@@ -36,9 +36,15 @@ describe('SeasonHistoryPage', () => {
   })
 
   it('lists past seasons with champion and placing', async () => {
+    // Given: history page is rendered with a past season
     renderPage()
+    // When: data loads
+    // Then: all required columns are present
     await waitFor(() => expect(screen.getByText('Campeao FC')).toBeInTheDocument())
-    expect(screen.getByText(/2026/)).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: '2026' })).toBeInTheDocument()
+    expect(screen.getByText('Campeao FC')).toBeInTheDocument()
+    expect(screen.getByText('2º')).toBeInTheDocument()
+    expect(screen.getByText('Artilheiro (21)')).toBeInTheDocument()
   })
 
   it('loads the season detail when a season is selected', async () => {
@@ -52,11 +58,14 @@ describe('SeasonHistoryPage', () => {
       topScorers: [{ playerName: 'Artilheiro', clubName: 'Campeao FC', goals: 21 }],
     })
 
+    // Given: history page is rendered with a past season
     renderPage()
+    // When: user clicks to view a season
     await waitFor(() => screen.getByText('Campeao FC'))
-    fireEvent.click(screen.getByRole('button', { name: /ver 2026/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ver 2026' }))
 
-    await waitFor(() => expect(screen.getByText(/Artilheiro/)).toBeInTheDocument())
+    // Then: the detail panel shows the top scorer in the format for detail list items
+    await waitFor(() => expect(screen.getByText('Artilheiro (Campeao FC) — 21')).toBeInTheDocument())
     expect(getSeason).toHaveBeenCalledWith('sg-1', 2026, 'test-token')
   })
 })

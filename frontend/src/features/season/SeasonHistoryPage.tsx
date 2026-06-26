@@ -35,16 +35,20 @@ export function SeasonHistoryPage() {
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1rem' }}>
         <thead>
           <tr>
+            <th style={{ textAlign: 'left' }}>Ano</th>
             <th style={{ textAlign: 'left' }}>Campeão</th>
             <th style={{ textAlign: 'center' }}>Sua posição</th>
+            <th style={{ textAlign: 'left' }}>Artilheiro</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {seasons.map(s => (
             <tr key={s.seasonYear}>
+              <td>{s.seasonYear}</td>
               <td>{s.championClubName}</td>
               <td style={{ textAlign: 'center' }}>{s.managedClubPosition}º</td>
+              <td>{s.topScorerName ? `${s.topScorerName} (${s.topScorerGoals})` : '—'}</td>
               <td>
                 <button className="cec-btn" onClick={() => setSelectedYear(s.seasonYear)}>
                   Ver {s.seasonYear}
@@ -81,7 +85,7 @@ export function SeasonHistoryPage() {
               ))}
             </tbody>
           </table>
-          <h4>Goleadores</h4>
+          <h4>Artilheiros</h4>
           <ul>
             {detail.data.topScorers.map((s, i) => (
               <li key={`${s.playerName}-${i}`}>{s.playerName} ({s.clubName}) — {s.goals}</li>
