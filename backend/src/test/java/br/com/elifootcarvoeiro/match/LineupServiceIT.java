@@ -70,10 +70,8 @@ class LineupServiceIT {
         UUID clubId = career.managedClubId();
         UUID userId = career.userId();
 
-        // Pick exactly 1 GK + 10 outfield
-        List<UUID> startingIds = buildValidXiIds(clubId);
-
-        SetLineupRequest req = new SetLineupRequest("4-4-2", startingIds);
+        List<LineupStarter> starters = buildValidStarters(clubId);
+        SetLineupRequest req = new SetLineupRequest("4-4-2", starters);
 
         // When - first call
         LineupResponse response = lineupService.setLineup(saveGameId, clubId, req, userId);
@@ -82,7 +80,7 @@ class LineupServiceIT {
         assertThat(response.lineupId()).isNotNull();
         assertThat(response.clubId()).isEqualTo(clubId);
         assertThat(response.formation()).isEqualTo("4-4-2");
-        assertThat(response.startingPlayerIds()).containsExactlyInAnyOrderElementsOf(startingIds);
+        assertThat(idsOf(response.starters())).containsExactlyInAnyOrderElementsOf(idsOf(starters));
 
         // Persisted: exactly 1 lineup row for this (saveGame, club)
         Lineup persistedLineup = lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
@@ -95,7 +93,7 @@ class LineupServiceIT {
         assertThat(players).allMatch(LineupPlayer::isStarting);
 
         // When - second call (upsert: change formation)
-        SetLineupRequest req2 = new SetLineupRequest("4-3-3", startingIds);
+        SetLineupRequest req2 = new SetLineupRequest("4-3-3", starters);
         LineupResponse response2 = lineupService.setLineup(saveGameId, clubId, req2, userId);
 
         // Then - still only 1 lineup row, formation updated, still 11 players (no duplicates)
@@ -114,9 +112,17 @@ class LineupServiceIT {
         UUID clubId = career.managedClubId();
         UUID userId = career.userId();
 
-        List<UUID> noGkIds = buildXiWithNoGk(career);
-
-        SetLineupRequest req = new SetLineupRequest("4-4-2", noGkIds);
+        // Use position-appropriate roles so this test isolates the no-GK rule
+        // regardless of validator ordering (a hardcoded outfield role on a striker
+        // would otherwise trip INVALID_ROLE and mask the INVALID_LINEUP we assert).
+        List<LineupStarter> noGk = lineupService.getSquad(career.id(), clubId, userId).players().stream()
+                .filter(p -> !p.position().equals("GK"))
+                .limit(11)
+                .map(p -> new LineupStarter(p.id(),
+                        br.com.elifootcarvoeiro.player.PlayerRole.defaultFor(
+                                br.com.elifootcarvoeiro.player.Position.valueOf(p.position())).name()))
+                .collect(Collectors.toList());
+        SetLineupRequest req = new SetLineupRequest("4-4-2", noGk);
 
         // When / Then
         assertThatThrownBy(() -> lineupService.setLineup(saveGameId, clubId, req, userId))
@@ -138,9 +144,8 @@ class LineupServiceIT {
         UUID clubId = career.managedClubId();
         UUID userId = career.userId();
 
-        List<UUID> tenPlayers = buildValidXiIds(clubId).subList(0, 10);
-
-        SetLineupRequest req = new SetLineupRequest("4-4-2", tenPlayers);
+        List<LineupStarter> ten = buildValidStarters(clubId).subList(0, 10);
+        SetLineupRequest req = new SetLineupRequest("4-4-2", ten);
 
         // When / Then
         assertThatThrownBy(() -> lineupService.setLineup(saveGameId, clubId, req, userId))
@@ -183,18 +188,14 @@ class LineupServiceIT {
         UUID clubId2 = career2.managedClubId();
 
         // Build a valid XI for club 1
-        List<UUID> validXi1 = buildValidXiIds(clubId1);
+        List<LineupStarter> validXi1 = buildValidStarters(clubId1);
 
         // Get a player from club 2
         List<br.com.elifootcarvoeiro.player.Player> club2Players = playerRepository.findByClubId(clubId2);
         assertThat(club2Players).isNotEmpty();
-        UUID foreignPlayerId = club2Players.get(0).getId();
-
-        // Replace the last player in the XI with a foreign player
-        List<UUID> xiBWithForeigner = new java.util.ArrayList<>(validXi1);
-        xiBWithForeigner.set(10, foreignPlayerId);
-
-        SetLineupRequest req = new SetLineupRequest("4-4-2", xiBWithForeigner);
+        List<LineupStarter> withForeigner = new java.util.ArrayList<>(validXi1);
+        withForeigner.set(10, new LineupStarter(club2Players.get(0).getId(), "POACHER"));
+        SetLineupRequest req = new SetLineupRequest("4-4-2", withForeigner);
 
         // When / Then
         assertThatThrownBy(() -> lineupService.setLineup(career1.id(), clubId1, req, career1.userId()))
@@ -206,31 +207,72 @@ class LineupServiceIT {
                 });
     }
 
+    // --- (f) Suspended player cannot be selected ---
+
+    @Test
+    void suspendedPlayerCannotBeSelected() {
+        Career career = createCareer();
+        UUID saveGameId = career.id();
+        UUID clubId = career.managedClubId();
+
+        List<LineupStarter> starters = buildValidStarters(clubId);
+        // suspend the 6th starter
+        br.com.elifootcarvoeiro.player.Player victim =
+                playerRepository.findById(starters.get(5).playerId()).orElseThrow();
+        victim.addSuspension(1);
+        playerRepository.save(victim);
+
+        assertThatThrownBy(() ->
+                lineupService.setLineup(saveGameId, clubId, new SetLineupRequest("4-4-2", starters), career.userId()))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException apiEx = (ApiException) ex;
+                    assertThat(apiEx.getCode()).isEqualTo("SUSPENDED_PLAYER");
+                    assertThat(apiEx.getStatus().value()).isEqualTo(422);
+                });
+    }
+
+    // --- (g) Role invalid for position is rejected ---
+
+    @Test
+    void roleInvalidForPositionIsRejected() {
+        Career career = createCareer();
+        UUID clubId = career.managedClubId();
+        List<LineupStarter> starters = new java.util.ArrayList<>(buildValidStarters(clubId));
+        // Force the GK starter to carry an outfield role -> invalid
+        int gkIndex = -1;
+        List<PlayerResponse> squad = lineupService.getSquad(career.id(), clubId, career.userId()).players();
+        for (int i = 0; i < starters.size(); i++) {
+            UUID pid = starters.get(i).playerId();
+            if (squad.stream().anyMatch(s -> s.id().equals(pid) && s.position().equals("GK"))) {
+                gkIndex = i;
+                break;
+            }
+        }
+        starters.set(gkIndex, new LineupStarter(starters.get(gkIndex).playerId(), "POACHER"));
+
+        assertThatThrownBy(() ->
+                lineupService.setLineup(career.id(), clubId, new SetLineupRequest("4-4-2", starters), career.userId()))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException apiEx = (ApiException) ex;
+                    assertThat(apiEx.getCode()).isEqualTo("INVALID_ROLE");
+                    assertThat(apiEx.getStatus().value()).isEqualTo(422);
+                });
+    }
+
     // --- Private helpers ---
 
-    /**
-     * Builds a valid list of 11 player IDs for the club: best XI via lineupService.bestXi.
-     */
-    private List<UUID> buildValidXiIds(UUID clubId) {
+    private List<LineupStarter> buildValidStarters(UUID clubId) {
         return lineupService.bestXi(clubId).stream()
-                .map(br.com.elifootcarvoeiro.player.Player::getId)
+                .map(p -> new LineupStarter(
+                        p.getId(),
+                        br.com.elifootcarvoeiro.player.PlayerRole.defaultFor(p.getPosition()).name()))
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Builds 11 player IDs with NO GK (replaces the GK with the next best outfield player).
-     */
-    private List<UUID> buildXiWithNoGk(Career career) {
-        SquadResponse squad = lineupService.getSquad(career.id(), career.managedClubId(), career.userId());
-
-        // Get all non-GK player IDs
-        List<UUID> outfieldIds = squad.players().stream()
-                .filter(p -> !p.position().equals("GK"))
-                .map(PlayerResponse::id)
-                .toList();
-
-        // Return first 11 outfield players (no GK)
-        return outfieldIds.stream().limit(11).collect(Collectors.toList());
+    private List<UUID> idsOf(List<LineupStarter> starters) {
+        return starters.stream().map(LineupStarter::playerId).collect(Collectors.toList());
     }
 
 }

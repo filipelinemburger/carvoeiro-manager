@@ -13,6 +13,11 @@ public record PlayerResponse(
         int passing,
         int tackling,
         int goalkeeping,
-        int stamina
+        int stamina,
+        int form,
+        int yellowCards,
+        int suspensionRemaining,
+        boolean eligible,
+        String role
 ) {
 }

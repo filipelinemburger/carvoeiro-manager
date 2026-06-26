@@ -7,6 +7,6 @@ public record LineupResponse(
         UUID lineupId,
         UUID clubId,
         String formation,
-        List<UUID> startingPlayerIds
+        List<LineupStarter> starters
 ) {
 }

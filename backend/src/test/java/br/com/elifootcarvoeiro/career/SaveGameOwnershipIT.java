@@ -88,7 +88,7 @@ class SaveGameOwnershipIT {
         String clubId = career.get("managedClubId").asString();
 
         // When: the body omits the required "formation" field (bean-validation, not a business rule)
-        String body = "{\"startingPlayerIds\":[\"" + UUID.randomUUID() + "\"]}";
+        String body = "{\"starters\":[{\"playerId\":\"" + UUID.randomUUID() + "\",\"role\":\"BOX_TO_BOX\"}]}";
 
         // Then: uniform 400 VALIDATION_ERROR error shape
         mockMvc.perform(put("/api/v1/save-games/" + saveGameId + "/clubs/" + clubId + "/lineup")
@@ -132,22 +132,29 @@ class SaveGameOwnershipIT {
 
         JsonNode players = objectMapper.readTree(response).get("players");
 
-        StringBuilder ids = new StringBuilder();
+        StringBuilder starters = new StringBuilder();
         String gkId = null;
         int outfield = 0;
         for (JsonNode player : players) {
             String position = player.get("position").asString();
             String id = player.get("id").asString();
+            String role = switch (position) {
+                case "GK" -> "GOALKEEPER";
+                case "DEF" -> "FULL_BACK";
+                case "MID" -> "BOX_TO_BOX";
+                default -> "POACHER";
+            };
             if ("GK".equals(position) && gkId == null) {
                 gkId = id;
+                starters.append("{\"playerId\":\"").append(id).append("\",\"role\":\"").append(role).append("\"},");
             } else if (!"GK".equals(position) && outfield < 10) {
-                ids.append("\"").append(id).append("\",");
+                starters.append("{\"playerId\":\"").append(id).append("\",\"role\":\"").append(role).append("\"},");
                 outfield++;
             }
         }
-        // GK first, then the 10 outfield ids (trailing comma already present before GK append below)
-        String startingIds = "\"" + gkId + "\"," + ids.substring(0, ids.length() - 1);
-        return "{\"formation\":\"4-4-2\",\"startingPlayerIds\":[" + startingIds + "]}";
+        // Remove trailing comma
+        String startersJson = starters.substring(0, starters.length() - 1);
+        return "{\"formation\":\"4-4-2\",\"starters\":[" + startersJson + "]}";
     }
 
     private String bearer(String token) {

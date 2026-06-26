@@ -6,13 +6,16 @@ import br.com.elifootcarvoeiro.club.ClubRepository;
 import br.com.elifootcarvoeiro.common.ApiException;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
+import br.com.elifootcarvoeiro.player.PlayerRole;
 import br.com.elifootcarvoeiro.player.Position;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -39,13 +42,14 @@ public class LineupService {
     }
 
     /**
-     * Returns all players belonging to the given club, mapped to PlayerResponse.
+     * Returns all players belonging to the given club, mapped to PlayerResponse including role and state.
      * Enforces that the save game is owned by the user and the club belongs to that save game.
      */
     public SquadResponse getSquad(UUID saveGameId, UUID clubId, UUID userId) {
         requireOwnedClub(saveGameId, clubId, userId);
+        Map<UUID, PlayerRole> roleByPlayer = currentRoles(saveGameId, clubId);
         List<PlayerResponse> responses = playerRepository.findByClubId(clubId).stream()
-                .map(this::toPlayerResponse)
+                .map(p -> toPlayerResponse(p, roleByPlayer.get(p.getId())))
                 .toList();
         return new SquadResponse(responses);
     }
@@ -57,6 +61,8 @@ public class LineupService {
      * - Exactly 11 starting players.
      * - Exactly 1 GK among them.
      * - Every player ID must belong to this club.
+     * - No suspended player may be selected.
+     * - Each role must be valid for the player's position.
      *
      * On conflict (lineup already exists): updates the formation and replaces all lineup_players
      * (delete-all + insert) so there are never leftover rows.
@@ -65,16 +71,19 @@ public class LineupService {
     public LineupResponse setLineup(UUID saveGameId, UUID clubId, SetLineupRequest req, UUID userId) {
         requireOwnedClub(saveGameId, clubId, userId);
 
-        List<UUID> startingIds = req.startingPlayerIds();
+        List<LineupStarter> starters = req.starters();
+        List<UUID> startingIds = starters == null ? List.of()
+                : starters.stream().map(LineupStarter::playerId).toList();
 
         validatePlayerCount(startingIds);
 
         List<Player> clubPlayers = playerRepository.findByClubId(clubId);
         validatePlayersOwnedByClub(startingIds, clubPlayers);
         validateGkCount(startingIds, clubPlayers);
+        validateNoSuspended(startingIds, clubPlayers);
+        Map<UUID, PlayerRole> resolvedRoles = validateAndParseRoles(starters, clubPlayers);
 
-        Lineup lineup = lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
-                .orElse(null);
+        Lineup lineup = lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId).orElse(null);
 
         if (lineup == null) {
             lineup = Lineup.create(saveGameId, clubId, req.formation());
@@ -87,11 +96,12 @@ public class LineupService {
         }
 
         final UUID lineupId = lineup.getId();
-        for (UUID playerId : startingIds) {
-            lineupPlayerRepository.save(LineupPlayer.create(lineupId, playerId, true));
+        for (LineupStarter starter : starters) {
+            lineupPlayerRepository.save(
+                    LineupPlayer.create(lineupId, starter.playerId(), true, resolvedRoles.get(starter.playerId())));
         }
 
-        return new LineupResponse(lineupId, clubId, req.formation(), List.copyOf(startingIds));
+        return new LineupResponse(lineupId, clubId, req.formation(), List.copyOf(starters));
     }
 
     /**
@@ -209,7 +219,54 @@ public class LineupService {
         }
     }
 
-    private PlayerResponse toPlayerResponse(Player p) {
+    private void validateNoSuspended(List<UUID> startingIds, List<Player> clubPlayers) {
+        Set<UUID> startingSet = Set.copyOf(startingIds);
+        List<UUID> suspended = clubPlayers.stream()
+                .filter(p -> startingSet.contains(p.getId()))
+                .filter(p -> !p.isEligible())
+                .map(Player::getId)
+                .toList();
+        if (!suspended.isEmpty()) {
+            throw new ApiException("SUSPENDED_PLAYER",
+                    "These players are suspended and cannot be selected: " + suspended,
+                    HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+    }
+
+    private Map<UUID, PlayerRole> validateAndParseRoles(List<LineupStarter> starters, List<Player> clubPlayers) {
+        Map<UUID, Player> byId = clubPlayers.stream().collect(Collectors.toMap(Player::getId, p -> p));
+        Map<UUID, PlayerRole> resolved = new HashMap<>();
+        for (LineupStarter starter : starters) {
+            PlayerRole role;
+            try {
+                role = PlayerRole.valueOf(starter.role());
+            } catch (IllegalArgumentException ex) {
+                throw new ApiException("INVALID_ROLE",
+                        "Unknown role: " + starter.role(), HttpStatus.UNPROCESSABLE_CONTENT);
+            }
+            // player is guaranteed non-null in practice: validatePlayersOwnedByClub
+            // runs before this and rejects any starter not in clubPlayers. The guard
+            // is defensive only.
+            Player player = byId.get(starter.playerId());
+            if (player != null && !role.isValidFor(player.getPosition())) {
+                throw new ApiException("INVALID_ROLE",
+                        "Role " + role + " is not valid for position " + player.getPosition(),
+                        HttpStatus.UNPROCESSABLE_CONTENT);
+            }
+            resolved.put(starter.playerId(), role);
+        }
+        return resolved;
+    }
+
+    private Map<UUID, PlayerRole> currentRoles(UUID saveGameId, UUID clubId) {
+        Map<UUID, PlayerRole> map = new HashMap<>();
+        lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId).ifPresent(lineup ->
+                lineupPlayerRepository.findByLineupId(lineup.getId()).forEach(lp ->
+                        map.put(lp.getPlayerId(), lp.getRole())));
+        return map;
+    }
+
+    private PlayerResponse toPlayerResponse(Player p, PlayerRole role) {
         return new PlayerResponse(
                 p.getId(),
                 p.getName(),
@@ -221,7 +278,11 @@ public class LineupService {
                 p.getPassing(),
                 p.getTackling(),
                 p.getGoalkeeping(),
-                p.getStamina()
-        );
+                p.getStamina(),
+                p.getForm(),
+                p.getYellowCards(),
+                p.getSuspensionRemaining(),
+                p.isEligible(),
+                role != null ? role.name() : null);
     }
 }
