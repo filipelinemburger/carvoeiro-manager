@@ -5,6 +5,8 @@ import java.util.List;
 public record SimulateRoundResponse(
         int round,
         List<FixtureResultResponse> results,
-        boolean seasonFinished
+        boolean seasonFinished,
+        List<BookingResponse> bookings,
+        List<SuspensionResponse> newSuspensions
 ) {
 }

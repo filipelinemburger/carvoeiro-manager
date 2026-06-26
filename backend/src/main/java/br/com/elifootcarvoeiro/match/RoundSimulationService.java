@@ -12,25 +12,25 @@ import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.competition.Fixture;
 import br.com.elifootcarvoeiro.competition.FixtureRepository;
 import br.com.elifootcarvoeiro.player.Player;
+import br.com.elifootcarvoeiro.player.PlayerRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 
 /**
- * Simulates a single league round deterministically. Builds each club's
- * TacticalProfile (managed: persisted; AI: default) and TeamMatchInput, runs the
- * engine, and persists the result and typed match events.
- *
- * Seed: saveGameId.getMostSignificantBits() ^ fixtureId.getMostSignificantBits() ^ round.
+ * Simulates a single league round deterministically, then applies the per-round
+ * player-state lifecycle (cards -> suspensions, form) via {@link MatchOutcomeApplier}.
  */
 @Service
 public class RoundSimulationService {
@@ -40,32 +40,42 @@ public class RoundSimulationService {
     private final CompetitionRepository competitionRepository;
     private final FixtureRepository fixtureRepository;
     private final ClubRepository clubRepository;
+    private final PlayerRepository playerRepository;
     private final LineupService lineupService;
     private final TacticsService tacticsService;
     private final TeamStrengthCalculator teamStrengthCalculator;
     private final MatchSimulationService matchSimulationService;
     private final MatchEventRepository matchEventRepository;
+    private final MatchOutcomeApplier matchOutcomeApplier;
 
     public RoundSimulationService(SaveGameService saveGameService,
                                   SaveGameRepository saveGameRepository,
                                   CompetitionRepository competitionRepository,
                                   FixtureRepository fixtureRepository,
                                   ClubRepository clubRepository,
+                                  PlayerRepository playerRepository,
                                   LineupService lineupService,
                                   TacticsService tacticsService,
                                   TeamStrengthCalculator teamStrengthCalculator,
                                   MatchSimulationService matchSimulationService,
-                                  MatchEventRepository matchEventRepository) {
+                                  MatchEventRepository matchEventRepository,
+                                  MatchOutcomeApplier matchOutcomeApplier) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.competitionRepository = competitionRepository;
         this.fixtureRepository = fixtureRepository;
         this.clubRepository = clubRepository;
+        this.playerRepository = playerRepository;
         this.lineupService = lineupService;
         this.tacticsService = tacticsService;
         this.teamStrengthCalculator = teamStrengthCalculator;
         this.matchSimulationService = matchSimulationService;
         this.matchEventRepository = matchEventRepository;
+        this.matchOutcomeApplier = matchOutcomeApplier;
+    }
+
+    private record FixtureSim(FixtureResultResponse response, List<Player> homeXi, List<Player> awayXi,
+                             int homeGoals, int awayGoals, List<AttributedEvent> events) {
     }
 
     @Transactional
@@ -84,9 +94,31 @@ public class RoundSimulationService {
         final UUID managedClubId = saveGame.getManagedClubId();
 
         List<FixtureResultResponse> results = new ArrayList<>();
+        Set<UUID> playedIds = new HashSet<>();
+        MatchOutcomeApplier.Summary summary = new MatchOutcomeApplier.Summary();
+        List<Player> toPersist = new ArrayList<>();
+
         for (Fixture fixture : fixtures) {
-            results.add(simulateFixture(fixture, saveGameId, managedClubId, clubById, nextRound));
+            FixtureSim sim = simulateFixture(fixture, saveGameId, managedClubId, clubById, nextRound);
+            results.add(sim.response());
+
+            boolean homeManaged = sim.homeXi().stream().anyMatch(p -> p.getClubId().equals(managedClubId));
+            boolean awayManaged = sim.awayXi().stream().anyMatch(p -> p.getClubId().equals(managedClubId));
+            matchOutcomeApplier.applyFixture(sim.events(),
+                    new MatchOutcomeApplier.TeamOutcome(sim.homeXi(), sim.homeGoals(), sim.awayGoals(), homeManaged),
+                    new MatchOutcomeApplier.TeamOutcome(sim.awayXi(), sim.awayGoals(), sim.homeGoals(), awayManaged),
+                    summary);
+
+            sim.homeXi().forEach(p -> { playedIds.add(p.getId()); toPersist.add(p); });
+            sim.awayXi().forEach(p -> { playedIds.add(p.getId()); toPersist.add(p); });
         }
+
+        List<Player> nonPlayers = playerRepository.findBySaveGameId(saveGameId).stream()
+                .filter(p -> !playedIds.contains(p.getId()))
+                .toList();
+        matchOutcomeApplier.applyNonPlayers(nonPlayers);
+        toPersist.addAll(nonPlayers);
+        playerRepository.saveAll(toPersist);
 
         final int newCurrentRound = nextRound + 1;
         saveGame.setCurrentRound(newCurrentRound);
@@ -96,11 +128,12 @@ public class RoundSimulationService {
         saveGameRepository.save(saveGame);
 
         return new SimulateRoundResponse(newCurrentRound, List.copyOf(results),
-                saveGame.getStatus() == SaveGameStatus.FINISHED);
+                saveGame.getStatus() == SaveGameStatus.FINISHED,
+                List.copyOf(summary.bookings()), List.copyOf(summary.newSuspensions()));
     }
 
-    private FixtureResultResponse simulateFixture(Fixture fixture, UUID saveGameId, UUID managedClubId,
-                                                  Map<UUID, Club> clubById, int round) {
+    private FixtureSim simulateFixture(Fixture fixture, UUID saveGameId, UUID managedClubId,
+                                       Map<UUID, Club> clubById, int round) {
         final UUID homeClubId = fixture.getHomeClubId();
         final UUID awayClubId = fixture.getAwayClubId();
 
@@ -122,28 +155,26 @@ public class RoundSimulationService {
         fixture.recordResult(match.homeGoals(), match.awayGoals());
         fixtureRepository.save(fixture);
 
-        saveEvents(fixture, match, homeXi, awayXi, homeProfile, awayProfile, homeClubId, awayClubId, seed);
+        List<AttributedEvent> attributed = saveEvents(fixture, match, homeXi, awayXi,
+                homeProfile, awayProfile, homeClubId, awayClubId, seed);
 
         Club homeClub = clubById.get(homeClubId);
         Club awayClub = clubById.get(awayClubId);
-        return new FixtureResultResponse(
+        FixtureResultResponse response = new FixtureResultResponse(
                 fixture.getId(),
                 homeClubId, homeClub != null ? homeClub.getName() : "",
                 match.homeGoals(),
                 awayClubId, awayClub != null ? awayClub.getName() : "",
                 match.awayGoals());
+        return new FixtureSim(response, homeXi, awayXi, match.homeGoals(), match.awayGoals(), attributed);
     }
 
-    /**
-     * Persists a MatchEvent per simulated event. Open-play goals -> finishing-weighted
-     * scorer; set-piece goals -> designated penalty/freekick taker (or finishing-weighted
-     * fallback); cards -> tackling-weighted player. Deterministic via a fixed-seed RNG.
-     */
-    private void saveEvents(Fixture fixture, SimulatedMatch match,
-                            List<Player> homeXi, List<Player> awayXi,
-                            TacticalProfile homeProfile, TacticalProfile awayProfile,
-                            UUID homeClubId, UUID awayClubId, long seed) {
+    private List<AttributedEvent> saveEvents(Fixture fixture, SimulatedMatch match,
+                                             List<Player> homeXi, List<Player> awayXi,
+                                             TacticalProfile homeProfile, TacticalProfile awayProfile,
+                                             UUID homeClubId, UUID awayClubId, long seed) {
         Random rng = new Random(seed ^ 0x5DEECE66DL);
+        List<AttributedEvent> attributed = new ArrayList<>();
         for (SimulatedEvent event : match.events()) {
             List<Player> xi = event.home() ? homeXi : awayXi;
             TacticalProfile profile = event.home() ? homeProfile : awayProfile;
@@ -157,7 +188,9 @@ public class RoundSimulationService {
             matchEventRepository.save(
                     MatchEvent.create(fixture.getId(), event.minute(), event.type().name(),
                             player.getId(), clubId));
+            attributed.add(new AttributedEvent(player.getId(), event.type(), event.home()));
         }
+        return attributed;
     }
 
     private Player setPieceTaker(List<Player> xi, TacticalProfile profile, Random rng) {

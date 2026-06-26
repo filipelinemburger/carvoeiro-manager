@@ -1,0 +1,77 @@
+package br.com.elifootcarvoeiro.match;
+
+import br.com.elifootcarvoeiro.auth.User;
+import br.com.elifootcarvoeiro.auth.UserRepository;
+import br.com.elifootcarvoeiro.career.SaveGameResponse;
+import br.com.elifootcarvoeiro.career.SaveGameService;
+import br.com.elifootcarvoeiro.player.Player;
+import br.com.elifootcarvoeiro.player.PlayerRepository;
+import br.com.elifootcarvoeiro.support.PostgresTestContainer;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
+
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@SpringBootTest
+@ActiveProfiles("test")
+@Import(PostgresTestContainer.class)
+class SuspensionLifecycleIT {
+
+    @Autowired RoundSimulationService roundSimulationService;
+    @Autowired LineupService lineupService;
+    @Autowired SaveGameService saveGameService;
+    @Autowired UserRepository userRepository;
+    @Autowired PlayerRepository playerRepository;
+
+    private record Career(UUID userId, SaveGameResponse save) {}
+
+    private Career createCareer() {
+        User user = User.create("susp_" + UUID.randomUUID(), "hash");
+        userRepository.save(user);
+        return new Career(user.getId(), saveGameService.createCareer(user.getId()));
+    }
+
+    @Test
+    void suspendedPlayerIsExcludedFromBestXi() {
+        // Given a player in a club is suspended
+        Career career = createCareer();
+        UUID clubId = career.save().managedClubId();
+        Player victim = lineupService.bestXi(clubId).get(5);
+        victim.addSuspension(1);
+        playerRepository.save(victim);
+
+        // When picking the best XI
+        List<Player> xi = lineupService.bestXi(clubId);
+
+        // Then the suspended player is not in it
+        assertThat(xi).extracting(Player::getId).doesNotContain(victim.getId());
+    }
+
+    @Test
+    void servingASuspensionClearsItAfterOneRound() {
+        // Given a benched player (not in any XI) carrying a 1-match ban
+        Career career = createCareer();
+        UUID saveGameId = career.save().id();
+        UUID clubId = career.save().managedClubId();
+
+        List<Player> xi = lineupService.bestXi(clubId);
+        Player benched = playerRepository.findByClubId(clubId).stream()
+                .filter(p -> xi.stream().noneMatch(s -> s.getId().equals(p.getId())))
+                .findFirst().orElseThrow();
+        benched.addSuspension(1);
+        playerRepository.save(benched);
+
+        // When a round is simulated (the benched player sits out)
+        roundSimulationService.simulateNextRound(saveGameId, career.userId());
+
+        // Then the ban is served
+        Player reloaded = playerRepository.findById(benched.getId()).orElseThrow();
+        assertThat(reloaded.getSuspensionRemaining()).isZero();
+    }
+}

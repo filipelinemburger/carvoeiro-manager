@@ -111,6 +111,7 @@ public class LineupService {
                                             "PLAYER_NOT_FOUND",
                                             "Player " + playerId + " not found",
                                             HttpStatus.NOT_FOUND)))
+                            .filter(Player::isEligible)
                             .collect(java.util.stream.Collectors.toList());
                 })
                 .orElseGet(() -> bestXi(clubId));
@@ -121,14 +122,16 @@ public class LineupService {
      * Assumes the club has at least 1 GK and at least 10 outfield players (guaranteed by seed data).
      */
     public List<Player> bestXi(UUID clubId) {
-        List<Player> allPlayers = playerRepository.findByClubId(clubId);
+        List<Player> allPlayers = playerRepository.findByClubId(clubId).stream()
+                .filter(Player::isEligible)
+                .toList();
 
         Player bestGk = allPlayers.stream()
                 .filter(p -> p.getPosition() == Position.GK)
                 .max(Comparator.comparingInt(Player::getOverall))
                 .orElseThrow(() -> new ApiException(
                         "NO_GK_FOUND",
-                        "Club " + clubId + " has no goalkeeper",
+                        "Club " + clubId + " has no eligible goalkeeper",
                         HttpStatus.UNPROCESSABLE_CONTENT));
 
         List<Player> topOutfield = allPlayers.stream()
