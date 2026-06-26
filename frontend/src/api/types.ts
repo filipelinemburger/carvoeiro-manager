@@ -148,3 +148,33 @@ export type RolloverResponse = {
   retirements: SquadChange[]
   newcomers: SquadChange[]
 }
+
+export type SeasonSummary = {
+  seasonYear: number
+  competitionName: string
+  championClubName: string
+  managedClubPosition: number
+  topScorerName: string | null
+  topScorerGoals: number
+}
+
+export type SeasonStandingRow = {
+  position: number
+  clubName: string
+  played: number
+  won: number
+  drawn: number
+  lost: number
+  goalsFor: number
+  goalsAgainst: number
+  goalDifference: number
+  points: number
+}
+
+export type SeasonDetail = {
+  seasonYear: number
+  competitionName: string
+  championClubName: string
+  table: SeasonStandingRow[]
+  topScorers: TopScorerResponse[]
+}

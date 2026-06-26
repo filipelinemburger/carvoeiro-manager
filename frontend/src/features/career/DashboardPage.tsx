@@ -105,6 +105,9 @@ export function DashboardPage() {
                   <button className="cec-btn">Classificação</button>
                 </Link>
               )}
+              <Link to={`/history?saveGameId=${saveGame.id}`}>
+                <button className="cec-btn">Histórico</button>
+              </Link>
             </div>
 
             <AdvancePanel

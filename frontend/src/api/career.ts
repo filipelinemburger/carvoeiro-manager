@@ -10,6 +10,8 @@ import type {
   TacticsResponse,
   TopScorerResponse,
   RolloverResponse,
+  SeasonSummary,
+  SeasonDetail,
 } from './types'
 
 export function createCareer(token: string): Promise<SaveGameResponse> {
@@ -78,4 +80,16 @@ export function getTopScorers(
 
 export function rolloverSeason(saveGameId: string, token: string): Promise<RolloverResponse> {
   return apiPost<RolloverResponse>(`/save-games/${saveGameId}/seasons/rollover`, {}, token)
+}
+
+export function getSeasonHistory(saveGameId: string, token: string): Promise<SeasonSummary[]> {
+  return apiGet<SeasonSummary[]>(`/save-games/${saveGameId}/seasons`, token)
+}
+
+export function getSeason(
+  saveGameId: string,
+  seasonYear: number,
+  token: string,
+): Promise<SeasonDetail> {
+  return apiGet<SeasonDetail>(`/save-games/${saveGameId}/seasons/${seasonYear}`, token)
 }

@@ -5,6 +5,7 @@ import { DashboardPage } from './features/career/DashboardPage'
 import { SquadPage } from './features/squad/SquadPage'
 import { TablePage } from './features/competition/TablePage'
 import { SeasonSummaryPage } from './features/season/SeasonSummaryPage'
+import { SeasonHistoryPage } from './features/season/SeasonHistoryPage'
 import { useAuth } from './auth/AuthContext'
 import type { ReactNode } from 'react'
 
@@ -48,6 +49,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <SeasonSummaryPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history"
+        element={
+          <ProtectedRoute>
+            <SeasonHistoryPage />
           </ProtectedRoute>
         }
       />
