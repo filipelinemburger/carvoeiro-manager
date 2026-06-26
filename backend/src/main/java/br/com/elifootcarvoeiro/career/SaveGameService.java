@@ -8,6 +8,7 @@ import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.competition.Fixture;
 import br.com.elifootcarvoeiro.competition.FixtureRepository;
 import br.com.elifootcarvoeiro.competition.FixtureScheduler;
+import br.com.elifootcarvoeiro.player.OverallCalculator;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
 import br.com.elifootcarvoeiro.player.Position;
@@ -35,13 +36,15 @@ public class SaveGameService {
     private final CompetitionRepository competitionRepository;
     private final FixtureRepository fixtureRepository;
     private final FixtureScheduler fixtureScheduler;
+    private final OverallCalculator overallCalculator;
 
     public SaveGameService(SeedLoader seedLoader,
                            SaveGameRepository saveGameRepository,
                            ClubRepository clubRepository,
                            PlayerRepository playerRepository,
                            CompetitionRepository competitionRepository,
-                           FixtureRepository fixtureRepository) {
+                           FixtureRepository fixtureRepository,
+                           OverallCalculator overallCalculator) {
         this.seedLoader = seedLoader;
         this.saveGameRepository = saveGameRepository;
         this.clubRepository = clubRepository;
@@ -49,6 +52,7 @@ public class SaveGameService {
         this.competitionRepository = competitionRepository;
         this.fixtureRepository = fixtureRepository;
         this.fixtureScheduler = new FixtureScheduler();
+        this.overallCalculator = overallCalculator;
     }
 
     /**
@@ -87,7 +91,9 @@ public class SaveGameService {
 
             for (SeedPlayer seedPlayer : seedClub.players()) {
                 Position position = Position.valueOf(seedPlayer.position());
-                int overall = computeOverall(seedPlayer, position);
+                int overall = overallCalculator.compute(position,
+                        seedPlayer.pace(), seedPlayer.finishing(), seedPlayer.passing(),
+                        seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina());
                 Player player = Player.create(
                         saveGame.getId(), club.getId(), seedPlayer.name(), position,
                         seedPlayer.age(), seedPlayer.nationality(),
@@ -179,22 +185,4 @@ public class SaveGameService {
                 totalRounds);
     }
 
-    /**
-     * Computes player overall as a position-weighted average of the 6 attributes.
-     *
-     * Weights (sum = 1.0):
-     *   GK:  goalkeeping .60, stamina .15, passing .15, pace .10
-     *   DEF: tackling .40, pace .20, stamina .15, passing .15, finishing .10
-     *   MID: passing .35, stamina .20, tackling .20, pace .15, finishing .10
-     *   ATT: finishing .40, pace .25, passing .15, stamina .10, tackling .10
-     */
-    private int computeOverall(SeedPlayer p, Position position) {
-        double weighted = switch (position) {
-            case GK -> p.goalkeeping() * 0.60 + p.stamina() * 0.15 + p.passing() * 0.15 + p.pace() * 0.10;
-            case DEF -> p.tackling() * 0.40 + p.pace() * 0.20 + p.stamina() * 0.15 + p.passing() * 0.15 + p.finishing() * 0.10;
-            case MID -> p.passing() * 0.35 + p.stamina() * 0.20 + p.tackling() * 0.20 + p.pace() * 0.15 + p.finishing() * 0.10;
-            case ATT -> p.finishing() * 0.40 + p.pace() * 0.25 + p.passing() * 0.15 + p.stamina() * 0.10 + p.tackling() * 0.10;
-        };
-        return (int) Math.round(weighted);
-    }
 }
