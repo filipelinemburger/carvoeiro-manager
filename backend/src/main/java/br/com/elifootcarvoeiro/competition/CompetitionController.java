@@ -15,9 +15,11 @@ import java.util.UUID;
 public class CompetitionController {
 
     private final StandingsService standingsService;
+    private final TopScorersService topScorersService;
 
-    public CompetitionController(StandingsService standingsService) {
+    public CompetitionController(StandingsService standingsService, TopScorersService topScorersService) {
         this.standingsService = standingsService;
+        this.topScorersService = topScorersService;
     }
 
     /**
@@ -31,5 +33,18 @@ public class CompetitionController {
             @CurrentUser UUID userId) {
         List<StandingRow> standings = standingsService.getStandings(saveGameId, competitionId, userId);
         return ResponseEntity.ok(standings);
+    }
+
+    /** Current-season top scorers for a competition (used by the end-of-season screen). */
+    @GetMapping("/{competitionId}/top-scorers")
+    public ResponseEntity<List<TopScorerResponse>> getTopScorers(
+            @PathVariable UUID saveGameId,
+            @PathVariable UUID competitionId,
+            @CurrentUser UUID userId) {
+        List<TopScorerResponse> body = topScorersService
+                .getTopScorers(saveGameId, competitionId, userId).stream()
+                .map(r -> new TopScorerResponse(r.playerName(), r.clubName(), r.goals()))
+                .toList();
+        return ResponseEntity.ok(body);
     }
 }
