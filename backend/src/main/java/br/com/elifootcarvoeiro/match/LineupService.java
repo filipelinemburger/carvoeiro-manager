@@ -82,6 +82,28 @@ public class LineupService {
     }
 
     /**
+     * Returns the persisted starting XI for the given (saveGameId, clubId) if one exists,
+     * otherwise falls back to bestXi(clubId).
+     */
+    public List<Player> startingXi(UUID saveGameId, UUID clubId) {
+        return lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
+                .map(lineup -> {
+                    List<UUID> playerIds = lineupPlayerRepository.findByLineupId(lineup.getId()).stream()
+                            .filter(LineupPlayer::isStarting)
+                            .map(LineupPlayer::getPlayerId)
+                            .toList();
+                    return playerIds.stream()
+                            .map(playerId -> playerRepository.findById(playerId)
+                                    .orElseThrow(() -> new ApiException(
+                                            "PLAYER_NOT_FOUND",
+                                            "Player " + playerId + " not found",
+                                            HttpStatus.NOT_FOUND)))
+                            .collect(java.util.stream.Collectors.toList());
+                })
+                .orElseGet(() -> bestXi(clubId));
+    }
+
+    /**
      * Picks the best XI for a club: the top GK by overall + the top 10 outfield players by overall.
      * Assumes the club has at least 1 GK and at least 10 outfield players (guaranteed by seed data).
      */
