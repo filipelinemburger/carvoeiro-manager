@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
@@ -6,31 +6,47 @@ import { createCareer, getSaveGame } from '../../api/career'
 import { AdvancePanel } from '../match/AdvancePanel'
 import type { SaveGameResponse } from '../../api/types'
 
-const SAVE_GAME_KEY = 'elifoot_save_game_id'
+// Scope the stored save game per user so one account never inherits another's
+// career id (which would 404 against the ownership guard).
+const saveGameKeyFor = (userId: string | undefined) =>
+  `elifoot_save_game_id_${userId ?? 'anon'}`
 
 export function DashboardPage() {
   const { user, token, logout } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  const storedId = localStorage.getItem(SAVE_GAME_KEY)
-  const [saveGameId, setSaveGameId] = useState<string | null>(storedId)
+  const saveGameKey = saveGameKeyFor(user?.userId)
+  const [saveGameId, setSaveGameId] = useState<string | null>(() =>
+    localStorage.getItem(saveGameKey),
+  )
 
   const handleLogout = () => {
     logout()
     void navigate('/login')
   }
 
-  const { data: saveGame, isLoading: loadingGame } = useQuery<SaveGameResponse>({
+  const { data: saveGame, isLoading: loadingGame, isError } = useQuery<SaveGameResponse>({
     queryKey: ['saveGame', saveGameId],
     queryFn: () => getSaveGame(saveGameId!, token ?? ''),
     enabled: Boolean(saveGameId && token),
+    retry: false,
   })
+
+  // If the stored save game can't be loaded (deleted, or not owned by this
+  // user), forget it so the user can start a fresh career instead of being
+  // stuck on a 404.
+  useEffect(() => {
+    if (isError && saveGameId) {
+      localStorage.removeItem(saveGameKey)
+      setSaveGameId(null)
+    }
+  }, [isError, saveGameId, saveGameKey])
 
   const createMutation = useMutation<SaveGameResponse>({
     mutationFn: () => createCareer(token ?? ''),
     onSuccess: (data) => {
-      localStorage.setItem(SAVE_GAME_KEY, data.id)
+      localStorage.setItem(saveGameKey, data.id)
       setSaveGameId(data.id)
       void queryClient.invalidateQueries({ queryKey: ['saveGame', data.id] })
     },
