@@ -139,4 +139,23 @@ public class Player {
     }
 
     public boolean isEligible() { return this.suspensionRemaining == 0; }
+
+    /** Replaces all six attributes and overall after the season aging curve. */
+    public void evolveAttributes(int pace, int finishing, int passing,
+                                 int tackling, int goalkeeping, int stamina, int overall) {
+        this.pace = pace;
+        this.finishing = finishing;
+        this.passing = passing;
+        this.tackling = tackling;
+        this.goalkeeping = goalkeeping;
+        this.stamina = stamina;
+        this.overall = overall;
+    }
+
+    /** Clears per-season state when a player carries over into a new season. */
+    public void resetSeasonState() {
+        this.form = 0;
+        this.yellowCards = 0;
+        this.suspensionRemaining = 0;
+    }
 }

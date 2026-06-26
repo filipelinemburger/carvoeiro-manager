@@ -71,4 +71,11 @@ public class SaveGame {
     public void setManagedClubId(UUID managedClubId) { this.managedClubId = managedClubId; }
     public void setCurrentRound(int currentRound) { this.currentRound = currentRound; }
     public void setStatus(SaveGameStatus status) { this.status = status; }
+
+    /** Rolls this career forward into the next season. */
+    public void advanceToNextSeason() {
+        this.seasonYear += 1;
+        this.currentRound = 0;
+        this.status = SaveGameStatus.IN_PROGRESS;
+    }
 }

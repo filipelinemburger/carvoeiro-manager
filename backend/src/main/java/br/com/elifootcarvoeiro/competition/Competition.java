@@ -57,4 +57,7 @@ public class Competition {
     public String getType() { return type; }
     public int getSeasonYear() { return seasonYear; }
     public int getTotalRounds() { return totalRounds; }
+
+    public void setSeasonYear(int seasonYear) { this.seasonYear = seasonYear; }
+    public void setTotalRounds(int totalRounds) { this.totalRounds = totalRounds; }
 }
