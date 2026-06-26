@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom'
+import { beforeEach } from 'vitest'
 
 // Node 26 / jsdom: mock localStorage since it requires --localstorage-file flag
 const localStorageMock = (() => {
@@ -16,4 +17,9 @@ const localStorageMock = (() => {
 Object.defineProperty(globalThis, 'localStorage', {
   value: localStorageMock,
   writable: true,
+})
+
+// Reset localStorage before each test to prevent state leakage
+beforeEach(() => {
+  localStorage.clear()
 })
