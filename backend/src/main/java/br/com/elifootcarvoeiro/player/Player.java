@@ -62,6 +62,15 @@ public class Player {
     @Column(name = "overall", nullable = false)
     private int overall;
 
+    @Column(name = "form", nullable = false)
+    private int form;
+
+    @Column(name = "yellow_cards", nullable = false)
+    private int yellowCards;
+
+    @Column(name = "suspension_remaining", nullable = false)
+    private int suspensionRemaining;
+
     protected Player() {
         // for JPA
     }
@@ -110,4 +119,24 @@ public class Player {
     public void setClubId(UUID clubId) { this.clubId = clubId; }
     public void setAge(int age) { this.age = age; }
     public void setOverall(int overall) { this.overall = overall; }
+
+    public int getForm() { return form; }
+    public int getYellowCards() { return yellowCards; }
+    public int getSuspensionRemaining() { return suspensionRemaining; }
+
+    public void applyForm(int delta) {
+        this.form = Math.max(-5, Math.min(5, this.form + delta));
+    }
+
+    public void addYellowCard() { this.yellowCards++; }
+
+    public void addSuspension(int matches) { this.suspensionRemaining += matches; }
+
+    public void decrementSuspension() {
+        if (this.suspensionRemaining > 0) {
+            this.suspensionRemaining--;
+        }
+    }
+
+    public boolean isEligible() { return this.suspensionRemaining == 0; }
 }

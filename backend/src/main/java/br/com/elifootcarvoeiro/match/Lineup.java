@@ -1,7 +1,12 @@
 package br.com.elifootcarvoeiro.match;
 
+import br.com.elifootcarvoeiro.player.Marking;
+import br.com.elifootcarvoeiro.player.Mentality;
+import br.com.elifootcarvoeiro.player.Pressing;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -29,6 +34,27 @@ public class Lineup {
     @Column(name = "formation", nullable = false, length = 10)
     private String formation;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "mentality", nullable = false, length = 12)
+    private Mentality mentality;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "pressing", nullable = false, length = 8)
+    private Pressing pressing;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "marking", nullable = false, length = 10)
+    private Marking marking;
+
+    @Column(name = "penalty_taker_id")
+    private UUID penaltyTakerId;
+
+    @Column(name = "freekick_taker_id")
+    private UUID freekickTakerId;
+
+    @Column(name = "corner_taker_id")
+    private UUID cornerTakerId;
+
     protected Lineup() {
         // for JPA
     }
@@ -38,6 +64,9 @@ public class Lineup {
         this.saveGameId = saveGameId;
         this.clubId = clubId;
         this.formation = formation;
+        this.mentality = Mentality.BALANCED;
+        this.pressing = Pressing.MEDIUM;
+        this.marking = Marking.ZONAL;
     }
 
     public static Lineup create(UUID saveGameId, UUID clubId, String formation) {
@@ -48,6 +77,18 @@ public class Lineup {
     public UUID getSaveGameId() { return saveGameId; }
     public UUID getClubId() { return clubId; }
     public String getFormation() { return formation; }
+    public Mentality getMentality() { return mentality; }
+    public Pressing getPressing() { return pressing; }
+    public Marking getMarking() { return marking; }
+    public UUID getPenaltyTakerId() { return penaltyTakerId; }
+    public UUID getFreekickTakerId() { return freekickTakerId; }
+    public UUID getCornerTakerId() { return cornerTakerId; }
 
     public void setFormation(String formation) { this.formation = formation; }
+    public void setMentality(Mentality mentality) { this.mentality = mentality; }
+    public void setPressing(Pressing pressing) { this.pressing = pressing; }
+    public void setMarking(Marking marking) { this.marking = marking; }
+    public void setPenaltyTakerId(UUID id) { this.penaltyTakerId = id; }
+    public void setFreekickTakerId(UUID id) { this.freekickTakerId = id; }
+    public void setCornerTakerId(UUID id) { this.cornerTakerId = id; }
 }
