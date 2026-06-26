@@ -9,9 +9,11 @@ import type { PlayerResponse, SquadResponse } from '../../api/types'
 vi.mock('../../api/career', () => ({
   getSquad: vi.fn(),
   setLineup: vi.fn(),
+  getTactics: vi.fn(),
+  setTactics: vi.fn(),
 }))
 
-import { getSquad, setLineup } from '../../api/career'
+import { getSquad, setLineup, getTactics } from '../../api/career'
 
 const mockGetSquad = vi.mocked(getSquad)
 const mockSetLineup = vi.mocked(setLineup)
@@ -114,6 +116,10 @@ describe('SquadPage', () => {
       clubId: 'club-1',
       formation: '4-3-3',
       starters: [],
+    })
+    vi.mocked(getTactics).mockResolvedValue({
+      mentality: 'BALANCED', pressing: 'MEDIUM', marking: 'ZONAL',
+      penaltyTakerId: null, freekickTakerId: null, cornerTakerId: null,
     })
     localStorage.setItem('elifoot_token', 'test-token')
     localStorage.setItem('elifoot_user', JSON.stringify({ username: 'u', userId: 'u1' }))

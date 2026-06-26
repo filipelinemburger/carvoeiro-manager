@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { getSquad, setLineup } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import type { PlayerResponse, PlayerRole, LineupStarter } from '../../api/types'
+import { TacticsPanel } from './TacticsPanel'
 
 const FORMATIONS = ['4-4-2', '4-3-3', '3-5-2', '4-2-3-1', '5-3-2']
 
@@ -197,6 +198,15 @@ export function SquadPage() {
       >
         {mutation.isPending ? 'Salvando…' : 'Salvar escalação'}
       </button>
+
+      <TacticsPanel
+        saveGameId={saveGameId}
+        clubId={clubId}
+        starters={selected.map(id => {
+          const p = players.find(pp => pp.id === id)!
+          return { id, name: p.name }
+        })}
+      />
     </div>
   )
 }

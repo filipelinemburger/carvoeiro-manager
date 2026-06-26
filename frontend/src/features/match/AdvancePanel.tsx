@@ -50,6 +50,30 @@ export function AdvancePanel({ saveGameId, competitionId }: AdvancePanelProps) {
               </li>
             ))}
           </ul>
+          {result.bookings.length > 0 && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <h4>Cartões</h4>
+              <ul>
+                {result.bookings.map((b, i) => (
+                  <li key={`${b.playerId}-${i}`}>
+                    {b.playerName} — {b.type === 'RED_CARD' ? 'Vermelho' : 'Amarelo'}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {result.newSuspensions.length > 0 && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <h4>Suspensões</h4>
+              <ul>
+                {result.newSuspensions.map((s, i) => (
+                  <li key={`${s.playerId}-${i}`}>
+                    {s.playerName} — {s.matches} jogo(s)
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>
