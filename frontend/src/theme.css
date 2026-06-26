@@ -1,0 +1,10 @@
+:root {
+  --cec-yellow: #f7d417;
+  --cec-black: #111111;
+  --cec-green: #1f7a3f;
+  --cec-white: #ffffff;
+  --bg: #f4f4f5;
+}
+body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); }
+.cec-header { background: var(--cec-black); color: var(--cec-yellow); padding: 0.75rem 1rem; }
+.cec-btn { background: var(--cec-yellow); color: var(--cec-black); border: 0; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600; }
