@@ -1,5 +1,6 @@
 package br.com.elifootcarvoeiro.common.security;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,20 +23,26 @@ import java.util.List;
 /**
  * Stateless JWT security. Public routes: {@code /api/v1/auth/**} and
  * {@code /api/v1/health}; everything else requires a valid Bearer token.
- * CORS is restricted to the Vite dev origin.
+ * CORS allows the configured frontend origins. The default accepts any
+ * localhost/127.0.0.1 port so the Vite dev server works regardless of which
+ * port it lands on (e.g. 5174 when 5173 is taken); override
+ * {@code app.cors.allowed-origins} in production with the real origin.
  */
 @Configuration
 @EnableConfigurationProperties(JwtProperties.class)
 public class SecurityConfig {
 
-    private static final String FRONTEND_ORIGIN = "http://localhost:5173";
-
     private final JwtAuthFilter jwtAuthFilter;
     private final RestAuthenticationEntryPoint authenticationEntryPoint;
+    private final List<String> allowedOriginPatterns;
 
-    public SecurityConfig(JwtAuthFilter jwtAuthFilter, RestAuthenticationEntryPoint authenticationEntryPoint) {
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter,
+                          RestAuthenticationEntryPoint authenticationEntryPoint,
+                          @Value("${app.cors.allowed-origins:http://localhost:*,http://127.0.0.1:*}")
+                          List<String> allowedOriginPatterns) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.authenticationEntryPoint = authenticationEntryPoint;
+        this.allowedOriginPatterns = allowedOriginPatterns;
     }
 
     @Bean
@@ -56,7 +63,8 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(FRONTEND_ORIGIN));
+        // Patterns (not exact origins) so wildcard ports work together with allowCredentials.
+        configuration.setAllowedOriginPatterns(allowedOriginPatterns);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

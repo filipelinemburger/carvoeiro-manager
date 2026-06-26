@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { LoginPage } from './auth/LoginPage'
+import { RegisterPage } from './auth/RegisterPage'
 import { DashboardPage } from './features/career/DashboardPage'
 import { SquadPage } from './features/squad/SquadPage'
 import { TablePage } from './features/competition/TablePage'
@@ -16,6 +17,7 @@ export function AppRouter() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route
         path="/dashboard"
         element={

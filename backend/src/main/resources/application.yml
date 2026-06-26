@@ -16,6 +16,10 @@ app:
   jwt:
     secret: ${JWT_SECRET:change-me-dev-secret-change-me-dev-secret-0123456789}
     expiration-minutes: ${JWT_EXP_MIN:720}
+  cors:
+    # Dev default accepts any localhost port (Vite may use 5173, 5174, ...).
+    # Override in production with the real frontend origin(s), comma-separated.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
 
 server:
   port: 8080
