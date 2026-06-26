@@ -56,6 +56,8 @@ class SaveGameServiceIT {
         // Then a SaveGame was created with correct fields
         assertThat(response.id()).isNotNull();
         assertThat(response.seasonYear()).isGreaterThan(0);
+        assertThat(response.competitionId()).isNotNull();
+        assertThat(response.competitionName()).isNotBlank();
         assertThat(response.managedClubId()).isNotNull();
         assertThat(response.managedClubName()).isNotBlank();
         assertThat(response.currentRound()).isEqualTo(0);

@@ -26,3 +26,15 @@ export async function apiPost<T>(path: string, body: unknown, token?: string): P
   })
   return handle<T>(res)
 }
+
+export async function apiPut<T>(path: string, body: unknown, token?: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  })
+  return handle<T>(res)
+}

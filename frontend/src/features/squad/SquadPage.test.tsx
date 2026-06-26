@@ -1,0 +1,147 @@
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
+import { SquadPage } from './SquadPage'
+import { AuthProvider } from '../../auth/AuthContext'
+import type { PlayerResponse, SquadResponse } from '../../api/types'
+
+vi.mock('../../api/career', () => ({
+  getSquad: vi.fn(),
+  setLineup: vi.fn(),
+}))
+
+import { getSquad, setLineup } from '../../api/career'
+
+const mockGetSquad = vi.mocked(getSquad)
+const mockSetLineup = vi.mocked(setLineup)
+
+const GK: PlayerResponse = {
+  id: 'p-gk',
+  name: 'Goleiro Teste',
+  position: 'GK',
+  age: 25,
+  overall: 72,
+  pace: 50,
+  finishing: 20,
+  passing: 40,
+  tackling: 30,
+  goalkeeping: 80,
+  stamina: 60,
+}
+
+const makeOutfield = (id: string, name: string, pos: 'DEF' | 'MID' | 'ATT'): PlayerResponse => ({
+  id,
+  name,
+  position: pos,
+  age: 24,
+  overall: 70,
+  pace: 70,
+  finishing: 65,
+  passing: 68,
+  tackling: 60,
+  goalkeeping: 10,
+  stamina: 72,
+})
+
+const DEF1 = makeOutfield('p-d1', 'Defensor Um', 'DEF')
+const DEF2 = makeOutfield('p-d2', 'Defensor Dois', 'DEF')
+const DEF3 = makeOutfield('p-d3', 'Defensor Tres', 'DEF')
+const DEF4 = makeOutfield('p-d4', 'Defensor Quatro', 'DEF')
+const MID1 = makeOutfield('p-m1', 'Meio Um', 'MID')
+const MID2 = makeOutfield('p-m2', 'Meio Dois', 'MID')
+const MID3 = makeOutfield('p-m3', 'Meio Tres', 'MID')
+const ATT1 = makeOutfield('p-a1', 'Atacante Um', 'ATT')
+const ATT2 = makeOutfield('p-a2', 'Atacante Dois', 'ATT')
+const ATT3 = makeOutfield('p-a3', 'Atacante Tres', 'ATT')
+const ATT4 = makeOutfield('p-a4', 'Atacante Quatro', 'ATT')
+
+const ALL_OUTFIELD = [DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
+// Extra outfield to allow selecting 11 without a GK
+const ELEVEN_NO_GK = [...ALL_OUTFIELD, ATT4]
+
+const squad: SquadResponse = {
+  players: [GK, ...ALL_OUTFIELD, ATT4],
+}
+
+function makeQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } })
+}
+
+function renderWithProviders(saveGameId = 'sg-1', clubId = 'club-1') {
+  const qc = makeQueryClient()
+  return render(
+    <MemoryRouter initialEntries={[`/squad?saveGameId=${saveGameId}&clubId=${clubId}`]}>
+      <AuthProvider>
+        <QueryClientProvider client={qc}>
+          <SquadPage />
+        </QueryClientProvider>
+      </AuthProvider>
+    </MemoryRouter>,
+  )
+}
+
+describe('SquadPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetSquad.mockResolvedValue(squad)
+    mockSetLineup.mockResolvedValue({
+      lineupId: 'l-1',
+      clubId: 'club-1',
+      formation: '4-3-3',
+      startingPlayerIds: [],
+    })
+    localStorage.setItem('elifoot_token', 'test-token')
+    localStorage.setItem('elifoot_user', JSON.stringify({ username: 'u', userId: 'u1' }))
+  })
+
+  it('renders player names after loading', async () => {
+    renderWithProviders()
+    await waitFor(() => {
+      expect(screen.getByText('Goleiro Teste')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Defensor Um')).toBeInTheDocument()
+    expect(screen.getByText('Atacante Um')).toBeInTheDocument()
+  })
+
+  it('enables "Salvar escalação" when exactly 11 players are selected including exactly 1 GK', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+
+    // Select all 11 players (1 GK + 10 outfield)
+    for (const player of squad.players) {
+      const checkbox = screen.getByRole('checkbox', { name: new RegExp(player.name, 'i') })
+      fireEvent.click(checkbox)
+    }
+
+    const saveBtn = screen.getByRole('button', { name: /salvar escala/i })
+    expect(saveBtn).not.toBeDisabled()
+  })
+
+  it('keeps button disabled and shows validation message when selection has no GK', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Defensor Um'))
+
+    // Select 11 outfield players (no GK)
+    for (const player of ELEVEN_NO_GK) {
+      const checkbox = screen.getByRole('checkbox', { name: new RegExp(player.name, 'i') })
+      fireEvent.click(checkbox)
+    }
+
+    const saveBtn = screen.getByRole('button', { name: /salvar escala/i })
+    // 11 players selected, no GK → button disabled, validation message about GK
+    expect(saveBtn).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent(/goleiro/i)
+  })
+
+  it('keeps button disabled when fewer than 11 are selected', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+
+    const checkbox = screen.getByRole('checkbox', { name: /goleiro teste/i })
+    fireEvent.click(checkbox)
+
+    const saveBtn = screen.getByRole('button', { name: /salvar escala/i })
+    expect(saveBtn).toBeDisabled()
+  })
+})

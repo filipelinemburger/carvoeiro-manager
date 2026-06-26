@@ -120,6 +120,8 @@ public class SaveGameService {
         return new SaveGameResponse(
                 saveGame.getId(),
                 saveGame.getSeasonYear(),
+                competition.getId(),
+                competition.getName(),
                 managedClubId,
                 managedClubName,
                 saveGame.getCurrentRound(),
@@ -140,16 +142,21 @@ public class SaveGameService {
                     .orElse(null);
         }
 
-        // Determine totalRounds from the competition
-        int totalRounds = competitionRepository.findAll().stream()
-                .filter(c -> c.getSaveGameId().equals(saveGameId))
-                .mapToInt(Competition::getTotalRounds)
+        // Determine totalRounds and competitionId from the competition
+        Competition competition = competitionRepository.findBySaveGameId(saveGameId)
+                .stream()
                 .findFirst()
-                .orElse(0);
+                .orElse(null);
+
+        UUID competitionId = competition != null ? competition.getId() : null;
+        String competitionName = competition != null ? competition.getName() : null;
+        int totalRounds = competition != null ? competition.getTotalRounds() : 0;
 
         return new SaveGameResponse(
                 saveGame.getId(),
                 saveGame.getSeasonYear(),
+                competitionId,
+                competitionName,
                 saveGame.getManagedClubId(),
                 managedClubName,
                 saveGame.getCurrentRound(),
