@@ -1,5 +1,8 @@
 package br.com.elifootcarvoeiro.match;
 
+import br.com.elifootcarvoeiro.career.SaveGameService;
+import br.com.elifootcarvoeiro.club.Club;
+import br.com.elifootcarvoeiro.club.ClubRepository;
 import br.com.elifootcarvoeiro.common.ApiException;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
@@ -17,22 +20,30 @@ import java.util.stream.Collectors;
 @Service
 public class LineupService {
 
+    private final SaveGameService saveGameService;
     private final PlayerRepository playerRepository;
+    private final ClubRepository clubRepository;
     private final LineupRepository lineupRepository;
     private final LineupPlayerRepository lineupPlayerRepository;
 
-    public LineupService(PlayerRepository playerRepository,
+    public LineupService(SaveGameService saveGameService,
+                         PlayerRepository playerRepository,
+                         ClubRepository clubRepository,
                          LineupRepository lineupRepository,
                          LineupPlayerRepository lineupPlayerRepository) {
+        this.saveGameService = saveGameService;
         this.playerRepository = playerRepository;
+        this.clubRepository = clubRepository;
         this.lineupRepository = lineupRepository;
         this.lineupPlayerRepository = lineupPlayerRepository;
     }
 
     /**
      * Returns all players belonging to the given club, mapped to PlayerResponse.
+     * Enforces that the save game is owned by the user and the club belongs to that save game.
      */
-    public SquadResponse getSquad(UUID clubId) {
+    public SquadResponse getSquad(UUID saveGameId, UUID clubId, UUID userId) {
+        requireOwnedClub(saveGameId, clubId, userId);
         List<PlayerResponse> responses = playerRepository.findByClubId(clubId).stream()
                 .map(this::toPlayerResponse)
                 .toList();
@@ -51,7 +62,9 @@ public class LineupService {
      * (delete-all + insert) so there are never leftover rows.
      */
     @Transactional
-    public LineupResponse setLineup(UUID saveGameId, UUID clubId, SetLineupRequest req) {
+    public LineupResponse setLineup(UUID saveGameId, UUID clubId, SetLineupRequest req, UUID userId) {
+        requireOwnedClub(saveGameId, clubId, userId);
+
         List<UUID> startingIds = req.startingPlayerIds();
 
         validatePlayerCount(startingIds);
@@ -131,6 +144,24 @@ public class LineupService {
     }
 
     // --- Private validation helpers ---
+
+    /**
+     * Enforces save-game ownership and that the club belongs to the save game.
+     * Throws {@code SAVE_GAME_NOT_FOUND} (404) when the save game is missing/foreign, and
+     * {@code CLUB_NOT_FOUND} (404) when the club does not belong to the save game.
+     */
+    private void requireOwnedClub(UUID saveGameId, UUID clubId, UUID userId) {
+        saveGameService.requireOwned(saveGameId, userId);
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> clubNotFound());
+        if (!club.getSaveGameId().equals(saveGameId)) {
+            throw clubNotFound();
+        }
+    }
+
+    private ApiException clubNotFound() {
+        return new ApiException("CLUB_NOT_FOUND", "Club not found", HttpStatus.NOT_FOUND);
+    }
 
     private void validatePlayerCount(List<UUID> startingIds) {
         if (startingIds == null || startingIds.size() != 11) {

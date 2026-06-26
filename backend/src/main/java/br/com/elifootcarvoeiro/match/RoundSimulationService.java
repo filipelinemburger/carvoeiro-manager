@@ -2,6 +2,7 @@ package br.com.elifootcarvoeiro.match;
 
 import br.com.elifootcarvoeiro.career.SaveGame;
 import br.com.elifootcarvoeiro.career.SaveGameRepository;
+import br.com.elifootcarvoeiro.career.SaveGameService;
 import br.com.elifootcarvoeiro.career.SaveGameStatus;
 import br.com.elifootcarvoeiro.club.Club;
 import br.com.elifootcarvoeiro.club.ClubRepository;
@@ -42,6 +43,7 @@ import java.util.stream.Collectors;
 @Service
 public class RoundSimulationService {
 
+    private final SaveGameService saveGameService;
     private final SaveGameRepository saveGameRepository;
     private final CompetitionRepository competitionRepository;
     private final FixtureRepository fixtureRepository;
@@ -50,13 +52,15 @@ public class RoundSimulationService {
     private final MatchSimulationService matchSimulationService;
     private final MatchEventRepository matchEventRepository;
 
-    public RoundSimulationService(SaveGameRepository saveGameRepository,
+    public RoundSimulationService(SaveGameService saveGameService,
+                                  SaveGameRepository saveGameRepository,
                                   CompetitionRepository competitionRepository,
                                   FixtureRepository fixtureRepository,
                                   ClubRepository clubRepository,
                                   LineupService lineupService,
                                   MatchSimulationService matchSimulationService,
                                   MatchEventRepository matchEventRepository) {
+        this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.competitionRepository = competitionRepository;
         this.fixtureRepository = fixtureRepository;
@@ -67,8 +71,8 @@ public class RoundSimulationService {
     }
 
     @Transactional
-    public SimulateRoundResponse simulateNextRound(UUID saveGameId) {
-        SaveGame saveGame = loadSaveGame(saveGameId);
+    public SimulateRoundResponse simulateNextRound(UUID saveGameId, UUID userId) {
+        SaveGame saveGame = saveGameService.requireOwned(saveGameId, userId);
 
         if (saveGame.getStatus() == SaveGameStatus.FINISHED) {
             throw new ApiException("SEASON_FINISHED", "The season has already finished", HttpStatus.CONFLICT);
@@ -212,14 +216,6 @@ public class RoundSimulationService {
         double defense = 0.6 * outfieldTackling + 0.4 * gk.getGoalkeeping();
 
         return new LineupStrength(attack, defense);
-    }
-
-    private SaveGame loadSaveGame(UUID saveGameId) {
-        return saveGameRepository.findById(saveGameId)
-                .orElseThrow(() -> new ApiException(
-                        "SAVE_GAME_NOT_FOUND",
-                        "Save game with id " + saveGameId + " not found",
-                        HttpStatus.NOT_FOUND));
     }
 
     private Map<UUID, Club> buildClubMap(UUID saveGameId) {

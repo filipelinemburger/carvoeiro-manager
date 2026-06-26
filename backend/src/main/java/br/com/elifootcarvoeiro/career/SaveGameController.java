@@ -28,7 +28,7 @@ public class SaveGameController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<SaveGameResponse> getById(@PathVariable UUID id) {
-        return ResponseEntity.ok(saveGameService.getById(id));
+    public ResponseEntity<SaveGameResponse> getById(@PathVariable UUID id, @CurrentUser UUID userId) {
+        return ResponseEntity.ok(saveGameService.getById(id, userId));
     }
 }

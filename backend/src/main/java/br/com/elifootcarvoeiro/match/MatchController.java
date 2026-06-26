@@ -27,7 +27,7 @@ public class MatchController {
     public ResponseEntity<SimulateRoundResponse> advanceRound(
             @PathVariable UUID saveGameId,
             @CurrentUser UUID userId) {
-        SimulateRoundResponse response = roundSimulationService.simulateNextRound(saveGameId);
+        SimulateRoundResponse response = roundSimulationService.simulateNextRound(saveGameId, userId);
         return ResponseEntity.ok(response);
     }
 }

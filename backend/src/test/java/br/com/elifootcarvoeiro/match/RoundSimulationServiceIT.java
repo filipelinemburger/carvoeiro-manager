@@ -54,21 +54,27 @@ class RoundSimulationServiceIT {
     @Autowired
     FixtureRepository fixtureRepository;
 
-    private SaveGameResponse createCareer() {
+    private record Career(UUID userId, SaveGameResponse save) {
+        UUID id() { return save.id(); }
+    }
+
+    private Career createCareer() {
         User user = User.create("sim_test_" + UUID.randomUUID(), "hash");
         userRepository.save(user);
-        return saveGameService.createCareer(user.getId());
+        SaveGameResponse save = saveGameService.createCareer(user.getId());
+        return new Career(user.getId(), save);
     }
 
     @Test
     void advancingOnceSimulatesAllRound1FixturesAndIncreasesCurrentRound() {
         // Given a fresh career
-        SaveGameResponse career = createCareer();
+        Career career = createCareer();
         UUID saveGameId = career.id();
+        UUID userId = career.userId();
         int clubCount = clubRepository.findBySaveGameId(saveGameId).size(); // 10
 
         // When advancing to round 1
-        SimulateRoundResponse response = roundSimulationService.simulateNextRound(saveGameId);
+        SimulateRoundResponse response = roundSimulationService.simulateNextRound(saveGameId, userId);
 
         // Then
         assertThat(response.round()).isEqualTo(1);
@@ -93,8 +99,9 @@ class RoundSimulationServiceIT {
     @Test
     void advancingThroughAllRoundsFinishesTheSeason() {
         // Given a fresh career with 10 clubs = 18 total rounds
-        SaveGameResponse career = createCareer();
+        Career career = createCareer();
         UUID saveGameId = career.id();
+        UUID userId = career.userId();
 
         Competition competition = competitionRepository.findBySaveGameId(saveGameId).get(0);
         int totalRounds = competition.getTotalRounds(); // 18
@@ -103,7 +110,7 @@ class RoundSimulationServiceIT {
         // When advancing through all rounds
         SimulateRoundResponse lastResponse = null;
         for (int i = 1; i <= totalRounds; i++) {
-            lastResponse = roundSimulationService.simulateNextRound(saveGameId);
+            lastResponse = roundSimulationService.simulateNextRound(saveGameId, userId);
         }
 
         // Then the last advance marks seasonFinished
@@ -140,18 +147,19 @@ class RoundSimulationServiceIT {
     @Test
     void advancingWhenSeasonFinishedThrowsConflict() {
         // Given a career fully advanced
-        SaveGameResponse career = createCareer();
+        Career career = createCareer();
         UUID saveGameId = career.id();
+        UUID userId = career.userId();
 
         Competition competition = competitionRepository.findBySaveGameId(saveGameId).get(0);
         int totalRounds = competition.getTotalRounds();
 
         for (int i = 0; i < totalRounds; i++) {
-            roundSimulationService.simulateNextRound(saveGameId);
+            roundSimulationService.simulateNextRound(saveGameId, userId);
         }
 
         // When trying to advance again
-        assertThatThrownBy(() -> roundSimulationService.simulateNextRound(saveGameId))
+        assertThatThrownBy(() -> roundSimulationService.simulateNextRound(saveGameId, userId))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException apiEx = (ApiException) ex;

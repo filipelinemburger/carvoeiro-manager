@@ -48,10 +48,16 @@ class LineupServiceIT {
 
     // --- Helpers ---
 
-    private SaveGameResponse createCareer() {
+    private record Career(UUID userId, SaveGameResponse save) {
+        UUID id() { return save.id(); }
+        UUID managedClubId() { return save.managedClubId(); }
+    }
+
+    private Career createCareer() {
         User user = User.create("lineup_test_" + UUID.randomUUID(), "hash");
         userRepository.save(user);
-        return saveGameService.createCareer(user.getId());
+        SaveGameResponse save = saveGameService.createCareer(user.getId());
+        return new Career(user.getId(), save);
     }
 
     // --- (a) Setting a valid XI persists and reads back; upsert doesn't duplicate ---
@@ -59,9 +65,10 @@ class LineupServiceIT {
     @Test
     void settingValidXiPersistsAndSubsequentCallUpdatesRatherThanDuplicating() {
         // Given
-        SaveGameResponse career = createCareer();
+        Career career = createCareer();
         UUID saveGameId = career.id();
         UUID clubId = career.managedClubId();
+        UUID userId = career.userId();
 
         // Pick exactly 1 GK + 10 outfield
         List<UUID> startingIds = buildValidXiIds(clubId);
@@ -69,7 +76,7 @@ class LineupServiceIT {
         SetLineupRequest req = new SetLineupRequest("4-4-2", startingIds);
 
         // When - first call
-        LineupResponse response = lineupService.setLineup(saveGameId, clubId, req);
+        LineupResponse response = lineupService.setLineup(saveGameId, clubId, req, userId);
 
         // Then
         assertThat(response.lineupId()).isNotNull();
@@ -89,7 +96,7 @@ class LineupServiceIT {
 
         // When - second call (upsert: change formation)
         SetLineupRequest req2 = new SetLineupRequest("4-3-3", startingIds);
-        LineupResponse response2 = lineupService.setLineup(saveGameId, clubId, req2);
+        LineupResponse response2 = lineupService.setLineup(saveGameId, clubId, req2, userId);
 
         // Then - still only 1 lineup row, formation updated, still 11 players (no duplicates)
         assertThat(lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)).isPresent();
@@ -102,16 +109,17 @@ class LineupServiceIT {
     @Test
     void lineupWithNoGkIsRejected() {
         // Given
-        SaveGameResponse career = createCareer();
+        Career career = createCareer();
         UUID saveGameId = career.id();
         UUID clubId = career.managedClubId();
+        UUID userId = career.userId();
 
-        List<UUID> noGkIds = buildXiWithNoGk(clubId);
+        List<UUID> noGkIds = buildXiWithNoGk(career);
 
         SetLineupRequest req = new SetLineupRequest("4-4-2", noGkIds);
 
         // When / Then
-        assertThatThrownBy(() -> lineupService.setLineup(saveGameId, clubId, req))
+        assertThatThrownBy(() -> lineupService.setLineup(saveGameId, clubId, req, userId))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException apiEx = (ApiException) ex;
@@ -125,16 +133,17 @@ class LineupServiceIT {
     @Test
     void lineupWithWrongCountIsRejected() {
         // Given
-        SaveGameResponse career = createCareer();
+        Career career = createCareer();
         UUID saveGameId = career.id();
         UUID clubId = career.managedClubId();
+        UUID userId = career.userId();
 
         List<UUID> tenPlayers = buildValidXiIds(clubId).subList(0, 10);
 
         SetLineupRequest req = new SetLineupRequest("4-4-2", tenPlayers);
 
         // When / Then
-        assertThatThrownBy(() -> lineupService.setLineup(saveGameId, clubId, req))
+        assertThatThrownBy(() -> lineupService.setLineup(saveGameId, clubId, req, userId))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException apiEx = (ApiException) ex;
@@ -148,7 +157,7 @@ class LineupServiceIT {
     @Test
     void bestXiReturnsElevenPlayersWithExactlyOneGk() {
         // Given
-        SaveGameResponse career = createCareer();
+        Career career = createCareer();
         UUID clubId = career.managedClubId();
 
         // When
@@ -167,8 +176,8 @@ class LineupServiceIT {
     @Test
     void lineupWithForeignPlayerIsRejected() {
         // Given: two different careers (with two different managed clubs)
-        SaveGameResponse career1 = createCareer();
-        SaveGameResponse career2 = createCareer();
+        Career career1 = createCareer();
+        Career career2 = createCareer();
 
         UUID clubId1 = career1.managedClubId();
         UUID clubId2 = career2.managedClubId();
@@ -188,7 +197,7 @@ class LineupServiceIT {
         SetLineupRequest req = new SetLineupRequest("4-4-2", xiBWithForeigner);
 
         // When / Then
-        assertThatThrownBy(() -> lineupService.setLineup(career1.id(), clubId1, req))
+        assertThatThrownBy(() -> lineupService.setLineup(career1.id(), clubId1, req, career1.userId()))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException apiEx = (ApiException) ex;
@@ -211,8 +220,8 @@ class LineupServiceIT {
     /**
      * Builds 11 player IDs with NO GK (replaces the GK with the next best outfield player).
      */
-    private List<UUID> buildXiWithNoGk(UUID clubId) {
-        SquadResponse squad = lineupService.getSquad(clubId);
+    private List<UUID> buildXiWithNoGk(Career career) {
+        SquadResponse squad = lineupService.getSquad(career.id(), career.managedClubId(), career.userId());
 
         // Get all non-GK player IDs
         List<UUID> outfieldIds = squad.players().stream()

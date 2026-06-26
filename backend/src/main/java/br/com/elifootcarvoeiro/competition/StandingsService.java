@@ -1,5 +1,6 @@
 package br.com.elifootcarvoeiro.competition;
 
+import br.com.elifootcarvoeiro.career.SaveGameService;
 import br.com.elifootcarvoeiro.club.Club;
 import br.com.elifootcarvoeiro.club.ClubRepository;
 import br.com.elifootcarvoeiro.common.ApiException;
@@ -12,27 +13,39 @@ import java.util.UUID;
 @Service
 public class StandingsService {
 
+    private final SaveGameService saveGameService;
     private final ClubRepository clubRepository;
+    private final CompetitionRepository competitionRepository;
     private final FixtureRepository fixtureRepository;
     private final StandingsCalculator standingsCalculator;
 
-    public StandingsService(ClubRepository clubRepository,
+    public StandingsService(SaveGameService saveGameService,
+                             ClubRepository clubRepository,
+                             CompetitionRepository competitionRepository,
                              FixtureRepository fixtureRepository) {
+        this.saveGameService = saveGameService;
         this.clubRepository = clubRepository;
+        this.competitionRepository = competitionRepository;
         this.fixtureRepository = fixtureRepository;
         this.standingsCalculator = new StandingsCalculator();
     }
 
-    public List<StandingRow> getStandings(UUID saveGameId, UUID competitionId) {
-        List<Club> clubs = clubRepository.findBySaveGameId(saveGameId);
-        if (clubs.isEmpty()) {
-            throw new ApiException(
-                    "SAVE_GAME_NOT_FOUND",
-                    "No clubs found for save game " + saveGameId,
-                    HttpStatus.NOT_FOUND);
-        }
+    public List<StandingRow> getStandings(UUID saveGameId, UUID competitionId, UUID userId) {
+        // Enforce save-game ownership before exposing any data.
+        saveGameService.requireOwned(saveGameId, userId);
 
-        List<Fixture> allFixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, competitionId);
+        // The competition must belong to this save game; otherwise treat as not found
+        // (avoids leaking competitions from other save games).
+        Competition competition = competitionRepository.findById(competitionId)
+                .filter(c -> c.getSaveGameId().equals(saveGameId))
+                .orElseThrow(() -> new ApiException(
+                        "COMPETITION_NOT_FOUND",
+                        "Competition not found",
+                        HttpStatus.NOT_FOUND));
+
+        List<Club> clubs = clubRepository.findBySaveGameId(saveGameId);
+        List<Fixture> allFixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(
+                saveGameId, competition.getId());
         return standingsCalculator.compute(clubs, allFixtures);
     }
 }

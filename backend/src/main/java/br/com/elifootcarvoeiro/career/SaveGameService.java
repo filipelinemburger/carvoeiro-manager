@@ -128,12 +128,28 @@ public class SaveGameService {
                 totalRounds);
     }
 
-    public SaveGameResponse getById(UUID saveGameId) {
+    /**
+     * Loads a save game and enforces that it belongs to {@code userId}.
+     *
+     * Throws {@code SAVE_GAME_NOT_FOUND} (404) if the save game does not exist OR is owned by a
+     * different user. NOT_FOUND (rather than FORBIDDEN) is used deliberately so the API never leaks
+     * which save-game ids exist for other users.
+     */
+    public SaveGame requireOwned(UUID saveGameId, UUID userId) {
         SaveGame saveGame = saveGameRepository.findById(saveGameId)
-                .orElseThrow(() -> new ApiException(
-                        "SAVE_GAME_NOT_FOUND",
-                        "Save game with id " + saveGameId + " not found",
-                        HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> saveGameNotFound());
+        if (!saveGame.getUserId().equals(userId)) {
+            throw saveGameNotFound();
+        }
+        return saveGame;
+    }
+
+    private ApiException saveGameNotFound() {
+        return new ApiException("SAVE_GAME_NOT_FOUND", "Save game not found", HttpStatus.NOT_FOUND);
+    }
+
+    public SaveGameResponse getById(UUID saveGameId, UUID userId) {
+        SaveGame saveGame = requireOwned(saveGameId, userId);
 
         String managedClubName = null;
         if (saveGame.getManagedClubId() != null) {

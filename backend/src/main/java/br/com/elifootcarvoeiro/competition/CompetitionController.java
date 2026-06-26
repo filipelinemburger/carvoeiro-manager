@@ -29,7 +29,7 @@ public class CompetitionController {
             @PathVariable UUID saveGameId,
             @PathVariable UUID competitionId,
             @CurrentUser UUID userId) {
-        List<StandingRow> standings = standingsService.getStandings(saveGameId, competitionId);
+        List<StandingRow> standings = standingsService.getStandings(saveGameId, competitionId, userId);
         return ResponseEntity.ok(standings);
     }
 }

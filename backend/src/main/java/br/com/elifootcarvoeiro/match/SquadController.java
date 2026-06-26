@@ -1,6 +1,7 @@
 package br.com.elifootcarvoeiro.match;
 
 import br.com.elifootcarvoeiro.common.security.CurrentUser;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,7 +30,7 @@ public class SquadController {
             @PathVariable UUID saveGameId,
             @PathVariable UUID clubId,
             @CurrentUser UUID userId) {
-        return ResponseEntity.ok(lineupService.getSquad(clubId));
+        return ResponseEntity.ok(lineupService.getSquad(saveGameId, clubId, userId));
     }
 
     /**
@@ -40,8 +41,8 @@ public class SquadController {
     public ResponseEntity<LineupResponse> setLineup(
             @PathVariable UUID saveGameId,
             @PathVariable UUID clubId,
-            @RequestBody SetLineupRequest request,
+            @Valid @RequestBody SetLineupRequest request,
             @CurrentUser UUID userId) {
-        return ResponseEntity.ok(lineupService.setLineup(saveGameId, clubId, request));
+        return ResponseEntity.ok(lineupService.setLineup(saveGameId, clubId, request, userId));
     }
 }
