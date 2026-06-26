@@ -12,7 +12,6 @@ import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.competition.Fixture;
 import br.com.elifootcarvoeiro.competition.FixtureRepository;
 import br.com.elifootcarvoeiro.player.Player;
-import br.com.elifootcarvoeiro.player.Position;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,22 +22,15 @@ import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 
 /**
- * Simulates a single league round in a deterministic, reproducible way.
+ * Simulates a single league round deterministically. Builds each club's
+ * TacticalProfile (managed: persisted; AI: default) and TeamMatchInput, runs the
+ * engine, and persists the result and typed match events.
  *
- * Strength formulae (values ~0..99):
- *   attack  = mean over 11 players of (0.5*finishing + 0.3*pace + 0.2*passing)
- *   defense = 0.6 * mean(tackling of the 10 outfield) + 0.4 * (GK's goalkeeping)
- *
- * Seed derivation (no clock/random source):
- *   seed = saveGameId.getMostSignificantBits()
- *          ^ fixtureId.getMostSignificantBits()
- *          ^ (long) round
- *
- * Scorer selection per goal: deterministic RNG seeded from the fixture seed, iterated once
- * per goal in minute order; pick is weighted by each player's finishing attribute.
+ * Seed: saveGameId.getMostSignificantBits() ^ fixtureId.getMostSignificantBits() ^ round.
  */
 @Service
 public class RoundSimulationService {
@@ -49,6 +41,8 @@ public class RoundSimulationService {
     private final FixtureRepository fixtureRepository;
     private final ClubRepository clubRepository;
     private final LineupService lineupService;
+    private final TacticsService tacticsService;
+    private final TeamStrengthCalculator teamStrengthCalculator;
     private final MatchSimulationService matchSimulationService;
     private final MatchEventRepository matchEventRepository;
 
@@ -58,6 +52,8 @@ public class RoundSimulationService {
                                   FixtureRepository fixtureRepository,
                                   ClubRepository clubRepository,
                                   LineupService lineupService,
+                                  TacticsService tacticsService,
+                                  TeamStrengthCalculator teamStrengthCalculator,
                                   MatchSimulationService matchSimulationService,
                                   MatchEventRepository matchEventRepository) {
         this.saveGameService = saveGameService;
@@ -66,6 +62,8 @@ public class RoundSimulationService {
         this.fixtureRepository = fixtureRepository;
         this.clubRepository = clubRepository;
         this.lineupService = lineupService;
+        this.tacticsService = tacticsService;
+        this.teamStrengthCalculator = teamStrengthCalculator;
         this.matchSimulationService = matchSimulationService;
         this.matchEventRepository = matchEventRepository;
     }
@@ -73,17 +71,12 @@ public class RoundSimulationService {
     @Transactional
     public SimulateRoundResponse simulateNextRound(UUID saveGameId, UUID userId) {
         SaveGame saveGame = saveGameService.requireOwned(saveGameId, userId);
-
         if (saveGame.getStatus() == SaveGameStatus.FINISHED) {
             throw new ApiException("SEASON_FINISHED", "The season has already finished", HttpStatus.CONFLICT);
         }
 
         final Competition competition = competitionRepository.findBySaveGameId(saveGameId).get(0);
-        // currentRound is the last completed round (0 = none completed yet).
-        // The next round to simulate is the 0-based index: currentRound itself.
-        // After simulation we set currentRound = currentRound + 1.
         final int nextRound = saveGame.getCurrentRound();
-        // Fixtures are stored with 0-based round indices (0..totalRounds-1)
         List<Fixture> fixtures = fixtureRepository.findBySaveGameIdAndCompetitionIdAndRound(
                 saveGameId, competition.getId(), nextRound);
 
@@ -91,10 +84,8 @@ public class RoundSimulationService {
         final UUID managedClubId = saveGame.getManagedClubId();
 
         List<FixtureResultResponse> results = new ArrayList<>();
-
         for (Fixture fixture : fixtures) {
-            FixtureResultResponse result = simulateFixture(fixture, saveGameId, managedClubId, clubById, nextRound);
-            results.add(result);
+            results.add(simulateFixture(fixture, saveGameId, managedClubId, clubById, nextRound));
         }
 
         final int newCurrentRound = nextRound + 1;
@@ -104,35 +95,37 @@ public class RoundSimulationService {
         }
         saveGameRepository.save(saveGame);
 
-        // Return 1-based round number for display
-        return new SimulateRoundResponse(newCurrentRound, List.copyOf(results), saveGame.getStatus() == SaveGameStatus.FINISHED);
+        return new SimulateRoundResponse(newCurrentRound, List.copyOf(results),
+                saveGame.getStatus() == SaveGameStatus.FINISHED);
     }
 
     private FixtureResultResponse simulateFixture(Fixture fixture, UUID saveGameId, UUID managedClubId,
-                                                   Map<UUID, Club> clubById, int round) {
+                                                  Map<UUID, Club> clubById, int round) {
         final UUID homeClubId = fixture.getHomeClubId();
         final UUID awayClubId = fixture.getAwayClubId();
 
         List<Player> homeXi = resolveXi(saveGameId, homeClubId, managedClubId);
         List<Player> awayXi = resolveXi(saveGameId, awayClubId, managedClubId);
 
-        LineupStrength homeStrength = computeStrength(homeXi);
-        LineupStrength awayStrength = computeStrength(awayXi);
+        TacticalProfile homeProfile = tacticsService.profileFor(saveGameId, homeClubId, homeXi);
+        TacticalProfile awayProfile = tacticsService.profileFor(saveGameId, awayClubId, awayXi);
+
+        TeamMatchInput homeInput = teamStrengthCalculator.compute(homeXi, homeProfile);
+        TeamMatchInput awayInput = teamStrengthCalculator.compute(awayXi, awayProfile);
 
         long seed = saveGameId.getMostSignificantBits()
                 ^ fixture.getId().getMostSignificantBits()
                 ^ (long) round;
 
-        SimulatedMatch match = matchSimulationService.simulate(homeStrength, awayStrength, seed);
+        SimulatedMatch match = matchSimulationService.simulate(homeInput, awayInput, seed);
 
         fixture.recordResult(match.homeGoals(), match.awayGoals());
         fixtureRepository.save(fixture);
 
-        saveGoalEvents(fixture, match, homeXi, awayXi, homeClubId, awayClubId, seed);
+        saveEvents(fixture, match, homeXi, awayXi, homeProfile, awayProfile, homeClubId, awayClubId, seed);
 
         Club homeClub = clubById.get(homeClubId);
         Club awayClub = clubById.get(awayClubId);
-
         return new FixtureResultResponse(
                 fixture.getId(),
                 homeClubId, homeClub != null ? homeClub.getName() : "",
@@ -142,37 +135,55 @@ public class RoundSimulationService {
     }
 
     /**
-     * Saves a MatchEvent for each goal in the match using a deterministic scorer selection.
-     *
-     * A single Random seeded from the fixture seed is used to pick scorers in minute order,
-     * ensuring full reproducibility: same seed always produces identical scorer assignments.
+     * Persists a MatchEvent per simulated event. Open-play goals -> finishing-weighted
+     * scorer; set-piece goals -> designated penalty/freekick taker (or finishing-weighted
+     * fallback); cards -> tackling-weighted player. Deterministic via a fixed-seed RNG.
      */
-    private void saveGoalEvents(Fixture fixture, SimulatedMatch match,
-                                 List<Player> homeXi, List<Player> awayXi,
-                                 UUID homeClubId, UUID awayClubId, long seed) {
+    private void saveEvents(Fixture fixture, SimulatedMatch match,
+                            List<Player> homeXi, List<Player> awayXi,
+                            TacticalProfile homeProfile, TacticalProfile awayProfile,
+                            UUID homeClubId, UUID awayClubId, long seed) {
         Random rng = new Random(seed ^ 0x5DEECE66DL);
+        for (SimulatedEvent event : match.events()) {
+            List<Player> xi = event.home() ? homeXi : awayXi;
+            TacticalProfile profile = event.home() ? homeProfile : awayProfile;
+            UUID clubId = event.home() ? homeClubId : awayClubId;
 
-        for (SimulatedGoal goal : match.goals()) {
-            List<Player> scoringXi = goal.home() ? homeXi : awayXi;
-            UUID scoringClubId = goal.home() ? homeClubId : awayClubId;
-
-            Player scorer = pickScorerWeightedByFinishing(scoringXi, rng);
+            Player player = switch (event.type()) {
+                case GOAL -> pickWeighted(xi, Player::getFinishing, rng);
+                case SET_PIECE_GOAL -> setPieceTaker(xi, profile, rng);
+                case YELLOW_CARD, RED_CARD -> pickWeighted(xi, Player::getTackling, rng);
+            };
             matchEventRepository.save(
-                    MatchEvent.create(fixture.getId(), goal.minute(), "GOAL", scorer.getId(), scoringClubId));
+                    MatchEvent.create(fixture.getId(), event.minute(), event.type().name(),
+                            player.getId(), clubId));
         }
     }
 
-    /**
-     * Picks a scorer from the XI with probability proportional to each player's finishing attribute.
-     * The GK (goalkeeping-specialist) has a very low finishing, so they are selected rarely.
-     */
-    private Player pickScorerWeightedByFinishing(List<Player> xi, Random rng) {
-        // Use finishing + 1 so every player has a non-zero weight
-        int totalWeight = xi.stream().mapToInt(p -> p.getFinishing() + 1).sum();
+    private Player setPieceTaker(List<Player> xi, TacticalProfile profile, Random rng) {
+        UUID takerId = profile.penaltyTakerId() != null ? profile.penaltyTakerId() : profile.freekickTakerId();
+        if (takerId != null) {
+            for (Player p : xi) {
+                if (p.getId().equals(takerId)) {
+                    return p;
+                }
+            }
+        }
+        return pickWeighted(xi, Player::getFinishing, rng);
+    }
+
+    private Player pickWeighted(List<Player> xi, ToIntFunction<Player> attribute, Random rng) {
+        // Guard before any RNG draw, so determinism for valid XIs is unaffected. An
+        // empty XI cannot occur with full seeded rosters today, but once eligibility
+        // filtering lands (Tasks 6-7) a meaningful error beats nextInt(0)'s cryptic throw.
+        if (xi.isEmpty()) {
+            throw new IllegalStateException("Cannot attribute a match event to an empty XI");
+        }
+        int totalWeight = xi.stream().mapToInt(p -> attribute.applyAsInt(p) + 1).sum();
         int pick = rng.nextInt(totalWeight);
         int accumulated = 0;
         for (Player player : xi) {
-            accumulated += player.getFinishing() + 1;
+            accumulated += attribute.applyAsInt(player) + 1;
             if (pick < accumulated) {
                 return player;
             }
@@ -180,42 +191,11 @@ public class RoundSimulationService {
         return xi.get(xi.size() - 1);
     }
 
-    /**
-     * Returns the persisted XI for the managed club, or bestXi for AI clubs.
-     */
     private List<Player> resolveXi(UUID saveGameId, UUID clubId, UUID managedClubId) {
         if (clubId.equals(managedClubId)) {
             return lineupService.startingXi(saveGameId, clubId);
         }
         return lineupService.bestXi(clubId);
-    }
-
-    /**
-     * Computes lineup strength from 11 players.
-     *
-     * attack  = mean over 11 of (0.5*finishing + 0.3*pace + 0.2*passing)
-     * defense = 0.6 * mean(tackling of the 10 outfield) + 0.4 * (GK's goalkeeping)
-     */
-    private LineupStrength computeStrength(List<Player> xi) {
-        double attackSum = xi.stream()
-                .mapToDouble(p -> 0.5 * p.getFinishing() + 0.3 * p.getPace() + 0.2 * p.getPassing())
-                .sum();
-        double attack = attackSum / xi.size();
-
-        Player gk = xi.stream()
-                .filter(p -> p.getPosition() == Position.GK)
-                .findFirst()
-                .orElse(xi.get(0));
-
-        double outfieldTackling = xi.stream()
-                .filter(p -> p.getPosition() != Position.GK)
-                .mapToDouble(Player::getTackling)
-                .average()
-                .orElse(0.0);
-
-        double defense = 0.6 * outfieldTackling + 0.4 * gk.getGoalkeeping();
-
-        return new LineupStrength(attack, defense);
     }
 
     private Map<UUID, Club> buildClubMap(UUID saveGameId) {
