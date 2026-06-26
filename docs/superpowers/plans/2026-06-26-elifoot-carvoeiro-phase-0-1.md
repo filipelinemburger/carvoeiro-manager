@@ -34,6 +34,8 @@ The shell's default `java` is Java 8 — **do not use it for this project**. Jav
   source "$HOME/.sdkman/bin/sdkman-init.sh" && sdk use gradle 9.6.1
   ```
 - Node 26 / npm 11 and the Docker daemon are available (Testcontainers works).
+
+**Spring Boot 4 testing note:** Spring Boot 4.0's modularization removed the `@WebMvcTest` slice from `spring-boot-starter-test` (it lived in `spring-boot-test-autoconfigure` ≤3.x; not present in 4.0.x). Test controllers with `@SpringBootTest @AutoConfigureMockMvc @ActiveProfiles("test") @Import(PostgresTestContainer.class)` and `MockMvc` (full context + real Postgres) instead of `@WebMvcTest`. This is also better aligned with the project's "prefer real database for integration tests" standard. Where a task brief shows `@WebMvcTest`, substitute the `@SpringBootTest` form.
 - **Never run `git commit`/`git push` for the user automatically** — the commit steps below are for the implementing engineer to run themselves; do not auto-execute them on the user's behalf without their go-ahead.
 
 ## Package / File Layout
