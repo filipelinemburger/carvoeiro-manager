@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -16,6 +16,8 @@ import { getSquad, setLineup } from '../../api/career'
 const mockGetSquad = vi.mocked(getSquad)
 const mockSetLineup = vi.mocked(setLineup)
 
+const STATE = { form: 0, yellowCards: 0, suspensionRemaining: 0, eligible: true, role: null }
+
 const GK: PlayerResponse = {
   id: 'p-gk',
   name: 'Goleiro Teste',
@@ -28,6 +30,7 @@ const GK: PlayerResponse = {
   tackling: 30,
   goalkeeping: 80,
   stamina: 60,
+  ...STATE,
 }
 
 const makeOutfield = (id: string, name: string, pos: 'DEF' | 'MID' | 'ATT'): PlayerResponse => ({
@@ -42,6 +45,7 @@ const makeOutfield = (id: string, name: string, pos: 'DEF' | 'MID' | 'ATT'): Pla
   tackling: 60,
   goalkeeping: 10,
   stamina: 72,
+  ...STATE,
 })
 
 const DEF1 = makeOutfield('p-d1', 'Defensor Um', 'DEF')
@@ -67,7 +71,12 @@ const GK2: PlayerResponse = {
   tackling: 28,
   goalkeeping: 82,
   stamina: 65,
+  ...STATE,
 }
+
+const SUSPENDED = makeOutfield('p-susp', 'Banido Um', 'MID')
+SUSPENDED.eligible = false
+SUSPENDED.suspensionRemaining = 1
 
 const ALL_OUTFIELD = [DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
 // Extra outfield to allow selecting 11 without a GK
@@ -76,7 +85,7 @@ const ELEVEN_NO_GK = [...ALL_OUTFIELD, ATT4]
 const ELEVEN_WITH_TWO_GK = [GK, GK2, DEF1, DEF2, DEF3, DEF4, MID1, MID2, ATT1, ATT2, ATT3]
 
 const squad: SquadResponse = {
-  players: [GK, GK2, ...ALL_OUTFIELD, ATT4],
+  players: [GK, GK2, ...ALL_OUTFIELD, ATT4, SUSPENDED],
 }
 
 function makeQueryClient() {
@@ -104,7 +113,7 @@ describe('SquadPage', () => {
       lineupId: 'l-1',
       clubId: 'club-1',
       formation: '4-3-3',
-      startingPlayerIds: [],
+      starters: [],
     })
     localStorage.setItem('elifoot_token', 'test-token')
     localStorage.setItem('elifoot_user', JSON.stringify({ username: 'u', userId: 'u1' }))
@@ -175,5 +184,24 @@ describe('SquadPage', () => {
     // 11 players selected but 2 GKs → button disabled, validation message about exactly 1 GK
     expect(saveBtn).toBeDisabled()
     expect(screen.getByRole('alert')).toHaveTextContent(/exatamente 1 goleiro/i)
+  })
+
+  it('does not let a suspended player be selected', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Banido Um'))
+    const checkbox = screen.getByRole('checkbox', { name: /banido um/i })
+    expect(checkbox).toBeDisabled()
+    expect(screen.getByText(/\(Suspenso 1\)/i)).toBeInTheDocument()
+  })
+
+  it('shows a role selector for a selected outfield player', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Defensor Um'))
+    fireEvent.click(screen.getByRole('checkbox', { name: /defensor um/i }))
+    const select = screen.getByRole('combobox', { name: /função de defensor um/i })
+    expect(select).toBeInTheDocument()
+    // Options are scoped to the player's position band (DEF), not all roles
+    const options = within(select).getAllByRole('option').map(o => o.textContent)
+    expect(options).toEqual(['STOPPER', 'FULL_BACK', 'BALL_PLAYING_DEF'])
   })
 })

@@ -27,6 +27,15 @@ export type SaveGameResponse = {
   totalRounds: number
 }
 
+export type Mentality = 'DEFENSIVE' | 'BALANCED' | 'ATTACKING'
+export type Pressing = 'LOW' | 'MEDIUM' | 'HIGH'
+export type Marking = 'ZONAL' | 'MAN_TIGHT'
+export type PlayerRole =
+  | 'GOALKEEPER'
+  | 'STOPPER' | 'FULL_BACK' | 'BALL_PLAYING_DEF'
+  | 'HOLDING_MID' | 'BOX_TO_BOX' | 'PLAYMAKER'
+  | 'POACHER' | 'TARGET_MAN' | 'WINGER'
+
 export type PlayerResponse = {
   id: string
   name: string
@@ -39,6 +48,16 @@ export type PlayerResponse = {
   tackling: number
   goalkeeping: number
   stamina: number
+  form: number
+  yellowCards: number
+  suspensionRemaining: number
+  eligible: boolean
+  role: PlayerRole | null
+}
+
+export type LineupStarter = {
+  playerId: string
+  role: PlayerRole
 }
 
 export type SquadResponse = {
@@ -47,14 +66,37 @@ export type SquadResponse = {
 
 export type SetLineupRequest = {
   formation: string
-  startingPlayerIds: string[]
+  starters: LineupStarter[]
 }
 
 export type LineupResponse = {
   lineupId: string
   clubId: string
   formation: string
-  startingPlayerIds: string[]
+  starters: LineupStarter[]
+}
+
+export type TacticsRequest = {
+  mentality: Mentality
+  pressing: Pressing
+  marking: Marking
+  penaltyTakerId: string | null
+  freekickTakerId: string | null
+  cornerTakerId: string | null
+}
+
+export type TacticsResponse = TacticsRequest
+
+export type Booking = {
+  playerId: string
+  playerName: string
+  type: 'YELLOW_CARD' | 'RED_CARD'
+}
+
+export type Suspension = {
+  playerId: string
+  playerName: string
+  matches: number
 }
 
 export type StandingRow = {
@@ -84,4 +126,6 @@ export type SimulateRoundResponse = {
   round: number
   results: FixtureResultResponse[]
   seasonFinished: boolean
+  bookings: Booking[]
+  newSuspensions: Suspension[]
 }

@@ -6,6 +6,8 @@ import type {
   LineupResponse,
   SimulateRoundResponse,
   StandingRow,
+  TacticsRequest,
+  TacticsResponse,
 } from './types'
 
 export function createCareer(token: string): Promise<SaveGameResponse> {
@@ -42,4 +44,21 @@ export function getStandings(
     `/save-games/${saveGameId}/competitions/${competitionId}/standings`,
     token,
   )
+}
+
+export function getTactics(
+  saveGameId: string,
+  clubId: string,
+  token: string,
+): Promise<TacticsResponse> {
+  return apiGet<TacticsResponse>(`/save-games/${saveGameId}/clubs/${clubId}/tactics`, token)
+}
+
+export function setTactics(
+  saveGameId: string,
+  clubId: string,
+  req: TacticsRequest,
+  token: string,
+): Promise<TacticsResponse> {
+  return apiPut<TacticsResponse>(`/save-games/${saveGameId}/clubs/${clubId}/tactics`, req, token)
 }
