@@ -107,7 +107,11 @@ export function DashboardPage() {
               )}
             </div>
 
-            <AdvancePanel saveGameId={saveGame.id} competitionId={saveGame.competitionId} />
+            <AdvancePanel
+              saveGameId={saveGame.id}
+              competitionId={saveGame.competitionId}
+              managedClubId={saveGame.managedClubId}
+            />
           </div>
         )}
 

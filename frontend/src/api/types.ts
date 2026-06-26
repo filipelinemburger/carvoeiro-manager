@@ -129,3 +129,22 @@ export type SimulateRoundResponse = {
   bookings: Booking[]
   newSuspensions: Suspension[]
 }
+
+export type TopScorerResponse = {
+  playerName: string
+  clubName: string
+  goals: number
+}
+
+export type SquadChange = {
+  playerName: string
+  position: string
+  age: number
+}
+
+export type RolloverResponse = {
+  seasonYear: number
+  currentRound: number
+  retirements: SquadChange[]
+  newcomers: SquadChange[]
+}

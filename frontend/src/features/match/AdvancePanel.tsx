@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { advanceRound } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import type { SimulateRoundResponse } from '../../api/types'
@@ -6,9 +7,10 @@ import type { SimulateRoundResponse } from '../../api/types'
 interface AdvancePanelProps {
   saveGameId: string
   competitionId: string
+  managedClubId: string
 }
 
-export function AdvancePanel({ saveGameId, competitionId }: AdvancePanelProps) {
+export function AdvancePanel({ saveGameId, competitionId, managedClubId }: AdvancePanelProps) {
   const { token } = useAuth()
   const queryClient = useQueryClient()
 
@@ -37,7 +39,14 @@ export function AdvancePanel({ saveGameId, competitionId }: AdvancePanelProps) {
       )}
 
       {result?.seasonFinished && (
-        <p style={{ color: 'green', fontWeight: 'bold' }}>Temporada encerrada!</p>
+        <div style={{ marginTop: '0.5rem' }}>
+          <p style={{ color: 'green', fontWeight: 'bold' }}>Temporada encerrada!</p>
+          <Link
+            to={`/season-summary?saveGameId=${saveGameId}&competitionId=${competitionId}&managedClubId=${managedClubId}`}
+          >
+            <button className="cec-btn">Ver resumo da temporada</button>
+          </Link>
+        </div>
       )}
 
       {result && (

@@ -8,6 +8,8 @@ import type {
   StandingRow,
   TacticsRequest,
   TacticsResponse,
+  TopScorerResponse,
+  RolloverResponse,
 } from './types'
 
 export function createCareer(token: string): Promise<SaveGameResponse> {
@@ -61,4 +63,19 @@ export function setTactics(
   token: string,
 ): Promise<TacticsResponse> {
   return apiPut<TacticsResponse>(`/save-games/${saveGameId}/clubs/${clubId}/tactics`, req, token)
+}
+
+export function getTopScorers(
+  saveGameId: string,
+  competitionId: string,
+  token: string,
+): Promise<TopScorerResponse[]> {
+  return apiGet<TopScorerResponse[]>(
+    `/save-games/${saveGameId}/competitions/${competitionId}/top-scorers`,
+    token,
+  )
+}
+
+export function rolloverSeason(saveGameId: string, token: string): Promise<RolloverResponse> {
+  return apiPost<RolloverResponse>(`/save-games/${saveGameId}/seasons/rollover`, {}, token)
 }

@@ -1,0 +1,67 @@
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
+import { SeasonSummaryPage } from './SeasonSummaryPage'
+import { AuthProvider } from '../../auth/AuthContext'
+
+vi.mock('../../api/career', () => ({
+  getStandings: vi.fn(),
+  getTopScorers: vi.fn(),
+  rolloverSeason: vi.fn(),
+}))
+
+import { getStandings, getTopScorers, rolloverSeason } from '../../api/career'
+
+function renderPage() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <MemoryRouter initialEntries={['/season-summary?saveGameId=sg-1&competitionId=c-1&managedClubId=club-1']}>
+      <AuthProvider>
+        <QueryClientProvider client={qc}>
+          <SeasonSummaryPage />
+        </QueryClientProvider>
+      </AuthProvider>
+    </MemoryRouter>,
+  )
+}
+
+describe('SeasonSummaryPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.setItem('elifoot_token', 'test-token')
+    localStorage.setItem('elifoot_user', JSON.stringify({ username: 'u', userId: 'u1' }))
+    vi.mocked(getStandings).mockResolvedValue([
+      { clubId: 'club-9', clubName: 'Campeao FC', played: 18, won: 14, drawn: 2, lost: 2, goalsFor: 40, goalsAgainst: 12, goalDifference: 28, points: 44 },
+      { clubId: 'club-1', clubName: 'Criciúma EC', played: 18, won: 12, drawn: 4, lost: 2, goalsFor: 35, goalsAgainst: 15, goalDifference: 20, points: 40 },
+    ])
+    vi.mocked(getTopScorers).mockResolvedValue([
+      { playerName: 'Artilheiro', clubName: 'Campeao FC', goals: 21 },
+    ])
+  })
+
+  it('shows the champion, table and top scorers', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/Campeão: Campeao FC/i)).toBeInTheDocument())
+    expect(screen.getByText('Criciúma EC')).toBeInTheDocument()
+    expect(screen.getAllByText(/Artilheiro/).length).toBeGreaterThan(0)
+  })
+
+  it('rolls over and shows squad changes', async () => {
+    vi.mocked(rolloverSeason).mockResolvedValue({
+      seasonYear: 2027,
+      currentRound: 0,
+      retirements: [{ playerName: 'Veterano', position: 'DEF', age: 38 }],
+      newcomers: [{ playerName: 'Jovem Silva', position: 'DEF', age: 17 }],
+    })
+
+    renderPage()
+    await waitFor(() => screen.getByRole('button', { name: /próxima temporada/i }))
+    fireEvent.click(screen.getByRole('button', { name: /próxima temporada/i }))
+
+    await waitFor(() => expect(screen.getByText(/Aposentadorias/i)).toBeInTheDocument())
+    expect(screen.getByText(/Veterano/)).toBeInTheDocument()
+    expect(screen.getByText(/Jovem Silva/)).toBeInTheDocument()
+    expect(rolloverSeason).toHaveBeenCalledWith('sg-1', 'test-token')
+  })
+})

@@ -4,6 +4,7 @@ import { RegisterPage } from './auth/RegisterPage'
 import { DashboardPage } from './features/career/DashboardPage'
 import { SquadPage } from './features/squad/SquadPage'
 import { TablePage } from './features/competition/TablePage'
+import { SeasonSummaryPage } from './features/season/SeasonSummaryPage'
 import { useAuth } from './auth/AuthContext'
 import type { ReactNode } from 'react'
 
@@ -39,6 +40,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <TablePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/season-summary"
+        element={
+          <ProtectedRoute>
+            <SeasonSummaryPage />
           </ProtectedRoute>
         }
       />

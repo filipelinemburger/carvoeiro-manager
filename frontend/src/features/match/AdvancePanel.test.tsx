@@ -14,7 +14,7 @@ function renderPanel() {
     <MemoryRouter>
       <AuthProvider>
         <QueryClientProvider client={qc}>
-          <AdvancePanel saveGameId="sg-1" competitionId="c-1" />
+          <AdvancePanel saveGameId="sg-1" competitionId="c-1" managedClubId="club-1" />
         </QueryClientProvider>
       </AuthProvider>
     </MemoryRouter>,
@@ -43,5 +43,15 @@ describe('AdvancePanel', () => {
     await waitFor(() => expect(screen.getByText(/Cartões/)).toBeInTheDocument())
     expect(screen.getByText(/Bruto Um — Vermelho/)).toBeInTheDocument()
     expect(screen.getByText(/Suspensões/)).toBeInTheDocument()
+  })
+
+  it('links to the season summary when the season finishes', async () => {
+    vi.mocked(advanceRound).mockResolvedValue({
+      round: 18, results: [], seasonFinished: true, bookings: [], newSuspensions: [],
+    })
+    renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: /avançar rodada/i }))
+    await waitFor(() => expect(screen.getByText(/Temporada encerrada/i)).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /resumo da temporada/i })).toBeInTheDocument()
   })
 })
