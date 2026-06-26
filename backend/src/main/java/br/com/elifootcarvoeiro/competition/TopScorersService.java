@@ -19,7 +19,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Aggregates GOAL match-events into a sorted top-scorer table for a competition.
+ * Aggregates GOAL and SET_PIECE_GOAL match-events into a sorted top-scorer table for a competition.
  * Used live (end-of-season screen) and by the season archive at rollover.
  */
 @Service

@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.UUID;
 
 public interface MatchEventRepository extends JpaRepository<MatchEvent, UUID> {
-    List<MatchEvent> findByFixtureIdInAndType(Collection<UUID> fixtureIds, String type);
     List<MatchEvent> findByFixtureIdInAndTypeIn(Collection<UUID> fixtureIds, Collection<String> types);
     void deleteByFixtureIdIn(Collection<UUID> fixtureIds);
 }
