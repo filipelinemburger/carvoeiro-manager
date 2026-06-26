@@ -55,13 +55,28 @@ const ATT1 = makeOutfield('p-a1', 'Atacante Um', 'ATT')
 const ATT2 = makeOutfield('p-a2', 'Atacante Dois', 'ATT')
 const ATT3 = makeOutfield('p-a3', 'Atacante Tres', 'ATT')
 const ATT4 = makeOutfield('p-a4', 'Atacante Quatro', 'ATT')
+const GK2: PlayerResponse = {
+  id: 'p-gk2',
+  name: 'Goleiro Dois',
+  position: 'GK',
+  age: 28,
+  overall: 75,
+  pace: 52,
+  finishing: 18,
+  passing: 42,
+  tackling: 28,
+  goalkeeping: 82,
+  stamina: 65,
+}
 
 const ALL_OUTFIELD = [DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
 // Extra outfield to allow selecting 11 without a GK
 const ELEVEN_NO_GK = [...ALL_OUTFIELD, ATT4]
+// Two GKs and 9 outfield players = 11 total
+const ELEVEN_WITH_TWO_GK = [GK, GK2, DEF1, DEF2, DEF3, DEF4, MID1, MID2, ATT1, ATT2, ATT3]
 
 const squad: SquadResponse = {
-  players: [GK, ...ALL_OUTFIELD, ATT4],
+  players: [GK, GK2, ...ALL_OUTFIELD, ATT4],
 }
 
 function makeQueryClient() {
@@ -108,8 +123,9 @@ describe('SquadPage', () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Teste'))
 
-    // Select all 11 players (1 GK + 10 outfield)
-    for (const player of squad.players) {
+    // Select 11 players: 1 GK + 10 outfield (excluding GK2)
+    const validSelection = [GK, DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
+    for (const player of validSelection) {
       const checkbox = screen.getByRole('checkbox', { name: new RegExp(player.name, 'i') })
       fireEvent.click(checkbox)
     }
@@ -143,5 +159,21 @@ describe('SquadPage', () => {
 
     const saveBtn = screen.getByRole('button', { name: /salvar escala/i })
     expect(saveBtn).toBeDisabled()
+  })
+
+  it('keeps button disabled and shows validation message when selection has 2 GKs', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Dois'))
+
+    // Select 11 players including both GKs
+    for (const player of ELEVEN_WITH_TWO_GK) {
+      const checkbox = screen.getByRole('checkbox', { name: new RegExp(player.name, 'i') })
+      fireEvent.click(checkbox)
+    }
+
+    const saveBtn = screen.getByRole('button', { name: /salvar escala/i })
+    // 11 players selected but 2 GKs → button disabled, validation message about exactly 1 GK
+    expect(saveBtn).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent(/exatamente 1 goleiro/i)
   })
 })

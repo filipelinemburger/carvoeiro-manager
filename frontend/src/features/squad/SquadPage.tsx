@@ -22,8 +22,8 @@ function validate(selected: string[], players: PlayerResponse[]): string | null 
     return `Selecione exatamente 11 jogadores (${selected.length}/11)`
   }
   const gkCount = players.filter(p => selected.includes(p.id) && p.position === 'GK').length
-  if (gkCount === 0) {
-    return 'É necessário incluir pelo menos 1 goleiro na escalação'
+  if (gkCount !== 1) {
+    return 'A escalação precisa de exatamente 1 goleiro'
   }
   return null
 }
