@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16
+    container_name: elifoot-db
+    environment:
+      POSTGRES_DB: elifoot
+      POSTGRES_USER: elifoot
+      POSTGRES_PASSWORD: elifoot
+    ports:
+      - "5432:5432"
+    volumes:
+      - elifoot-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U elifoot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  elifoot-pgdata:
