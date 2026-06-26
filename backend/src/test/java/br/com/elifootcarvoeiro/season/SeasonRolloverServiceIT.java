@@ -19,6 +19,7 @@ import br.com.elifootcarvoeiro.competition.StandingsService;
 import br.com.elifootcarvoeiro.match.LineupService;
 import br.com.elifootcarvoeiro.match.LineupRepository;
 import br.com.elifootcarvoeiro.match.SetLineupRequest;
+import br.com.elifootcarvoeiro.match.SetTacticsRequest;
 import br.com.elifootcarvoeiro.match.LineupStarter;
 import br.com.elifootcarvoeiro.match.RoundSimulationService;
 import br.com.elifootcarvoeiro.player.Player;
@@ -178,5 +179,51 @@ class SeasonRolloverServiceIT {
         assertThatThrownBy(() -> rolloverService.rollover(owner.id(), intruder.userId()))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getStatus().value()).isEqualTo(404));
+    }
+
+    @Test
+    void rollingOverRetiresAManagedTakerWithoutFkViolation() {
+        // Given: a career with a full lineup and a set-piece taker guaranteed to retire
+        Career c = createCareer();
+
+        // Build the managed XI and set it as the active lineup
+        List<LineupStarter> xi = lineupService.bestXi(c.clubId()).stream()
+                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .toList();
+        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi), c.userId());
+
+        // Designate the first starter as set-piece taker on all three FK columns
+        UUID takerId = xi.get(0).playerId();
+        lineupService.setTactics(c.id(), c.clubId(),
+                new SetTacticsRequest("BALANCED", "MEDIUM", "ZONAL", takerId, takerId, takerId),
+                c.userId());
+
+        // Force the taker to age 37 so it becomes 38 at rollover (retirement probability == 1.0)
+        Player taker = playerRepository.findById(takerId).orElseThrow();
+        taker.setAge(37);
+        playerRepository.save(taker);
+
+        // Record squad size before rollover so we can verify one-out/one-in invariant
+        long squadSizeBefore = playerRepository.findBySaveGameId(c.id()).stream()
+                .filter(p -> p.getClubId().equals(c.clubId()))
+                .count();
+
+        // Complete the season so rollover is allowed
+        finishSeason(c);
+
+        // When: rolling over (must NOT throw a FK violation)
+        rolloverService.rollover(c.id(), c.userId());
+
+        // Then: the retired taker has been deleted
+        assertThat(playerRepository.findById(takerId)).isEmpty();
+
+        // And: the managed club's squad size is unchanged (one retired, one newgen added)
+        long squadSizeAfter = playerRepository.findBySaveGameId(c.id()).stream()
+                .filter(p -> p.getClubId().equals(c.clubId()))
+                .count();
+        assertThat(squadSizeAfter).isEqualTo(squadSizeBefore);
+
+        // And: the managed lineup was cleared so the user must re-pick after rollover
+        assertThat(lineupRepository.findBySaveGameIdAndClubId(c.id(), c.clubId())).isEmpty();
     }
 }
