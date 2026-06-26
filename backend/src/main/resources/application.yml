@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: elifoot-carvoeiro
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/elifoot}
+    username: ${DB_USER:elifoot}
+    password: ${DB_PASSWORD:elifoot}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:change-me-dev-secret-change-me-dev-secret-0123456789}
+    expiration-minutes: ${JWT_EXP_MIN:720}
+
+server:
+  port: 8080
