@@ -7,4 +7,5 @@ import java.util.UUID;
 
 public interface LineupPlayerRepository extends JpaRepository<LineupPlayer, LineupPlayerId> {
     List<LineupPlayer> findByLineupId(UUID lineupId);
+    void deleteByLineupId(UUID lineupId);
 }
