@@ -40,6 +40,12 @@ class LineupServiceIT {
     @Autowired
     LineupPlayerRepository lineupPlayerRepository;
 
+    @Autowired
+    br.com.elifootcarvoeiro.player.PlayerRepository playerRepository;
+
+    @Autowired
+    br.com.elifootcarvoeiro.club.ClubRepository clubRepository;
+
     // --- Helpers ---
 
     private SaveGameResponse createCareer() {
@@ -58,7 +64,7 @@ class LineupServiceIT {
         UUID clubId = career.managedClubId();
 
         // Pick exactly 1 GK + 10 outfield
-        List<UUID> startingIds = buildValidXiIds(saveGameId, clubId);
+        List<UUID> startingIds = buildValidXiIds(clubId);
 
         SetLineupRequest req = new SetLineupRequest("4-4-2", startingIds);
 
@@ -100,7 +106,7 @@ class LineupServiceIT {
         UUID saveGameId = career.id();
         UUID clubId = career.managedClubId();
 
-        List<UUID> noGkIds = buildXiWithNoGk(saveGameId, clubId);
+        List<UUID> noGkIds = buildXiWithNoGk(clubId);
 
         SetLineupRequest req = new SetLineupRequest("4-4-2", noGkIds);
 
@@ -123,7 +129,7 @@ class LineupServiceIT {
         UUID saveGameId = career.id();
         UUID clubId = career.managedClubId();
 
-        List<UUID> tenPlayers = buildValidXiIds(saveGameId, clubId).subList(0, 10);
+        List<UUID> tenPlayers = buildValidXiIds(clubId).subList(0, 10);
 
         SetLineupRequest req = new SetLineupRequest("4-4-2", tenPlayers);
 
@@ -156,12 +162,47 @@ class LineupServiceIT {
         assertThat(gkCount).isEqualTo(1);
     }
 
+    // --- (e) Foreign player (from different club) → INVALID_LINEUP ---
+
+    @Test
+    void lineupWithForeignPlayerIsRejected() {
+        // Given: two different careers (with two different managed clubs)
+        SaveGameResponse career1 = createCareer();
+        SaveGameResponse career2 = createCareer();
+
+        UUID clubId1 = career1.managedClubId();
+        UUID clubId2 = career2.managedClubId();
+
+        // Build a valid XI for club 1
+        List<UUID> validXi1 = buildValidXiIds(clubId1);
+
+        // Get a player from club 2
+        List<br.com.elifootcarvoeiro.player.Player> club2Players = playerRepository.findByClubId(clubId2);
+        assertThat(club2Players).isNotEmpty();
+        UUID foreignPlayerId = club2Players.get(0).getId();
+
+        // Replace the last player in the XI with a foreign player
+        List<UUID> xiBWithForeigner = new java.util.ArrayList<>(validXi1);
+        xiBWithForeigner.set(10, foreignPlayerId);
+
+        SetLineupRequest req = new SetLineupRequest("4-4-2", xiBWithForeigner);
+
+        // When / Then
+        assertThatThrownBy(() -> lineupService.setLineup(career1.id(), clubId1, req))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException apiEx = (ApiException) ex;
+                    assertThat(apiEx.getCode()).isEqualTo("INVALID_LINEUP");
+                    assertThat(apiEx.getStatus().value()).isEqualTo(422);
+                });
+    }
+
     // --- Private helpers ---
 
     /**
      * Builds a valid list of 11 player IDs for the club: best XI via lineupService.bestXi.
      */
-    private List<UUID> buildValidXiIds(UUID saveGameId, UUID clubId) {
+    private List<UUID> buildValidXiIds(UUID clubId) {
         return lineupService.bestXi(clubId).stream()
                 .map(br.com.elifootcarvoeiro.player.Player::getId)
                 .collect(Collectors.toList());
@@ -170,7 +211,7 @@ class LineupServiceIT {
     /**
      * Builds 11 player IDs with NO GK (replaces the GK with the next best outfield player).
      */
-    private List<UUID> buildXiWithNoGk(UUID saveGameId, UUID clubId) {
+    private List<UUID> buildXiWithNoGk(UUID clubId) {
         SquadResponse squad = lineupService.getSquad(clubId);
 
         // Get all non-GK player IDs
