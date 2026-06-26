@@ -94,7 +94,7 @@ public class LineupService {
                 .orElseThrow(() -> new ApiException(
                         "NO_GK_FOUND",
                         "Club " + clubId + " has no goalkeeper",
-                        HttpStatus.UNPROCESSABLE_ENTITY));
+                        HttpStatus.UNPROCESSABLE_CONTENT));
 
         List<Player> topOutfield = allPlayers.stream()
                 .filter(p -> p.getPosition() != Position.GK)
@@ -116,7 +116,7 @@ public class LineupService {
                     "INVALID_LINEUP",
                     "A lineup must have exactly 11 starting players, but got " +
                             (startingIds == null ? 0 : startingIds.size()),
-                    HttpStatus.UNPROCESSABLE_ENTITY);
+                    HttpStatus.UNPROCESSABLE_CONTENT);
         }
     }
 
@@ -133,7 +133,7 @@ public class LineupService {
             throw new ApiException(
                     "INVALID_LINEUP",
                     "The following player IDs do not belong to this club: " + foreignIds,
-                    HttpStatus.UNPROCESSABLE_ENTITY);
+                    HttpStatus.UNPROCESSABLE_CONTENT);
         }
     }
 
@@ -149,7 +149,7 @@ public class LineupService {
             throw new ApiException(
                     "INVALID_LINEUP",
                     "A lineup must have exactly 1 goalkeeper, but found " + gkCount,
-                    HttpStatus.UNPROCESSABLE_ENTITY);
+                    HttpStatus.UNPROCESSABLE_CONTENT);
         }
     }
 
