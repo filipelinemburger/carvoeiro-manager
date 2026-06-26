@@ -20,6 +20,20 @@
 - Tests follow Given/When/Then; method names are descriptive sentences. Target ≥80% coverage.
 - The match engine must be deterministic for a given seed (no `Math.random`, no clock reads).
 - Frontend: functional components + hooks, `const` over `let`, strict TypeScript, async errors via try/catch.
+
+## Environment Setup (this machine)
+
+The shell's default `java` is Java 8 — **do not use it for this project**. Java 25 and a compatible Gradle are already installed:
+
+- **JDK 25:** Amazon Corretto 25 at `/Library/Java/JavaVirtualMachines/amazon-corretto-25.jdk/Contents/Home`. Every backend command must run with this as `JAVA_HOME`:
+  ```bash
+  export JAVA_HOME=/Library/Java/JavaVirtualMachines/amazon-corretto-25.jdk/Contents/Home
+  ```
+- **Gradle 9.6.1** (verified running on Java 25) is installed via SDKMAN. Use it to generate the wrapper, then use `./gradlew` for everything after. To get `gradle` on PATH in a non-interactive shell:
+  ```bash
+  source "$HOME/.sdkman/bin/sdkman-init.sh" && sdk use gradle 9.6.1
+  ```
+- Node 26 / npm 11 and the Docker daemon are available (Testcontainers works).
 - **Never run `git commit`/`git push` for the user automatically** — the commit steps below are for the implementing engineer to run themselves; do not auto-execute them on the user's behalf without their go-ahead.
 
 ## Package / File Layout
@@ -138,7 +152,15 @@ git init && git add . && git commit -m "chore: repo root + postgres compose"
 
 - [ ] **Step 1: Generate the Gradle wrapper**
 
-Run (from `backend/`): `gradle wrapper --gradle-version 8.14` (use any Gradle ≥ the version supporting Java 25 toolchains).
+Run (from `backend/`), with the installed Gradle 9.6.1 and `JAVA_HOME` set to Corretto 25 (see Environment Setup):
+
+```bash
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/amazon-corretto-25.jdk/Contents/Home
+source "$HOME/.sdkman/bin/sdkman-init.sh" && sdk use gradle 9.6.1
+gradle wrapper --gradle-version 9.6.1
+```
+
+After this, always use `./gradlew` (with the same `JAVA_HOME`) — never the system `gradle`/`java`.
 
 - [ ] **Step 2: Write `settings.gradle`**
 
