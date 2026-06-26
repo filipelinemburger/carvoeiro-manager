@@ -4,10 +4,13 @@ import br.com.elifootcarvoeiro.career.SaveGameService;
 import br.com.elifootcarvoeiro.club.Club;
 import br.com.elifootcarvoeiro.club.ClubRepository;
 import br.com.elifootcarvoeiro.common.ApiException;
+import br.com.elifootcarvoeiro.player.Marking;
+import br.com.elifootcarvoeiro.player.Mentality;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
 import br.com.elifootcarvoeiro.player.PlayerRole;
 import br.com.elifootcarvoeiro.player.Position;
+import br.com.elifootcarvoeiro.player.Pressing;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -284,5 +287,80 @@ public class LineupService {
                 p.getSuspensionRemaining(),
                 p.isEligible(),
                 role != null ? role.name() : null);
+    }
+
+    @Transactional
+    public TacticsResponse setTactics(UUID saveGameId, UUID clubId, SetTacticsRequest req, UUID userId) {
+        requireOwnedClub(saveGameId, clubId, userId);
+
+        Mentality mentality = parseMentality(req.mentality());
+        Pressing pressing = parsePressing(req.pressing());
+        Marking marking = parseMarking(req.marking());
+
+        Lineup lineup = lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
+                .orElseThrow(() -> new ApiException("LINEUP_REQUIRED",
+                        "Set a lineup before configuring tactics", HttpStatus.UNPROCESSABLE_CONTENT));
+
+        Set<UUID> xiIds = lineupPlayerRepository.findByLineupId(lineup.getId()).stream()
+                .filter(LineupPlayer::isStarting)
+                .map(LineupPlayer::getPlayerId)
+                .collect(Collectors.toSet());
+        requireTakerInXi(req.penaltyTakerId(), xiIds);
+        requireTakerInXi(req.freekickTakerId(), xiIds);
+        requireTakerInXi(req.cornerTakerId(), xiIds);
+
+        lineup.setMentality(mentality);
+        lineup.setPressing(pressing);
+        lineup.setMarking(marking);
+        lineup.setPenaltyTakerId(req.penaltyTakerId());
+        lineup.setFreekickTakerId(req.freekickTakerId());
+        lineup.setCornerTakerId(req.cornerTakerId());
+        lineupRepository.save(lineup);
+
+        return toTacticsResponse(lineup);
+    }
+
+    public TacticsResponse getTactics(UUID saveGameId, UUID clubId, UUID userId) {
+        requireOwnedClub(saveGameId, clubId, userId);
+        return lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
+                .map(this::toTacticsResponse)
+                .orElseGet(() -> new TacticsResponse(
+                        Mentality.BALANCED.name(), Pressing.MEDIUM.name(), Marking.ZONAL.name(),
+                        null, null, null));
+    }
+
+    private TacticsResponse toTacticsResponse(Lineup lineup) {
+        return new TacticsResponse(
+                lineup.getMentality().name(), lineup.getPressing().name(), lineup.getMarking().name(),
+                lineup.getPenaltyTakerId(), lineup.getFreekickTakerId(), lineup.getCornerTakerId());
+    }
+
+    private void requireTakerInXi(UUID takerId, Set<UUID> xiIds) {
+        if (takerId != null && !xiIds.contains(takerId)) {
+            throw new ApiException("INVALID_TACTICS",
+                    "Set-piece taker " + takerId + " is not in the starting XI",
+                    HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+    }
+
+    private Mentality parseMentality(String v) {
+        try { return Mentality.valueOf(v); }
+        catch (IllegalArgumentException e) {
+            throw new ApiException("INVALID_TACTICS", "Unknown mentality: " + v, HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+    }
+
+    private Pressing parsePressing(String v) {
+        try { return Pressing.valueOf(v); }
+        catch (IllegalArgumentException e) {
+            throw new ApiException("INVALID_TACTICS", "Unknown pressing: " + v, HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+    }
+
+    private Marking parseMarking(String v) {
+        try { return Marking.valueOf(v); }
+        catch (IllegalArgumentException e) {
+            throw new ApiException("INVALID_TACTICS", "Unknown marking: " + v, HttpStatus.UNPROCESSABLE_CONTENT);
+        }
     }
 }
