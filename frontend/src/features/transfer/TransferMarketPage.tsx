@@ -14,6 +14,8 @@ export function TransferMarketPage() {
   const queryClient = useQueryClient()
   const saveGameId = searchParams.get('saveGameId') ?? ''
   const [amounts, setAmounts] = useState<Record<string, string>>({})
+  const [wages, setWages] = useState<Record<string, string>>({})
+  const [years, setYears] = useState<Record<string, string>>({})
 
   const enabled = Boolean(saveGameId && token)
   const save = useQuery({ queryKey: ['saveGame', saveGameId], queryFn: () => getSaveGame(saveGameId, token ?? ''), enabled })
@@ -25,7 +27,8 @@ export function TransferMarketPage() {
     void queryClient.invalidateQueries({ queryKey: ['offers', saveGameId] })
   }
   const offerMut = useMutation({
-    mutationFn: (v: { playerId: string; amount: number }) => makeOffer(saveGameId, v, token ?? ''),
+    mutationFn: (v: { playerId: string; amount: number; wage: number; contractYears: number }) =>
+      makeOffer(saveGameId, v, token ?? ''),
     onSuccess: invalidate,
   })
   const acceptMut = useMutation({ mutationFn: (id: string) => acceptCounter(saveGameId, id, token ?? ''), onSuccess: invalidate })
@@ -105,6 +108,7 @@ export function TransferMarketPage() {
             <th>Pos</th><th>Idade</th><th>OVR</th>
             <th style={{ textAlign: 'left' }}>Clube</th>
             <th style={{ textAlign: 'right' }}>Valor</th>
+            <th style={{ textAlign: 'right' }}>Salário pedido</th>
             <th>Proposta</th>
           </tr>
         </thead>
@@ -117,6 +121,7 @@ export function TransferMarketPage() {
               <td style={{ textAlign: 'center' }}>{p.overall}</td>
               <td>{p.clubName}</td>
               <td style={{ textAlign: 'right' }}>{formatBRL(p.value)}</td>
+              <td style={{ textAlign: 'right' }}>{formatBRL(p.wageDemand)}</td>
               <td style={{ textAlign: 'center' }}>
                 <input
                   aria-label={`Valor para ${p.name}`}
@@ -125,10 +130,23 @@ export function TransferMarketPage() {
                   onChange={e => setAmounts(a => ({ ...a, [p.playerId]: e.target.value }))}
                   style={{ width: 110 }}
                 />{' '}
+                <input aria-label={`Salário para ${p.name}`} type="number"
+                  value={wages[p.playerId] ?? ''}
+                  onChange={e => setWages(w => ({ ...w, [p.playerId]: e.target.value }))}
+                  style={{ width: 110 }} />{' '}
+                <input aria-label={`Anos para ${p.name}`} type="number" min={1} max={5}
+                  value={years[p.playerId] ?? '3'}
+                  onChange={e => setYears(y => ({ ...y, [p.playerId]: e.target.value }))}
+                  style={{ width: 50 }} />{' '}
                 <button
                   className="cec-btn"
                   disabled={!windowOpen || offerMut.isPending}
-                  onClick={() => offerMut.mutate({ playerId: p.playerId, amount: Number(amounts[p.playerId] ?? 0) })}
+                  onClick={() => offerMut.mutate({
+                    playerId: p.playerId,
+                    amount: Number(amounts[p.playerId] ?? 0),
+                    wage: Number(wages[p.playerId] ?? p.wageDemand),
+                    contractYears: Number(years[p.playerId] ?? 3),
+                  })}
                 >
                   Propor
                 </button>
