@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
@@ -37,6 +38,21 @@ public class Club {
     @Column(name = "secondary_color", length = 9)
     private String secondaryColor;
 
+    @Column(name = "balance", nullable = false)
+    private BigDecimal balance = BigDecimal.ZERO;
+
+    @Column(name = "reputation", nullable = false)
+    private int reputation;
+
+    @Column(name = "stadium_capacity", nullable = false)
+    private int stadiumCapacity;
+
+    @Column(name = "sponsorship_per_round", nullable = false)
+    private BigDecimal sponsorshipPerRound = BigDecimal.ZERO;
+
+    @Column(name = "stadium_upkeep_per_round", nullable = false)
+    private BigDecimal stadiumUpkeepPerRound = BigDecimal.ZERO;
+
     protected Club() {
         // for JPA
     }
@@ -67,4 +83,19 @@ public class Club {
     public void setNickname(String nickname) { this.nickname = nickname; }
     public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
     public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
+
+    public BigDecimal getBalance() { return balance; }
+    public int getReputation() { return reputation; }
+    public int getStadiumCapacity() { return stadiumCapacity; }
+    public BigDecimal getSponsorshipPerRound() { return sponsorshipPerRound; }
+    public BigDecimal getStadiumUpkeepPerRound() { return stadiumUpkeepPerRound; }
+
+    public void setBalance(BigDecimal balance) { this.balance = balance; }
+    public void setReputation(int reputation) { this.reputation = reputation; }
+    public void setStadiumCapacity(int stadiumCapacity) { this.stadiumCapacity = stadiumCapacity; }
+    public void setSponsorshipPerRound(BigDecimal v) { this.sponsorshipPerRound = v; }
+    public void setStadiumUpkeepPerRound(BigDecimal v) { this.stadiumUpkeepPerRound = v; }
+
+    /** Applies a signed delta to the balance (income positive, costs negative). */
+    public void adjustBalance(BigDecimal delta) { this.balance = this.balance.add(delta); }
 }

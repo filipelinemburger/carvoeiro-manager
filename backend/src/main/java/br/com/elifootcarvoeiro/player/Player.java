@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
@@ -70,6 +71,9 @@ public class Player {
 
     @Column(name = "suspension_remaining", nullable = false)
     private int suspensionRemaining;
+
+    @Column(name = "wage", nullable = false)
+    private BigDecimal wage = BigDecimal.ZERO;
 
     protected Player() {
         // for JPA
@@ -158,4 +162,7 @@ public class Player {
         this.yellowCards = 0;
         this.suspensionRemaining = 0;
     }
+
+    public BigDecimal getWage() { return wage; }
+    public void setWage(BigDecimal wage) { this.wage = wage; }
 }
