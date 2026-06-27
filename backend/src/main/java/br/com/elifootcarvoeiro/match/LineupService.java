@@ -3,6 +3,7 @@ package br.com.elifootcarvoeiro.match;
 import br.com.elifootcarvoeiro.career.SaveGameService;
 import br.com.elifootcarvoeiro.club.Club;
 import br.com.elifootcarvoeiro.club.ClubRepository;
+import br.com.elifootcarvoeiro.contract.ContractValuation;
 import br.com.elifootcarvoeiro.common.ApiException;
 import br.com.elifootcarvoeiro.player.Marking;
 import br.com.elifootcarvoeiro.player.Mentality;
@@ -31,17 +32,20 @@ public class LineupService {
     private final ClubRepository clubRepository;
     private final LineupRepository lineupRepository;
     private final LineupPlayerRepository lineupPlayerRepository;
+    private final ContractValuation contractValuation;
 
     public LineupService(SaveGameService saveGameService,
                          PlayerRepository playerRepository,
                          ClubRepository clubRepository,
                          LineupRepository lineupRepository,
-                         LineupPlayerRepository lineupPlayerRepository) {
+                         LineupPlayerRepository lineupPlayerRepository,
+                         ContractValuation contractValuation) {
         this.saveGameService = saveGameService;
         this.playerRepository = playerRepository;
         this.clubRepository = clubRepository;
         this.lineupRepository = lineupRepository;
         this.lineupPlayerRepository = lineupPlayerRepository;
+        this.contractValuation = contractValuation;
     }
 
     /**
@@ -286,7 +290,9 @@ public class LineupService {
                 p.getYellowCards(),
                 p.getSuspensionRemaining(),
                 p.isEligible(),
-                role != null ? role.name() : null);
+                role != null ? role.name() : null,
+                p.getContractYears(),
+                contractValuation.wageDemand(p.getOverall(), p.getAge()));
     }
 
     @Transactional

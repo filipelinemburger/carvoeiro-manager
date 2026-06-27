@@ -1,5 +1,6 @@
 package br.com.elifootcarvoeiro.match;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 public record PlayerResponse(
@@ -18,6 +19,8 @@ public record PlayerResponse(
         int yellowCards,
         int suspensionRemaining,
         boolean eligible,
-        String role
+        String role,
+        int contractYears,
+        BigDecimal wageDemand
 ) {
 }
