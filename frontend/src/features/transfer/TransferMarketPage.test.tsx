@@ -15,7 +15,7 @@ vi.mock('../../api/career', () => ({
   respondToOffer: vi.fn(),
 }))
 
-import { getSaveGame, getMarket, getOffers, makeOffer } from '../../api/career'
+import { getSaveGame, getMarket, getOffers, makeOffer, respondToOffer } from '../../api/career'
 
 const SAVE_OPEN = {
   id: 'sg-1', seasonYear: 2026, competitionId: 'c-1', competitionName: 'Catarinense',
@@ -71,5 +71,27 @@ describe('TransferMarketPage', () => {
     renderPage()
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/fechada/i))
     expect(screen.getByRole('button', { name: /propor/i })).toBeDisabled()
+  })
+
+  it('shows incoming bids and accepts one', async () => {
+    vi.mocked(getOffers).mockResolvedValue([
+      { id: 'in1', playerId: 'mp1', playerName: 'Meu Jogador', fromClubId: 'club-9', fromClubName: 'Rival FC',
+        toClubId: 'club-1', toClubName: 'Criciúma', direction: 'INCOMING', amount: 2000000,
+        counterAmount: null, status: 'PENDING', round: 0 },
+    ])
+    vi.mocked(respondToOffer).mockResolvedValue({
+      id: 'in1', playerId: 'mp1', playerName: 'Meu Jogador', fromClubId: 'club-9', fromClubName: 'Rival FC',
+      toClubId: 'club-1', toClubName: 'Criciúma', direction: 'INCOMING', amount: 2000000,
+      counterAmount: null, status: 'ACCEPTED', round: 0,
+    })
+
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/Propostas recebidas/i)).toBeInTheDocument())
+    expect(screen.getByText(/Meu Jogador/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /aceitar venda/i }))
+    await waitFor(() =>
+      expect(respondToOffer).toHaveBeenCalledWith('sg-1', 'in1', { action: 'ACCEPT', counterAmount: null }, 'test-token'),
+    )
   })
 })

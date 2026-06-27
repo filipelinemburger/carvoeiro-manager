@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
-  getSaveGame, getMarket, getOffers, makeOffer, acceptCounter, withdrawOffer,
+  getSaveGame, getMarket, getOffers, makeOffer, acceptCounter, withdrawOffer, respondToOffer,
 } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import { formatBRL } from '../../lib/money'
@@ -31,11 +31,19 @@ export function TransferMarketPage() {
   const acceptMut = useMutation({ mutationFn: (id: string) => acceptCounter(saveGameId, id, token ?? ''), onSuccess: invalidate })
   const withdrawMut = useMutation({ mutationFn: (id: string) => withdrawOffer(saveGameId, id, token ?? ''), onSuccess: invalidate })
 
+  const [counters, setCounters] = useState<Record<string, string>>({})
+  const respondMut = useMutation({
+    mutationFn: (v: { offerId: string; action: 'ACCEPT' | 'REJECT' | 'COUNTER'; counterAmount: number | null }) =>
+      respondToOffer(saveGameId, v.offerId, { action: v.action, counterAmount: v.counterAmount }, token ?? ''),
+    onSuccess: invalidate,
+  })
+
   if (market.isLoading) return <p>Carregando mercado…</p>
   if (market.error) return <p>Erro ao carregar o mercado.</p>
 
   const windowOpen = save.data ? isTransferWindowOpen(save.data.currentRound, save.data.totalRounds) : true
   const outgoing = (offers.data ?? []).filter(o => o.direction === 'OUTGOING' && o.status === 'COUNTERED')
+  const incoming = (offers.data ?? []).filter(o => o.direction === 'INCOMING' && o.status === 'PENDING')
   const last = offerMut.data
 
   return (
@@ -50,6 +58,28 @@ export function TransferMarketPage() {
         </p>
       )}
       {offerMut.isError && <p style={{ color: 'red' }}>Erro ao enviar proposta.</p>}
+
+      {incoming.length > 0 && (
+        <div style={{ marginBottom: '1rem' }}>
+          <h3>Propostas recebidas</h3>
+          <ul>
+            {incoming.map(o => (
+              <li key={o.id} style={{ marginBottom: '0.5rem' }}>
+                {o.playerName} — {o.fromClubName} oferece {formatBRL(o.amount)}{' '}
+                <button className="cec-btn" disabled={!windowOpen || respondMut.isPending}
+                  onClick={() => respondMut.mutate({ offerId: o.id, action: 'ACCEPT', counterAmount: null })}>Aceitar venda</button>{' '}
+                <button className="cec-btn" disabled={!windowOpen || respondMut.isPending}
+                  onClick={() => respondMut.mutate({ offerId: o.id, action: 'REJECT', counterAmount: null })}>Recusar</button>{' '}
+                <input aria-label={`Contraproposta para ${o.playerName}`} type="number"
+                  value={counters[o.id] ?? ''} onChange={e => setCounters(c => ({ ...c, [o.id]: e.target.value }))}
+                  style={{ width: 110 }} />
+                <button className="cec-btn" disabled={!windowOpen || respondMut.isPending}
+                  onClick={() => respondMut.mutate({ offerId: o.id, action: 'COUNTER', counterAmount: Number(counters[o.id] ?? 0) })}>Contrapor</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {outgoing.length > 0 && (
         <div style={{ marginBottom: '1rem' }}>
