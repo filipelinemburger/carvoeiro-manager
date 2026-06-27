@@ -11,12 +11,15 @@ import br.com.elifootcarvoeiro.competition.Competition;
 import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.competition.Fixture;
 import br.com.elifootcarvoeiro.competition.FixtureRepository;
+import br.com.elifootcarvoeiro.finance.FinanceRoundResponse;
+import br.com.elifootcarvoeiro.finance.FinanceService;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -47,6 +50,7 @@ public class RoundSimulationService {
     private final MatchSimulationService matchSimulationService;
     private final MatchEventRepository matchEventRepository;
     private final MatchOutcomeApplier matchOutcomeApplier;
+    private final FinanceService financeService;
 
     public RoundSimulationService(SaveGameService saveGameService,
                                   SaveGameRepository saveGameRepository,
@@ -59,7 +63,8 @@ public class RoundSimulationService {
                                   TeamStrengthCalculator teamStrengthCalculator,
                                   MatchSimulationService matchSimulationService,
                                   MatchEventRepository matchEventRepository,
-                                  MatchOutcomeApplier matchOutcomeApplier) {
+                                  MatchOutcomeApplier matchOutcomeApplier,
+                                  FinanceService financeService) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.competitionRepository = competitionRepository;
@@ -72,6 +77,7 @@ public class RoundSimulationService {
         this.matchSimulationService = matchSimulationService;
         this.matchEventRepository = matchEventRepository;
         this.matchOutcomeApplier = matchOutcomeApplier;
+        this.financeService = financeService;
     }
 
     private record FixtureSim(FixtureResultResponse response, List<Player> homeXi, List<Player> awayXi,
@@ -127,9 +133,19 @@ public class RoundSimulationService {
         }
         saveGameRepository.save(saveGame);
 
+        FinanceRoundResponse roundFinance = financeService.processRound(saveGameId, nextRound, fixtures);
+        BigDecimal prize = BigDecimal.ZERO;
+        if (saveGame.getStatus() == SaveGameStatus.FINISHED) {
+            prize = financeService.processSeasonEnd(saveGameId);
+        }
+        FinanceRoundResponse finance = new FinanceRoundResponse(
+                roundFinance.gate(), roundFinance.sponsorship(), roundFinance.wages(),
+                roundFinance.upkeep(), prize, roundFinance.net(), roundFinance.balance().add(prize));
+
         return new SimulateRoundResponse(newCurrentRound, List.copyOf(results),
                 saveGame.getStatus() == SaveGameStatus.FINISHED,
-                List.copyOf(summary.bookings()), List.copyOf(summary.newSuspensions()));
+                List.copyOf(summary.bookings()), List.copyOf(summary.newSuspensions()),
+                finance);
     }
 
     private FixtureSim simulateFixture(Fixture fixture, UUID saveGameId, UUID managedClubId,
