@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
-import { createCareer, getSaveGame } from '../../api/career'
+import { createCareer, getSaveGame, getFinances } from '../../api/career'
+import { formatBRL } from '../../lib/money'
 import { AdvancePanel } from '../match/AdvancePanel'
 import type { SaveGameResponse } from '../../api/types'
 
@@ -31,6 +32,12 @@ export function DashboardPage() {
     queryFn: () => getSaveGame(saveGameId!, token ?? ''),
     enabled: Boolean(saveGameId && token),
     retry: false,
+  })
+
+  const { data: finances } = useQuery({
+    queryKey: ['finances', saveGame?.id, saveGame?.managedClubId],
+    queryFn: () => getFinances(saveGame!.id, saveGame!.managedClubId, token ?? ''),
+    enabled: Boolean(saveGame && token),
   })
 
   // If the stored save game can't be loaded (deleted, or not owned by this
@@ -93,6 +100,11 @@ export function DashboardPage() {
             <p>
               <strong>Rodada:</strong> {saveGame.currentRound} / {saveGame.totalRounds}
             </p>
+            {finances && (
+              <p style={{ color: finances.balance < 0 ? 'red' : undefined }}>
+                <strong>Saldo:</strong> {formatBRL(finances.balance)}
+              </p>
+            )}
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
               {squadUrl && (
@@ -107,6 +119,9 @@ export function DashboardPage() {
               )}
               <Link to={`/history?saveGameId=${saveGame.id}`}>
                 <button className="cec-btn">Histórico</button>
+              </Link>
+              <Link to={`/finances?saveGameId=${saveGame.id}&clubId=${saveGame.managedClubId}`}>
+                <button className="cec-btn">Finanças</button>
               </Link>
             </div>
 

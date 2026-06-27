@@ -12,6 +12,7 @@ import type {
   RolloverResponse,
   SeasonSummary,
   SeasonDetail,
+  FinancesResponse,
 } from './types'
 
 export function createCareer(token: string): Promise<SaveGameResponse> {
@@ -92,4 +93,12 @@ export function getSeason(
   token: string,
 ): Promise<SeasonDetail> {
   return apiGet<SeasonDetail>(`/save-games/${saveGameId}/seasons/${seasonYear}`, token)
+}
+
+export function getFinances(
+  saveGameId: string,
+  clubId: string,
+  token: string,
+): Promise<FinancesResponse> {
+  return apiGet<FinancesResponse>(`/save-games/${saveGameId}/clubs/${clubId}/finances`, token)
 }

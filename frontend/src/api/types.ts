@@ -178,3 +178,16 @@ export type SeasonDetail = {
   table: SeasonStandingRow[]
   topScorers: TopScorerResponse[]
 }
+
+export type FinanceTransaction = {
+  seasonYear: number
+  round: number
+  type: 'GATE' | 'WAGES' | 'SPONSOR' | 'UPKEEP' | 'PRIZE'
+  amount: number
+  description: string
+}
+
+export type FinancesResponse = {
+  balance: number
+  transactions: FinanceTransaction[]
+}

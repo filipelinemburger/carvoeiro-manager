@@ -6,6 +6,7 @@ import { SquadPage } from './features/squad/SquadPage'
 import { TablePage } from './features/competition/TablePage'
 import { SeasonSummaryPage } from './features/season/SeasonSummaryPage'
 import { SeasonHistoryPage } from './features/season/SeasonHistoryPage'
+import { FinancesPage } from './features/finance/FinancesPage'
 import { useAuth } from './auth/AuthContext'
 import type { ReactNode } from 'react'
 
@@ -57,6 +58,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <SeasonHistoryPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finances"
+        element={
+          <ProtectedRoute>
+            <FinancesPage />
           </ProtectedRoute>
         }
       />

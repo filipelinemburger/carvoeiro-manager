@@ -4,11 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { DashboardPage } from './DashboardPage'
 import { AuthProvider } from '../../auth/AuthContext'
-import { getSaveGame } from '../../api/career'
+import { getSaveGame, getFinances } from '../../api/career'
 
 vi.mock('../../api/career', () => ({
   getSaveGame: vi.fn(),
   createCareer: vi.fn(),
+  getFinances: vi.fn(),
 }))
 vi.mock('../match/AdvancePanel', () => ({ AdvancePanel: () => null }))
 
@@ -67,12 +68,14 @@ describe('DashboardPage', () => {
       currentRound: 5,
       totalRounds: 18,
     })
+    ;(getFinances as Mock).mockResolvedValue({ balance: 12500000, transactions: [] })
 
     renderDashboard()
 
     await waitFor(() => {
       expect(screen.getByText(/Criciúma Esporte Clube/)).toBeInTheDocument()
     })
+    await waitFor(() => expect(screen.getByText(/Saldo:/)).toBeInTheDocument())
     expect(getSaveGame).toHaveBeenCalledWith('save-2', 'test-token')
   })
 
