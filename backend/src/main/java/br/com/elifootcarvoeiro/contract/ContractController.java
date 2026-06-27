@@ -35,4 +35,12 @@ public class ContractController {
         return ResponseEntity.ok(contractService.renewContract(
                 saveGameId, userId, playerId, request.wage(), request.contractYears()));
     }
+
+    @PostMapping("/free-agents/{playerId}/sign")
+    public ResponseEntity<PlayerContractResponse> sign(
+            @PathVariable UUID saveGameId, @PathVariable UUID playerId,
+            @RequestBody SignFreeAgentRequest request, @CurrentUser UUID userId) {
+        return ResponseEntity.ok(contractService.signFreeAgent(
+                saveGameId, userId, playerId, request.wage(), request.contractYears()));
+    }
 }
