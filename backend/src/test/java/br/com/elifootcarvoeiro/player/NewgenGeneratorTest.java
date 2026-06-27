@@ -1,5 +1,6 @@
 package br.com.elifootcarvoeiro.player;
 
+import br.com.elifootcarvoeiro.finance.FinanceCalculator;
 import br.com.elifootcarvoeiro.seed.SeedLoader;
 import org.junit.jupiter.api.Test;
 
@@ -11,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class NewgenGeneratorTest {
 
     private final OverallCalculator overallCalculator = new OverallCalculator();
-    private final NewgenGenerator generator = new NewgenGenerator(new SeedLoader(), overallCalculator);
+    private final NewgenGenerator generator = new NewgenGenerator(new SeedLoader(), overallCalculator, new FinanceCalculator());
 
     @Test
     void generatesAYouthPlayerInTheRequestedClubAndPosition() {
@@ -44,6 +45,12 @@ class NewgenGeneratorTest {
     void attackersGetAHighFinishingFloor() {
         Player p = generator.generate(UUID.randomUUID(), UUID.randomUUID(), Position.ATT, new Random(2));
         assertThat(p.getFinishing()).isGreaterThanOrEqualTo(45); // ATT finishing band starts at 45
+    }
+
+    @Test
+    void newgensReceiveAPositiveWage() {
+        Player p = generator.generate(UUID.randomUUID(), UUID.randomUUID(), Position.ATT, new Random(5));
+        assertThat(p.getWage()).isGreaterThan(java.math.BigDecimal.ZERO);
     }
 
     @Test

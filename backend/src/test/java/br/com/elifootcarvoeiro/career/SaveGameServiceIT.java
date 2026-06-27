@@ -99,4 +99,31 @@ class SaveGameServiceIT {
         assertThat(allFixtures).allMatch(f -> f.getHomeGoals() == null);
         assertThat(allFixtures).allMatch(f -> f.getAwayGoals() == null);
     }
+
+    @Test
+    void creatingCareerSeedsClubFinancialProfilesAndPlayerWages() {
+        // Given a persisted user
+        User user = User.create("tigre_finance", "hash");
+        userRepository.save(user);
+
+        // When a career is created
+        SaveGameResponse response = saveGameService.createCareer(user.getId());
+        UUID saveGameId = response.id();
+
+        // Then every club has a populated financial profile
+        var clubs = clubRepository.findBySaveGameId(saveGameId);
+        assertThat(clubs).isNotEmpty();
+        clubs.forEach(club -> {
+            assertThat(club.getReputation()).as("reputation").isGreaterThan(0);
+            assertThat(club.getStadiumCapacity()).as("capacity").isGreaterThan(0);
+            assertThat(club.getBalance()).as("balance").isGreaterThan(java.math.BigDecimal.ZERO);
+            assertThat(club.getSponsorshipPerRound()).as("sponsorship").isGreaterThan(java.math.BigDecimal.ZERO);
+            assertThat(club.getStadiumUpkeepPerRound()).as("upkeep").isGreaterThan(java.math.BigDecimal.ZERO);
+        });
+
+        // And every player has a positive wage
+        assertThat(playerRepository.findBySaveGameId(saveGameId))
+                .isNotEmpty()
+                .allSatisfy(p -> assertThat(p.getWage()).isGreaterThan(java.math.BigDecimal.ZERO));
+    }
 }

@@ -1,5 +1,6 @@
 package br.com.elifootcarvoeiro.player;
 
+import br.com.elifootcarvoeiro.finance.FinanceCalculator;
 import br.com.elifootcarvoeiro.seed.NewgenNames;
 import br.com.elifootcarvoeiro.seed.SeedLoader;
 import org.springframework.stereotype.Component;
@@ -18,11 +19,14 @@ import java.util.UUID;
 public class NewgenGenerator {
 
     private final OverallCalculator overallCalculator;
+    private final FinanceCalculator financeCalculator;
     private final List<String> firstNames;
     private final List<String> lastNames;
 
-    public NewgenGenerator(SeedLoader seedLoader, OverallCalculator overallCalculator) {
+    public NewgenGenerator(SeedLoader seedLoader, OverallCalculator overallCalculator,
+                           FinanceCalculator financeCalculator) {
         this.overallCalculator = overallCalculator;
+        this.financeCalculator = financeCalculator;
         NewgenNames names = seedLoader.loadNewgenNames();
         this.firstNames = names.firstNames();
         this.lastNames = names.lastNames();
@@ -56,8 +60,10 @@ public class NewgenGenerator {
 
         int overall = overallCalculator.compute(position, pace, finishing, passing,
                 tackling, goalkeeping, stamina);
-        return Player.create(saveGameId, clubId, name, position, age, "Brasil",
+        Player newgen = Player.create(saveGameId, clubId, name, position, age, "Brasil",
                 pace, finishing, passing, tackling, goalkeeping, stamina, overall);
+        newgen.setWage(financeCalculator.weeklyWage(overall, age));
+        return newgen;
     }
 
     private int band(int base, int span, Random rng) {

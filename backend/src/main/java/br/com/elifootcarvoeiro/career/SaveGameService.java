@@ -8,6 +8,7 @@ import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.competition.Fixture;
 import br.com.elifootcarvoeiro.competition.FixtureRepository;
 import br.com.elifootcarvoeiro.competition.FixtureScheduler;
+import br.com.elifootcarvoeiro.finance.FinanceCalculator;
 import br.com.elifootcarvoeiro.player.OverallCalculator;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
@@ -37,6 +38,7 @@ public class SaveGameService {
     private final FixtureRepository fixtureRepository;
     private final FixtureScheduler fixtureScheduler;
     private final OverallCalculator overallCalculator;
+    private final FinanceCalculator financeCalculator;
 
     public SaveGameService(SeedLoader seedLoader,
                            SaveGameRepository saveGameRepository,
@@ -44,7 +46,8 @@ public class SaveGameService {
                            PlayerRepository playerRepository,
                            CompetitionRepository competitionRepository,
                            FixtureRepository fixtureRepository,
-                           OverallCalculator overallCalculator) {
+                           OverallCalculator overallCalculator,
+                           FinanceCalculator financeCalculator) {
         this.seedLoader = seedLoader;
         this.saveGameRepository = saveGameRepository;
         this.clubRepository = clubRepository;
@@ -53,6 +56,7 @@ public class SaveGameService {
         this.fixtureRepository = fixtureRepository;
         this.fixtureScheduler = new FixtureScheduler();
         this.overallCalculator = overallCalculator;
+        this.financeCalculator = financeCalculator;
     }
 
     /**
@@ -89,6 +93,7 @@ public class SaveGameService {
                 managedClubName = club.getName();
             }
 
+            List<Player> squad = new ArrayList<>();
             for (SeedPlayer seedPlayer : seedClub.players()) {
                 Position position = Position.valueOf(seedPlayer.position());
                 int overall = overallCalculator.compute(position,
@@ -100,8 +105,20 @@ public class SaveGameService {
                         seedPlayer.pace(), seedPlayer.finishing(), seedPlayer.passing(),
                         seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina(),
                         overall);
+                player.setWage(financeCalculator.weeklyWage(overall, seedPlayer.age()));
                 playerRepository.save(player);
+                squad.add(player);
             }
+
+            // Financial profile derived from squad strength.
+            int reputation = financeCalculator.reputation(squad);
+            int capacity = financeCalculator.stadiumCapacity(reputation);
+            club.setReputation(reputation);
+            club.setStadiumCapacity(capacity);
+            club.setBalance(financeCalculator.startingBalance(reputation));
+            club.setSponsorshipPerRound(financeCalculator.sponsorshipPerRound(reputation));
+            club.setStadiumUpkeepPerRound(financeCalculator.upkeepPerRound(capacity));
+            clubRepository.save(club);
         }
 
         // 3. Create competition
