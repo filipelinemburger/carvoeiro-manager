@@ -1,0 +1,73 @@
+package br.com.elifootcarvoeiro.contract;
+
+import br.com.elifootcarvoeiro.career.SaveGame;
+import br.com.elifootcarvoeiro.career.SaveGameService;
+import br.com.elifootcarvoeiro.common.ApiException;
+import br.com.elifootcarvoeiro.player.Player;
+import br.com.elifootcarvoeiro.player.PlayerRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+/**
+ * Contract operations the manager controls: renewing an owned player and signing
+ * free agents. Acceptance is a pure wage threshold (ContractValuation); no RNG.
+ */
+@Service
+public class ContractService {
+
+    private final SaveGameService saveGameService;
+    private final PlayerRepository playerRepository;
+    private final ContractValuation contractValuation;
+
+    public ContractService(SaveGameService saveGameService,
+                           PlayerRepository playerRepository,
+                           ContractValuation contractValuation) {
+        this.saveGameService = saveGameService;
+        this.playerRepository = playerRepository;
+        this.contractValuation = contractValuation;
+    }
+
+    @Transactional
+    public PlayerContractResponse renewContract(UUID saveGameId, UUID userId, UUID playerId,
+                                                BigDecimal wage, int contractYears) {
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        Player player = requireManagedPlayer(saveGameId, save.getManagedClubId(), playerId);
+        applyTerms(player, wage, contractYears);
+        playerRepository.save(player);
+        return toResponse(player);
+    }
+
+    // ---- shared helpers (signFreeAgent in Task 8 reuses applyTerms + validation) ----
+
+    void applyTerms(Player player, BigDecimal wage, int contractYears) {
+        if (!contractValuation.isValidLength(contractYears) || wage == null || wage.signum() <= 0) {
+            throw new ApiException("INVALID_CONTRACT",
+                    "Contract length must be 1-5 years and wage must be positive",
+                    HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+        if (!contractValuation.acceptsWage(player.getOverall(), player.getAge(), wage)) {
+            BigDecimal demand = contractValuation.wageDemand(player.getOverall(), player.getAge());
+            throw new ApiException("PLAYER_REJECTS_TERMS",
+                    "Player rejects these terms; demands at least " + demand,
+                    HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+        player.setWage(wage);
+        player.setContractYears(contractYears);
+    }
+
+    Player requireManagedPlayer(UUID saveGameId, UUID managedClubId, UUID playerId) {
+        return playerRepository.findById(playerId)
+                .filter(p -> p.getSaveGameId().equals(saveGameId))
+                .filter(p -> managedClubId.equals(p.getClubId()))
+                .orElseThrow(() -> new ApiException("PLAYER_NOT_FOUND",
+                        "Player not found at your club", HttpStatus.NOT_FOUND));
+    }
+
+    PlayerContractResponse toResponse(Player p) {
+        return new PlayerContractResponse(p.getId(), p.getName(), p.getWage(), p.getContractYears());
+    }
+}
