@@ -100,7 +100,13 @@ class SeasonRolloverServiceIT {
         String championName = finalTable.get(0).clubName();
         Map<UUID, Integer> agesBefore = playerRepository.findBySaveGameId(c.id()).stream()
                 .collect(Collectors.toMap(Player::getId, Player::getAge));
+        // Contracts must not interfere with the retirement/newgen invariants under test.
+        List<Player> allPlayers = playerRepository.findBySaveGameId(c.id());
+        allPlayers.forEach(p -> p.setContractYears(5));
+        playerRepository.saveAll(allPlayers);
+
         Map<UUID, Long> squadSizeBefore = playerRepository.findBySaveGameId(c.id()).stream()
+                .filter(p -> p.getClubId() != null)
                 .collect(Collectors.groupingBy(Player::getClubId, Collectors.counting()));
 
         // When rolling over
@@ -137,6 +143,7 @@ class SeasonRolloverServiceIT {
 
         // Players: every club's squad size is unchanged; carried players aged +1 and have clean state
         Map<UUID, Long> squadSizeAfter = playerRepository.findBySaveGameId(c.id()).stream()
+                .filter(p -> p.getClubId() != null)
                 .collect(Collectors.groupingBy(Player::getClubId, Collectors.counting()));
         assertThat(squadSizeAfter).isEqualTo(squadSizeBefore);
         List<Player> after = playerRepository.findBySaveGameId(c.id());
@@ -211,6 +218,11 @@ class SeasonRolloverServiceIT {
         // Complete the season so rollover is allowed
         finishSeason(c);
 
+        // Contracts must not interfere with the retirement/newgen invariants under test.
+        List<Player> allPlayersBeforeRollover = playerRepository.findBySaveGameId(c.id());
+        allPlayersBeforeRollover.forEach(p -> p.setContractYears(5));
+        playerRepository.saveAll(allPlayersBeforeRollover);
+
         // When: rolling over (must NOT throw a FK violation)
         rolloverService.rollover(c.id(), c.userId());
 
@@ -219,7 +231,7 @@ class SeasonRolloverServiceIT {
 
         // And: the managed club's squad size is unchanged (one retired, one newgen added)
         long squadSizeAfter = playerRepository.findBySaveGameId(c.id()).stream()
-                .filter(p -> p.getClubId().equals(c.clubId()))
+                .filter(p -> c.clubId().equals(p.getClubId()))
                 .count();
         assertThat(squadSizeAfter).isEqualTo(squadSizeBefore);
 

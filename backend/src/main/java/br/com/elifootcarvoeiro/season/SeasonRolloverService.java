@@ -21,6 +21,7 @@ import br.com.elifootcarvoeiro.match.LineupPlayerRepository;
 import br.com.elifootcarvoeiro.transfer.TransferOfferRepository;
 import br.com.elifootcarvoeiro.match.LineupRepository;
 import br.com.elifootcarvoeiro.match.MatchEventRepository;
+import br.com.elifootcarvoeiro.contract.FreeAgentGenerator;
 import br.com.elifootcarvoeiro.player.NewgenGenerator;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerAgingService;
@@ -65,7 +66,10 @@ public class SeasonRolloverService {
     private final SeasonStandingRepository seasonStandingRepository;
     private final SeasonTopScorerRepository seasonTopScorerRepository;
     private final PlayerAgingService playerAgingService;
+    private static final int FREE_AGENT_FLOOR = 6;
+
     private final NewgenGenerator newgenGenerator;
+    private final FreeAgentGenerator freeAgentGenerator;
     private final FinanceTransactionRepository financeTransactionRepository;
     private final TransferOfferRepository transferOfferRepository;
     private final FixtureScheduler fixtureScheduler = new FixtureScheduler();
@@ -86,6 +90,7 @@ public class SeasonRolloverService {
                                  SeasonTopScorerRepository seasonTopScorerRepository,
                                  PlayerAgingService playerAgingService,
                                  NewgenGenerator newgenGenerator,
+                                 FreeAgentGenerator freeAgentGenerator,
                                  FinanceTransactionRepository financeTransactionRepository,
                                  TransferOfferRepository transferOfferRepository) {
         this.saveGameService = saveGameService;
@@ -104,6 +109,7 @@ public class SeasonRolloverService {
         this.seasonTopScorerRepository = seasonTopScorerRepository;
         this.playerAgingService = playerAgingService;
         this.newgenGenerator = newgenGenerator;
+        this.freeAgentGenerator = freeAgentGenerator;
         this.financeTransactionRepository = financeTransactionRepository;
         this.transferOfferRepository = transferOfferRepository;
     }
@@ -154,12 +160,13 @@ public class SeasonRolloverService {
         });
         lineupRepository.flush();
 
-        // 3. Age every player (id order, one seeded RNG); partition retiring vs carried.
+        // 3. Age every player (id order, one seeded RNG); tick contracts; partition.
         List<Player> players = new ArrayList<>(playerRepository.findBySaveGameId(saveGameId));
         players.sort(Comparator.comparing(Player::getId));
 
         List<SquadChangeResponse> retirements = new ArrayList<>();
         List<SquadChangeResponse> newcomers = new ArrayList<>();
+        List<SquadChangeResponse> expiredContracts = new ArrayList<>();
         List<Player> toDelete = new ArrayList<>();
         List<Player> toSave = new ArrayList<>();
 
@@ -167,28 +174,57 @@ public class SeasonRolloverService {
             player.setAge(player.getAge() + 1);
             playerAgingService.applyAgeCurve(player, rng);
             boolean retires = rng.nextDouble() < playerAgingService.retirementProbability(player.getAge());
-            boolean managed = player.getClubId().equals(managedClubId);
+            boolean freeAgent = player.isFreeAgent();
+            boolean managed = !freeAgent && player.getClubId().equals(managedClubId);
+
             if (retires) {
+                if (freeAgent) {
+                    // A free agent who retires simply leaves the pool (no replacement).
+                    toDelete.add(player);
+                    continue;
+                }
                 if (managed) {
                     retirements.add(new SquadChangeResponse(
                             player.getName(), player.getPosition().name(), player.getAge()));
                 }
                 Player newgen = newgenGenerator.generate(
                         saveGameId, player.getClubId(), player.getPosition(), rng);
+                newgen.setContractYears(2 + rng.nextInt(3));
                 toSave.add(newgen);
                 if (managed) {
                     newcomers.add(new SquadChangeResponse(
                             newgen.getName(), newgen.getPosition().name(), newgen.getAge()));
                 }
                 toDelete.add(player);
-            } else {
-                player.resetSeasonState();
-                toSave.add(player);
+                continue;
             }
+
+            // Carried over: reset per-season state, then tick the contract.
+            player.resetSeasonState();
+            if (!freeAgent) {
+                player.setContractYears(player.getContractYears() - 1);
+                if (player.getContractYears() <= 0) {
+                    if (managed) {
+                        expiredContracts.add(new SquadChangeResponse(
+                                player.getName(), player.getPosition().name(), player.getAge()));
+                        player.setClubId(null);          // lapses into the free-agent pool
+                        player.setContractYears(0);
+                    } else {
+                        player.setContractYears(2 + rng.nextInt(3)); // AI auto-renews
+                    }
+                }
+            }
+            toSave.add(player);
         }
         playerRepository.deleteAll(toDelete);
         playerRepository.flush();
         playerRepository.saveAll(toSave);
+
+        // Replenish the free-agent pool to the floor so the market never dies.
+        int poolSize = playerRepository.findBySaveGameIdAndClubIdIsNull(saveGameId).size();
+        for (int i = poolSize; i < FREE_AGENT_FLOOR; i++) {
+            playerRepository.save(freeAgentGenerator.generate(saveGameId, rng));
+        }
 
         // 4. Regenerate fixtures and roll each competition's year forward.
         List<Club> clubsSorted = clubs.stream()
@@ -210,7 +246,7 @@ public class SeasonRolloverService {
         saveGameRepository.save(saveGame);
 
         return new RolloverResponse(saveGame.getSeasonYear(), saveGame.getCurrentRound(),
-                List.copyOf(retirements), List.copyOf(newcomers));
+                List.copyOf(retirements), List.copyOf(newcomers), List.copyOf(expiredContracts));
     }
 
     private void archive(UUID saveGameId, UUID userId, Competition competition, int finishingYear,
