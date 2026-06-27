@@ -53,6 +53,8 @@ export type PlayerResponse = {
   suspensionRemaining: number
   eligible: boolean
   role: PlayerRole | null
+  contractYears: number
+  wageDemand: number
 }
 
 export type LineupStarter = {
@@ -158,6 +160,7 @@ export type RolloverResponse = {
   currentRound: number
   retirements: SquadChange[]
   newcomers: SquadChange[]
+  expiredContracts: SquadChange[]
 }
 
 export type SeasonSummary = {
@@ -213,6 +216,7 @@ export type MarketPlayer = {
   clubName: string
   value: number
   wage: number
+  wageDemand: number
 }
 
 export type TransferOffer = {
@@ -228,7 +232,22 @@ export type TransferOffer = {
   counterAmount: number | null
   status: 'PENDING' | 'COUNTERED' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN'
   round: number
+  wage: number | null
+  contractYears: number | null
 }
 
-export type MakeOfferRequest = { playerId: string; amount: number }
+export type FreeAgent = {
+  playerId: string
+  name: string
+  position: string
+  age: number
+  overall: number
+  wageDemand: number
+}
+
+export type RenewContractRequest = { wage: number; contractYears: number }
+export type SignFreeAgentRequest = { wage: number; contractYears: number }
+export type PlayerContract = { playerId: string; name: string; wage: number; contractYears: number }
+
+export type MakeOfferRequest = { playerId: string; amount: number; wage: number; contractYears: number }
 export type RespondOfferRequest = { action: 'ACCEPT' | 'REJECT' | 'COUNTER'; counterAmount: number | null }

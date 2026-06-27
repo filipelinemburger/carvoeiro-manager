@@ -17,6 +17,10 @@ import type {
   TransferOffer,
   MakeOfferRequest,
   RespondOfferRequest,
+  FreeAgent,
+  RenewContractRequest,
+  SignFreeAgentRequest,
+  PlayerContract,
 } from './types'
 
 export function createCareer(token: string): Promise<SaveGameResponse> {
@@ -138,4 +142,26 @@ export function respondToOffer(
   token: string,
 ): Promise<TransferOffer> {
   return apiPost<TransferOffer>(`/save-games/${saveGameId}/transfers/offers/${offerId}/respond`, req, token)
+}
+
+export function getFreeAgents(saveGameId: string, token: string): Promise<FreeAgent[]> {
+  return apiGet<FreeAgent[]>(`/save-games/${saveGameId}/free-agents`, token)
+}
+
+export function signFreeAgent(
+  saveGameId: string,
+  playerId: string,
+  req: SignFreeAgentRequest,
+  token: string,
+): Promise<PlayerContract> {
+  return apiPost<PlayerContract>(`/save-games/${saveGameId}/free-agents/${playerId}/sign`, req, token)
+}
+
+export function renewContract(
+  saveGameId: string,
+  playerId: string,
+  req: RenewContractRequest,
+  token: string,
+): Promise<PlayerContract> {
+  return apiPost<PlayerContract>(`/save-games/${saveGameId}/players/${playerId}/renew`, req, token)
 }
