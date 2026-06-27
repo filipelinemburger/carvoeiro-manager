@@ -203,7 +203,7 @@ describe('SquadPage', () => {
   })
 
   it('shows contract years and a renew control', async () => {
-    mockRenewContract.mockResolvedValue({ playerId: GK.id, wage: 90000, contractYears: 3 })
+    mockRenewContract.mockResolvedValue({ playerId: GK.id, name: 'Goleiro Teste', wage: 90000, contractYears: 3 })
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Teste'))
     // Contract years column should be visible for the GK (contractYears: 2)

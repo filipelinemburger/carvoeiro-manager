@@ -110,6 +110,16 @@ export function SeasonSummaryPage() {
               </ul>
             </div>
           )}
+          {(result.expiredContracts?.length ?? 0) > 0 && (
+            <section>
+              <h3>Contratos expirados</h3>
+              <ul>
+                {result.expiredContracts.map((c, i) => (
+                  <li key={i}>{c.playerName} ({c.position}, {c.age})</li>
+                ))}
+              </ul>
+            </section>
+          )}
           <Link to="/dashboard"><button className="cec-btn">Voltar ao painel</button></Link>
         </div>
       )}

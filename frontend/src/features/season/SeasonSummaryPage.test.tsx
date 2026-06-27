@@ -53,6 +53,7 @@ describe('SeasonSummaryPage', () => {
       currentRound: 0,
       retirements: [{ playerName: 'Veterano', position: 'DEF', age: 38 }],
       newcomers: [{ playerName: 'Jovem Silva', position: 'DEF', age: 17 }],
+      expiredContracts: [],
     })
 
     renderPage()
@@ -63,5 +64,22 @@ describe('SeasonSummaryPage', () => {
     expect(screen.getByText(/Veterano/)).toBeInTheDocument()
     expect(screen.getByText(/Jovem Silva/)).toBeInTheDocument()
     expect(rolloverSeason).toHaveBeenCalledWith('sg-1', 'test-token')
+  })
+
+  it('lists players who lapsed into free agency', async () => {
+    vi.mocked(rolloverSeason).mockResolvedValue({
+      seasonYear: 2027,
+      currentRound: 0,
+      retirements: [],
+      newcomers: [],
+      expiredContracts: [{ playerName: 'Zé Tigre', position: 'MID', age: 31 }],
+    })
+
+    renderPage()
+    await waitFor(() => screen.getByRole('button', { name: /próxima temporada/i }))
+    fireEvent.click(screen.getByRole('button', { name: /próxima temporada/i }))
+
+    expect(await screen.findByText(/Contratos expirados/)).toBeInTheDocument()
+    expect(screen.getByText(/Zé Tigre/)).toBeInTheDocument()
   })
 })
