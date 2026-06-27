@@ -2,12 +2,14 @@ package br.com.elifootcarvoeiro.contract;
 
 import br.com.elifootcarvoeiro.common.security.CurrentUser;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -18,6 +20,12 @@ public class ContractController {
 
     public ContractController(ContractService contractService) {
         this.contractService = contractService;
+    }
+
+    @GetMapping("/free-agents")
+    public ResponseEntity<List<FreeAgentResponse>> freeAgents(
+            @PathVariable UUID saveGameId, @CurrentUser UUID userId) {
+        return ResponseEntity.ok(contractService.getFreeAgents(saveGameId, userId));
     }
 
     @PostMapping("/players/{playerId}/renew")

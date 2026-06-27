@@ -161,6 +161,7 @@ public class FinanceService {
 
     private Map<UUID, BigDecimal> wageBills(UUID saveGameId) {
         return playerRepository.findBySaveGameId(saveGameId).stream()
+                .filter(p -> p.getClubId() != null)
                 .collect(Collectors.groupingBy(Player::getClubId,
                         Collectors.reducing(BigDecimal.ZERO, Player::getWage, BigDecimal::add)));
     }

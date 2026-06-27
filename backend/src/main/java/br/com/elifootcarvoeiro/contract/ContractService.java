@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -39,6 +41,16 @@ public class ContractService {
         applyTerms(player, wage, contractYears);
         playerRepository.save(player);
         return toResponse(player);
+    }
+
+    public List<FreeAgentResponse> getFreeAgents(UUID saveGameId, UUID userId) {
+        saveGameService.requireOwned(saveGameId, userId);
+        return playerRepository.findBySaveGameIdAndClubIdIsNull(saveGameId).stream()
+                .map(p -> new FreeAgentResponse(p.getId(), p.getName(), p.getPosition().name(),
+                        p.getAge(), p.getOverall(),
+                        contractValuation.wageDemand(p.getOverall(), p.getAge())))
+                .sorted(Comparator.comparing(FreeAgentResponse::overall).reversed())
+                .toList();
     }
 
     // ---- shared helpers (signFreeAgent in Task 8 reuses applyTerms + validation) ----

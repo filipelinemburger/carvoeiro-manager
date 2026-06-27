@@ -212,7 +212,7 @@ class SeasonRolloverServiceIT {
 
         // Record squad size before rollover so we can verify one-out/one-in invariant
         long squadSizeBefore = playerRepository.findBySaveGameId(c.id()).stream()
-                .filter(p -> p.getClubId().equals(c.clubId()))
+                .filter(p -> p.getClubId() != null && p.getClubId().equals(c.clubId()))
                 .count();
 
         // Complete the season so rollover is allowed

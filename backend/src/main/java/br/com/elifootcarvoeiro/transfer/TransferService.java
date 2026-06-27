@@ -76,7 +76,7 @@ public class TransferService {
         UUID managedClubId = save.getManagedClubId();
         Map<UUID, String> clubNames = clubNames(saveGameId);
         return playerRepository.findBySaveGameId(saveGameId).stream()
-                .filter(p -> !p.getClubId().equals(managedClubId))
+                .filter(p -> p.getClubId() != null && !p.getClubId().equals(managedClubId))
                 .map(p -> new MarketPlayerResponse(p.getId(), p.getName(), p.getPosition().name(),
                         p.getAge(), p.getOverall(), p.getClubId(),
                         clubNames.getOrDefault(p.getClubId(), ""),

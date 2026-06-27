@@ -121,8 +121,10 @@ class SaveGameServiceIT {
             assertThat(club.getStadiumUpkeepPerRound()).as("upkeep").isGreaterThan(java.math.BigDecimal.ZERO);
         });
 
-        // And every player has a positive wage
-        assertThat(playerRepository.findBySaveGameId(saveGameId))
+        // And every club player has a positive wage (free agents have wage=0 by design)
+        var clubPlayers = playerRepository.findBySaveGameId(saveGameId).stream()
+                .filter(p -> p.getClubId() != null).toList();
+        assertThat(clubPlayers)
                 .isNotEmpty()
                 .allSatisfy(p -> assertThat(p.getWage()).isGreaterThan(java.math.BigDecimal.ZERO));
     }

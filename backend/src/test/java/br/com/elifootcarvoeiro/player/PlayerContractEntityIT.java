@@ -34,7 +34,9 @@ class PlayerContractEntityIT {
     @Test
     void contractYearsRoundTrips() {
         UUID saveId = newSave();
-        Player p = playerRepository.findBySaveGameId(saveId).get(0);
+        // Explicitly pick a club player; free agents (clubId=null) are also seeded at career creation.
+        Player p = playerRepository.findBySaveGameId(saveId).stream()
+                .filter(pl -> pl.getClubId() != null).findFirst().orElseThrow();
         p.setContractYears(4);
         playerRepository.saveAndFlush(p);
 

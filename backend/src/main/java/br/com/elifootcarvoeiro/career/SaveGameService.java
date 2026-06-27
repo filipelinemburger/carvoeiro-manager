@@ -8,6 +8,7 @@ import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.competition.Fixture;
 import br.com.elifootcarvoeiro.competition.FixtureRepository;
 import br.com.elifootcarvoeiro.competition.FixtureScheduler;
+import br.com.elifootcarvoeiro.contract.FreeAgentGenerator;
 import br.com.elifootcarvoeiro.finance.FinanceCalculator;
 import br.com.elifootcarvoeiro.player.OverallCalculator;
 import br.com.elifootcarvoeiro.player.Player;
@@ -41,6 +42,7 @@ public class SaveGameService {
     private final FixtureScheduler fixtureScheduler;
     private final OverallCalculator overallCalculator;
     private final FinanceCalculator financeCalculator;
+    private final FreeAgentGenerator freeAgentGenerator;
 
     public SaveGameService(SeedLoader seedLoader,
                            SaveGameRepository saveGameRepository,
@@ -49,7 +51,8 @@ public class SaveGameService {
                            CompetitionRepository competitionRepository,
                            FixtureRepository fixtureRepository,
                            OverallCalculator overallCalculator,
-                           FinanceCalculator financeCalculator) {
+                           FinanceCalculator financeCalculator,
+                           FreeAgentGenerator freeAgentGenerator) {
         this.seedLoader = seedLoader;
         this.saveGameRepository = saveGameRepository;
         this.clubRepository = clubRepository;
@@ -59,6 +62,7 @@ public class SaveGameService {
         this.fixtureScheduler = new FixtureScheduler();
         this.overallCalculator = overallCalculator;
         this.financeCalculator = financeCalculator;
+        this.freeAgentGenerator = freeAgentGenerator;
     }
 
     /**
@@ -131,6 +135,12 @@ public class SaveGameService {
             player.setContractYears(1 + contractRng.nextInt(4));
         }
         playerRepository.saveAll(allPlayers);
+
+        // Seed an initial free-agent pool (clubless) so there is always a market to shop.
+        Random faRng = new Random(saveGame.getId().getMostSignificantBits() ^ 0xFA11AC0DL);
+        for (int i = 0; i < 10; i++) {
+            playerRepository.save(freeAgentGenerator.generate(saveGame.getId(), faRng));
+        }
 
         // 3. Create competition
         int totalRounds = 2 * (clubCount - 1);

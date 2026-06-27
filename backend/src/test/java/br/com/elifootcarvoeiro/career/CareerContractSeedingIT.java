@@ -30,10 +30,12 @@ class CareerContractSeedingIT {
         userRepository.save(user);
         SaveGameResponse save = saveGameService.createCareer(user.getId());
 
-        var players = playerRepository.findBySaveGameId(save.id());
-        assertThat(players).isNotEmpty();
-        assertThat(players).allMatch(p -> p.getContractYears() >= 1 && p.getContractYears() <= 4);
+        // Only club players have staggered contracts; free agents (clubId=null) have contractYears=0.
+        var clubPlayers = playerRepository.findBySaveGameId(save.id()).stream()
+                .filter(p -> p.getClubId() != null).toList();
+        assertThat(clubPlayers).isNotEmpty();
+        assertThat(clubPlayers).allMatch(p -> p.getContractYears() >= 1 && p.getContractYears() <= 4);
         // Staggered, not all identical.
-        assertThat(players.stream().map(Player::getContractYears).distinct().count()).isGreaterThan(1);
+        assertThat(clubPlayers.stream().map(Player::getContractYears).distinct().count()).isGreaterThan(1);
     }
 }
