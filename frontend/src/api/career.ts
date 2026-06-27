@@ -13,6 +13,10 @@ import type {
   SeasonSummary,
   SeasonDetail,
   FinancesResponse,
+  MarketPlayer,
+  TransferOffer,
+  MakeOfferRequest,
+  RespondOfferRequest,
 } from './types'
 
 export function createCareer(token: string): Promise<SaveGameResponse> {
@@ -101,4 +105,37 @@ export function getFinances(
   token: string,
 ): Promise<FinancesResponse> {
   return apiGet<FinancesResponse>(`/save-games/${saveGameId}/clubs/${clubId}/finances`, token)
+}
+
+export function getMarket(saveGameId: string, token: string): Promise<MarketPlayer[]> {
+  return apiGet<MarketPlayer[]>(`/save-games/${saveGameId}/transfers/market`, token)
+}
+
+export function getOffers(saveGameId: string, token: string): Promise<TransferOffer[]> {
+  return apiGet<TransferOffer[]>(`/save-games/${saveGameId}/transfers/offers`, token)
+}
+
+export function makeOffer(
+  saveGameId: string,
+  req: MakeOfferRequest,
+  token: string,
+): Promise<TransferOffer> {
+  return apiPost<TransferOffer>(`/save-games/${saveGameId}/transfers/offers`, req, token)
+}
+
+export function acceptCounter(saveGameId: string, offerId: string, token: string): Promise<TransferOffer> {
+  return apiPost<TransferOffer>(`/save-games/${saveGameId}/transfers/offers/${offerId}/accept-counter`, {}, token)
+}
+
+export function withdrawOffer(saveGameId: string, offerId: string, token: string): Promise<TransferOffer> {
+  return apiPost<TransferOffer>(`/save-games/${saveGameId}/transfers/offers/${offerId}/withdraw`, {}, token)
+}
+
+export function respondToOffer(
+  saveGameId: string,
+  offerId: string,
+  req: RespondOfferRequest,
+  token: string,
+): Promise<TransferOffer> {
+  return apiPost<TransferOffer>(`/save-games/${saveGameId}/transfers/offers/${offerId}/respond`, req, token)
 }

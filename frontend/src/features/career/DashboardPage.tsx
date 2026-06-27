@@ -123,6 +123,9 @@ export function DashboardPage() {
               <Link to={`/finances?saveGameId=${saveGame.id}&clubId=${saveGame.managedClubId}`}>
                 <button className="cec-btn">Finanças</button>
               </Link>
+              <Link to={`/transfers?saveGameId=${saveGame.id}&clubId=${saveGame.managedClubId}`}>
+                <button className="cec-btn">Mercado</button>
+              </Link>
             </div>
 
             <AdvancePanel

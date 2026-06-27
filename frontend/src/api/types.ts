@@ -202,3 +202,33 @@ export type FinancesResponse = {
   balance: number
   transactions: FinanceTransaction[]
 }
+
+export type MarketPlayer = {
+  playerId: string
+  name: string
+  position: string
+  age: number
+  overall: number
+  clubId: string
+  clubName: string
+  value: number
+  wage: number
+}
+
+export type TransferOffer = {
+  id: string
+  playerId: string
+  playerName: string
+  fromClubId: string
+  fromClubName: string
+  toClubId: string
+  toClubName: string
+  direction: 'OUTGOING' | 'INCOMING'
+  amount: number
+  counterAmount: number | null
+  status: 'PENDING' | 'COUNTERED' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN'
+  round: number
+}
+
+export type MakeOfferRequest = { playerId: string; amount: number }
+export type RespondOfferRequest = { action: 'ACCEPT' | 'REJECT' | 'COUNTER'; counterAmount: number | null }

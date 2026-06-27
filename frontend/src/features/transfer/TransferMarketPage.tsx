@@ -1,0 +1,112 @@
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
+import {
+  getSaveGame, getMarket, getOffers, makeOffer, acceptCounter, withdrawOffer,
+} from '../../api/career'
+import { useAuth } from '../../auth/AuthContext'
+import { formatBRL } from '../../lib/money'
+import { isTransferWindowOpen } from '../../lib/transferWindow'
+
+export function TransferMarketPage() {
+  const { token } = useAuth()
+  const [searchParams] = useSearchParams()
+  const queryClient = useQueryClient()
+  const saveGameId = searchParams.get('saveGameId') ?? ''
+  const [amounts, setAmounts] = useState<Record<string, string>>({})
+
+  const enabled = Boolean(saveGameId && token)
+  const save = useQuery({ queryKey: ['saveGame', saveGameId], queryFn: () => getSaveGame(saveGameId, token ?? ''), enabled })
+  const market = useQuery({ queryKey: ['market', saveGameId], queryFn: () => getMarket(saveGameId, token ?? ''), enabled })
+  const offers = useQuery({ queryKey: ['offers', saveGameId], queryFn: () => getOffers(saveGameId, token ?? ''), enabled })
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
+    void queryClient.invalidateQueries({ queryKey: ['offers', saveGameId] })
+  }
+  const offerMut = useMutation({
+    mutationFn: (v: { playerId: string; amount: number }) => makeOffer(saveGameId, v, token ?? ''),
+    onSuccess: invalidate,
+  })
+  const acceptMut = useMutation({ mutationFn: (id: string) => acceptCounter(saveGameId, id, token ?? ''), onSuccess: invalidate })
+  const withdrawMut = useMutation({ mutationFn: (id: string) => withdrawOffer(saveGameId, id, token ?? ''), onSuccess: invalidate })
+
+  if (market.isLoading) return <p>Carregando mercado…</p>
+  if (market.error) return <p>Erro ao carregar o mercado.</p>
+
+  const windowOpen = save.data ? isTransferWindowOpen(save.data.currentRound, save.data.totalRounds) : true
+  const outgoing = (offers.data ?? []).filter(o => o.direction === 'OUTGOING' && o.status === 'COUNTERED')
+  const last = offerMut.data
+
+  return (
+    <div style={{ padding: '1.5rem' }}>
+      <h2>Mercado de Transferências</h2>
+      {!windowOpen && <p role="alert" style={{ color: 'red' }}>Janela de transferências fechada.</p>}
+      {last && (
+        <p style={{ color: last.status === 'REJECTED' ? 'red' : 'green' }}>
+          {last.playerName}: {last.status === 'ACCEPTED' ? 'Proposta aceita!'
+            : last.status === 'COUNTERED' ? `Contraproposta: ${formatBRL(last.counterAmount ?? 0)}`
+            : 'Proposta recusada.'}
+        </p>
+      )}
+      {offerMut.isError && <p style={{ color: 'red' }}>Erro ao enviar proposta.</p>}
+
+      {outgoing.length > 0 && (
+        <div style={{ marginBottom: '1rem' }}>
+          <h3>Contrapropostas recebidas</h3>
+          <ul>
+            {outgoing.map(o => (
+              <li key={o.id}>
+                {o.playerName} — {formatBRL(o.counterAmount ?? 0)}{' '}
+                <button className="cec-btn" disabled={!windowOpen || acceptMut.isPending}
+                  onClick={() => acceptMut.mutate(o.id)}>Aceitar</button>{' '}
+                <button className="cec-btn" disabled={withdrawMut.isPending}
+                  onClick={() => withdrawMut.mutate(o.id)}>Desistir</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={{ textAlign: 'left' }}>Nome</th>
+            <th>Pos</th><th>Idade</th><th>OVR</th>
+            <th style={{ textAlign: 'left' }}>Clube</th>
+            <th style={{ textAlign: 'right' }}>Valor</th>
+            <th>Proposta</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(market.data ?? []).map(p => (
+            <tr key={p.playerId}>
+              <td>{p.name}</td>
+              <td style={{ textAlign: 'center' }}>{p.position}</td>
+              <td style={{ textAlign: 'center' }}>{p.age}</td>
+              <td style={{ textAlign: 'center' }}>{p.overall}</td>
+              <td>{p.clubName}</td>
+              <td style={{ textAlign: 'right' }}>{formatBRL(p.value)}</td>
+              <td style={{ textAlign: 'center' }}>
+                <input
+                  aria-label={`Valor para ${p.name}`}
+                  type="number"
+                  value={amounts[p.playerId] ?? ''}
+                  onChange={e => setAmounts(a => ({ ...a, [p.playerId]: e.target.value }))}
+                  style={{ width: 110 }}
+                />{' '}
+                <button
+                  className="cec-btn"
+                  disabled={!windowOpen || offerMut.isPending}
+                  onClick={() => offerMut.mutate({ playerId: p.playerId, amount: Number(amounts[p.playerId] ?? 0) })}
+                >
+                  Propor
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
