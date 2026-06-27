@@ -57,7 +57,7 @@ class TransferServiceSellingIT {
     /** Create an unsolicited INCOMING bid from an AI club for one of the managed club's players. */
     private TransferOffer incomingBidFor(Career c, Player managedPlayer, BigDecimal amount) {
         TransferOffer offer = TransferOffer.create(c.id(), managedPlayer.getId(), anAiClub(c), c.clubId(),
-                TransferDirection.INCOMING, amount, 0);
+                TransferDirection.INCOMING, amount, 0, null, null);
         return transferOfferRepository.save(offer);
     }
 

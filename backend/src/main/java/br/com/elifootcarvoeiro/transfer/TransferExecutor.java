@@ -57,6 +57,13 @@ public class TransferExecutor {
         buyer.adjustBalance(fee.negate());
         seller.adjustBalance(fee);
         player.setClubId(buyerId);
+        // Outgoing buy carries personal terms; a managed sale (incoming) leaves wage null.
+        if (offer.getWage() != null) {
+            player.setWage(offer.getWage());
+            if (offer.getContractYears() != null) {
+                player.setContractYears(offer.getContractYears());
+            }
+        }
         clubRepository.save(buyer);
         clubRepository.save(seller);
         playerRepository.save(player);

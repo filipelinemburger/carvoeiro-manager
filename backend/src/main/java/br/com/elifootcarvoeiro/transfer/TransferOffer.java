@@ -29,21 +29,25 @@ public class TransferOffer {
     @Column(name = "status", nullable = false, length = 12) private TransferOfferStatus status;
     @Column(name = "round", nullable = false) private int round;
     @Column(name = "created_at", nullable = false, updatable = false) private Instant createdAt;
+    @Column(name = "wage") private BigDecimal wage;
+    @Column(name = "contract_years") private Integer contractYears;
 
     protected TransferOffer() { }
 
     private TransferOffer(UUID id, UUID saveGameId, UUID playerId, UUID fromClubId, UUID toClubId,
                           TransferDirection direction, BigDecimal amount, TransferOfferStatus status,
-                          int round, Instant createdAt) {
+                          int round, Instant createdAt, BigDecimal wage, Integer contractYears) {
         this.id = id; this.saveGameId = saveGameId; this.playerId = playerId;
         this.fromClubId = fromClubId; this.toClubId = toClubId; this.direction = direction;
         this.amount = amount; this.status = status; this.round = round; this.createdAt = createdAt;
+        this.wage = wage; this.contractYears = contractYears;
     }
 
     public static TransferOffer create(UUID saveGameId, UUID playerId, UUID fromClubId, UUID toClubId,
-                                       TransferDirection direction, BigDecimal amount, int round) {
+                                       TransferDirection direction, BigDecimal amount, int round,
+                                       BigDecimal wage, Integer contractYears) {
         return new TransferOffer(UUID.randomUUID(), saveGameId, playerId, fromClubId, toClubId,
-                direction, amount, TransferOfferStatus.PENDING, round, Instant.now());
+                direction, amount, TransferOfferStatus.PENDING, round, Instant.now(), wage, contractYears);
     }
 
     public UUID getId() { return id; }
@@ -57,6 +61,8 @@ public class TransferOffer {
     public TransferOfferStatus getStatus() { return status; }
     public int getRound() { return round; }
     public Instant getCreatedAt() { return createdAt; }
+    public BigDecimal getWage() { return wage; }
+    public Integer getContractYears() { return contractYears; }
 
     public void markCountered(BigDecimal counterAmount) {
         this.counterAmount = counterAmount;

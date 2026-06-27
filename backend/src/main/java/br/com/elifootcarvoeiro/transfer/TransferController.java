@@ -37,8 +37,9 @@ public class TransferController {
     @PostMapping("/offers")
     public ResponseEntity<TransferOfferResponse> makeOffer(
             @PathVariable UUID saveGameId, @RequestBody MakeOfferRequest request, @CurrentUser UUID userId) {
-        return ResponseEntity.ok(
-                transferService.makeOffer(saveGameId, userId, request.playerId(), request.amount()));
+        return ResponseEntity.ok(transferService.makeOffer(
+                saveGameId, userId, request.playerId(), request.amount(),
+                request.wage(), request.contractYears()));
     }
 
     @PostMapping("/offers/{offerId}/accept-counter")

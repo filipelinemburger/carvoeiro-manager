@@ -36,7 +36,7 @@ class TransferOfferEntityIT {
 
         TransferOffer offer = TransferOffer.create(save.getId(), UUID.randomUUID(),
                 UUID.randomUUID(), UUID.randomUUID(), TransferDirection.OUTGOING,
-                new BigDecimal("1500000.00"), 0);
+                new BigDecimal("1500000.00"), 0, null, null);
         transferOfferRepository.save(offer);
 
         // When it is countered and read back

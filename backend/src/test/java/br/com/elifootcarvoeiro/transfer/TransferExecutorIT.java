@@ -74,7 +74,7 @@ class TransferExecutorIT {
         BigDecimal sellerBefore = clubRepository.findById(seller).orElseThrow().getBalance();
 
         TransferOffer offer = TransferOffer.create(c.id(), target.getId(), c.clubId(), seller,
-                TransferDirection.OUTGOING, fee, save.getCurrentRound());
+                TransferDirection.OUTGOING, fee, save.getCurrentRound(), null, null);
 
         executor.execute(save, offer, fee);
 
@@ -105,7 +105,7 @@ class TransferExecutorIT {
         BigDecimal fee = new BigDecimal("750000.00");
 
         TransferOffer offer = TransferOffer.create(c.id(), soldId, buyer, c.clubId(),
-                TransferDirection.INCOMING, fee, save.getCurrentRound());
+                TransferDirection.INCOMING, fee, save.getCurrentRound(), null, null);
 
         executor.execute(save, offer, fee);
 

@@ -78,7 +78,7 @@ class TransferAdvanceRolloverIT {
         UUID aiClub = clubRepository.findBySaveGameId(c.id()).stream()
                 .map(Club::getId).filter(id -> !id.equals(c.clubId())).findFirst().orElseThrow();
         transferOfferRepository.save(TransferOffer.create(c.id(), managedPlayer.getId(), aiClub,
-                c.clubId(), TransferDirection.INCOMING, new BigDecimal("900000.00"), 0));
+                c.clubId(), TransferDirection.INCOMING, new BigDecimal("900000.00"), 0, null, null));
 
         // When the season is played out and rolled over
         int totalRounds = competitionRepository.findBySaveGameId(c.id()).get(0).getTotalRounds();

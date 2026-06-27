@@ -7,6 +7,7 @@ import br.com.elifootcarvoeiro.career.SaveGameService;
 import br.com.elifootcarvoeiro.club.Club;
 import br.com.elifootcarvoeiro.club.ClubRepository;
 import br.com.elifootcarvoeiro.common.ApiException;
+import br.com.elifootcarvoeiro.contract.ContractValuation;
 import br.com.elifootcarvoeiro.match.RoundSimulationService;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
@@ -31,6 +32,7 @@ class TransferServiceBuyingIT {
 
     @Autowired TransferService transferService;
     @Autowired TransferValuation transferValuation;
+    @Autowired ContractValuation contractValuation;
     @Autowired RoundSimulationService roundSimulationService;
     @Autowired SaveGameService saveGameService;
     @Autowired UserRepository userRepository;
@@ -58,13 +60,17 @@ class TransferServiceBuyingIT {
         return value.multiply(new BigDecimal(factor)).setScale(2, RoundingMode.HALF_UP);
     }
 
+    private BigDecimal okWage(Player p) {
+        return contractValuation.wageDemand(p.getOverall(), p.getAge());
+    }
+
     @Test
     void offeringFullValueExecutesTheTransfer() {
         Career c = createCareer();
         Player target = anAiPlayer(c);
         BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
 
-        TransferOfferResponse r = transferService.makeOffer(c.id(), c.userId(), target.getId(), value);
+        TransferOfferResponse r = transferService.makeOffer(c.id(), c.userId(), target.getId(), value, okWage(target), 3);
 
         assertThat(r.status()).isEqualTo("ACCEPTED");
         assertThat(playerRepository.findById(target.getId()).orElseThrow().getClubId()).isEqualTo(c.clubId());
@@ -77,7 +83,7 @@ class TransferServiceBuyingIT {
         BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
 
         TransferOfferResponse countered = transferService.makeOffer(
-                c.id(), c.userId(), target.getId(), pct(value, "0.80"));
+                c.id(), c.userId(), target.getId(), pct(value, "0.80"), okWage(target), 3);
         assertThat(countered.status()).isEqualTo("COUNTERED");
         assertThat(countered.counterAmount()).isEqualByComparingTo(pct(value, "1.10"));
 
@@ -92,7 +98,7 @@ class TransferServiceBuyingIT {
         Player target = anAiPlayer(c);
         BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
         TransferOfferResponse r = transferService.makeOffer(
-                c.id(), c.userId(), target.getId(), pct(value, "0.50"));
+                c.id(), c.userId(), target.getId(), pct(value, "0.50"), okWage(target), 3);
         assertThat(r.status()).isEqualTo("REJECTED");
     }
 
@@ -102,7 +108,7 @@ class TransferServiceBuyingIT {
         Player target = anAiPlayer(c);
         BigDecimal balance = clubRepository.findById(c.clubId()).orElseThrow().getBalance();
         assertThatThrownBy(() -> transferService.makeOffer(
-                c.id(), c.userId(), target.getId(), balance.add(new BigDecimal("1"))))
+                c.id(), c.userId(), target.getId(), balance.add(new BigDecimal("1")), okWage(target), 3))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
@@ -120,7 +126,7 @@ class TransferServiceBuyingIT {
         }
         Player target = anAiPlayer(c);
         BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
-        assertThatThrownBy(() -> transferService.makeOffer(c.id(), c.userId(), target.getId(), value))
+        assertThatThrownBy(() -> transferService.makeOffer(c.id(), c.userId(), target.getId(), value, okWage(target), 3))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;

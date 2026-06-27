@@ -8,6 +8,7 @@ import br.com.elifootcarvoeiro.club.ClubRepository;
 import br.com.elifootcarvoeiro.common.ApiException;
 import br.com.elifootcarvoeiro.competition.Competition;
 import br.com.elifootcarvoeiro.competition.CompetitionRepository;
+import br.com.elifootcarvoeiro.contract.ContractValuation;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
 import br.com.elifootcarvoeiro.player.Position;
@@ -48,6 +49,7 @@ public class TransferService {
     private final TransferWindow transferWindow;
     private final TransferNegotiator transferNegotiator;
     private final TransferExecutor transferExecutor;
+    private final ContractValuation contractValuation;
 
     public TransferService(SaveGameService saveGameService,
                            SaveGameRepository saveGameRepository,
@@ -58,7 +60,8 @@ public class TransferService {
                            TransferValuation transferValuation,
                            TransferWindow transferWindow,
                            TransferNegotiator transferNegotiator,
-                           TransferExecutor transferExecutor) {
+                           TransferExecutor transferExecutor,
+                           ContractValuation contractValuation) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.playerRepository = playerRepository;
@@ -69,6 +72,7 @@ public class TransferService {
         this.transferWindow = transferWindow;
         this.transferNegotiator = transferNegotiator;
         this.transferExecutor = transferExecutor;
+        this.contractValuation = contractValuation;
     }
 
     public List<MarketPlayerResponse> getMarket(UUID saveGameId, UUID userId) {
@@ -80,13 +84,15 @@ public class TransferService {
                 .map(p -> new MarketPlayerResponse(p.getId(), p.getName(), p.getPosition().name(),
                         p.getAge(), p.getOverall(), p.getClubId(),
                         clubNames.getOrDefault(p.getClubId(), ""),
-                        transferValuation.marketValue(p.getOverall(), p.getAge()), p.getWage()))
+                        transferValuation.marketValue(p.getOverall(), p.getAge()), p.getWage(),
+                        contractValuation.wageDemand(p.getOverall(), p.getAge())))
                 .sorted(Comparator.comparing(MarketPlayerResponse::value).reversed())
                 .toList();
     }
 
     @Transactional
-    public TransferOfferResponse makeOffer(UUID saveGameId, UUID userId, UUID playerId, BigDecimal amount) {
+    public TransferOfferResponse makeOffer(UUID saveGameId, UUID userId, UUID playerId,
+                                           BigDecimal amount, BigDecimal wage, int contractYears) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         UUID managedClubId = save.getManagedClubId();
         requireWindowOpen(save);
@@ -94,20 +100,24 @@ public class TransferService {
         Player player = playerRepository.findById(playerId)
                 .filter(p -> p.getSaveGameId().equals(saveGameId))
                 .orElseThrow(() -> invalid("Player is not available for transfer"));
+        if (player.getClubId() == null) {
+            throw invalid("Free agents are signed, not bought");
+        }
         if (player.getClubId().equals(managedClubId)) {
             throw invalid("Cannot buy a player you already own");
         }
+        requireValidTerms(wage, contractYears);
         requireFunds(managedClubId, amount);
         requireSquadRoom(managedClubId);
 
         BigDecimal value = transferValuation.marketValue(player.getOverall(), player.getAge());
         TransferOffer offer = TransferOffer.create(saveGameId, playerId, managedClubId, player.getClubId(),
-                TransferDirection.OUTGOING, amount, save.getCurrentRound());
+                TransferDirection.OUTGOING, amount, save.getCurrentRound(), wage, contractYears);
         transferOfferRepository.save(offer);
 
         NegotiationResult result = transferNegotiator.respondToBuy(value, amount);
         switch (result.decision()) {
-            case ACCEPT -> { transferExecutor.execute(save, offer, amount); offer.markAccepted(); }
+            case ACCEPT -> completeBuy(save, offer, player, amount);
             case COUNTER -> offer.markCountered(result.counterAmount());
             case REJECT -> offer.markRejected();
         }
@@ -127,8 +137,9 @@ public class TransferService {
         BigDecimal fee = offer.getCounterAmount();
         requireFunds(save.getManagedClubId(), fee);
         requireSquadRoom(save.getManagedClubId());
-        transferExecutor.execute(save, offer, fee);
-        offer.markAccepted();
+        Player player = playerRepository.findById(offer.getPlayerId())
+                .orElseThrow(() -> invalid("Player no longer exists"));
+        completeBuy(save, offer, player, fee);
         transferOfferRepository.save(offer);
         return toResponse(offer);
     }
@@ -234,9 +245,27 @@ public class TransferService {
                 BigDecimal bid = transferNegotiator.bidAmount(
                         transferValuation.marketValue(player.getOverall(), player.getAge()));
                 transferOfferRepository.save(TransferOffer.create(saveGameId, player.getId(),
-                        bidder.getId(), managedClubId, TransferDirection.INCOMING, bid, round));
+                        bidder.getId(), managedClubId, TransferDirection.INCOMING, bid, round, null, null));
                 created++;
             }
+        }
+    }
+
+    /** Completes a buy iff the player accepts the offered wage, else the deal falls through. */
+    private void completeBuy(SaveGame save, TransferOffer offer, Player player, BigDecimal fee) {
+        if (!contractValuation.acceptsWage(player.getOverall(), player.getAge(), offer.getWage())) {
+            offer.markRejected(); // personal terms not met; no money moves, player stays
+            return;
+        }
+        transferExecutor.execute(save, offer, fee);
+        offer.markAccepted();
+    }
+
+    private void requireValidTerms(BigDecimal wage, int contractYears) {
+        if (!contractValuation.isValidLength(contractYears) || wage == null || wage.signum() <= 0) {
+            throw new ApiException("INVALID_CONTRACT",
+                    "Contract length must be 1-5 years and wage must be positive",
+                    HttpStatus.UNPROCESSABLE_CONTENT);
         }
     }
 
@@ -302,6 +331,6 @@ public class TransferService {
         return new TransferOfferResponse(offer.getId(), offer.getPlayerId(), playerName,
                 offer.getFromClubId(), fromName, offer.getToClubId(), toName,
                 offer.getDirection().name(), offer.getAmount(), offer.getCounterAmount(),
-                offer.getStatus().name(), offer.getRound());
+                offer.getStatus().name(), offer.getRound(), offer.getWage(), offer.getContractYears());
     }
 }
