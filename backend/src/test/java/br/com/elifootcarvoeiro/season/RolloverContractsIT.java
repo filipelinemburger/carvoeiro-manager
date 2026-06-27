@@ -90,8 +90,9 @@ class RolloverContractsIT {
     @Test
     void theFreeAgentPoolIsReplenishedToTheFloor() {
         Career c = playToSeasonEnd();
-        playerRepository.findBySaveGameId(c.id()).forEach(p -> p.setContractYears(5));
-        playerRepository.saveAll(playerRepository.findBySaveGameId(c.id()));
+        List<Player> allPlayers = playerRepository.findBySaveGameId(c.id());
+        allPlayers.forEach(p -> p.setContractYears(5));
+        playerRepository.saveAll(allPlayers);
 
         rolloverService.rollover(c.id(), c.userId());
 
