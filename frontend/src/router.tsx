@@ -8,6 +8,7 @@ import { SeasonSummaryPage } from './features/season/SeasonSummaryPage'
 import { SeasonHistoryPage } from './features/season/SeasonHistoryPage'
 import { FinancesPage } from './features/finance/FinancesPage'
 import { TransferMarketPage } from './features/transfer/TransferMarketPage'
+import { FreeAgentsPage } from './features/contract/FreeAgentsPage'
 import { useAuth } from './auth/AuthContext'
 import type { ReactNode } from 'react'
 
@@ -75,6 +76,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <TransferMarketPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/free-agents"
+        element={
+          <ProtectedRoute>
+            <FreeAgentsPage />
           </ProtectedRoute>
         }
       />
