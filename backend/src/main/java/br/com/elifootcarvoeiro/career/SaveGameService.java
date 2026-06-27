@@ -22,7 +22,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Random;
 import java.util.UUID;
 
 @Service
@@ -120,6 +122,15 @@ public class SaveGameService {
             club.setStadiumUpkeepPerRound(financeCalculator.upkeepPerRound(capacity));
             clubRepository.save(club);
         }
+
+        // Stagger contract lengths (1..4) deterministically so deals don't all expire together.
+        Random contractRng = new Random(saveGame.getId().getMostSignificantBits());
+        List<Player> allPlayers = playerRepository.findBySaveGameId(saveGame.getId()).stream()
+                .sorted(Comparator.comparing(Player::getId)).toList();
+        for (Player player : allPlayers) {
+            player.setContractYears(1 + contractRng.nextInt(4));
+        }
+        playerRepository.saveAll(allPlayers);
 
         // 3. Create competition
         int totalRounds = 2 * (clubCount - 1);
