@@ -26,7 +26,7 @@ public class Player {
     @Column(name = "save_game_id", nullable = false)
     private UUID saveGameId;
 
-    @Column(name = "club_id", nullable = false)
+    @Column(name = "club_id")
     private UUID clubId;
 
     @Column(name = "name", nullable = false, length = 80)
@@ -74,6 +74,9 @@ public class Player {
 
     @Column(name = "wage", nullable = false)
     private BigDecimal wage = BigDecimal.ZERO;
+
+    @Column(name = "contract_years", nullable = false)
+    private int contractYears;
 
     protected Player() {
         // for JPA
@@ -165,4 +168,9 @@ public class Player {
 
     public BigDecimal getWage() { return wage; }
     public void setWage(BigDecimal wage) { this.wage = wage; }
+
+    public int getContractYears() { return contractYears; }
+    public void setContractYears(int contractYears) { this.contractYears = contractYears; }
+
+    public boolean isFreeAgent() { return clubId == null; }
 }
