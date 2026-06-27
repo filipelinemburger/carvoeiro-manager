@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { advanceRound } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import type { SimulateRoundResponse } from '../../api/types'
+import { formatBRL } from '../../lib/money'
 
 interface AdvancePanelProps {
   saveGameId: string
@@ -80,6 +81,20 @@ export function AdvancePanel({ saveGameId, competitionId, managedClubId }: Advan
                     {s.playerName} — {s.matches} jogo(s)
                   </li>
                 ))}
+              </ul>
+            </div>
+          )}
+          {result.finance && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <h4>Finanças da rodada</h4>
+              <ul>
+                <li>Bilheteria: {formatBRL(result.finance.gate)}</li>
+                <li>Patrocínio: {formatBRL(result.finance.sponsorship)}</li>
+                <li>Salários: −{formatBRL(result.finance.wages)}</li>
+                <li>Manutenção: −{formatBRL(result.finance.upkeep)}</li>
+                {result.finance.prize > 0 && <li>Premiação: {formatBRL(result.finance.prize)}</li>}
+                <li><strong>Resultado:</strong> {formatBRL(result.finance.net + result.finance.prize)}</li>
+                <li><strong>Saldo:</strong> {formatBRL(result.finance.balance)}</li>
               </ul>
             </div>
           )}
