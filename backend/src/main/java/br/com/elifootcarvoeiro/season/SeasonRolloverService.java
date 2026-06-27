@@ -18,6 +18,7 @@ import br.com.elifootcarvoeiro.competition.TopScorerRow;
 import br.com.elifootcarvoeiro.competition.TopScorersService;
 import br.com.elifootcarvoeiro.finance.FinanceTransactionRepository;
 import br.com.elifootcarvoeiro.match.LineupPlayerRepository;
+import br.com.elifootcarvoeiro.transfer.TransferOfferRepository;
 import br.com.elifootcarvoeiro.match.LineupRepository;
 import br.com.elifootcarvoeiro.match.MatchEventRepository;
 import br.com.elifootcarvoeiro.player.NewgenGenerator;
@@ -66,6 +67,7 @@ public class SeasonRolloverService {
     private final PlayerAgingService playerAgingService;
     private final NewgenGenerator newgenGenerator;
     private final FinanceTransactionRepository financeTransactionRepository;
+    private final TransferOfferRepository transferOfferRepository;
     private final FixtureScheduler fixtureScheduler = new FixtureScheduler();
 
     public SeasonRolloverService(SaveGameService saveGameService,
@@ -84,7 +86,8 @@ public class SeasonRolloverService {
                                  SeasonTopScorerRepository seasonTopScorerRepository,
                                  PlayerAgingService playerAgingService,
                                  NewgenGenerator newgenGenerator,
-                                 FinanceTransactionRepository financeTransactionRepository) {
+                                 FinanceTransactionRepository financeTransactionRepository,
+                                 TransferOfferRepository transferOfferRepository) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.competitionRepository = competitionRepository;
@@ -102,6 +105,7 @@ public class SeasonRolloverService {
         this.playerAgingService = playerAgingService;
         this.newgenGenerator = newgenGenerator;
         this.financeTransactionRepository = financeTransactionRepository;
+        this.transferOfferRepository = transferOfferRepository;
     }
 
     @Transactional
@@ -140,6 +144,8 @@ public class SeasonRolloverService {
 
         // Purge the finished season's finance ledger (balances persist on the club).
         financeTransactionRepository.deleteBySaveGameId(saveGameId);
+        // Purge season-scoped transfer offers (players/clubs change at rollover).
+        transferOfferRepository.deleteBySaveGameId(saveGameId);
 
         // 2. Clear the managed club's lineup before deleting players (FK safety).
         lineupRepository.findBySaveGameIdAndClubId(saveGameId, managedClubId).ifPresent(lineup -> {

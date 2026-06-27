@@ -14,6 +14,7 @@ import br.com.elifootcarvoeiro.competition.FixtureRepository;
 import br.com.elifootcarvoeiro.finance.FinanceRoundResponse;
 import br.com.elifootcarvoeiro.finance.FinanceService;
 import br.com.elifootcarvoeiro.player.Player;
+import br.com.elifootcarvoeiro.transfer.TransferService;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,7 @@ public class RoundSimulationService {
     private final MatchEventRepository matchEventRepository;
     private final MatchOutcomeApplier matchOutcomeApplier;
     private final FinanceService financeService;
+    private final TransferService transferService;
 
     public RoundSimulationService(SaveGameService saveGameService,
                                   SaveGameRepository saveGameRepository,
@@ -64,7 +66,8 @@ public class RoundSimulationService {
                                   MatchSimulationService matchSimulationService,
                                   MatchEventRepository matchEventRepository,
                                   MatchOutcomeApplier matchOutcomeApplier,
-                                  FinanceService financeService) {
+                                  FinanceService financeService,
+                                  TransferService transferService) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.competitionRepository = competitionRepository;
@@ -78,6 +81,7 @@ public class RoundSimulationService {
         this.matchEventRepository = matchEventRepository;
         this.matchOutcomeApplier = matchOutcomeApplier;
         this.financeService = financeService;
+        this.transferService = transferService;
     }
 
     private record FixtureSim(FixtureResultResponse response, List<Player> homeXi, List<Player> awayXi,
@@ -141,6 +145,8 @@ public class RoundSimulationService {
         FinanceRoundResponse finance = new FinanceRoundResponse(
                 roundFinance.gate(), roundFinance.sponsorship(), roundFinance.wages(),
                 roundFinance.upkeep(), prize, roundFinance.net(), roundFinance.balance().add(prize));
+
+        transferService.generateIncomingOffers(saveGameId, newCurrentRound);
 
         return new SimulateRoundResponse(newCurrentRound, List.copyOf(results),
                 saveGame.getStatus() == SaveGameStatus.FINISHED,
