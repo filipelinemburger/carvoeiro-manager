@@ -11,14 +11,16 @@ vi.mock('../../api/career', () => ({
   setLineup: vi.fn(),
   getTactics: vi.fn(),
   setTactics: vi.fn(),
+  renewContract: vi.fn(),
 }))
 
-import { getSquad, setLineup, getTactics } from '../../api/career'
+import { getSquad, setLineup, getTactics, renewContract } from '../../api/career'
 
 const mockGetSquad = vi.mocked(getSquad)
 const mockSetLineup = vi.mocked(setLineup)
+const mockRenewContract = vi.mocked(renewContract)
 
-const STATE = { form: 0, yellowCards: 0, suspensionRemaining: 0, eligible: true, role: null }
+const STATE = { form: 0, yellowCards: 0, suspensionRemaining: 0, eligible: true, role: null, contractYears: 2, wageDemand: 90000 }
 
 const GK: PlayerResponse = {
   id: 'p-gk',
@@ -198,6 +200,16 @@ describe('SquadPage', () => {
     const checkbox = screen.getByRole('checkbox', { name: /banido um/i })
     expect(checkbox).toBeDisabled()
     expect(screen.getByText(/\(Suspenso 1\)/i)).toBeInTheDocument()
+  })
+
+  it('shows contract years and a renew control', async () => {
+    mockRenewContract.mockResolvedValue({ playerId: GK.id, wage: 90000, contractYears: 3 })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    // Contract years column should be visible for the GK (contractYears: 2)
+    expect(screen.getAllByText(/ano\(s\)/i).length).toBeGreaterThan(0)
+    // Renovar button should be present
+    expect(screen.getAllByRole('button', { name: /renovar/i }).length).toBeGreaterThan(0)
   })
 
   it('shows a role selector for a selected outfield player', async () => {

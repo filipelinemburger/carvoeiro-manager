@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { getSquad, setLineup } from '../../api/career'
+import { getSquad, setLineup, renewContract } from '../../api/career'
+import { formatBRL } from '../../lib/money'
 import { useAuth } from '../../auth/AuthContext'
 import type { PlayerResponse, PlayerRole, LineupStarter } from '../../api/types'
 import { TacticsPanel } from './TacticsPanel'
@@ -78,6 +79,12 @@ export function SquadPage() {
     },
   })
 
+  const renewMut = useMutation({
+    mutationFn: (v: { playerId: string; wage: number; contractYears: number }) =>
+      renewContract(saveGameId, v.playerId, { wage: v.wage, contractYears: v.contractYears }, token ?? ''),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] }) },
+  })
+
   const validationError = players.length > 0 ? validate(selected, players) : null
   const canSave = validationError === null
 
@@ -141,6 +148,9 @@ export function SquadPage() {
             <th>Forma</th>
             <th>Fôlego</th>
             <th>Função</th>
+            <th>Contrato</th>
+            <th>Salário Pedido</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -184,6 +194,19 @@ export function SquadPage() {
                       ))}
                     </select>
                   )}
+                </td>
+                <td style={{ textAlign: 'center', color: player.contractYears <= 1 ? 'red' : undefined }}>
+                  {player.contractYears} ano(s)
+                </td>
+                <td style={{ textAlign: 'right' }}>{formatBRL(player.wageDemand)}</td>
+                <td style={{ textAlign: 'center' }}>
+                  <button
+                    className="cec-btn"
+                    disabled={renewMut.isPending}
+                    onClick={() => renewMut.mutate({ playerId: player.id, wage: player.wageDemand, contractYears: 3 })}
+                  >
+                    Renovar
+                  </button>
                 </td>
               </tr>
             )
