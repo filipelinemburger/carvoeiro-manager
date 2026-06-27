@@ -10,6 +10,7 @@ import br.com.elifootcarvoeiro.competition.Competition;
 import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
+import br.com.elifootcarvoeiro.player.Position;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,8 @@ import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -31,6 +34,9 @@ public class TransferService {
 
     static final int MIN_SQUAD_SIZE = 14;
     static final int MAX_SQUAD_SIZE = 30;
+
+    private static final double BID_CHANCE = 0.15;
+    private static final int MAX_BIDS_PER_ROUND = 2;
 
     private final SaveGameService saveGameService;
     private final SaveGameRepository saveGameRepository;
@@ -139,6 +145,109 @@ public class TransferService {
         offer.markWithdrawn();
         transferOfferRepository.save(offer);
         return toResponse(offer);
+    }
+
+    @Transactional
+    public TransferOfferResponse respondToIncoming(UUID saveGameId, UUID userId, UUID offerId,
+                                                   String action, BigDecimal counterAmount) {
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        UUID managedClubId = save.getManagedClubId();
+        TransferOffer offer = requireOffer(saveGameId, offerId);
+        if (offer.getDirection() != TransferDirection.INCOMING
+                || !offer.getToClubId().equals(managedClubId)
+                || (offer.getStatus() != TransferOfferStatus.PENDING
+                    && offer.getStatus() != TransferOfferStatus.COUNTERED)) {
+            throw invalid("This incoming offer cannot be answered");
+        }
+        requireWindowOpen(save);
+        Player player = playerRepository.findById(offer.getPlayerId()).orElseThrow(() -> invalid("Player no longer exists"));
+        BigDecimal value = transferValuation.marketValue(player.getOverall(), player.getAge());
+
+        switch (action) {
+            case "ACCEPT" -> {
+                requireSellAllowed(managedClubId, player);
+                transferExecutor.execute(save, offer, offer.getAmount());
+                offer.markAccepted();
+            }
+            case "REJECT" -> offer.markRejected();
+            case "COUNTER" -> {
+                offer.markCountered(counterAmount);
+                if (transferNegotiator.acceptsSellCounter(value, counterAmount)) {
+                    requireSellAllowed(managedClubId, player);
+                    transferExecutor.execute(save, offer, counterAmount);
+                    offer.markAccepted();
+                } else {
+                    offer.markRejected();
+                }
+            }
+            default -> throw invalid("Unknown action: " + action);
+        }
+        transferOfferRepository.save(offer);
+        return toResponse(offer);
+    }
+
+    public List<TransferOfferResponse> getOffers(UUID saveGameId, UUID userId) {
+        saveGameService.requireOwned(saveGameId, userId);
+        return transferOfferRepository.findBySaveGameIdAndStatusIn(saveGameId,
+                        List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED)).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    /** Unsolicited AI bids for managed players during an open window (deterministic, seeded). */
+    @Transactional
+    public void generateIncomingOffers(UUID saveGameId, int round) {
+        SaveGame save = saveGameRepository.findById(saveGameId).orElseThrow();
+        Competition competition = competitionRepository.findBySaveGameId(saveGameId).get(0);
+        if (!transferWindow.isOpen(round, competition.getTotalRounds())) {
+            return;
+        }
+        UUID managedClubId = save.getManagedClubId();
+        List<Club> aiClubs = clubRepository.findBySaveGameId(saveGameId).stream()
+                .filter(club -> !club.getId().equals(managedClubId))
+                .sorted(Comparator.comparing(Club::getId)).toList();
+        if (aiClubs.isEmpty()) {
+            return;
+        }
+        Set<UUID> alreadyBidOn = transferOfferRepository.findBySaveGameIdAndStatusIn(saveGameId,
+                        List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED)).stream()
+                .filter(o -> o.getDirection() == TransferDirection.INCOMING)
+                .map(TransferOffer::getPlayerId)
+                .collect(Collectors.toSet());
+
+        List<Player> managedPlayers = playerRepository.findByClubId(managedClubId).stream()
+                .sorted(Comparator.comparing(Player::getId)).toList();
+        Random rng = new Random(saveGameId.getMostSignificantBits() ^ (long) round);
+        int created = 0;
+        for (Player player : managedPlayers) {
+            if (created >= MAX_BIDS_PER_ROUND) {
+                break;
+            }
+            if (alreadyBidOn.contains(player.getId())) {
+                continue;
+            }
+            if (rng.nextDouble() < BID_CHANCE) {
+                Club bidder = aiClubs.get(rng.nextInt(aiClubs.size()));
+                BigDecimal bid = transferNegotiator.bidAmount(
+                        transferValuation.marketValue(player.getOverall(), player.getAge()));
+                transferOfferRepository.save(TransferOffer.create(saveGameId, player.getId(),
+                        bidder.getId(), managedClubId, TransferDirection.INCOMING, bid, round));
+                created++;
+            }
+        }
+    }
+
+    private void requireSellAllowed(UUID managedClubId, Player player) {
+        List<Player> squad = playerRepository.findByClubId(managedClubId);
+        if (squad.size() <= MIN_SQUAD_SIZE) {
+            throw new ApiException("SQUAD_TOO_SMALL",
+                    "Squad would be too small", HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+        if (player.getPosition() == Position.GK
+                && squad.stream().filter(p -> p.getPosition() == Position.GK).count() <= 1) {
+            throw new ApiException("SQUAD_TOO_SMALL",
+                    "Cannot sell your last goalkeeper", HttpStatus.UNPROCESSABLE_CONTENT);
+        }
     }
 
     // ---- shared helpers (also used by Task 7's selling methods) ----
