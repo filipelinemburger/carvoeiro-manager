@@ -129,6 +129,22 @@ class TransferServiceSellingIT {
     }
 
     @Test
+    void counteringWithZeroAmountIsRejectedAndPlayerNotSold() {
+        Career c = createCareer();
+        Player p = aManagedOutfielder(c);
+        TransferOffer bid = incomingBidFor(c, p, new BigDecimal("900000.00"));
+
+        assertThatThrownBy(() -> transferService.respondToIncoming(c.id(), c.userId(), bid.getId(), "COUNTER", java.math.BigDecimal.ZERO))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException api = (ApiException) ex;
+                    assertThat(api.getCode()).isEqualTo("INVALID_TRANSFER");
+                    assertThat(api.getStatus().value()).isEqualTo(422);
+                });
+        assertThat(playerRepository.findById(p.getId()).orElseThrow().getClubId()).isEqualTo(c.clubId());
+    }
+
+    @Test
     void getOffersReturnsTheActiveInbox() {
         Career c = createCareer();
         Player p = aManagedOutfielder(c);

@@ -171,6 +171,9 @@ public class TransferService {
             }
             case "REJECT" -> offer.markRejected();
             case "COUNTER" -> {
+                if (counterAmount == null || counterAmount.signum() <= 0) {
+                    throw invalid("Counter amount must be positive");
+                }
                 offer.markCountered(counterAmount);
                 if (transferNegotiator.acceptsSellCounter(value, counterAmount)) {
                     requireSellAllowed(managedClubId, player);
