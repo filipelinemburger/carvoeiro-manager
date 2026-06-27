@@ -66,6 +66,7 @@ class ContractServiceRenewIT {
         Career c = createCareer();
         Player p = aManagedPlayer(c);
         int originalContractYears = p.getContractYears();
+        BigDecimal originalWage = p.getWage();
         BigDecimal demand = contractValuation.wageDemand(p.getOverall(), p.getAge());
         BigDecimal lowball = demand.subtract(new BigDecimal("1"));
 
@@ -78,6 +79,8 @@ class ContractServiceRenewIT {
                 });
         assertThat(playerRepository.findById(p.getId()).orElseThrow().getContractYears())
                 .isEqualTo(originalContractYears); // unchanged
+        assertThat(playerRepository.findById(p.getId()).orElseThrow().getWage())
+                .isEqualByComparingTo(originalWage); // unchanged
     }
 
     @Test
