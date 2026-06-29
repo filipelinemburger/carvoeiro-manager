@@ -6,11 +6,15 @@ import br.com.elifootcarvoeiro.career.SaveGameService;
 import br.com.elifootcarvoeiro.career.SaveGameStatus;
 import br.com.elifootcarvoeiro.common.ApiException;
 import br.com.elifootcarvoeiro.competition.Fixture;
+import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.competition.FixtureRepository;
 import br.com.elifootcarvoeiro.finance.FinanceRoundResponse;
 import br.com.elifootcarvoeiro.finance.FinanceService;
 import br.com.elifootcarvoeiro.match.RoundOutcome;
 import br.com.elifootcarvoeiro.match.FixtureSimulator;
+import br.com.elifootcarvoeiro.transfer.TransferDirection;
+import br.com.elifootcarvoeiro.transfer.TransferOfferRepository;
+import br.com.elifootcarvoeiro.transfer.TransferOfferStatus;
 import br.com.elifootcarvoeiro.transfer.TransferService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -30,6 +34,8 @@ import java.util.UUID;
  *       (which also flips the save to {@code FINISHED}).</li>
  *   <li>{@code TRANSFER} — generate AI incoming bids for the date (window-gated inside
  *       {@link TransferService#generateIncomingOffers}).</li>
+ *   <li>{@code FINISHED} — returned when no calendar entries remain and the save is flipped
+ *       to {@code FINISHED} (no active event guard already handled the previous last match).</li>
  * </ul>
  * Replaces the old round-based {@code RoundSimulationService}. Match determinism is
  * unchanged (the seed is keyed off {@code fixture.getRound()}); for the single
@@ -42,25 +48,31 @@ public class SeasonAdvanceService {
     private final SaveGameService saveGameService;
     private final SaveGameRepository saveGameRepository;
     private final SeasonEventRepository seasonEventRepository;
+    private final CompetitionRepository competitionRepository;
     private final FixtureRepository fixtureRepository;
     private final FixtureSimulator fixtureSimulator;
     private final FinanceService financeService;
     private final TransferService transferService;
+    private final TransferOfferRepository transferOfferRepository;
 
     public SeasonAdvanceService(SaveGameService saveGameService,
                                 SaveGameRepository saveGameRepository,
                                 SeasonEventRepository seasonEventRepository,
+                                CompetitionRepository competitionRepository,
                                 FixtureRepository fixtureRepository,
                                 FixtureSimulator fixtureSimulator,
                                 FinanceService financeService,
-                                TransferService transferService) {
+                                TransferService transferService,
+                                TransferOfferRepository transferOfferRepository) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.seasonEventRepository = seasonEventRepository;
+        this.competitionRepository = competitionRepository;
         this.fixtureRepository = fixtureRepository;
         this.fixtureSimulator = fixtureSimulator;
         this.financeService = financeService;
         this.transferService = transferService;
+        this.transferOfferRepository = transferOfferRepository;
     }
 
     @Transactional
@@ -76,7 +88,8 @@ public class SeasonAdvanceService {
             // No calendar entries left to process: the season is over.
             save.setStatus(SaveGameStatus.FINISHED);
             saveGameRepository.save(save);
-            throw new ApiException("SEASON_FINISHED", "The season has already finished", HttpStatus.CONFLICT);
+            return new AdvanceResponse("FINISHED", null, null, null,
+                    List.of(), List.of(), List.of(), null, 0, true);
         }
 
         save.setCurrentDate(event.getEventDate());
@@ -96,6 +109,10 @@ public class SeasonAdvanceService {
         final UUID saveGameId = save.getId();
         final UUID competitionId = event.getCompetitionId();
         final int round = event.getRound();
+
+        String competitionName = competitionRepository.findById(competitionId)
+                .map(c -> c.getName())
+                .orElse(null);
 
         List<Fixture> fixtures = fixtureRepository
                 .findBySaveGameIdAndCompetitionIdAndRound(saveGameId, competitionId, round);
@@ -121,15 +138,24 @@ public class SeasonAdvanceService {
                 matchdayFinance.upkeep(), prize, matchdayFinance.net(),
                 matchdayFinance.balance().add(prize));
 
-        return new AdvanceResponse("MATCH", event.getEventDate(), round,
+        return new AdvanceResponse("MATCH", event.getEventDate().toString(), competitionName, round,
                 List.copyOf(outcome.results()), List.copyOf(outcome.bookings()),
-                List.copyOf(outcome.newSuspensions()), finance, seasonFinished);
+                List.copyOf(outcome.newSuspensions()), finance, 0, seasonFinished);
     }
 
     private AdvanceResponse processTransfer(SaveGame save, SeasonEvent event) {
+        int before = activeIncomingBids(save.getId());
         transferService.generateIncomingOffers(save.getId(), event.getEventDate());
-        return new AdvanceResponse("TRANSFER", event.getEventDate(), null,
-                List.of(), List.of(), List.of(), null, false);
+        int bidsReceived = Math.max(0, activeIncomingBids(save.getId()) - before);
+        return new AdvanceResponse("TRANSFER", event.getEventDate().toString(), null, null,
+                List.of(), List.of(), List.of(), null, bidsReceived, false);
+    }
+
+    private int activeIncomingBids(UUID saveGameId) {
+        return (int) transferOfferRepository.findBySaveGameIdAndStatusIn(saveGameId,
+                        List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED)).stream()
+                .filter(o -> o.getDirection() == TransferDirection.INCOMING)
+                .count();
     }
 
     /** True when no other unprocessed MATCH event remains besides the one just popped. */

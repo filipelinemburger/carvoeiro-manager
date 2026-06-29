@@ -84,7 +84,7 @@ class SeasonAdvanceServiceIT {
         // Then the save's current date moved to the popped event's date
         SaveGame saved = saveGameRepository.findById(c.id()).orElseThrow();
         assertThat(saved.getCurrentDate()).isEqualTo(firstDate);
-        assertThat(response.date()).isEqualTo(firstDate);
+        assertThat(response.date()).isEqualTo(firstDate.toString());
         assertThat(response.type()).isIn("MATCH", "TRANSFER");
 
         // And the popped event is now processed
@@ -103,6 +103,7 @@ class SeasonAdvanceServiceIT {
 
         // Then the matchday's fixtures are simulated and finance is carried
         assertThat(match.type()).isEqualTo("MATCH");
+        assertThat(match.competitionName()).isEqualTo("Campeonato Catarinense");
         assertThat(match.round()).isNotNull();
         assertThat(match.results()).hasSize(clubCount / 2); // 5 fixtures per Catarinense round
         assertThat(match.finance()).isNotNull();
