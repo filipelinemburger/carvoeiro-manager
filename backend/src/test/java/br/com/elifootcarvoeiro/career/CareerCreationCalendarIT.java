@@ -57,8 +57,8 @@ class CareerCreationCalendarIT {
         assertThat(fixtures).allMatch(f -> f.getMatchDate() != null,
                 "Every fixture must have a match_date assigned by SeasonCalendarGenerator");
 
-        // First fixture date is season start (2026-01-15)
-        LocalDate seasonStart = LocalDate.of(2026, 1, 15);
+        // First fixture date is season start (Jan 15 of the seed's season year)
+        LocalDate seasonStart = LocalDate.of(response.seasonYear(), 1, 15);
         assertThat(fixtures).anyMatch(f -> f.getMatchDate().equals(seasonStart));
 
         // MATCH season events exist (one per round of the competition = 18 rounds for 10 clubs)

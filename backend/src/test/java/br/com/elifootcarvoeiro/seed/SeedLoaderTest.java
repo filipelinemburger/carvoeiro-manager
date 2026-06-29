@@ -12,38 +12,38 @@ class SeedLoaderTest {
 
     @Test
     void loadsCatarinenseWithEvenNumberOfClubsIncludingCriciuma() {
-        SeedData data = new SeedLoader().loadCatarinense();
+        SeedCareer data = new SeedLoader().loadCareer();
 
-        assertThat(data.competitionName()).isEqualTo("Campeonato Catarinense");
-        assertThat(data.clubs()).isNotEmpty();
-        assertThat(data.clubs().size() % 2).isZero();
-        assertThat(data.clubs()).anyMatch(c -> c.shortName().equals("CRI"));
-        assertThat(data.clubs()).allSatisfy(c ->
+        assertThat(data.competitions().get(0).name()).isEqualTo("Campeonato Catarinense");
+        assertThat(data.clubPool()).isNotEmpty();
+        assertThat(data.clubPool().size() % 2).isZero();
+        assertThat(data.clubPool()).anyMatch(c -> c.shortName().equals("CRI"));
+        assertThat(data.clubPool()).allSatisfy(c ->
                 assertThat(c.players()).hasSizeGreaterThanOrEqualTo(14));
     }
 
     @Test
     void everyPlayerHasValidPosition() {
-        SeedData data = new SeedLoader().loadCatarinense();
+        SeedCareer data = new SeedLoader().loadCareer();
 
-        assertThat(data.clubs()).allSatisfy(club ->
+        assertThat(data.clubPool()).allSatisfy(club ->
                 assertThat(club.players()).allSatisfy(player ->
                         assertThat(VALID_POSITIONS).contains(player.position())));
     }
 
     @Test
     void everyClubHasAtLeastOneGoalkeeper() {
-        SeedData data = new SeedLoader().loadCatarinense();
+        SeedCareer data = new SeedLoader().loadCareer();
 
-        assertThat(data.clubs()).allSatisfy(club ->
+        assertThat(data.clubPool()).allSatisfy(club ->
                 assertThat(club.players())
                         .anyMatch(p -> "GK".equals(p.position())));
     }
 
     @Test
     void seasonYearIs2026() {
-        SeedData data = new SeedLoader().loadCatarinense();
+        SeedCareer data = new SeedLoader().loadCareer();
 
-        assertThat(data.seasonYear()).isEqualTo(2026);
+        assertThat(data.competitions().get(0).seasonYear()).isEqualTo(2026);
     }
 }

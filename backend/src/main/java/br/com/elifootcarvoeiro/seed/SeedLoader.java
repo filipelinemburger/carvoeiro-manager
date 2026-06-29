@@ -12,14 +12,6 @@ public class SeedLoader {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public SeedData loadCatarinense() {
-        try (InputStream in = new ClassPathResource("seed/catarinense.json").getInputStream()) {
-            return mapper.readValue(in, SeedData.class);
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to load catarinense seed", e);
-        }
-    }
-
     public SeedCareer loadCareer() {
         try (InputStream in = new ClassPathResource("seed/catarinense.json").getInputStream()) {
             return mapper.readValue(in, SeedCareer.class);
