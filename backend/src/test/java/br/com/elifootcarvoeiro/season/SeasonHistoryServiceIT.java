@@ -4,9 +4,10 @@ import br.com.elifootcarvoeiro.auth.User;
 import br.com.elifootcarvoeiro.auth.UserRepository;
 import br.com.elifootcarvoeiro.career.SaveGameResponse;
 import br.com.elifootcarvoeiro.career.SaveGameService;
+import br.com.elifootcarvoeiro.career.SaveGameRepository;
+import br.com.elifootcarvoeiro.career.SaveGameStatus;
 import br.com.elifootcarvoeiro.common.ApiException;
 import br.com.elifootcarvoeiro.competition.CompetitionRepository;
-import br.com.elifootcarvoeiro.match.RoundSimulationService;
 import br.com.elifootcarvoeiro.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,8 +28,9 @@ class SeasonHistoryServiceIT {
 
     @Autowired SeasonHistoryService historyService;
     @Autowired SeasonRolloverService rolloverService;
-    @Autowired RoundSimulationService roundSimulationService;
+    @Autowired SeasonAdvanceService seasonAdvanceService;
     @Autowired SaveGameService saveGameService;
+    @Autowired SaveGameRepository saveGameRepository;
     @Autowired UserRepository userRepository;
     @Autowired CompetitionRepository competitionRepository;
 
@@ -42,9 +44,10 @@ class SeasonHistoryServiceIT {
 
     private int finishAndRollOver(Career c) {
         int year = competitionRepository.findBySaveGameId(c.id()).get(0).getSeasonYear();
-        int totalRounds = competitionRepository.findBySaveGameId(c.id()).get(0).getTotalRounds();
-        for (int i = 0; i < totalRounds; i++) {
-            roundSimulationService.simulateNextRound(c.id(), c.userId());
+        int guard = 0;
+        while (saveGameRepository.findById(c.id()).orElseThrow().getStatus() != SaveGameStatus.FINISHED
+                && guard++ < 500) {
+            seasonAdvanceService.advance(c.id(), c.userId());
         }
         rolloverService.rollover(c.id(), c.userId());
         return year;

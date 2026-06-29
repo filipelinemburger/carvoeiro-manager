@@ -4,24 +4,13 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 
-/** Pure round-based transfer-window gating: a pre-season block and a mid-season block. */
+/** Date-based transfer-window gating: a pre-season range and a mid-season range. */
 @Component
 public class TransferWindow {
-
-    private static final int PRE_SEASON_ROUNDS = 3;
-    private static final int MID_LENGTH = 3;
 
     static final int PRE_SEASON_DAYS = 42;
     static final int MID_WINDOW_START_DAYS = 140;
     static final int MID_WINDOW_END_DAYS = 168;
-
-    public boolean isOpen(int currentRound, int totalRounds) {
-        if (currentRound < PRE_SEASON_ROUNDS) {
-            return true;
-        }
-        int midStart = totalRounds / 2;
-        return currentRound >= midStart && currentRound < midStart + MID_LENGTH;
-    }
 
     /**
      * Date-based window: a season runs within one calendar year (Jan 15 -> ~Oct), so the

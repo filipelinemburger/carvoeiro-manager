@@ -6,6 +6,8 @@ import br.com.elifootcarvoeiro.career.SaveGameResponse;
 import br.com.elifootcarvoeiro.career.SaveGameService;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
+import br.com.elifootcarvoeiro.season.AdvanceResponse;
+import br.com.elifootcarvoeiro.season.SeasonAdvanceService;
 import br.com.elifootcarvoeiro.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Import(PostgresTestContainer.class)
 class SuspensionLifecycleIT {
 
-    @Autowired RoundSimulationService roundSimulationService;
+    @Autowired SeasonAdvanceService seasonAdvanceService;
     @Autowired LineupService lineupService;
     @Autowired SaveGameService saveGameService;
     @Autowired UserRepository userRepository;
@@ -35,6 +37,17 @@ class SuspensionLifecycleIT {
         User user = User.create("susp_" + UUID.randomUUID(), "hash");
         userRepository.save(user);
         return new Career(user.getId(), saveGameService.createCareer(user.getId()));
+    }
+
+    /** Advances until the next MATCH is played (skipping any TRANSFER stops). */
+    private void advanceOneMatch(Career c) {
+        for (int guard = 0; guard < 500; guard++) {
+            AdvanceResponse r = seasonAdvanceService.advance(c.save().id(), c.userId());
+            if ("MATCH".equals(r.type())) {
+                return;
+            }
+        }
+        throw new IllegalStateException("No MATCH event reached within guard");
     }
 
     @Test
@@ -68,7 +81,7 @@ class SuspensionLifecycleIT {
         playerRepository.save(benched);
 
         // When a round is simulated (the benched player sits out)
-        roundSimulationService.simulateNextRound(saveGameId, career.userId());
+        advanceOneMatch(career);
 
         // Then the ban is served
         Player reloaded = playerRepository.findById(benched.getId()).orElseThrow();

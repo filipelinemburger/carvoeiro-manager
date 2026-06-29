@@ -6,9 +6,10 @@ import br.com.elifootcarvoeiro.career.SaveGameResponse;
 import br.com.elifootcarvoeiro.career.SaveGameService;
 import br.com.elifootcarvoeiro.club.Club;
 import br.com.elifootcarvoeiro.club.ClubRepository;
+import br.com.elifootcarvoeiro.career.SaveGame;
+import br.com.elifootcarvoeiro.career.SaveGameRepository;
 import br.com.elifootcarvoeiro.common.ApiException;
 import br.com.elifootcarvoeiro.contract.ContractValuation;
-import br.com.elifootcarvoeiro.match.RoundSimulationService;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
 import br.com.elifootcarvoeiro.support.PostgresTestContainer;
@@ -20,6 +21,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,8 +35,8 @@ class TransferServiceBuyingIT {
     @Autowired TransferService transferService;
     @Autowired TransferValuation transferValuation;
     @Autowired ContractValuation contractValuation;
-    @Autowired RoundSimulationService roundSimulationService;
     @Autowired SaveGameService saveGameService;
+    @Autowired SaveGameRepository saveGameRepository;
     @Autowired UserRepository userRepository;
     @Autowired ClubRepository clubRepository;
     @Autowired PlayerRepository playerRepository;
@@ -120,10 +122,10 @@ class TransferServiceBuyingIT {
     @Test
     void offersAreBlockedWhenTheWindowIsClosed() {
         Career c = createCareer();
-        // Advance to round 5 (pre-season window closed: 5 is not < 3 and not in [9,12)).
-        for (int i = 0; i < 5; i++) {
-            roundSimulationService.simulateNextRound(c.id(), c.userId());
-        }
+        // Move the save date outside any transfer window (May 1 is past pre-season, before mid-season).
+        SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();
+        save.setCurrentDate(LocalDate.of(2026, 5, 1));
+        saveGameRepository.save(save);
         Player target = anAiPlayer(c);
         BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
         assertThatThrownBy(() -> transferService.makeOffer(c.id(), c.userId(), target.getId(), value, okWage(target), 3))

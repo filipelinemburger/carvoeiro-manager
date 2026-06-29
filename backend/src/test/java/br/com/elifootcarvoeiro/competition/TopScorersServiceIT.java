@@ -4,10 +4,12 @@ import br.com.elifootcarvoeiro.auth.User;
 import br.com.elifootcarvoeiro.auth.UserRepository;
 import br.com.elifootcarvoeiro.career.SaveGameResponse;
 import br.com.elifootcarvoeiro.career.SaveGameService;
+import br.com.elifootcarvoeiro.career.SaveGameRepository;
+import br.com.elifootcarvoeiro.career.SaveGameStatus;
 import br.com.elifootcarvoeiro.club.Club;
 import br.com.elifootcarvoeiro.club.ClubRepository;
 import br.com.elifootcarvoeiro.common.ApiException;
-import br.com.elifootcarvoeiro.match.RoundSimulationService;
+import br.com.elifootcarvoeiro.season.SeasonAdvanceService;
 import br.com.elifootcarvoeiro.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,8 +30,9 @@ class TopScorersServiceIT {
 
     @Autowired TopScorersService topScorersService;
     @Autowired StandingsService standingsService;
-    @Autowired RoundSimulationService roundSimulationService;
+    @Autowired SeasonAdvanceService seasonAdvanceService;
     @Autowired SaveGameService saveGameService;
+    @Autowired SaveGameRepository saveGameRepository;
     @Autowired UserRepository userRepository;
     @Autowired CompetitionRepository competitionRepository;
     @Autowired ClubRepository clubRepository;
@@ -47,9 +50,10 @@ class TopScorersServiceIT {
         // Given a career advanced through a full season
         Career c = createCareer();
         UUID competitionId = competitionRepository.findBySaveGameId(c.id()).get(0).getId();
-        int totalRounds = competitionRepository.findBySaveGameId(c.id()).get(0).getTotalRounds();
-        for (int i = 0; i < totalRounds; i++) {
-            roundSimulationService.simulateNextRound(c.id(), c.userId());
+        int guard = 0;
+        while (saveGameRepository.findById(c.id()).orElseThrow().getStatus() != SaveGameStatus.FINISHED
+                && guard++ < 500) {
+            seasonAdvanceService.advance(c.id(), c.userId());
         }
 
         // When computing top scorers

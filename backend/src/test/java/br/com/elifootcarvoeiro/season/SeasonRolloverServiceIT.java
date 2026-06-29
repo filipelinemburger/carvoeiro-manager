@@ -21,7 +21,6 @@ import br.com.elifootcarvoeiro.match.LineupRepository;
 import br.com.elifootcarvoeiro.match.SetLineupRequest;
 import br.com.elifootcarvoeiro.match.SetTacticsRequest;
 import br.com.elifootcarvoeiro.match.LineupStarter;
-import br.com.elifootcarvoeiro.match.RoundSimulationService;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
 import br.com.elifootcarvoeiro.player.PlayerRole;
@@ -48,7 +47,7 @@ class SeasonRolloverServiceIT {
 
     @Autowired SeasonRolloverService rolloverService;
     @Autowired StandingsService standingsService;
-    @Autowired RoundSimulationService roundSimulationService;
+    @Autowired SeasonAdvanceService seasonAdvanceService;
     @Autowired LineupService lineupService;
     @Autowired SaveGameService saveGameService;
     @Autowired UserRepository userRepository;
@@ -74,9 +73,10 @@ class SeasonRolloverServiceIT {
     }
 
     private void finishSeason(Career c) {
-        int totalRounds = competitionRepository.findBySaveGameId(c.id()).get(0).getTotalRounds();
-        for (int i = 0; i < totalRounds; i++) {
-            roundSimulationService.simulateNextRound(c.id(), c.userId());
+        int guard = 0;
+        while (saveGameRepository.findById(c.id()).orElseThrow().getStatus() != SaveGameStatus.FINISHED
+                && guard++ < 500) {
+            seasonAdvanceService.advance(c.id(), c.userId());
         }
     }
 

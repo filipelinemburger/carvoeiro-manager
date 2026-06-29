@@ -5,9 +5,7 @@ import br.com.elifootcarvoeiro.auth.UserRepository;
 import br.com.elifootcarvoeiro.career.SaveGameResponse;
 import br.com.elifootcarvoeiro.career.SaveGameService;
 import br.com.elifootcarvoeiro.career.SaveGameStatus;
-import br.com.elifootcarvoeiro.career.SaveGame;
 import br.com.elifootcarvoeiro.career.SaveGameRepository;
-import br.com.elifootcarvoeiro.match.RoundSimulationService;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
 import br.com.elifootcarvoeiro.support.PostgresTestContainer;
@@ -30,7 +28,7 @@ class RolloverContractsIT {
     @Autowired UserRepository userRepository;
     @Autowired SaveGameService saveGameService;
     @Autowired SaveGameRepository saveGameRepository;
-    @Autowired RoundSimulationService roundSimulationService;
+    @Autowired SeasonAdvanceService seasonAdvanceService;
     @Autowired SeasonRolloverService rolloverService;
     @Autowired PlayerRepository playerRepository;
 
@@ -43,8 +41,10 @@ class RolloverContractsIT {
         User user = User.create("roll_" + UUID.randomUUID(), "hash");
         userRepository.save(user);
         Career c = new Career(user.getId(), saveGameService.createCareer(user.getId()));
-        while (saveGameRepository.findById(c.id()).orElseThrow().getStatus() != SaveGameStatus.FINISHED) {
-            roundSimulationService.simulateNextRound(c.id(), c.userId());
+        int guard = 0;
+        while (saveGameRepository.findById(c.id()).orElseThrow().getStatus() != SaveGameStatus.FINISHED
+                && guard++ < 500) {
+            seasonAdvanceService.advance(c.id(), c.userId());
         }
         return c;
     }

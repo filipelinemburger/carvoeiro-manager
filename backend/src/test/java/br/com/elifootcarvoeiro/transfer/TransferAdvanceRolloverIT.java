@@ -4,12 +4,14 @@ import br.com.elifootcarvoeiro.auth.User;
 import br.com.elifootcarvoeiro.auth.UserRepository;
 import br.com.elifootcarvoeiro.career.SaveGameResponse;
 import br.com.elifootcarvoeiro.career.SaveGameService;
+import br.com.elifootcarvoeiro.career.SaveGameRepository;
+import br.com.elifootcarvoeiro.career.SaveGameStatus;
 import br.com.elifootcarvoeiro.club.Club;
 import br.com.elifootcarvoeiro.club.ClubRepository;
-import br.com.elifootcarvoeiro.competition.CompetitionRepository;
-import br.com.elifootcarvoeiro.match.RoundSimulationService;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
+import br.com.elifootcarvoeiro.season.AdvanceResponse;
+import br.com.elifootcarvoeiro.season.SeasonAdvanceService;
 import br.com.elifootcarvoeiro.season.SeasonRolloverService;
 import br.com.elifootcarvoeiro.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
@@ -29,13 +31,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Import(PostgresTestContainer.class)
 class TransferAdvanceRolloverIT {
 
-    @Autowired RoundSimulationService roundSimulationService;
+    @Autowired SeasonAdvanceService seasonAdvanceService;
     @Autowired SeasonRolloverService seasonRolloverService;
     @Autowired SaveGameService saveGameService;
+    @Autowired SaveGameRepository saveGameRepository;
     @Autowired UserRepository userRepository;
     @Autowired ClubRepository clubRepository;
     @Autowired PlayerRepository playerRepository;
-    @Autowired CompetitionRepository competitionRepository;
     @Autowired TransferOfferRepository transferOfferRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
@@ -55,19 +57,26 @@ class TransferAdvanceRolloverIT {
 
     @Test
     void advancingInsideAWindowProducesOnlyValidIncomingOffers() {
-        // Given a fresh career (rounds 1 and 2 are in the pre-season window)
+        // Given a fresh career, the early calendar lands inside the pre-season transfer window,
+        // so incoming bids are generated on the TRANSFER events the advance pops.
         Career c = createCareer();
 
-        // When advancing two rounds (the hook runs generateIncomingOffers for rounds 1 and 2)
-        roundSimulationService.simulateNextRound(c.id(), c.userId());
-        roundSimulationService.simulateNextRound(c.id(), c.userId());
+        // When advancing through the first several events (which include pre-season TRANSFER stops)
+        for (int i = 0; i < 6; i++) {
+            AdvanceResponse r = seasonAdvanceService.advance(c.id(), c.userId());
+            // Stop once the season would finish (defensive; never reached this early).
+            if (r.seasonFinished()) {
+                break;
+            }
+        }
 
-        // Then any generated offers are INCOMING, PENDING, for the managed club, bounded, no errors
+        // Then any generated offers are INCOMING, PENDING, for the managed club, and bounded
         List<TransferOffer> offers = transferOfferRepository.findBySaveGameIdAndStatusIn(c.id(), ALL);
         assertThat(offers).allMatch(o -> o.getDirection() == TransferDirection.INCOMING);
         assertThat(offers).allMatch(o -> o.getStatus() == TransferOfferStatus.PENDING);
         assertThat(offers).allMatch(o -> o.getToClubId().equals(c.clubId()));
-        assertThat(offers.size()).isLessThanOrEqualTo(4); // up to 2 per generating round
+        // Up to 2 bids per processed TRANSFER event; a handful of windows at most this early.
+        assertThat(offers.size()).isLessThanOrEqualTo(8);
     }
 
     @Test
@@ -81,9 +90,10 @@ class TransferAdvanceRolloverIT {
                 c.clubId(), TransferDirection.INCOMING, new BigDecimal("900000.00"), 0, null, null));
 
         // When the season is played out and rolled over
-        int totalRounds = competitionRepository.findBySaveGameId(c.id()).get(0).getTotalRounds();
-        for (int i = 0; i < totalRounds; i++) {
-            roundSimulationService.simulateNextRound(c.id(), c.userId());
+        int guard = 0;
+        while (saveGameRepository.findById(c.id()).orElseThrow().getStatus() != SaveGameStatus.FINISHED
+                && guard++ < 500) {
+            seasonAdvanceService.advance(c.id(), c.userId());
         }
         seasonRolloverService.rollover(c.id(), c.userId());
 

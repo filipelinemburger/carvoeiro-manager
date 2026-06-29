@@ -11,7 +11,6 @@ import br.com.elifootcarvoeiro.competition.Competition;
 import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.competition.Fixture;
 import br.com.elifootcarvoeiro.competition.FixtureRepository;
-import br.com.elifootcarvoeiro.match.RoundSimulationService;
 import br.com.elifootcarvoeiro.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +34,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class FinanceServiceIT {
 
     @Autowired FinanceService financeService;
-    @Autowired RoundSimulationService roundSimulationService;
     @Autowired SaveGameService saveGameService;
     @Autowired UserRepository userRepository;
     @Autowired ClubRepository clubRepository;
@@ -54,27 +52,30 @@ class FinanceServiceIT {
         return new Career(user.getId(), saveGameService.createCareer(user.getId()));
     }
 
+    private List<Fixture> round0Fixtures(Career c, UUID competitionId) {
+        return fixtureRepository.findBySaveGameIdAndCompetitionIdAndRound(c.id(), competitionId, 0);
+    }
+
     @Test
-    void processRoundMovesEveryClubBalanceAndItemizesTheManagedClub() {
-        // Given a fresh career
+    void processMatchdayMovesEveryMemberBalanceAndItemizesTheManagedClub() {
+        // Given a fresh career (all 10 Catarinense clubs are competition members)
         Career c = createCareer();
         Competition competition = competitionRepository.findBySaveGameId(c.id()).get(0);
-        List<Fixture> round0 = fixtureRepository.findBySaveGameIdAndCompetitionIdAndRound(
-                c.id(), competition.getId(), 0);
+        List<Fixture> round0 = round0Fixtures(c, competition.getId());
         Map<UUID, BigDecimal> before = clubRepository.findBySaveGameId(c.id()).stream()
                 .collect(Collectors.toMap(Club::getId, Club::getBalance));
 
-        // When the round's finances are processed
-        FinanceRoundResponse managed = financeService.processRound(c.id(), 0, round0);
+        // When the matchday's finances are processed
+        FinanceRoundResponse managed = financeService.processMatchday(c.id(), competition.getId(), round0);
 
-        // Then every club's balance changed (income/wages/upkeep applied)
+        // Then every member club's balance changed (income/wages/upkeep applied)
         Map<UUID, BigDecimal> after = clubRepository.findBySaveGameId(c.id()).stream()
                 .collect(Collectors.toMap(Club::getId, Function.identity()))
                 .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getBalance()));
         after.forEach((id, bal) -> assertThat(bal).as("club %s balance moved", id)
                 .isNotEqualByComparingTo(before.get(id)));
 
-        // And the managed club has itemized rows for round 0 (SPONSOR + WAGES + UPKEEP, plus GATE if home)
+        // And the managed club has itemized rows (SPONSOR + WAGES + UPKEEP, plus GATE if home)
         boolean managedIsHome = round0.stream().anyMatch(f -> f.getHomeClubId().equals(c.clubId()));
         List<FinanceTransaction> ledger = financeTransactionRepository
                 .findBySaveGameIdAndClubIdOrderByRoundDescCreatedAtDesc(c.id(), c.clubId());
@@ -94,16 +95,13 @@ class FinanceServiceIT {
 
     @Test
     void processSeasonEndAwardsPrizeMoney() {
-        // Given a fully-played season
+        // Given a fresh career (prize money is awarded by final standing position)
         Career c = createCareer();
-        int totalRounds = competitionRepository.findBySaveGameId(c.id()).get(0).getTotalRounds();
-        for (int i = 0; i < totalRounds; i++) {
-            roundSimulationService.simulateNextRound(c.id(), c.userId());
-        }
+        Competition competition = competitionRepository.findBySaveGameId(c.id()).get(0);
         BigDecimal managedBalanceBefore = clubRepository.findById(c.clubId()).orElseThrow().getBalance();
 
-        // When season-end finances run
-        BigDecimal prize = financeService.processSeasonEnd(c.id());
+        // When season-end finances run for the competition
+        BigDecimal prize = financeService.processSeasonEnd(c.id(), competition.getId());
 
         // Then the managed club received prize money and has a PRIZE row
         assertThat(prize).isGreaterThan(BigDecimal.ZERO);
@@ -117,8 +115,8 @@ class FinanceServiceIT {
     @Test
     void getFinancesReturnsBalanceAndTransactionsForOwner() {
         Career c = createCareer();
-        financeService.processRound(c.id(), 0, fixtureRepository.findBySaveGameIdAndCompetitionIdAndRound(
-                c.id(), competitionRepository.findBySaveGameId(c.id()).get(0).getId(), 0));
+        Competition competition = competitionRepository.findBySaveGameId(c.id()).get(0);
+        financeService.processMatchday(c.id(), competition.getId(), round0Fixtures(c, competition.getId()));
 
         FinancesResponse finances = financeService.getFinances(c.id(), c.clubId(), c.userId());
         assertThat(finances.balance()).isGreaterThan(BigDecimal.ZERO);

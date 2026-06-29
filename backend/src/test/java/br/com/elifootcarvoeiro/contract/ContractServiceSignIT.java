@@ -2,10 +2,11 @@ package br.com.elifootcarvoeiro.contract;
 
 import br.com.elifootcarvoeiro.auth.User;
 import br.com.elifootcarvoeiro.auth.UserRepository;
+import br.com.elifootcarvoeiro.career.SaveGame;
+import br.com.elifootcarvoeiro.career.SaveGameRepository;
 import br.com.elifootcarvoeiro.career.SaveGameResponse;
 import br.com.elifootcarvoeiro.career.SaveGameService;
 import br.com.elifootcarvoeiro.common.ApiException;
-import br.com.elifootcarvoeiro.match.RoundSimulationService;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
 import br.com.elifootcarvoeiro.support.PostgresTestContainer;
@@ -16,6 +17,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,10 +30,10 @@ class ContractServiceSignIT {
 
     @Autowired UserRepository userRepository;
     @Autowired SaveGameService saveGameService;
+    @Autowired SaveGameRepository saveGameRepository;
     @Autowired ContractService contractService;
     @Autowired ContractValuation contractValuation;
     @Autowired PlayerRepository playerRepository;
-    @Autowired RoundSimulationService roundSimulationService;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -78,9 +80,10 @@ class ContractServiceSignIT {
     @Test
     void signingIsBlockedWhenTheWindowIsClosed() {
         Career c = createCareer();
-        for (int i = 0; i < 5; i++) {
-            roundSimulationService.simulateNextRound(c.id(), c.userId());
-        }
+        // Move the save date outside any transfer window (May 1 is past pre-season, before mid-season).
+        SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();
+        save.setCurrentDate(LocalDate.of(2026, 5, 1));
+        saveGameRepository.save(save);
         FreeAgentResponse fa = anyFreeAgent(c);
         assertThatThrownBy(() -> contractService.signFreeAgent(
                 c.id(), c.userId(), fa.playerId(), fa.wageDemand(), 3))

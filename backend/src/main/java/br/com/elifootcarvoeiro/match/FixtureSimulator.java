@@ -23,14 +23,12 @@ import java.util.stream.Collectors;
 /**
  * Runs the fixture-simulation engine for a given list of fixtures: per-fixture
  * simulation, event attribution, outcome application and player persistence.
- * Extracted from {@link RoundSimulationService} so that {@code SeasonAdvanceService}
- * (Task 7) can reuse it via the date-driven path.
+ * Reused by {@code SeasonAdvanceService} via the date-driven advance path.
  *
  * <p>Match seed: {@code saveGameId.msb ^ fixtureId.msb ^ fixture.getRound()}.
- * Using {@code fixture.getRound()} (not {@code save.getCurrentRound()}) makes the
- * seed identical for the existing round-based path (all fixtures in a round share
- * the same round number) while remaining safe for date-driven multi-round calls
- * where there is no single "current round".
+ * Keying on {@code fixture.getRound()} keeps the seed identical to the original
+ * round-based path (all fixtures in a round share the same round number) while
+ * remaining safe for date-driven calls where there is no single "current round".
  */
 @Service
 public class FixtureSimulator {

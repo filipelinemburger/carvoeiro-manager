@@ -6,8 +6,6 @@ import br.com.elifootcarvoeiro.career.SaveGameService;
 import br.com.elifootcarvoeiro.club.Club;
 import br.com.elifootcarvoeiro.club.ClubRepository;
 import br.com.elifootcarvoeiro.common.ApiException;
-import br.com.elifootcarvoeiro.competition.Competition;
-import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.contract.ContractValuation;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
@@ -17,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +42,6 @@ public class TransferService {
     private final SaveGameRepository saveGameRepository;
     private final PlayerRepository playerRepository;
     private final ClubRepository clubRepository;
-    private final CompetitionRepository competitionRepository;
     private final TransferOfferRepository transferOfferRepository;
     private final TransferValuation transferValuation;
     private final TransferWindow transferWindow;
@@ -55,7 +53,6 @@ public class TransferService {
                            SaveGameRepository saveGameRepository,
                            PlayerRepository playerRepository,
                            ClubRepository clubRepository,
-                           CompetitionRepository competitionRepository,
                            TransferOfferRepository transferOfferRepository,
                            TransferValuation transferValuation,
                            TransferWindow transferWindow,
@@ -66,7 +63,6 @@ public class TransferService {
         this.saveGameRepository = saveGameRepository;
         this.playerRepository = playerRepository;
         this.clubRepository = clubRepository;
-        this.competitionRepository = competitionRepository;
         this.transferOfferRepository = transferOfferRepository;
         this.transferValuation = transferValuation;
         this.transferWindow = transferWindow;
@@ -210,10 +206,9 @@ public class TransferService {
 
     /** Unsolicited AI bids for managed players during an open window (deterministic, seeded). */
     @Transactional
-    public void generateIncomingOffers(UUID saveGameId, int round) {
+    public void generateIncomingOffers(UUID saveGameId, LocalDate eventDate) {
         SaveGame save = saveGameRepository.findById(saveGameId).orElseThrow();
-        Competition competition = competitionRepository.findBySaveGameId(saveGameId).get(0);
-        if (!transferWindow.isOpen(round, competition.getTotalRounds())) {
+        if (!transferWindow.isOpen(eventDate)) {
             return;
         }
         UUID managedClubId = save.getManagedClubId();
@@ -231,7 +226,7 @@ public class TransferService {
 
         List<Player> managedPlayers = playerRepository.findByClubId(managedClubId).stream()
                 .sorted(Comparator.comparing(Player::getId)).toList();
-        Random rng = new Random(saveGameId.getMostSignificantBits() ^ (long) round);
+        Random rng = new Random(saveGameId.getMostSignificantBits() ^ eventDate.toEpochDay());
         int created = 0;
         for (Player player : managedPlayers) {
             if (created >= MAX_BIDS_PER_ROUND) {
@@ -245,7 +240,8 @@ public class TransferService {
                 BigDecimal bid = transferNegotiator.bidAmount(
                         transferValuation.marketValue(player.getOverall(), player.getAge()));
                 transferOfferRepository.save(TransferOffer.create(saveGameId, player.getId(),
-                        bidder.getId(), managedClubId, TransferDirection.INCOMING, bid, round, null, null));
+                        bidder.getId(), managedClubId, TransferDirection.INCOMING, bid,
+                        save.getCurrentRound(), null, null));
                 created++;
             }
         }
@@ -285,8 +281,7 @@ public class TransferService {
     // ---- shared helpers (also used by Task 7's selling methods) ----
 
     void requireWindowOpen(SaveGame save) {
-        Competition competition = competitionRepository.findBySaveGameId(save.getId()).get(0);
-        if (!transferWindow.isOpen(save.getCurrentRound(), competition.getTotalRounds())) {
+        if (!transferWindow.isOpen(save.getCurrentDate())) {
             throw new ApiException("TRANSFER_WINDOW_CLOSED",
                     "The transfer window is closed", HttpStatus.UNPROCESSABLE_CONTENT);
         }

@@ -19,6 +19,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -156,13 +157,13 @@ class TransferServiceSellingIT {
     @Test
     void generateIncomingOffersCreatesBidsInsideAWindowAndNoneOutside() {
         Career c = createCareer();
-        transferService.generateIncomingOffers(c.id(), 0);   // pre-season window OPEN
+        transferService.generateIncomingOffers(c.id(), LocalDate.of(2026, 1, 15)); // pre-season window OPEN
         long inWindow = transferOfferRepository.findBySaveGameIdAndStatusIn(
                 c.id(), List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED)).size();
         assertThat(inWindow).isGreaterThanOrEqualTo(0); // bounded; may be 0..2 deterministically
 
         Career c2 = createCareer();
-        transferService.generateIncomingOffers(c2.id(), 5); // window CLOSED
+        transferService.generateIncomingOffers(c2.id(), LocalDate.of(2026, 5, 1)); // window CLOSED
         assertThat(transferOfferRepository.findBySaveGameIdAndStatusIn(
                 c2.id(), List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED))).isEmpty();
     }

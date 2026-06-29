@@ -3,8 +3,6 @@ package br.com.elifootcarvoeiro.contract;
 import br.com.elifootcarvoeiro.career.SaveGame;
 import br.com.elifootcarvoeiro.career.SaveGameService;
 import br.com.elifootcarvoeiro.common.ApiException;
-import br.com.elifootcarvoeiro.competition.Competition;
-import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
 import br.com.elifootcarvoeiro.transfer.TransferWindow;
@@ -30,18 +28,15 @@ public class ContractService {
     private final PlayerRepository playerRepository;
     private final ContractValuation contractValuation;
     private final TransferWindow transferWindow;
-    private final CompetitionRepository competitionRepository;
 
     public ContractService(SaveGameService saveGameService,
                            PlayerRepository playerRepository,
                            ContractValuation contractValuation,
-                           TransferWindow transferWindow,
-                           CompetitionRepository competitionRepository) {
+                           TransferWindow transferWindow) {
         this.saveGameService = saveGameService;
         this.playerRepository = playerRepository;
         this.contractValuation = contractValuation;
         this.transferWindow = transferWindow;
-        this.competitionRepository = competitionRepository;
     }
 
     @Transactional
@@ -84,8 +79,7 @@ public class ContractService {
     }
 
     private void requireWindowOpen(SaveGame save) {
-        Competition competition = competitionRepository.findBySaveGameId(save.getId()).get(0);
-        if (!transferWindow.isOpen(save.getCurrentRound(), competition.getTotalRounds())) {
+        if (!transferWindow.isOpen(save.getCurrentDate())) {
             throw new ApiException("TRANSFER_WINDOW_CLOSED",
                     "The transfer window is closed", HttpStatus.UNPROCESSABLE_CONTENT);
         }
