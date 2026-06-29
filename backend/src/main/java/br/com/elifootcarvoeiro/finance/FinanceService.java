@@ -178,6 +178,8 @@ public class FinanceService {
                 .map(Fixture::getHomeClubId)
                 .collect(Collectors.toCollection(HashSet::new));
 
+        int round = matchdayFixtures.isEmpty() ? 0 : matchdayFixtures.get(0).getRound();
+
         BigDecimal mGate = BigDecimal.ZERO;
         BigDecimal mSpon = BigDecimal.ZERO;
         BigDecimal mWages = BigDecimal.ZERO;
@@ -197,7 +199,7 @@ public class FinanceService {
                         .findFirst()
                         .orElse(null);
                 Club away = awayId != null ? clubById.get(awayId) : null;
-                int awayRep = away != null ? away.getReputation() : club.getReputation();
+                int awayRep = away != null ? away.getReputation() : 0;
                 gate = financeCalculator.gateIncome(club.getReputation(), awayRep, club.getStadiumCapacity());
             }
 
@@ -215,16 +217,16 @@ public class FinanceService {
                 mWages = wages;
                 mUpkeep = upkeep;
                 mBalance = club.getBalance();
-                // Use round=0 for matchday-scoped ledger rows (round is not meaningful here).
+                // Ledger rows use the matchday's round, derived from the fixtures.
                 if (gate.signum() > 0) {
-                    record(saveGameId, managedClubId, seasonYear, 0,
+                    record(saveGameId, managedClubId, seasonYear, round,
                             FinanceTransactionType.GATE, gate, "Renda de bilheteria");
                 }
-                record(saveGameId, managedClubId, seasonYear, 0,
+                record(saveGameId, managedClubId, seasonYear, round,
                         FinanceTransactionType.SPONSOR, sponsorship, "Patrocínio");
-                record(saveGameId, managedClubId, seasonYear, 0,
+                record(saveGameId, managedClubId, seasonYear, round,
                         FinanceTransactionType.WAGES, wages.negate(), "Salários");
-                record(saveGameId, managedClubId, seasonYear, 0,
+                record(saveGameId, managedClubId, seasonYear, round,
                         FinanceTransactionType.UPKEEP, upkeep.negate(), "Manutenção do estádio");
             }
         }
