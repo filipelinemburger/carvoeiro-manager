@@ -49,7 +49,9 @@ class TopScorersServiceIT {
     void aggregatesGoalsAcrossPlayedFixturesSortedDescending() {
         // Given a career advanced through a full season
         Career c = createCareer();
-        UUID competitionId = competitionRepository.findBySaveGameId(c.id()).get(0).getId();
+        UUID competitionId = competitionRepository.findBySaveGameId(c.id()).stream()
+                .filter(comp -> comp.getName().contains("Catarinense"))
+                .findFirst().orElseThrow().getId();
         int guard = 0;
         while (saveGameRepository.findById(c.id()).orElseThrow().getStatus() != SaveGameStatus.FINISHED
                 && guard++ < 500) {
@@ -78,7 +80,9 @@ class TopScorersServiceIT {
     void foreignUserCannotReadTopScorers() {
         Career owner = createCareer();
         Career intruder = createCareer();
-        UUID competitionId = competitionRepository.findBySaveGameId(owner.id()).get(0).getId();
+        UUID competitionId = competitionRepository.findBySaveGameId(owner.id()).stream()
+                .filter(comp -> comp.getName().contains("Catarinense"))
+                .findFirst().orElseThrow().getId();
         assertThatThrownBy(() -> topScorersService.getTopScorers(owner.id(), competitionId, intruder.userId()))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getStatus().value()).isEqualTo(404));

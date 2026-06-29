@@ -234,6 +234,335 @@
         { "name": "Ivan Camboriú", "position": "ATT", "age": 27, "nationality": "Brasil", "pace": 66, "finishing": 55, "passing": 52, "tackling": 18, "goalkeeping": 6, "stamina": 66 },
         { "name": "Eduardo Camboriú", "position": "ATT", "age": 21, "nationality": "Brasil", "pace": 76, "finishing": 57, "passing": 50, "tackling": 14, "goalkeeping": 6, "stamina": 72 }
       ]
+    },
+    {
+      "name": "Goiás Esporte Clube",
+      "shortName": "GOI",
+      "nickname": "Esmeraldino",
+      "primaryColor": "#007a33",
+      "secondaryColor": "#ffffff",
+      "players": [
+        { "name": "Tadeu Goiás", "position": "GK", "age": 30, "nationality": "Brasil", "pace": 46, "finishing": 18, "passing": 58, "tackling": 32, "goalkeeping": 78, "stamina": 72 },
+        { "name": "Renan Goiás", "position": "GK", "age": 24, "nationality": "Brasil", "pace": 42, "finishing": 14, "passing": 53, "tackling": 28, "goalkeeping": 71, "stamina": 67 },
+        { "name": "Heron Goiás", "position": "DEF", "age": 27, "nationality": "Brasil", "pace": 66, "finishing": 22, "passing": 60, "tackling": 73, "goalkeeping": 8, "stamina": 73 },
+        { "name": "Sidnei Goiás", "position": "DEF", "age": 31, "nationality": "Brasil", "pace": 58, "finishing": 18, "passing": 58, "tackling": 76, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Diego Goiás", "position": "DEF", "age": 25, "nationality": "Brasil", "pace": 68, "finishing": 24, "passing": 62, "tackling": 71, "goalkeeping": 8, "stamina": 74 },
+        { "name": "Caetano Goiás", "position": "DEF", "age": 24, "nationality": "Brasil", "pace": 64, "finishing": 20, "passing": 60, "tackling": 69, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Welliton Goiás", "position": "MID", "age": 26, "nationality": "Brasil", "pace": 70, "finishing": 48, "passing": 70, "tackling": 56, "goalkeeping": 8, "stamina": 76 },
+        { "name": "Auremir Goiás", "position": "MID", "age": 28, "nationality": "Brasil", "pace": 66, "finishing": 44, "passing": 72, "tackling": 58, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Luan Goiás", "position": "MID", "age": 23, "nationality": "Brasil", "pace": 72, "finishing": 50, "passing": 68, "tackling": 54, "goalkeeping": 8, "stamina": 78 },
+        { "name": "Vinícius Goiás", "position": "MID", "age": 22, "nationality": "Brasil", "pace": 74, "finishing": 48, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 76 },
+        { "name": "Nicolas Goiás", "position": "ATT", "age": 22, "nationality": "Brasil", "pace": 80, "finishing": 70, "passing": 62, "tackling": 22, "goalkeeping": 6, "stamina": 76 },
+        { "name": "Apodi Goiás", "position": "ATT", "age": 28, "nationality": "Brasil", "pace": 76, "finishing": 68, "passing": 60, "tackling": 20, "goalkeeping": 6, "stamina": 74 },
+        { "name": "Pedro Raul", "position": "ATT", "age": 26, "nationality": "Brasil", "pace": 72, "finishing": 72, "passing": 58, "tackling": 24, "goalkeeping": 6, "stamina": 72 },
+        { "name": "Alef Manga", "position": "ATT", "age": 24, "nationality": "Brasil", "pace": 82, "finishing": 74, "passing": 60, "tackling": 20, "goalkeeping": 6, "stamina": 78 }
+      ]
+    },
+    {
+      "name": "Coritiba Foot Ball Club",
+      "shortName": "COR",
+      "nickname": "Coxa-Branca",
+      "primaryColor": "#009900",
+      "secondaryColor": "#ffffff",
+      "players": [
+        { "name": "Gabriel Vasconcelos", "position": "GK", "age": 28, "nationality": "Brasil", "pace": 44, "finishing": 16, "passing": 56, "tackling": 30, "goalkeeping": 77, "stamina": 70 },
+        { "name": "Wilson Coritiba", "position": "GK", "age": 34, "nationality": "Brasil", "pace": 38, "finishing": 14, "passing": 52, "tackling": 28, "goalkeeping": 74, "stamina": 65 },
+        { "name": "Nathan Mendes", "position": "DEF", "age": 27, "nationality": "Brasil", "pace": 68, "finishing": 24, "passing": 62, "tackling": 74, "goalkeeping": 8, "stamina": 74 },
+        { "name": "Luciano Castán", "position": "DEF", "age": 32, "nationality": "Brasil", "pace": 56, "finishing": 18, "passing": 58, "tackling": 78, "goalkeeping": 10, "stamina": 68 },
+        { "name": "Henrique Coritiba", "position": "DEF", "age": 25, "nationality": "Brasil", "pace": 66, "finishing": 22, "passing": 60, "tackling": 72, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Natanael Coritiba", "position": "DEF", "age": 23, "nationality": "Brasil", "pace": 70, "finishing": 26, "passing": 62, "tackling": 70, "goalkeeping": 8, "stamina": 74 },
+        { "name": "Bernardo Coritiba", "position": "MID", "age": 24, "nationality": "Brasil", "pace": 72, "finishing": 50, "passing": 72, "tackling": 56, "goalkeeping": 8, "stamina": 78 },
+        { "name": "Régis Coritiba", "position": "MID", "age": 28, "nationality": "Brasil", "pace": 66, "finishing": 46, "passing": 74, "tackling": 58, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Andrey Coritiba", "position": "MID", "age": 22, "nationality": "Brasil", "pace": 74, "finishing": 50, "passing": 70, "tackling": 54, "goalkeeping": 8, "stamina": 76 },
+        { "name": "Sebastián Gómez", "position": "MID", "age": 26, "nationality": "Brasil", "pace": 68, "finishing": 48, "passing": 72, "tackling": 58, "goalkeeping": 8, "stamina": 74 },
+        { "name": "Alef Coritiba", "position": "ATT", "age": 23, "nationality": "Brasil", "pace": 80, "finishing": 72, "passing": 62, "tackling": 22, "goalkeeping": 6, "stamina": 76 },
+        { "name": "Igor Paixão", "position": "ATT", "age": 24, "nationality": "Brasil", "pace": 84, "finishing": 74, "passing": 64, "tackling": 20, "goalkeeping": 6, "stamina": 78 },
+        { "name": "Robson Coritiba", "position": "ATT", "age": 29, "nationality": "Brasil", "pace": 72, "finishing": 70, "passing": 60, "tackling": 22, "goalkeeping": 6, "stamina": 72 },
+        { "name": "Thiago Lopes", "position": "ATT", "age": 26, "nationality": "Brasil", "pace": 76, "finishing": 68, "passing": 62, "tackling": 24, "goalkeeping": 6, "stamina": 74 }
+      ]
+    },
+    {
+      "name": "Novorizontino Futebol Clube",
+      "shortName": "NOV",
+      "nickname": "Tigre do Vale",
+      "primaryColor": "#ff0000",
+      "secondaryColor": "#000000",
+      "players": [
+        { "name": "Giovanni Novorizontino", "position": "GK", "age": 27, "nationality": "Brasil", "pace": 43, "finishing": 15, "passing": 54, "tackling": 28, "goalkeeping": 72, "stamina": 68 },
+        { "name": "Lucas Frigeri", "position": "GK", "age": 23, "nationality": "Brasil", "pace": 40, "finishing": 12, "passing": 50, "tackling": 25, "goalkeeping": 66, "stamina": 63 },
+        { "name": "Weverton Novorizontino", "position": "DEF", "age": 26, "nationality": "Brasil", "pace": 64, "finishing": 20, "passing": 58, "tackling": 70, "goalkeeping": 8, "stamina": 70 },
+        { "name": "César Novorizontino", "position": "DEF", "age": 29, "nationality": "Brasil", "pace": 58, "finishing": 16, "passing": 56, "tackling": 72, "goalkeeping": 8, "stamina": 66 },
+        { "name": "Ralf Novorizontino", "position": "DEF", "age": 25, "nationality": "Brasil", "pace": 62, "finishing": 20, "passing": 58, "tackling": 68, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Murilo Novorizontino", "position": "DEF", "age": 24, "nationality": "Brasil", "pace": 64, "finishing": 20, "passing": 60, "tackling": 66, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Danielzinho Novorizontino", "position": "MID", "age": 25, "nationality": "Brasil", "pace": 68, "finishing": 46, "passing": 68, "tackling": 54, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Gustavo Bonfim", "position": "MID", "age": 22, "nationality": "Brasil", "pace": 72, "finishing": 48, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 74 },
+        { "name": "Léo Baiano", "position": "MID", "age": 27, "nationality": "Brasil", "pace": 64, "finishing": 42, "passing": 70, "tackling": 56, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Vitinho Novorizontino", "position": "MID", "age": 24, "nationality": "Brasil", "pace": 70, "finishing": 46, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Quirino Novorizontino", "position": "ATT", "age": 24, "nationality": "Brasil", "pace": 78, "finishing": 66, "passing": 58, "tackling": 20, "goalkeeping": 6, "stamina": 74 },
+        { "name": "Cléo Silva", "position": "ATT", "age": 26, "nationality": "Brasil", "pace": 74, "finishing": 64, "passing": 60, "tackling": 22, "goalkeeping": 6, "stamina": 72 },
+        { "name": "Douglas Novorizontino", "position": "ATT", "age": 28, "nationality": "Brasil", "pace": 70, "finishing": 62, "passing": 56, "tackling": 20, "goalkeeping": 6, "stamina": 70 },
+        { "name": "Pablo Dyego", "position": "ATT", "age": 30, "nationality": "Brasil", "pace": 68, "finishing": 68, "passing": 58, "tackling": 22, "goalkeeping": 6, "stamina": 68 }
+      ]
+    },
+    {
+      "name": "Sport Club do Recife",
+      "shortName": "SPT",
+      "nickname": "Leão do Norte",
+      "primaryColor": "#cc0000",
+      "secondaryColor": "#000000",
+      "players": [
+        { "name": "Caíque França", "position": "GK", "age": 27, "nationality": "Brasil", "pace": 45, "finishing": 17, "passing": 56, "tackling": 30, "goalkeeping": 76, "stamina": 70 },
+        { "name": "Mailson Sport", "position": "GK", "age": 25, "nationality": "Brasil", "pace": 41, "finishing": 14, "passing": 52, "tackling": 26, "goalkeeping": 70, "stamina": 66 },
+        { "name": "Alisson Sport", "position": "DEF", "age": 28, "nationality": "Brasil", "pace": 64, "finishing": 22, "passing": 60, "tackling": 72, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Rafael Thyere", "position": "DEF", "age": 30, "nationality": "Brasil", "pace": 58, "finishing": 18, "passing": 58, "tackling": 76, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Chico Sport", "position": "DEF", "age": 26, "nationality": "Brasil", "pace": 66, "finishing": 22, "passing": 60, "tackling": 70, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Igor Sport", "position": "DEF", "age": 24, "nationality": "Brasil", "pace": 68, "finishing": 24, "passing": 62, "tackling": 68, "goalkeeping": 8, "stamina": 74 },
+        { "name": "Thiago Leal", "position": "MID", "age": 26, "nationality": "Brasil", "pace": 68, "finishing": 48, "passing": 70, "tackling": 56, "goalkeeping": 8, "stamina": 74 },
+        { "name": "Fabinho Sport", "position": "MID", "age": 24, "nationality": "Brasil", "pace": 70, "finishing": 46, "passing": 68, "tackling": 54, "goalkeeping": 8, "stamina": 74 },
+        { "name": "Jorginho Sport", "position": "MID", "age": 28, "nationality": "Brasil", "pace": 64, "finishing": 44, "passing": 72, "tackling": 58, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Pedro Henrique Sport", "position": "MID", "age": 22, "nationality": "Brasil", "pace": 72, "finishing": 50, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 76 },
+        { "name": "Zé Love", "position": "ATT", "age": 30, "nationality": "Brasil", "pace": 72, "finishing": 72, "passing": 58, "tackling": 22, "goalkeeping": 6, "stamina": 70 },
+        { "name": "Beto Sport", "position": "ATT", "age": 26, "nationality": "Brasil", "pace": 76, "finishing": 70, "passing": 60, "tackling": 20, "goalkeeping": 6, "stamina": 74 },
+        { "name": "Paulinho Sport", "position": "ATT", "age": 24, "nationality": "Brasil", "pace": 80, "finishing": 68, "passing": 62, "tackling": 22, "goalkeeping": 6, "stamina": 76 },
+        { "name": "Everton Sport", "position": "ATT", "age": 22, "nationality": "Brasil", "pace": 82, "finishing": 66, "passing": 60, "tackling": 20, "goalkeeping": 6, "stamina": 76 }
+      ]
+    },
+    {
+      "name": "Ceará Sporting Club",
+      "shortName": "CEA",
+      "nickname": "Vozão",
+      "primaryColor": "#000000",
+      "secondaryColor": "#ffffff",
+      "players": [
+        { "name": "Richard Ceará", "position": "GK", "age": 29, "nationality": "Brasil", "pace": 44, "finishing": 16, "passing": 56, "tackling": 30, "goalkeeping": 76, "stamina": 70 },
+        { "name": "Bruno Ceará", "position": "GK", "age": 24, "nationality": "Brasil", "pace": 41, "finishing": 13, "passing": 52, "tackling": 26, "goalkeeping": 70, "stamina": 65 },
+        { "name": "Messias Ceará", "position": "DEF", "age": 27, "nationality": "Brasil", "pace": 64, "finishing": 22, "passing": 60, "tackling": 72, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Luiz Otávio", "position": "DEF", "age": 30, "nationality": "Brasil", "pace": 58, "finishing": 18, "passing": 58, "tackling": 76, "goalkeeping": 10, "stamina": 68 },
+        { "name": "Jonathan Ceará", "position": "DEF", "age": 26, "nationality": "Brasil", "pace": 66, "finishing": 22, "passing": 60, "tackling": 70, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Gabriel Lacerda", "position": "DEF", "age": 24, "nationality": "Brasil", "pace": 68, "finishing": 24, "passing": 62, "tackling": 68, "goalkeeping": 8, "stamina": 74 },
+        { "name": "Geovane Ceará", "position": "MID", "age": 24, "nationality": "Brasil", "pace": 72, "finishing": 50, "passing": 70, "tackling": 56, "goalkeeping": 8, "stamina": 76 },
+        { "name": "Fernando Sobral", "position": "MID", "age": 27, "nationality": "Brasil", "pace": 66, "finishing": 46, "passing": 74, "tackling": 58, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Richardson Ceará", "position": "MID", "age": 28, "nationality": "Brasil", "pace": 64, "finishing": 44, "passing": 72, "tackling": 60, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Lima Ceará", "position": "MID", "age": 25, "nationality": "Brasil", "pace": 68, "finishing": 48, "passing": 70, "tackling": 56, "goalkeeping": 8, "stamina": 74 },
+        { "name": "Vina Ceará", "position": "ATT", "age": 28, "nationality": "Brasil", "pace": 74, "finishing": 72, "passing": 66, "tackling": 24, "goalkeeping": 6, "stamina": 74 },
+        { "name": "Stênio Ceará", "position": "ATT", "age": 22, "nationality": "Brasil", "pace": 80, "finishing": 68, "passing": 62, "tackling": 20, "goalkeeping": 6, "stamina": 76 },
+        { "name": "Mendoza Ceará", "position": "ATT", "age": 26, "nationality": "Brasil", "pace": 76, "finishing": 70, "passing": 60, "tackling": 22, "goalkeeping": 6, "stamina": 74 },
+        { "name": "Erick Ceará", "position": "ATT", "age": 23, "nationality": "Brasil", "pace": 78, "finishing": 66, "passing": 62, "tackling": 22, "goalkeeping": 6, "stamina": 74 }
+      ]
+    },
+    {
+      "name": "Vila Nova Futebol Clube",
+      "shortName": "VIL",
+      "nickname": "Tigre Colorado",
+      "primaryColor": "#cc0000",
+      "secondaryColor": "#ff6600",
+      "players": [
+        { "name": "Georgemy Vila Nova", "position": "GK", "age": 27, "nationality": "Brasil", "pace": 42, "finishing": 14, "passing": 52, "tackling": 27, "goalkeeping": 68, "stamina": 65 },
+        { "name": "Lucas Bruxel", "position": "GK", "age": 23, "nationality": "Brasil", "pace": 39, "finishing": 12, "passing": 48, "tackling": 24, "goalkeeping": 62, "stamina": 61 },
+        { "name": "Renato Vila Nova", "position": "DEF", "age": 28, "nationality": "Brasil", "pace": 62, "finishing": 18, "passing": 56, "tackling": 68, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Wellington Silva", "position": "DEF", "age": 26, "nationality": "Brasil", "pace": 64, "finishing": 20, "passing": 58, "tackling": 66, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Rithely Vila Nova", "position": "DEF", "age": 30, "nationality": "Brasil", "pace": 58, "finishing": 16, "passing": 54, "tackling": 68, "goalkeeping": 8, "stamina": 65 },
+        { "name": "Wagner Vila Nova", "position": "DEF", "age": 24, "nationality": "Brasil", "pace": 64, "finishing": 20, "passing": 56, "tackling": 64, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Higor Vila Nova", "position": "MID", "age": 25, "nationality": "Brasil", "pace": 66, "finishing": 44, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Matheusinho Vila Nova", "position": "MID", "age": 23, "nationality": "Brasil", "pace": 68, "finishing": 46, "passing": 64, "tackling": 50, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Pedro Lucas Vila Nova", "position": "MID", "age": 26, "nationality": "Brasil", "pace": 64, "finishing": 42, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Arthur Vila Nova", "position": "MID", "age": 22, "nationality": "Brasil", "pace": 70, "finishing": 46, "passing": 64, "tackling": 50, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Guilherme Parede", "position": "ATT", "age": 26, "nationality": "Brasil", "pace": 72, "finishing": 62, "passing": 56, "tackling": 18, "goalkeeping": 6, "stamina": 70 },
+        { "name": "Pablo Vila Nova", "position": "ATT", "age": 24, "nationality": "Brasil", "pace": 74, "finishing": 60, "passing": 54, "tackling": 18, "goalkeeping": 6, "stamina": 70 },
+        { "name": "Dequinha Vila Nova", "position": "ATT", "age": 28, "nationality": "Brasil", "pace": 68, "finishing": 60, "passing": 54, "tackling": 20, "goalkeeping": 6, "stamina": 66 },
+        { "name": "Rubens Vila Nova", "position": "ATT", "age": 22, "nationality": "Brasil", "pace": 76, "finishing": 62, "passing": 52, "tackling": 16, "goalkeeping": 6, "stamina": 72 }
+      ]
+    },
+    {
+      "name": "Clube Atlético Paysandu",
+      "shortName": "PAY",
+      "nickname": "Papão da Curuzu",
+      "primaryColor": "#003399",
+      "secondaryColor": "#ffffff",
+      "players": [
+        { "name": "Thiago Couto", "position": "GK", "age": 28, "nationality": "Brasil", "pace": 43, "finishing": 15, "passing": 54, "tackling": 28, "goalkeeping": 72, "stamina": 68 },
+        { "name": "Léo Paysandu", "position": "GK", "age": 23, "nationality": "Brasil", "pace": 40, "finishing": 12, "passing": 50, "tackling": 24, "goalkeeping": 66, "stamina": 63 },
+        { "name": "Edilson Paysandu", "position": "DEF", "age": 30, "nationality": "Brasil", "pace": 58, "finishing": 16, "passing": 54, "tackling": 70, "goalkeeping": 8, "stamina": 66 },
+        { "name": "Marcão Paysandu", "position": "DEF", "age": 27, "nationality": "Brasil", "pace": 62, "finishing": 18, "passing": 56, "tackling": 68, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Bryan Paysandu", "position": "DEF", "age": 24, "nationality": "Brasil", "pace": 64, "finishing": 20, "passing": 58, "tackling": 66, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Edilson Pay", "position": "DEF", "age": 26, "nationality": "Brasil", "pace": 60, "finishing": 16, "passing": 54, "tackling": 68, "goalkeeping": 8, "stamina": 66 },
+        { "name": "João Vieira Paysandu", "position": "MID", "age": 25, "nationality": "Brasil", "pace": 66, "finishing": 44, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Rildo Paysandu", "position": "MID", "age": 27, "nationality": "Brasil", "pace": 62, "finishing": 42, "passing": 68, "tackling": 54, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Kevyn Paysandu", "position": "MID", "age": 22, "nationality": "Brasil", "pace": 70, "finishing": 46, "passing": 64, "tackling": 50, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Marlon Paysandu", "position": "MID", "age": 26, "nationality": "Brasil", "pace": 64, "finishing": 42, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Esli Garcia", "position": "ATT", "age": 23, "nationality": "Brasil", "pace": 76, "finishing": 62, "passing": 56, "tackling": 18, "goalkeeping": 6, "stamina": 72 },
+        { "name": "Nicolas Paysandu", "position": "ATT", "age": 25, "nationality": "Brasil", "pace": 72, "finishing": 60, "passing": 54, "tackling": 18, "goalkeeping": 6, "stamina": 70 },
+        { "name": "Robson Paysandu", "position": "ATT", "age": 28, "nationality": "Brasil", "pace": 68, "finishing": 62, "passing": 52, "tackling": 20, "goalkeeping": 6, "stamina": 68 },
+        { "name": "Diego Borges", "position": "ATT", "age": 26, "nationality": "Brasil", "pace": 70, "finishing": 60, "passing": 54, "tackling": 18, "goalkeeping": 6, "stamina": 70 }
+      ]
+    },
+    {
+      "name": "Operário Ferroviário Esporte Clube",
+      "shortName": "OPE",
+      "nickname": "Fantasma",
+      "primaryColor": "#000000",
+      "secondaryColor": "#ffffff",
+      "players": [
+        { "name": "Thiago Operário", "position": "GK", "age": 27, "nationality": "Brasil", "pace": 42, "finishing": 14, "passing": 52, "tackling": 27, "goalkeeping": 70, "stamina": 66 },
+        { "name": "Ezequiel Operário", "position": "GK", "age": 24, "nationality": "Brasil", "pace": 39, "finishing": 12, "passing": 48, "tackling": 24, "goalkeeping": 64, "stamina": 62 },
+        { "name": "José Aldo", "position": "DEF", "age": 28, "nationality": "Brasil", "pace": 62, "finishing": 18, "passing": 56, "tackling": 68, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Dani Borges Operário", "position": "DEF", "age": 26, "nationality": "Brasil", "pace": 64, "finishing": 20, "passing": 58, "tackling": 66, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Willian Operário", "position": "DEF", "age": 30, "nationality": "Brasil", "pace": 58, "finishing": 16, "passing": 54, "tackling": 68, "goalkeeping": 8, "stamina": 64 },
+        { "name": "Rafael Lima", "position": "DEF", "age": 24, "nationality": "Brasil", "pace": 64, "finishing": 18, "passing": 56, "tackling": 64, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Rerison Operário", "position": "MID", "age": 24, "nationality": "Brasil", "pace": 68, "finishing": 46, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Boná Operário", "position": "MID", "age": 27, "nationality": "Brasil", "pace": 64, "finishing": 42, "passing": 68, "tackling": 54, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Rodrigo Operário", "position": "MID", "age": 25, "nationality": "Brasil", "pace": 66, "finishing": 44, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Lucão Operário", "position": "MID", "age": 23, "nationality": "Brasil", "pace": 70, "finishing": 46, "passing": 64, "tackling": 50, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Fabiano Operário", "position": "ATT", "age": 26, "nationality": "Brasil", "pace": 72, "finishing": 62, "passing": 54, "tackling": 18, "goalkeeping": 6, "stamina": 70 },
+        { "name": "Vinícius Operário", "position": "ATT", "age": 24, "nationality": "Brasil", "pace": 74, "finishing": 60, "passing": 52, "tackling": 18, "goalkeeping": 6, "stamina": 70 },
+        { "name": "Ronaldo Operário", "position": "ATT", "age": 28, "nationality": "Brasil", "pace": 68, "finishing": 60, "passing": 54, "tackling": 20, "goalkeeping": 6, "stamina": 66 },
+        { "name": "Iury Castilho", "position": "ATT", "age": 22, "nationality": "Brasil", "pace": 78, "finishing": 64, "passing": 56, "tackling": 16, "goalkeeping": 6, "stamina": 74 }
+      ]
+    },
+    {
+      "name": "Clube de Regatas Brasil",
+      "shortName": "CRB",
+      "nickname": "Galo da Praia",
+      "primaryColor": "#cc0000",
+      "secondaryColor": "#000000",
+      "players": [
+        { "name": "Matheus Albino", "position": "GK", "age": 26, "nationality": "Brasil", "pace": 43, "finishing": 14, "passing": 52, "tackling": 27, "goalkeeping": 68, "stamina": 65 },
+        { "name": "Diogo CRB", "position": "GK", "age": 23, "nationality": "Brasil", "pace": 39, "finishing": 12, "passing": 48, "tackling": 23, "goalkeeping": 62, "stamina": 61 },
+        { "name": "Diego Melo", "position": "DEF", "age": 28, "nationality": "Brasil", "pace": 62, "finishing": 18, "passing": 56, "tackling": 68, "goalkeeping": 8, "stamina": 67 },
+        { "name": "Gum CRB", "position": "DEF", "age": 31, "nationality": "Brasil", "pace": 54, "finishing": 14, "passing": 52, "tackling": 70, "goalkeeping": 8, "stamina": 62 },
+        { "name": "Lucão CRB", "position": "DEF", "age": 25, "nationality": "Brasil", "pace": 64, "finishing": 20, "passing": 56, "tackling": 66, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Guilherme CRB", "position": "DEF", "age": 24, "nationality": "Brasil", "pace": 66, "finishing": 20, "passing": 58, "tackling": 64, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Yago CRB", "position": "MID", "age": 25, "nationality": "Brasil", "pace": 68, "finishing": 46, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Pablo CRB", "position": "MID", "age": 23, "nationality": "Brasil", "pace": 70, "finishing": 46, "passing": 64, "tackling": 50, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Moisés CRB", "position": "MID", "age": 27, "nationality": "Brasil", "pace": 64, "finishing": 42, "passing": 68, "tackling": 54, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Léo Gamalho", "position": "MID", "age": 26, "nationality": "Brasil", "pace": 66, "finishing": 44, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Anselmo Ramon CRB", "position": "ATT", "age": 30, "nationality": "Brasil", "pace": 68, "finishing": 68, "passing": 56, "tackling": 20, "goalkeeping": 6, "stamina": 68 },
+        { "name": "Pipico CRB", "position": "ATT", "age": 26, "nationality": "Brasil", "pace": 74, "finishing": 64, "passing": 54, "tackling": 18, "goalkeeping": 6, "stamina": 72 },
+        { "name": "Héverton CRB", "position": "ATT", "age": 28, "nationality": "Brasil", "pace": 70, "finishing": 62, "passing": 56, "tackling": 20, "goalkeeping": 6, "stamina": 68 },
+        { "name": "Renato Cajá", "position": "ATT", "age": 24, "nationality": "Brasil", "pace": 76, "finishing": 64, "passing": 58, "tackling": 18, "goalkeeping": 6, "stamina": 72 }
+      ]
+    },
+    {
+      "name": "Guarani Futebol Clube",
+      "shortName": "GUA",
+      "nickname": "Bugre",
+      "primaryColor": "#007a33",
+      "secondaryColor": "#ffffff",
+      "players": [
+        { "name": "Vladimir Guarani", "position": "GK", "age": 30, "nationality": "Brasil", "pace": 41, "finishing": 14, "passing": 52, "tackling": 27, "goalkeeping": 68, "stamina": 64 },
+        { "name": "Kozlinski Guarani", "position": "GK", "age": 24, "nationality": "Brasil", "pace": 38, "finishing": 12, "passing": 48, "tackling": 23, "goalkeeping": 62, "stamina": 60 },
+        { "name": "Pacheco Guarani", "position": "DEF", "age": 28, "nationality": "Brasil", "pace": 60, "finishing": 16, "passing": 54, "tackling": 66, "goalkeeping": 8, "stamina": 65 },
+        { "name": "Lucas Adell", "position": "DEF", "age": 26, "nationality": "Brasil", "pace": 62, "finishing": 18, "passing": 56, "tackling": 64, "goalkeeping": 8, "stamina": 67 },
+        { "name": "Carlão Guarani", "position": "DEF", "age": 30, "nationality": "Brasil", "pace": 56, "finishing": 14, "passing": 52, "tackling": 66, "goalkeeping": 8, "stamina": 62 },
+        { "name": "Mateus Guarani", "position": "DEF", "age": 24, "nationality": "Brasil", "pace": 64, "finishing": 18, "passing": 56, "tackling": 62, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Rodrigão Guarani", "position": "MID", "age": 25, "nationality": "Brasil", "pace": 66, "finishing": 44, "passing": 64, "tackling": 52, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Caio Guarani", "position": "MID", "age": 23, "nationality": "Brasil", "pace": 68, "finishing": 44, "passing": 62, "tackling": 50, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Arthur Rezende", "position": "MID", "age": 26, "nationality": "Brasil", "pace": 64, "finishing": 40, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 66 },
+        { "name": "Júlio Guarani", "position": "MID", "age": 24, "nationality": "Brasil", "pace": 66, "finishing": 42, "passing": 64, "tackling": 50, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Júnior Todinho", "position": "ATT", "age": 25, "nationality": "Brasil", "pace": 70, "finishing": 60, "passing": 52, "tackling": 18, "goalkeeping": 6, "stamina": 68 },
+        { "name": "Bruno Sávio Guarani", "position": "ATT", "age": 23, "nationality": "Brasil", "pace": 74, "finishing": 58, "passing": 52, "tackling": 16, "goalkeeping": 6, "stamina": 70 },
+        { "name": "Giovanny Guarani", "position": "ATT", "age": 27, "nationality": "Brasil", "pace": 68, "finishing": 58, "passing": 54, "tackling": 18, "goalkeeping": 6, "stamina": 66 },
+        { "name": "Isaque Guarani", "position": "ATT", "age": 22, "nationality": "Brasil", "pace": 76, "finishing": 60, "passing": 52, "tackling": 16, "goalkeeping": 6, "stamina": 72 }
+      ]
+    },
+    {
+      "name": "Ponte Preta Futebol Clube",
+      "shortName": "PPT",
+      "nickname": "Macaca",
+      "primaryColor": "#000000",
+      "secondaryColor": "#ffffff",
+      "players": [
+        { "name": "Caíque Ponte Preta", "position": "GK", "age": 27, "nationality": "Brasil", "pace": 44, "finishing": 15, "passing": 54, "tackling": 28, "goalkeeping": 70, "stamina": 67 },
+        { "name": "Ygor Ponte Preta", "position": "GK", "age": 24, "nationality": "Brasil", "pace": 40, "finishing": 12, "passing": 50, "tackling": 24, "goalkeeping": 64, "stamina": 62 },
+        { "name": "Fábio Sanches", "position": "DEF", "age": 30, "nationality": "Brasil", "pace": 58, "finishing": 16, "passing": 54, "tackling": 68, "goalkeeping": 8, "stamina": 65 },
+        { "name": "Nino Paraíba", "position": "DEF", "age": 27, "nationality": "Brasil", "pace": 62, "finishing": 18, "passing": 56, "tackling": 66, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Bernardo Ponte Preta", "position": "DEF", "age": 25, "nationality": "Brasil", "pace": 64, "finishing": 20, "passing": 58, "tackling": 64, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Igor Inocêncio", "position": "DEF", "age": 23, "nationality": "Brasil", "pace": 66, "finishing": 20, "passing": 58, "tackling": 62, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Élvis Ponte Preta", "position": "MID", "age": 26, "nationality": "Brasil", "pace": 66, "finishing": 44, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Camilo Ponte Preta", "position": "MID", "age": 30, "nationality": "Brasil", "pace": 62, "finishing": 44, "passing": 70, "tackling": 54, "goalkeeping": 8, "stamina": 66 },
+        { "name": "Léo Naldi", "position": "MID", "age": 24, "nationality": "Brasil", "pace": 68, "finishing": 46, "passing": 66, "tackling": 50, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Ramon Ponte Preta", "position": "MID", "age": 22, "nationality": "Brasil", "pace": 70, "finishing": 46, "passing": 64, "tackling": 50, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Matheus Costa", "position": "ATT", "age": 26, "nationality": "Brasil", "pace": 72, "finishing": 62, "passing": 56, "tackling": 18, "goalkeeping": 6, "stamina": 70 },
+        { "name": "Wesley Ponte Preta", "position": "ATT", "age": 24, "nationality": "Brasil", "pace": 74, "finishing": 60, "passing": 54, "tackling": 18, "goalkeeping": 6, "stamina": 70 },
+        { "name": "Lucas Ponte Preta", "position": "ATT", "age": 28, "nationality": "Brasil", "pace": 68, "finishing": 60, "passing": 54, "tackling": 20, "goalkeeping": 6, "stamina": 66 },
+        { "name": "Eliel Ponte Preta", "position": "ATT", "age": 22, "nationality": "Brasil", "pace": 76, "finishing": 62, "passing": 52, "tackling": 16, "goalkeeping": 6, "stamina": 72 }
+      ]
+    },
+    {
+      "name": "Mirassol Futebol Clube",
+      "shortName": "MIR",
+      "nickname": "Leão do Interior",
+      "primaryColor": "#ffff00",
+      "secondaryColor": "#0000cc",
+      "players": [
+        { "name": "Alex Muralha", "position": "GK", "age": 33, "nationality": "Brasil", "pace": 42, "finishing": 16, "passing": 55, "tackling": 28, "goalkeeping": 74, "stamina": 66 },
+        { "name": "Daniel Paulista", "position": "GK", "age": 25, "nationality": "Brasil", "pace": 43, "finishing": 14, "passing": 52, "tackling": 27, "goalkeeping": 70, "stamina": 68 },
+        { "name": "João Paulo Neto", "position": "GK", "age": 22, "nationality": "Brasil", "pace": 40, "finishing": 12, "passing": 48, "tackling": 24, "goalkeeping": 64, "stamina": 62 },
+        { "name": "Neto Moura", "position": "DEF", "age": 26, "nationality": "Brasil", "pace": 68, "finishing": 24, "passing": 62, "tackling": 74, "goalkeeping": 8, "stamina": 74 },
+        { "name": "Luís Otávio Mirassol", "position": "DEF", "age": 28, "nationality": "Brasil", "pace": 62, "finishing": 20, "passing": 60, "tackling": 76, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Helinho Mirassol", "position": "DEF", "age": 25, "nationality": "Brasil", "pace": 66, "finishing": 22, "passing": 62, "tackling": 72, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Ângelo Mirassol", "position": "DEF", "age": 27, "nationality": "Brasil", "pace": 64, "finishing": 20, "passing": 60, "tackling": 72, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Eduardo Mirassol", "position": "DEF", "age": 23, "nationality": "Brasil", "pace": 68, "finishing": 24, "passing": 62, "tackling": 70, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Danielzinho Mirassol", "position": "DEF", "age": 30, "nationality": "Brasil", "pace": 60, "finishing": 18, "passing": 58, "tackling": 70, "goalkeeping": 8, "stamina": 66 },
+        { "name": "Negueba Mirassol", "position": "MID", "age": 28, "nationality": "Brasil", "pace": 72, "finishing": 50, "passing": 72, "tackling": 56, "goalkeeping": 8, "stamina": 74 },
+        { "name": "Chico Kim", "position": "MID", "age": 24, "nationality": "Brasil", "pace": 70, "finishing": 48, "passing": 70, "tackling": 54, "goalkeeping": 8, "stamina": 76 },
+        { "name": "Lucas Rosa", "position": "MID", "age": 22, "nationality": "Brasil", "pace": 74, "finishing": 52, "passing": 68, "tackling": 52, "goalkeeping": 8, "stamina": 76 },
+        { "name": "Gabriel Mesquita", "position": "MID", "age": 26, "nationality": "Brasil", "pace": 68, "finishing": 46, "passing": 72, "tackling": 56, "goalkeeping": 8, "stamina": 72 },
+        { "name": "Léo Reis", "position": "MID", "age": 30, "nationality": "Brasil", "pace": 64, "finishing": 44, "passing": 74, "tackling": 58, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Fernandinho Mirassol", "position": "MID", "age": 24, "nationality": "Brasil", "pace": 70, "finishing": 48, "passing": 70, "tackling": 54, "goalkeeping": 8, "stamina": 74 },
+        { "name": "Iury Mirassol", "position": "ATT", "age": 25, "nationality": "Brasil", "pace": 80, "finishing": 72, "passing": 62, "tackling": 22, "goalkeeping": 6, "stamina": 76 },
+        { "name": "Fabrício Daniel", "position": "ATT", "age": 27, "nationality": "Brasil", "pace": 76, "finishing": 70, "passing": 60, "tackling": 20, "goalkeeping": 6, "stamina": 74 },
+        { "name": "Cristian Mirassol", "position": "ATT", "age": 23, "nationality": "Brasil", "pace": 78, "finishing": 68, "passing": 62, "tackling": 22, "goalkeeping": 6, "stamina": 74 },
+        { "name": "Luiz Fernando Mirassol", "position": "ATT", "age": 29, "nationality": "Brasil", "pace": 74, "finishing": 70, "passing": 60, "tackling": 24, "goalkeeping": 6, "stamina": 72 },
+        { "name": "Zé Roberto Mirassol", "position": "ATT", "age": 24, "nationality": "Brasil", "pace": 78, "finishing": 68, "passing": 60, "tackling": 20, "goalkeeping": 6, "stamina": 74 },
+        { "name": "Biel Mirassol", "position": "ATT", "age": 22, "nationality": "Brasil", "pace": 82, "finishing": 70, "passing": 62, "tackling": 18, "goalkeeping": 6, "stamina": 76 }
+      ]
+    },
+    {
+      "name": "Clube do Remo",
+      "shortName": "REM",
+      "nickname": "Azulino",
+      "primaryColor": "#003399",
+      "secondaryColor": "#ffffff",
+      "players": [
+        { "name": "Vinicius Remo", "position": "GK", "age": 27, "nationality": "Brasil", "pace": 42, "finishing": 14, "passing": 52, "tackling": 26, "goalkeeping": 67, "stamina": 64 },
+        { "name": "Léo Remo", "position": "GK", "age": 23, "nationality": "Brasil", "pace": 39, "finishing": 11, "passing": 48, "tackling": 23, "goalkeeping": 61, "stamina": 60 },
+        { "name": "Marlon Remo", "position": "DEF", "age": 28, "nationality": "Brasil", "pace": 60, "finishing": 16, "passing": 54, "tackling": 64, "goalkeeping": 8, "stamina": 64 },
+        { "name": "Kevem Remo", "position": "DEF", "age": 25, "nationality": "Brasil", "pace": 62, "finishing": 18, "passing": 56, "tackling": 62, "goalkeeping": 8, "stamina": 66 },
+        { "name": "Nilton Remo", "position": "DEF", "age": 29, "nationality": "Brasil", "pace": 56, "finishing": 14, "passing": 52, "tackling": 64, "goalkeeping": 8, "stamina": 62 },
+        { "name": "Rafael Castro Remo", "position": "DEF", "age": 24, "nationality": "Brasil", "pace": 64, "finishing": 18, "passing": 56, "tackling": 60, "goalkeeping": 8, "stamina": 66 },
+        { "name": "Jaderson Remo", "position": "MID", "age": 24, "nationality": "Brasil", "pace": 66, "finishing": 44, "passing": 64, "tackling": 50, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Marciel Remo", "position": "MID", "age": 26, "nationality": "Brasil", "pace": 64, "finishing": 40, "passing": 64, "tackling": 52, "goalkeeping": 8, "stamina": 66 },
+        { "name": "Anderson Remo", "position": "MID", "age": 23, "nationality": "Brasil", "pace": 68, "finishing": 44, "passing": 62, "tackling": 50, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Brenner Remo", "position": "MID", "age": 25, "nationality": "Brasil", "pace": 66, "finishing": 42, "passing": 64, "tackling": 50, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Ronald Remo", "position": "ATT", "age": 24, "nationality": "Brasil", "pace": 72, "finishing": 58, "passing": 52, "tackling": 16, "goalkeeping": 6, "stamina": 68 },
+        { "name": "Brenner Remo ATT", "position": "ATT", "age": 22, "nationality": "Brasil", "pace": 74, "finishing": 56, "passing": 50, "tackling": 16, "goalkeeping": 6, "stamina": 70 },
+        { "name": "Carlos Eduardo Remo", "position": "ATT", "age": 27, "nationality": "Brasil", "pace": 68, "finishing": 56, "passing": 52, "tackling": 18, "goalkeeping": 6, "stamina": 64 },
+        { "name": "Ytalo Remo", "position": "ATT", "age": 29, "nationality": "Brasil", "pace": 66, "finishing": 58, "passing": 50, "tackling": 18, "goalkeeping": 6, "stamina": 64 }
+      ]
+    },
+    {
+      "name": "Botafogo Futebol Clube (SP)",
+      "shortName": "BOT",
+      "nickname": "Pantera",
+      "primaryColor": "#000000",
+      "secondaryColor": "#cc0000",
+      "players": [
+        { "name": "João Paulo Botafogo", "position": "GK", "age": 27, "nationality": "Brasil", "pace": 42, "finishing": 14, "passing": 52, "tackling": 26, "goalkeeping": 68, "stamina": 64 },
+        { "name": "Rafael Botafogo", "position": "GK", "age": 23, "nationality": "Brasil", "pace": 39, "finishing": 11, "passing": 48, "tackling": 23, "goalkeeping": 62, "stamina": 60 },
+        { "name": "Luís Henrique Botafogo", "position": "DEF", "age": 26, "nationality": "Brasil", "pace": 62, "finishing": 18, "passing": 54, "tackling": 64, "goalkeeping": 8, "stamina": 66 },
+        { "name": "Ericson Botafogo", "position": "DEF", "age": 29, "nationality": "Brasil", "pace": 56, "finishing": 14, "passing": 52, "tackling": 66, "goalkeeping": 8, "stamina": 62 },
+        { "name": "Carlos Henrique Botafogo", "position": "DEF", "age": 25, "nationality": "Brasil", "pace": 64, "finishing": 18, "passing": 56, "tackling": 62, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Wallison Botafogo", "position": "DEF", "age": 23, "nationality": "Brasil", "pace": 66, "finishing": 20, "passing": 56, "tackling": 60, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Thiaguinho Botafogo", "position": "MID", "age": 25, "nationality": "Brasil", "pace": 66, "finishing": 44, "passing": 64, "tackling": 50, "goalkeeping": 8, "stamina": 68 },
+        { "name": "Gustavo Botafogo", "position": "MID", "age": 27, "nationality": "Brasil", "pace": 62, "finishing": 42, "passing": 66, "tackling": 52, "goalkeeping": 8, "stamina": 66 },
+        { "name": "Hygor Botafogo", "position": "MID", "age": 23, "nationality": "Brasil", "pace": 68, "finishing": 44, "passing": 62, "tackling": 50, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Kenji Botafogo", "position": "MID", "age": 22, "nationality": "Brasil", "pace": 70, "finishing": 46, "passing": 62, "tackling": 48, "goalkeeping": 8, "stamina": 70 },
+        { "name": "Victor Andrade", "position": "ATT", "age": 26, "nationality": "Brasil", "pace": 74, "finishing": 60, "passing": 54, "tackling": 18, "goalkeeping": 6, "stamina": 70 },
+        { "name": "Leandro Maciel", "position": "ATT", "age": 24, "nationality": "Brasil", "pace": 72, "finishing": 58, "passing": 52, "tackling": 18, "goalkeeping": 6, "stamina": 68 },
+        { "name": "Diogo Botafogo", "position": "ATT", "age": 28, "nationality": "Brasil", "pace": 68, "finishing": 56, "passing": 52, "tackling": 20, "goalkeeping": 6, "stamina": 64 },
+        { "name": "Leandro Botafogo", "position": "ATT", "age": 22, "nationality": "Brasil", "pace": 76, "finishing": 60, "passing": 52, "tackling": 16, "goalkeeping": 6, "stamina": 72 }
+      ]
     }
   ],
   "competitions": [
@@ -242,6 +571,17 @@
       "type": "LEAGUE",
       "seasonYear": 2026,
       "memberShortNames": ["CRI", "AVA", "FIG", "CHA", "BRU", "MAR", "BAR", "CON", "HER", "CAM"]
+    },
+    {
+      "name": "Série B",
+      "type": "LEAGUE",
+      "seasonYear": 2026,
+      "memberShortNames": [
+        "CRI", "AVA", "FIG", "CHA", "BRU", "MAR",
+        "GOI", "COR", "NOV", "SPT", "CEA", "VIL",
+        "PAY", "OPE", "CRB", "GUA", "PPT", "MIR",
+        "REM", "BOT"
+      ]
     }
   ]
 }

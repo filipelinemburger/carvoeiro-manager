@@ -64,7 +64,7 @@ class SeasonArchiveEntityIT {
         assertThat(seasons).hasSize(1);
         assertThat(seasons.get(0).getChampionClubName()).isEqualTo("Campeao FC");
         assertThat(seasons.get(0).getManagedClubPosition()).isEqualTo(3);
-        assertThat(seasonRepository.findBySaveGameIdAndSeasonYear(saveGameId, 2026)).isPresent();
+        assertThat(seasonRepository.findBySaveGameIdAndSeasonYearOrderByCompetitionName(saveGameId, 2026)).isNotEmpty();
 
         assertThat(table).extracting(SeasonStanding::getPosition).containsExactly(1, 2);
         assertThat(table.get(0).getPoints()).isEqualTo(44);

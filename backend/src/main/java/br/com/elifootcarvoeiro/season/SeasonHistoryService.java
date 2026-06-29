@@ -36,7 +36,9 @@ public class SeasonHistoryService {
 
     public SeasonDetailResponse getSeason(UUID saveGameId, int seasonYear, UUID userId) {
         saveGameService.requireOwned(saveGameId, userId);
-        Season season = seasonRepository.findBySaveGameIdAndSeasonYear(saveGameId, seasonYear)
+        List<Season> seasons = seasonRepository.findBySaveGameIdAndSeasonYearOrderByCompetitionName(
+                saveGameId, seasonYear);
+        Season season = seasons.stream().findFirst()
                 .orElseThrow(() -> new ApiException(
                         "SEASON_NOT_FOUND", "Season not found", HttpStatus.NOT_FOUND));
 

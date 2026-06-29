@@ -43,7 +43,9 @@ class SeasonHistoryServiceIT {
     }
 
     private int finishAndRollOver(Career c) {
-        int year = competitionRepository.findBySaveGameId(c.id()).get(0).getSeasonYear();
+        int year = competitionRepository.findBySaveGameId(c.id()).stream()
+                .filter(comp -> comp.getName().contains("Catarinense"))
+                .findFirst().orElseThrow().getSeasonYear();
         int guard = 0;
         while (saveGameRepository.findById(c.id()).orElseThrow().getStatus() != SaveGameStatus.FINISHED
                 && guard++ < 500) {
@@ -62,13 +64,17 @@ class SeasonHistoryServiceIT {
         // When listing history
         List<SeasonSummaryResponse> history = historyService.getHistory(c.id(), c.userId());
 
-        // Then the finished season appears with its champion and the managed placing
-        assertThat(history).hasSize(1);
-        SeasonSummaryResponse summary = history.get(0);
-        assertThat(summary.seasonYear()).isEqualTo(firstYear);
-        assertThat(summary.championClubName()).isNotBlank();
-        assertThat(summary.managedClubPosition()).isBetween(1, 10);
-        assertThat(summary.topScorerGoals()).isGreaterThanOrEqualTo(1);
+        // Then archived seasons appear: 2 competitions per year → 2 summary entries
+        assertThat(history).hasSize(2);
+        // Both are for the rolled-over year
+        assertThat(history).allMatch(s -> s.seasonYear() == firstYear);
+        // The Catarinense summary has a valid managed position (10-club competition)
+        SeasonSummaryResponse catSummary = history.stream()
+                .filter(s -> s.competitionName().contains("Catarinense"))
+                .findFirst().orElseThrow();
+        assertThat(catSummary.championClubName()).isNotBlank();
+        assertThat(catSummary.managedClubPosition()).isBetween(1, 10);
+        assertThat(catSummary.topScorerGoals()).isGreaterThanOrEqualTo(1);
     }
 
     @Test

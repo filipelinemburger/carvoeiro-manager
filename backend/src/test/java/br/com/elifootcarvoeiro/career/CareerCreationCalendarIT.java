@@ -47,12 +47,14 @@ class CareerCreationCalendarIT {
         UUID saveGameId = response.id();
 
         // Then competition-club memberships are persisted (10 clubs in Catarinense)
-        var competition = competitionRepository.findBySaveGameId(saveGameId).get(0);
-        var memberships = competitionClubRepository.findByCompetitionId(competition.getId());
+        var catarinense = competitionRepository.findBySaveGameId(saveGameId).stream()
+                .filter(c -> c.getName().contains("Catarinense"))
+                .findFirst().orElseThrow();
+        var memberships = competitionClubRepository.findByCompetitionId(catarinense.getId());
         assertThat(memberships).hasSize(10);
 
         // All fixtures have a match_date set (routed through SeasonCalendarGenerator)
-        var fixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, competition.getId());
+        var fixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, catarinense.getId());
         assertThat(fixtures).hasSize(90); // 10 clubs * 9 opponents * 2 legs
         assertThat(fixtures).allMatch(f -> f.getMatchDate() != null,
                 "Every fixture must have a match_date assigned by SeasonCalendarGenerator");
@@ -61,10 +63,11 @@ class CareerCreationCalendarIT {
         LocalDate seasonStart = LocalDate.of(response.seasonYear(), 1, 15);
         assertThat(fixtures).anyMatch(f -> f.getMatchDate().equals(seasonStart));
 
-        // MATCH season events exist (one per round of the competition = 18 rounds for 10 clubs)
+        // MATCH season events exist (one per round of the Catarinense = 18 rounds for 10 clubs)
         var events = seasonEventRepository.findBySaveGameId(saveGameId);
         var matchEvents = events.stream()
                 .filter(e -> e.getType() == SeasonEventType.MATCH)
+                .filter(e -> catarinense.getId().equals(e.getCompetitionId()))
                 .toList();
         assertThat(matchEvents).hasSize(18); // 2*(10-1) = 18 rounds
 
@@ -80,8 +83,7 @@ class CareerCreationCalendarIT {
 
         // SaveGameResponse exposes currentDate and competitions
         assertThat(response.currentDate()).isEqualTo(seasonStart.toString());
-        assertThat(response.competitions()).hasSize(1);
-        assertThat(response.competitions().get(0).name()).isEqualTo("Campeonato Catarinense");
-        assertThat(response.competitions().get(0).type()).isEqualTo("LEAGUE");
+        assertThat(response.competitions()).hasSize(2);
+        assertThat(response.competitions()).anyMatch(c -> c.name().equals("Campeonato Catarinense") && c.type().equals("LEAGUE"));
     }
 }

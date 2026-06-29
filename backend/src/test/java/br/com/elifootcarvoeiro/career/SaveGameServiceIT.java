@@ -68,9 +68,9 @@ class SaveGameServiceIT {
         // SaveGame persisted in DB
         assertThat(saveGameRepository.findById(saveGameId)).isPresent();
 
-        // Exactly 10 clubs exist (Catarinense has 10 clubs)
+        // All clubs from the pool are created (24 clubs: 10 SC + 14 national)
         var clubs = clubRepository.findBySaveGameId(saveGameId);
-        assertThat(clubs).hasSize(10);
+        assertThat(clubs).hasSize(24);
 
         // Every club has at least one player
         clubs.forEach(club ->
@@ -82,18 +82,20 @@ class SaveGameServiceIT {
         // Managed club is Criciúma (short name "CRI" maps to the club's full name from seed)
         assertThat(response.managedClubName()).contains("Criciúma");
 
-        // Competition: 1 competition, totalRounds == 2*(clubCount-1)
-        int clubCount = clubs.size(); // 10
+        // Competition: 2 competitions now (Catarinense + Série B)
         var competitions = competitionRepository.findAll().stream()
                 .filter(c -> c.getSaveGameId().equals(saveGameId))
                 .toList();
-        assertThat(competitions).hasSize(1);
-        assertThat(competitions.get(0).getTotalRounds()).isEqualTo(2 * (clubCount - 1));
+        assertThat(competitions).hasSize(2);
+        var catarinense = competitions.stream()
+                .filter(c -> c.getName().contains("Catarinense"))
+                .findFirst().orElseThrow();
+        int catarinenseClubCount = 10;
+        assertThat(catarinense.getTotalRounds()).isEqualTo(2 * (catarinenseClubCount - 1));
 
-        // Fixtures: clubCount * (clubCount - 1) fixtures, all unplayed
-        var allFixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(
-                saveGameId, competitions.get(0).getId());
-        int expectedFixtures = clubCount * (clubCount - 1); // 90 for 10 clubs
+        // Fixtures for Catarinense: 10 * 9 = 90 fixtures, all unplayed
+        var allFixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, catarinense.getId());
+        int expectedFixtures = catarinenseClubCount * (catarinenseClubCount - 1); // 90 for 10 clubs
         assertThat(allFixtures).hasSize(expectedFixtures);
         assertThat(allFixtures).allMatch(f -> !f.isPlayed());
         assertThat(allFixtures).allMatch(f -> f.getHomeGoals() == null);

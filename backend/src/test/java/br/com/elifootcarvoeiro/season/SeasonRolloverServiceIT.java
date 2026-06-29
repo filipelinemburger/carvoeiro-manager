@@ -90,12 +90,15 @@ class SeasonRolloverServiceIT {
         lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi), c.userId());
         finishSeason(c);
 
-        Competition competition = competitionRepository.findBySaveGameId(c.id()).get(0);
+        // Scope to Catarinense: 10 members / 18 rounds; Criciúma (managed) is in both competitions
+        Competition competition = competitionRepository.findBySaveGameId(c.id()).stream()
+                .filter(comp -> comp.getName().contains("Catarinense"))
+                .findFirst().orElseThrow();
         UUID competitionId = competition.getId();
         int oldYear = competition.getSeasonYear();
         int totalRounds = competition.getTotalRounds();
+        int clubCount = 10; // Catarinense member count
         List<Club> clubs = clubRepository.findBySaveGameId(c.id());
-        int clubCount = clubs.size();
         List<StandingRow> finalTable = standingsService.getStandings(c.id(), competitionId, c.userId());
         String championName = finalTable.get(0).clubName();
         Map<UUID, Integer> agesBefore = playerRepository.findBySaveGameId(c.id()).stream()
@@ -120,26 +123,30 @@ class SeasonRolloverServiceIT {
         assertThat(save.getCurrentRound()).isZero();
         assertThat(save.getStatus()).isEqualTo(SaveGameStatus.IN_PROGRESS);
 
-        // Competition rolled forward; fixtures regenerated and all unplayed
-        Competition rolled = competitionRepository.findBySaveGameId(c.id()).get(0);
+        // Competition rolled forward; fixtures regenerated and all unplayed (scoped to Catarinense)
+        Competition rolled = competitionRepository.findBySaveGameId(c.id()).stream()
+                .filter(comp -> comp.getName().contains("Catarinense"))
+                .findFirst().orElseThrow();
         assertThat(rolled.getSeasonYear()).isEqualTo(oldYear + 1);
         assertThat(rolled.getTotalRounds()).isEqualTo(totalRounds);
         List<Fixture> fixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), competitionId);
-        assertThat(fixtures).hasSize(clubCount * (clubCount - 1));
+        assertThat(fixtures).hasSize(clubCount * (clubCount - 1)); // 10 * 9 = 90
         assertThat(fixtures).allMatch(f -> !f.isPlayed());
         assertThat(fixtures).allMatch(f -> f.getHomeGoals() == null && f.getAwayGoals() == null);
 
-        // Archive captured the finished season
+        // Archive captured the finished season (one archive entry per competition, so 2 total)
         List<Season> archived = seasonRepository.findBySaveGameIdOrderBySeasonYearDesc(c.id());
-        assertThat(archived).hasSize(1);
-        Season season = archived.get(0);
-        assertThat(season.getSeasonYear()).isEqualTo(oldYear);
-        assertThat(season.getChampionClubName()).isEqualTo(championName);
-        assertThat(season.getManagedClubPosition()).isBetween(1, clubCount);
-        assertThat(seasonStandingRepository.findBySeasonIdOrderByPosition(season.getId()))
+        assertThat(archived).hasSize(2); // Catarinense + Série B
+        Season catSeason = archived.stream()
+                .filter(s -> s.getCompetitionName().contains("Catarinense"))
+                .findFirst().orElseThrow();
+        assertThat(catSeason.getSeasonYear()).isEqualTo(oldYear);
+        assertThat(catSeason.getChampionClubName()).isEqualTo(championName);
+        assertThat(catSeason.getManagedClubPosition()).isBetween(1, clubCount);
+        assertThat(seasonStandingRepository.findBySeasonIdOrderByPosition(catSeason.getId()))
                 .hasSize(clubCount)
                 .extracting(SeasonStanding::getPosition).first().isEqualTo(1);
-        assertThat(seasonTopScorerRepository.findBySeasonIdOrderByRank(season.getId())).isNotEmpty();
+        assertThat(seasonTopScorerRepository.findBySeasonIdOrderByRank(catSeason.getId())).isNotEmpty();
 
         // Players: every club's squad size is unchanged; carried players aged +1 and have clean state
         Map<UUID, Long> squadSizeAfter = playerRepository.findBySaveGameId(c.id()).stream()

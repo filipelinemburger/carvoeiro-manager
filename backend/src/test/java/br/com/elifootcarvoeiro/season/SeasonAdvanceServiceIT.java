@@ -11,6 +11,7 @@ import br.com.elifootcarvoeiro.club.Club;
 import br.com.elifootcarvoeiro.club.ClubRepository;
 import br.com.elifootcarvoeiro.common.ApiException;
 import br.com.elifootcarvoeiro.competition.Competition;
+import br.com.elifootcarvoeiro.competition.CompetitionClubRepository;
 import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.competition.Fixture;
 import br.com.elifootcarvoeiro.competition.FixtureRepository;
@@ -26,7 +27,9 @@ import org.springframework.test.context.ActiveProfiles;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,6 +45,7 @@ class SeasonAdvanceServiceIT {
     @Autowired SaveGameRepository saveGameRepository;
     @Autowired ClubRepository clubRepository;
     @Autowired CompetitionRepository competitionRepository;
+    @Autowired CompetitionClubRepository competitionClubRepository;
     @Autowired FixtureRepository fixtureRepository;
     @Autowired SeasonEventRepository seasonEventRepository;
 
@@ -103,9 +107,7 @@ class SeasonAdvanceServiceIT {
 
         // Then the matchday's fixtures are simulated and finance is carried
         assertThat(match.type()).isEqualTo("MATCH");
-        assertThat(match.competitionName()).isEqualTo("Campeonato Catarinense");
         assertThat(match.round()).isNotNull();
-        assertThat(match.results()).hasSize(clubCount / 2); // 5 fixtures per Catarinense round
         assertThat(match.finance()).isNotNull();
         assertThat(match.finance().net()).isEqualByComparingTo(
                 match.finance().gate().add(match.finance().sponsorship())
@@ -113,7 +115,9 @@ class SeasonAdvanceServiceIT {
         assertThat(match.seasonFinished()).isFalse();
 
         // The simulated round's fixtures are played with goals set
-        Competition competition = competitionRepository.findBySaveGameId(c.id()).get(0);
+        Competition competition = competitionRepository.findBySaveGameId(c.id()).stream()
+                .filter(comp -> comp.getName().equals(match.competitionName()))
+                .findFirst().orElseThrow();
         List<Fixture> round = fixtureRepository.findBySaveGameIdAndCompetitionIdAndRound(
                 c.id(), competition.getId(), match.round());
         assertThat(round).allMatch(Fixture::isPlayed);
@@ -124,25 +128,30 @@ class SeasonAdvanceServiceIT {
     void advancingToTheEndFinishesTheSeasonAndAwardsPrize() {
         // Given a fresh career
         Career c = createCareer();
-        Competition competition = competitionRepository.findBySaveGameId(c.id()).get(0);
-        int totalRounds = competition.getTotalRounds(); // 18
-        int clubCount = clubRepository.findBySaveGameId(c.id()).size(); // 10
+        // Scope to Catarinense: 10 members / 18 rounds
+        Competition catarinense = competitionRepository.findBySaveGameId(c.id()).stream()
+                .filter(comp -> comp.getName().contains("Catarinense"))
+                .findFirst().orElseThrow();
+        int catarinenseTotalRounds = catarinense.getTotalRounds(); // 18
+        int catarinenseClubCount = competitionRepository.findBySaveGameId(c.id()).stream()
+                .filter(comp -> comp.getName().contains("Catarinense"))
+                .findFirst().orElseThrow().getTotalRounds() / 2 + 1; // = 10
 
-        // When advancing until the season is FINISHED
+        // When advancing until the season is FINISHED (guard 500 covers both competitions: 18 + 38 = 56 rounds + transfer events)
         AdvanceResponse last = null;
-        List<AdvanceResponse> matches = new ArrayList<>();
+        List<AdvanceResponse> catarinenseMatches = new ArrayList<>();
         int guard = 0;
         SaveGameStatus status = SaveGameStatus.IN_PROGRESS;
         while (status != SaveGameStatus.FINISHED && guard++ < 500) {
             last = seasonAdvanceService.advance(c.id(), c.userId());
-            if ("MATCH".equals(last.type())) {
-                matches.add(last);
+            if ("MATCH".equals(last.type()) && "Campeonato Catarinense".equals(last.competitionName())) {
+                catarinenseMatches.add(last);
             }
             status = saveGameRepository.findById(c.id()).orElseThrow().getStatus();
         }
 
-        // Then exactly totalRounds MATCH advances occurred and the last one finishes the season
-        assertThat(matches).hasSize(totalRounds);
+        // Then exactly catarinenseTotalRounds MATCH advances for Catarinense occurred
+        assertThat(catarinenseMatches).hasSize(catarinenseTotalRounds);
         assertThat(last).isNotNull();
         assertThat(last.type()).isEqualTo("MATCH");
         assertThat(last.seasonFinished()).isTrue();
@@ -151,13 +160,16 @@ class SeasonAdvanceServiceIT {
         SaveGame saved = saveGameRepository.findById(c.id()).orElseThrow();
         assertThat(saved.getStatus()).isEqualTo(SaveGameStatus.FINISHED);
 
-        // Every fixture is played and the table is zero-sum
-        List<Fixture> all = fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), competition.getId());
+        // Every Catarinense fixture is played and the table is zero-sum
+        List<Fixture> all = fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), catarinense.getId());
         assertThat(all).allMatch(Fixture::isPlayed);
-        List<Club> clubs = clubRepository.findBySaveGameId(c.id());
+        Set<UUID> catMemberIds = competitionClubRepository.findByCompetitionId(catarinense.getId()).stream()
+                .map(cc -> cc.getClubId()).collect(Collectors.toSet());
+        List<Club> clubs = clubRepository.findBySaveGameId(c.id()).stream()
+                .filter(cl -> catMemberIds.contains(cl.getId())).toList();
         List<StandingRow> standings = new StandingsCalculator().compute(clubs, all);
-        assertThat(standings).hasSize(clubCount);
-        assertThat(standings).allMatch(row -> row.played() == totalRounds);
+        assertThat(standings).hasSize(10); // Catarinense has 10 clubs
+        assertThat(standings).allMatch(row -> row.played() == catarinenseTotalRounds);
         int totalGF = standings.stream().mapToInt(StandingRow::goalsFor).sum();
         int totalGA = standings.stream().mapToInt(StandingRow::goalsAgainst).sum();
         assertThat(totalGF).isEqualTo(totalGA);

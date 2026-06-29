@@ -8,6 +8,7 @@ import br.com.elifootcarvoeiro.club.Club;
 import br.com.elifootcarvoeiro.club.ClubRepository;
 import br.com.elifootcarvoeiro.common.ApiException;
 import br.com.elifootcarvoeiro.competition.Competition;
+import br.com.elifootcarvoeiro.competition.CompetitionClubRepository;
 import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.competition.Fixture;
 import br.com.elifootcarvoeiro.competition.FixtureRepository;
@@ -38,6 +39,7 @@ class FinanceServiceIT {
     @Autowired UserRepository userRepository;
     @Autowired ClubRepository clubRepository;
     @Autowired CompetitionRepository competitionRepository;
+    @Autowired CompetitionClubRepository competitionClubRepository;
     @Autowired FixtureRepository fixtureRepository;
     @Autowired FinanceTransactionRepository financeTransactionRepository;
 
@@ -58,20 +60,26 @@ class FinanceServiceIT {
 
     @Test
     void processMatchdayMovesEveryMemberBalanceAndItemizesTheManagedClub() {
-        // Given a fresh career (all 10 Catarinense clubs are competition members)
+        // Given a fresh career (10 Catarinense clubs are competition members)
         Career c = createCareer();
-        Competition competition = competitionRepository.findBySaveGameId(c.id()).get(0);
+        Competition competition = competitionRepository.findBySaveGameId(c.id()).stream()
+                .filter(comp -> comp.getName().contains("Catarinense"))
+                .findFirst().orElseThrow();
         List<Fixture> round0 = round0Fixtures(c, competition.getId());
+        // Only Catarinense member clubs should have their balance changed by this matchday
+        java.util.Set<UUID> memberIds = competitionClubRepository.findByCompetitionId(competition.getId()).stream()
+                .map(cc -> cc.getClubId()).collect(java.util.stream.Collectors.toSet());
         Map<UUID, BigDecimal> before = clubRepository.findBySaveGameId(c.id()).stream()
+                .filter(cl -> memberIds.contains(cl.getId()))
                 .collect(Collectors.toMap(Club::getId, Club::getBalance));
 
         // When the matchday's finances are processed
         FinanceRoundResponse managed = financeService.processMatchday(c.id(), competition.getId(), round0);
 
-        // Then every member club's balance changed (income/wages/upkeep applied)
+        // Then every Catarinense member club's balance changed (income/wages/upkeep applied)
         Map<UUID, BigDecimal> after = clubRepository.findBySaveGameId(c.id()).stream()
-                .collect(Collectors.toMap(Club::getId, Function.identity()))
-                .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getBalance()));
+                .filter(cl -> memberIds.contains(cl.getId()))
+                .collect(Collectors.toMap(Club::getId, Club::getBalance));
         after.forEach((id, bal) -> assertThat(bal).as("club %s balance moved", id)
                 .isNotEqualByComparingTo(before.get(id)));
 
@@ -95,9 +103,11 @@ class FinanceServiceIT {
 
     @Test
     void processSeasonEndAwardsPrizeMoney() {
-        // Given a fresh career (prize money is awarded by final standing position)
+        // Given a fresh career (prize money is awarded by final standing position in Catarinense)
         Career c = createCareer();
-        Competition competition = competitionRepository.findBySaveGameId(c.id()).get(0);
+        Competition competition = competitionRepository.findBySaveGameId(c.id()).stream()
+                .filter(comp -> comp.getName().contains("Catarinense"))
+                .findFirst().orElseThrow();
         BigDecimal managedBalanceBefore = clubRepository.findById(c.clubId()).orElseThrow().getBalance();
 
         // When season-end finances run for the competition
@@ -115,7 +125,9 @@ class FinanceServiceIT {
     @Test
     void getFinancesReturnsBalanceAndTransactionsForOwner() {
         Career c = createCareer();
-        Competition competition = competitionRepository.findBySaveGameId(c.id()).get(0);
+        Competition competition = competitionRepository.findBySaveGameId(c.id()).stream()
+                .filter(comp -> comp.getName().contains("Catarinense"))
+                .findFirst().orElseThrow();
         financeService.processMatchday(c.id(), competition.getId(), round0Fixtures(c, competition.getId()));
 
         FinancesResponse finances = financeService.getFinances(c.id(), c.clubId(), c.userId());
