@@ -1,5 +1,6 @@
 package br.com.elifootcarvoeiro.career;
 
+import java.util.List;
 import java.util.UUID;
 
 public record SaveGameResponse(
@@ -10,5 +11,7 @@ public record SaveGameResponse(
         UUID managedClubId,
         String managedClubName,
         int currentRound,
-        int totalRounds
+        int totalRounds,
+        String currentDate,
+        List<CompetitionSummary> competitions
 ) {}

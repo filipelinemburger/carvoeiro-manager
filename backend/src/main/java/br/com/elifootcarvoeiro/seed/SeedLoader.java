@@ -20,6 +20,14 @@ public class SeedLoader {
         }
     }
 
+    public SeedCareer loadCareer() {
+        try (InputStream in = new ClassPathResource("seed/catarinense.json").getInputStream()) {
+            return mapper.readValue(in, SeedCareer.class);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to load career seed", e);
+        }
+    }
+
     public NewgenNames loadNewgenNames() {
         try (InputStream in = new ClassPathResource("seed/newgen-names.json").getInputStream()) {
             return mapper.readValue(in, NewgenNames.class);

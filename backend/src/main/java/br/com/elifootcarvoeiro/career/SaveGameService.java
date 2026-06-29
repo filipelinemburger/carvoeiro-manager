@@ -4,27 +4,31 @@ import br.com.elifootcarvoeiro.club.Club;
 import br.com.elifootcarvoeiro.club.ClubRepository;
 import br.com.elifootcarvoeiro.common.ApiException;
 import br.com.elifootcarvoeiro.competition.Competition;
+import br.com.elifootcarvoeiro.competition.CompetitionClub;
+import br.com.elifootcarvoeiro.competition.CompetitionClubRepository;
 import br.com.elifootcarvoeiro.competition.CompetitionRepository;
-import br.com.elifootcarvoeiro.competition.Fixture;
-import br.com.elifootcarvoeiro.competition.FixtureRepository;
-import br.com.elifootcarvoeiro.competition.FixtureScheduler;
 import br.com.elifootcarvoeiro.contract.FreeAgentGenerator;
 import br.com.elifootcarvoeiro.finance.FinanceCalculator;
 import br.com.elifootcarvoeiro.player.OverallCalculator;
 import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
 import br.com.elifootcarvoeiro.player.Position;
+import br.com.elifootcarvoeiro.season.SeasonCalendarGenerator;
+import br.com.elifootcarvoeiro.seed.SeedCareer;
 import br.com.elifootcarvoeiro.seed.SeedClub;
-import br.com.elifootcarvoeiro.seed.SeedData;
+import br.com.elifootcarvoeiro.seed.SeedCompetition;
 import br.com.elifootcarvoeiro.seed.SeedLoader;
 import br.com.elifootcarvoeiro.seed.SeedPlayer;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 
@@ -38,8 +42,8 @@ public class SaveGameService {
     private final ClubRepository clubRepository;
     private final PlayerRepository playerRepository;
     private final CompetitionRepository competitionRepository;
-    private final FixtureRepository fixtureRepository;
-    private final FixtureScheduler fixtureScheduler;
+    private final CompetitionClubRepository competitionClubRepository;
+    private final SeasonCalendarGenerator seasonCalendarGenerator;
     private final OverallCalculator overallCalculator;
     private final FinanceCalculator financeCalculator;
     private final FreeAgentGenerator freeAgentGenerator;
@@ -49,7 +53,8 @@ public class SaveGameService {
                            ClubRepository clubRepository,
                            PlayerRepository playerRepository,
                            CompetitionRepository competitionRepository,
-                           FixtureRepository fixtureRepository,
+                           CompetitionClubRepository competitionClubRepository,
+                           SeasonCalendarGenerator seasonCalendarGenerator,
                            OverallCalculator overallCalculator,
                            FinanceCalculator financeCalculator,
                            FreeAgentGenerator freeAgentGenerator) {
@@ -58,8 +63,8 @@ public class SaveGameService {
         this.clubRepository = clubRepository;
         this.playerRepository = playerRepository;
         this.competitionRepository = competitionRepository;
-        this.fixtureRepository = fixtureRepository;
-        this.fixtureScheduler = new FixtureScheduler();
+        this.competitionClubRepository = competitionClubRepository;
+        this.seasonCalendarGenerator = seasonCalendarGenerator;
         this.overallCalculator = overallCalculator;
         this.financeCalculator = financeCalculator;
         this.freeAgentGenerator = freeAgentGenerator;
@@ -67,21 +72,22 @@ public class SaveGameService {
 
     /**
      * Creates a new single-player career by copying the immutable seed into per-SaveGame rows:
-     * clubs, players, one league competition, and the full fixture calendar.
+     * clubs, players, competitions with membership rows, and the full dated calendar generated
+     * by SeasonCalendarGenerator.
      */
     @Transactional
     public SaveGameResponse createCareer(UUID userId) {
-        SeedData seed = seedLoader.loadCatarinense();
+        SeedCareer seed = seedLoader.loadCareer();
 
         // 1. Create SaveGame (managed club set after clubs exist)
-        SaveGame saveGame = SaveGame.create(userId, seed.seasonYear());
+        int seasonYear = seed.competitions().get(0).seasonYear();
+        SaveGame saveGame = SaveGame.create(userId, seasonYear);
         saveGameRepository.save(saveGame);
 
-        // 2. Create clubs and players; track order and managed club
-        List<SeedClub> seedClubs = seed.clubs();
-        int clubCount = seedClubs.size();
+        // 2. Create clubs and players; capture shortName -> clubId for membership wiring
+        List<SeedClub> seedClubs = seed.clubPool();
 
-        List<UUID> clubIds = new ArrayList<>(clubCount);
+        Map<String, UUID> clubIdByShortName = new HashMap<>();
         UUID managedClubId = null;
         String managedClubName = null;
 
@@ -92,7 +98,7 @@ public class SaveGameService {
             club.setSecondaryColor(seedClub.secondaryColor());
             clubRepository.save(club);
 
-            clubIds.add(club.getId());
+            clubIdByShortName.put(seedClub.shortName(), club.getId());
 
             if (MANAGED_CLUB_SHORT_NAME.equals(seedClub.shortName())) {
                 managedClubId = club.getId();
@@ -142,34 +148,51 @@ public class SaveGameService {
             playerRepository.save(freeAgentGenerator.generate(saveGame.getId(), faRng));
         }
 
-        // 3. Create competition
-        int totalRounds = 2 * (clubCount - 1);
-        Competition competition = Competition.create(
-                saveGame.getId(), seed.competitionName(), "LEAGUE", seed.seasonYear(), totalRounds);
-        competitionRepository.save(competition);
+        // 3. Create competitions and save membership rows BEFORE calling SeasonCalendarGenerator
+        //    (the generator reads memberships via competitionClubRepository to build the fixture schedule).
+        List<Competition> competitions = new ArrayList<>();
+        for (SeedCompetition seedComp : seed.competitions()) {
+            int memberCount = seedComp.memberShortNames().size();
+            int totalRounds = 2 * (memberCount - 1);
+            Competition competition = Competition.create(
+                    saveGame.getId(), seedComp.name(), seedComp.type(), seedComp.seasonYear(), totalRounds);
+            competitionRepository.save(competition);
+            competitions.add(competition);
 
-        // 4. Generate and save all fixtures
-        fixtureScheduler.doubleRoundRobin(clubCount).forEach(scheduled -> {
-            UUID homeClubId = clubIds.get(scheduled.homeIndex());
-            UUID awayClubId = clubIds.get(scheduled.awayIndex());
-            Fixture fixture = Fixture.create(
-                    saveGame.getId(), competition.getId(), scheduled.round(), homeClubId, awayClubId, null);
-            fixtureRepository.save(fixture);
-        });
+            for (String shortName : seedComp.memberShortNames()) {
+                UUID clubId = clubIdByShortName.get(shortName);
+                competitionClubRepository.save(
+                        CompetitionClub.create(saveGame.getId(), competition.getId(), clubId));
+            }
+        }
 
-        // 5. Set managed club and save the SaveGame
+        // 4. Route fixture and season_event creation through SeasonCalendarGenerator.
+        //    Memberships are persisted above so the generator will find them.
+        seasonCalendarGenerator.generate(saveGame.getId(), seasonYear, competitions);
+
+        // 5. Set managed club, current date to season start, and save the SaveGame.
+        LocalDate seasonStart = LocalDate.of(seasonYear, 1, 15);
         saveGame.setManagedClubId(managedClubId);
+        saveGame.setCurrentDate(seasonStart);
         saveGameRepository.save(saveGame);
+
+        // Build response with summary of all competitions
+        Competition primaryCompetition = competitions.get(0);
+        List<CompetitionSummary> competitionSummaries = competitions.stream()
+                .map(c -> new CompetitionSummary(c.getId(), c.getName(), c.getType(), c.getSeasonYear(), c.getTotalRounds()))
+                .toList();
 
         return new SaveGameResponse(
                 saveGame.getId(),
                 saveGame.getSeasonYear(),
-                competition.getId(),
-                competition.getName(),
+                primaryCompetition.getId(),
+                primaryCompetition.getName(),
                 managedClubId,
                 managedClubName,
                 saveGame.getCurrentRound(),
-                totalRounds);
+                primaryCompetition.getTotalRounds(),
+                seasonStart.toString(),
+                competitionSummaries);
     }
 
     /**
@@ -202,15 +225,20 @@ public class SaveGameService {
                     .orElse(null);
         }
 
-        // Determine totalRounds and competitionId from the competition
-        Competition competition = competitionRepository.findBySaveGameId(saveGameId)
-                .stream()
-                .findFirst()
-                .orElse(null);
+        // Determine totalRounds and competitionId from competitions
+        List<Competition> competitionsForSave = competitionRepository.findBySaveGameId(saveGameId);
 
-        UUID competitionId = competition != null ? competition.getId() : null;
-        String competitionName = competition != null ? competition.getName() : null;
-        int totalRounds = competition != null ? competition.getTotalRounds() : 0;
+        Competition primaryCompetition = competitionsForSave.stream().findFirst().orElse(null);
+
+        UUID competitionId = primaryCompetition != null ? primaryCompetition.getId() : null;
+        String competitionName = primaryCompetition != null ? primaryCompetition.getName() : null;
+        int totalRounds = primaryCompetition != null ? primaryCompetition.getTotalRounds() : 0;
+
+        List<CompetitionSummary> competitionSummaries = competitionsForSave.stream()
+                .map(c -> new CompetitionSummary(c.getId(), c.getName(), c.getType(), c.getSeasonYear(), c.getTotalRounds()))
+                .toList();
+
+        String currentDate = saveGame.getCurrentDate() != null ? saveGame.getCurrentDate().toString() : null;
 
         return new SaveGameResponse(
                 saveGame.getId(),
@@ -220,7 +248,9 @@ public class SaveGameService {
                 saveGame.getManagedClubId(),
                 managedClubName,
                 saveGame.getCurrentRound(),
-                totalRounds);
+                totalRounds,
+                currentDate,
+                competitionSummaries);
     }
 
 }
