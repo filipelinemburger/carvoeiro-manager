@@ -122,7 +122,7 @@ class StandingsCalculatorTest {
         Club clubB = makeClub("Beta");
 
         Fixture unplayed = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 1,
-                clubA.getId(), clubB.getId());
+                clubA.getId(), clubB.getId(), null);
         // unplayed has played=false and null goals
 
         List<Club> clubs = List.of(clubA, clubB);
@@ -143,7 +143,7 @@ class StandingsCalculatorTest {
     }
 
     private Fixture makePlayedFixture(UUID homeId, UUID awayId, int homeGoals, int awayGoals) {
-        Fixture f = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 1, homeId, awayId);
+        Fixture f = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 1, homeId, awayId, null);
         f.recordResult(homeGoals, awayGoals);
         return f;
     }

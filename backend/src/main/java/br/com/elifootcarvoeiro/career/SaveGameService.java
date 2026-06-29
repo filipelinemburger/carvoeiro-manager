@@ -153,7 +153,7 @@ public class SaveGameService {
             UUID homeClubId = clubIds.get(scheduled.homeIndex());
             UUID awayClubId = clubIds.get(scheduled.awayIndex());
             Fixture fixture = Fixture.create(
-                    saveGame.getId(), competition.getId(), scheduled.round(), homeClubId, awayClubId);
+                    saveGame.getId(), competition.getId(), scheduled.round(), homeClubId, awayClubId, null);
             fixtureRepository.save(fixture);
         });
 

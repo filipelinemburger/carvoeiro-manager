@@ -60,8 +60,8 @@ class FixtureRepositoryIT {
         Competition competition = Competition.create(save.getId(), "Catarinense 2025", "LEAGUE", 2025, 10);
         competitions.save(competition);
 
-        Fixture round1Fixture = Fixture.create(save.getId(), competition.getId(), 1, homeClub.getId(), awayClub.getId());
-        Fixture round2Fixture = Fixture.create(save.getId(), competition.getId(), 2, awayClub.getId(), homeClub.getId());
+        Fixture round1Fixture = Fixture.create(save.getId(), competition.getId(), 1, homeClub.getId(), awayClub.getId(), null);
+        Fixture round2Fixture = Fixture.create(save.getId(), competition.getId(), 2, awayClub.getId(), homeClub.getId(), null);
         fixtures.save(round1Fixture);
         fixtures.save(round2Fixture);
 
@@ -96,8 +96,8 @@ class FixtureRepositoryIT {
         Competition comp = Competition.create(save.getId(), "Copa SC 2025", "LEAGUE", 2025, 4);
         competitions.save(comp);
 
-        fixtures.save(Fixture.create(save.getId(), comp.getId(), 1, clubA.getId(), clubB.getId()));
-        fixtures.save(Fixture.create(save.getId(), comp.getId(), 2, clubB.getId(), clubA.getId()));
+        fixtures.save(Fixture.create(save.getId(), comp.getId(), 1, clubA.getId(), clubB.getId(), null));
+        fixtures.save(Fixture.create(save.getId(), comp.getId(), 2, clubB.getId(), clubA.getId(), null));
 
         // When findBySaveGameIdAndCompetitionId is called
         List<Fixture> all = fixtures.findBySaveGameIdAndCompetitionId(save.getId(), comp.getId());

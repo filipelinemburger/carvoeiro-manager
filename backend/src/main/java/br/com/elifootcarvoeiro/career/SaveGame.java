@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -41,6 +42,9 @@ public class SaveGame {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "\"current_date\"")
+    private LocalDate currentDate;
+
     protected SaveGame() {
         // for JPA
     }
@@ -71,6 +75,8 @@ public class SaveGame {
     public void setManagedClubId(UUID managedClubId) { this.managedClubId = managedClubId; }
     public void setCurrentRound(int currentRound) { this.currentRound = currentRound; }
     public void setStatus(SaveGameStatus status) { this.status = status; }
+    public LocalDate getCurrentDate() { return currentDate; }
+    public void setCurrentDate(LocalDate currentDate) { this.currentDate = currentDate; }
 
     /** Rolls this career forward into the next season. */
     public void advanceToNextSeason() {

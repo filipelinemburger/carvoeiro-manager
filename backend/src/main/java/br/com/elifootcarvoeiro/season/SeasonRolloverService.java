@@ -235,7 +235,7 @@ public class SeasonRolloverService {
                 UUID home = clubsSorted.get(scheduled.homeIndex()).getId();
                 UUID away = clubsSorted.get(scheduled.awayIndex()).getId();
                 fixtureRepository.save(Fixture.create(
-                        saveGameId, competition.getId(), scheduled.round(), home, away));
+                        saveGameId, competition.getId(), scheduled.round(), home, away, null));
             });
             competition.setSeasonYear(finishingYear + 1);
             competitionRepository.save(competition);

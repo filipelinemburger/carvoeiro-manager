@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -44,12 +45,15 @@ public class Fixture {
     @Column(name = "played", nullable = false)
     private boolean played;
 
+    @Column(name = "match_date")
+    private LocalDate matchDate;
+
     protected Fixture() {
         // for JPA
     }
 
     private Fixture(UUID id, UUID saveGameId, UUID competitionId, int round,
-                    UUID homeClubId, UUID awayClubId) {
+                    UUID homeClubId, UUID awayClubId, LocalDate matchDate) {
         this.id = id;
         this.saveGameId = saveGameId;
         this.competitionId = competitionId;
@@ -59,11 +63,12 @@ public class Fixture {
         this.homeGoals = null;
         this.awayGoals = null;
         this.played = false;
+        this.matchDate = matchDate;
     }
 
     public static Fixture create(UUID saveGameId, UUID competitionId, int round,
-                                 UUID homeClubId, UUID awayClubId) {
-        return new Fixture(UUID.randomUUID(), saveGameId, competitionId, round, homeClubId, awayClubId);
+                                 UUID homeClubId, UUID awayClubId, LocalDate matchDate) {
+        return new Fixture(UUID.randomUUID(), saveGameId, competitionId, round, homeClubId, awayClubId, matchDate);
     }
 
     public UUID getId() { return id; }
@@ -75,6 +80,8 @@ public class Fixture {
     public Integer getHomeGoals() { return homeGoals; }
     public Integer getAwayGoals() { return awayGoals; }
     public boolean isPlayed() { return played; }
+    public LocalDate getMatchDate() { return matchDate; }
+    public void setMatchDate(LocalDate matchDate) { this.matchDate = matchDate; }
 
     public void recordResult(int homeGoals, int awayGoals) {
         this.homeGoals = homeGoals;
