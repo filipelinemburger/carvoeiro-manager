@@ -7,6 +7,7 @@ import br.com.elifootcarvoeiro.club.Club;
 import br.com.elifootcarvoeiro.club.ClubRepository;
 import br.com.elifootcarvoeiro.common.ApiException;
 import br.com.elifootcarvoeiro.competition.Competition;
+import br.com.elifootcarvoeiro.competition.CompetitionClubRepository;
 import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.competition.Fixture;
 import br.com.elifootcarvoeiro.competition.FixtureRepository;
@@ -16,11 +17,14 @@ import br.com.elifootcarvoeiro.player.Player;
 import br.com.elifootcarvoeiro.player.PlayerRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -37,6 +41,7 @@ public class FinanceService {
     private final ClubRepository clubRepository;
     private final PlayerRepository playerRepository;
     private final CompetitionRepository competitionRepository;
+    private final CompetitionClubRepository competitionClubRepository;
     private final FixtureRepository fixtureRepository;
     private final FinanceTransactionRepository financeTransactionRepository;
     private final FinanceCalculator financeCalculator;
@@ -47,6 +52,7 @@ public class FinanceService {
                           ClubRepository clubRepository,
                           PlayerRepository playerRepository,
                           CompetitionRepository competitionRepository,
+                          CompetitionClubRepository competitionClubRepository,
                           FixtureRepository fixtureRepository,
                           FinanceTransactionRepository financeTransactionRepository,
                           FinanceCalculator financeCalculator) {
@@ -55,6 +61,7 @@ public class FinanceService {
         this.clubRepository = clubRepository;
         this.playerRepository = playerRepository;
         this.competitionRepository = competitionRepository;
+        this.competitionClubRepository = competitionClubRepository;
         this.fixtureRepository = fixtureRepository;
         this.financeTransactionRepository = financeTransactionRepository;
         this.financeCalculator = financeCalculator;
@@ -142,6 +149,134 @@ public class FinanceService {
             position++;
         }
         clubRepository.saveAll(clubs);
+        return managedPrize;
+    }
+
+    /**
+     * Processes finances for a single matchday within a specific competition.
+     * Sponsorship, wages, and upkeep apply only to the competition's member clubs.
+     * Gate income applies only to the home clubs in the provided matchday fixtures.
+     * Ledger rows are written only when the managed club is among the processed members.
+     */
+    @Transactional
+    public FinanceRoundResponse processMatchday(UUID saveGameId, UUID competitionId,
+                                                List<Fixture> matchdayFixtures) {
+        SaveGame saveGame = saveGameRepository.findById(saveGameId).orElseThrow();
+        final UUID managedClubId = saveGame.getManagedClubId();
+        final int seasonYear = saveGame.getSeasonYear();
+
+        // Only the competition's member clubs are charged this matchday.
+        List<UUID> memberIds = competitionClubRepository.findByCompetitionId(competitionId).stream()
+                .map(cc -> cc.getClubId())
+                .toList();
+
+        Map<UUID, Club> clubById = clubRepository.findBySaveGameId(saveGameId).stream()
+                .collect(Collectors.toMap(Club::getId, c -> c));
+        Map<UUID, BigDecimal> wageBillByClub = wageBills(saveGameId);
+
+        Set<UUID> homeClubs = matchdayFixtures.stream()
+                .map(Fixture::getHomeClubId)
+                .collect(Collectors.toCollection(HashSet::new));
+
+        BigDecimal mGate = BigDecimal.ZERO;
+        BigDecimal mSpon = BigDecimal.ZERO;
+        BigDecimal mWages = BigDecimal.ZERO;
+        BigDecimal mUpkeep = BigDecimal.ZERO;
+        BigDecimal mBalance = BigDecimal.ZERO;
+        boolean managedIsProcessed = false;
+
+        for (UUID clubId : memberIds) {
+            Club club = clubById.get(clubId);
+            if (club == null) continue;
+
+            BigDecimal gate = BigDecimal.ZERO;
+            if (homeClubs.contains(clubId)) {
+                UUID awayId = matchdayFixtures.stream()
+                        .filter(f -> f.getHomeClubId().equals(clubId))
+                        .map(Fixture::getAwayClubId)
+                        .findFirst()
+                        .orElse(null);
+                Club away = awayId != null ? clubById.get(awayId) : null;
+                int awayRep = away != null ? away.getReputation() : club.getReputation();
+                gate = financeCalculator.gateIncome(club.getReputation(), awayRep, club.getStadiumCapacity());
+            }
+
+            BigDecimal sponsorship = club.getSponsorshipPerRound();
+            BigDecimal wages = wageBillByClub.getOrDefault(clubId, BigDecimal.ZERO);
+            BigDecimal upkeep = club.getStadiumUpkeepPerRound();
+            BigDecimal net = gate.add(sponsorship).subtract(wages).subtract(upkeep);
+            club.adjustBalance(net);
+            clubRepository.save(club);
+
+            if (clubId.equals(managedClubId)) {
+                managedIsProcessed = true;
+                mGate = gate;
+                mSpon = sponsorship;
+                mWages = wages;
+                mUpkeep = upkeep;
+                mBalance = club.getBalance();
+                // Use round=0 for matchday-scoped ledger rows (round is not meaningful here).
+                if (gate.signum() > 0) {
+                    record(saveGameId, managedClubId, seasonYear, 0,
+                            FinanceTransactionType.GATE, gate, "Renda de bilheteria");
+                }
+                record(saveGameId, managedClubId, seasonYear, 0,
+                        FinanceTransactionType.SPONSOR, sponsorship, "Patrocínio");
+                record(saveGameId, managedClubId, seasonYear, 0,
+                        FinanceTransactionType.WAGES, wages.negate(), "Salários");
+                record(saveGameId, managedClubId, seasonYear, 0,
+                        FinanceTransactionType.UPKEEP, upkeep.negate(), "Manutenção do estádio");
+            }
+        }
+
+        if (!managedIsProcessed) {
+            Club managed = clubById.get(managedClubId);
+            mBalance = managed != null ? managed.getBalance() : BigDecimal.ZERO;
+        }
+
+        BigDecimal net = mGate.add(mSpon).subtract(mWages).subtract(mUpkeep);
+        return new FinanceRoundResponse(mGate, mSpon, mWages, mUpkeep, BigDecimal.ZERO, net, mBalance);
+    }
+
+    /**
+     * Distributes prize money based on final standings for a specific competition.
+     * Returns the managed club's prize (ZERO if managed club is not in this competition).
+     */
+    @Transactional
+    public BigDecimal processSeasonEnd(UUID saveGameId, UUID competitionId) {
+        SaveGame saveGame = saveGameRepository.findById(saveGameId).orElseThrow();
+        final UUID managedClubId = saveGame.getManagedClubId();
+        final int seasonYear = saveGame.getSeasonYear();
+
+        // Load only the clubs belonging to this competition.
+        List<UUID> memberIds = competitionClubRepository.findByCompetitionId(competitionId).stream()
+                .map(cc -> cc.getClubId())
+                .toList();
+        List<Club> memberClubs = clubRepository.findBySaveGameId(saveGameId).stream()
+                .filter(c -> memberIds.contains(c.getId()))
+                .toList();
+
+        Competition competition = competitionRepository.findById(competitionId).orElseThrow();
+        List<Fixture> played = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, competitionId);
+        List<StandingRow> table = standingsCalculator.compute(memberClubs, played);
+
+        Map<UUID, Club> clubById = memberClubs.stream().collect(Collectors.toMap(Club::getId, c -> c));
+        BigDecimal managedPrize = BigDecimal.ZERO;
+        int position = 1;
+        for (StandingRow row : table) {
+            BigDecimal prize = financeCalculator.prizeMoney(position, memberClubs.size());
+            Club club = clubById.get(row.clubId());
+            if (club != null) {
+                club.adjustBalance(prize);
+                clubRepository.save(club);
+                if (club.getId().equals(managedClubId)) {
+                    managedPrize = prize;
+                    record(saveGameId, managedClubId, seasonYear, competition.getTotalRounds(),
+                            FinanceTransactionType.PRIZE, prize, "Premiação - " + position + "º lugar");
+                }
+            }
+            position++;
+        }
         return managedPrize;
     }
 
