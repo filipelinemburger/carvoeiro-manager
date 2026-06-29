@@ -82,6 +82,7 @@ public class SaveGame {
     public void advanceToNextSeason() {
         this.seasonYear += 1;
         this.currentRound = 0;
+        this.currentDate = LocalDate.of(this.seasonYear, 1, 15);
         this.status = SaveGameStatus.IN_PROGRESS;
     }
 }

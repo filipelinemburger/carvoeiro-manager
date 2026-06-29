@@ -11,7 +11,6 @@ import br.com.elifootcarvoeiro.competition.Competition;
 import br.com.elifootcarvoeiro.competition.CompetitionRepository;
 import br.com.elifootcarvoeiro.competition.Fixture;
 import br.com.elifootcarvoeiro.competition.FixtureRepository;
-import br.com.elifootcarvoeiro.competition.FixtureScheduler;
 import br.com.elifootcarvoeiro.competition.StandingRow;
 import br.com.elifootcarvoeiro.competition.StandingsService;
 import br.com.elifootcarvoeiro.competition.TopScorerRow;
@@ -72,7 +71,8 @@ public class SeasonRolloverService {
     private final FreeAgentGenerator freeAgentGenerator;
     private final FinanceTransactionRepository financeTransactionRepository;
     private final TransferOfferRepository transferOfferRepository;
-    private final FixtureScheduler fixtureScheduler = new FixtureScheduler();
+    private final SeasonCalendarGenerator seasonCalendarGenerator;
+    private final SeasonEventRepository seasonEventRepository;
 
     public SeasonRolloverService(SaveGameService saveGameService,
                                  SaveGameRepository saveGameRepository,
@@ -92,7 +92,9 @@ public class SeasonRolloverService {
                                  NewgenGenerator newgenGenerator,
                                  FreeAgentGenerator freeAgentGenerator,
                                  FinanceTransactionRepository financeTransactionRepository,
-                                 TransferOfferRepository transferOfferRepository) {
+                                 TransferOfferRepository transferOfferRepository,
+                                 SeasonCalendarGenerator seasonCalendarGenerator,
+                                 SeasonEventRepository seasonEventRepository) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.competitionRepository = competitionRepository;
@@ -112,6 +114,8 @@ public class SeasonRolloverService {
         this.freeAgentGenerator = freeAgentGenerator;
         this.financeTransactionRepository = financeTransactionRepository;
         this.transferOfferRepository = transferOfferRepository;
+        this.seasonCalendarGenerator = seasonCalendarGenerator;
+        this.seasonEventRepository = seasonEventRepository;
     }
 
     @Transactional
@@ -152,6 +156,8 @@ public class SeasonRolloverService {
         financeTransactionRepository.deleteBySaveGameId(saveGameId);
         // Purge season-scoped transfer offers (players/clubs change at rollover).
         transferOfferRepository.deleteBySaveGameId(saveGameId);
+        // Purge stale season events so the new calendar can be regenerated cleanly.
+        seasonEventRepository.deleteBySaveGameId(saveGameId);
 
         // 2. Clear the managed club's lineup before deleting players (FK safety).
         lineupRepository.findBySaveGameIdAndClubId(saveGameId, managedClubId).ifPresent(lineup -> {
@@ -226,20 +232,13 @@ public class SeasonRolloverService {
             playerRepository.save(freeAgentGenerator.generate(saveGameId, rng));
         }
 
-        // 4. Regenerate fixtures and roll each competition's year forward.
-        List<Club> clubsSorted = clubs.stream()
-                .sorted(Comparator.comparing(Club::getId)).toList();
-        int clubCount = clubsSorted.size();
+        // 4. Roll each competition's year forward, then regenerate the dated calendar
+        //    (fixtures over each competition's members + the season_event queue).
         for (Competition competition : competitions) {
-            fixtureScheduler.doubleRoundRobin(clubCount).forEach(scheduled -> {
-                UUID home = clubsSorted.get(scheduled.homeIndex()).getId();
-                UUID away = clubsSorted.get(scheduled.awayIndex()).getId();
-                fixtureRepository.save(Fixture.create(
-                        saveGameId, competition.getId(), scheduled.round(), home, away, null));
-            });
             competition.setSeasonYear(finishingYear + 1);
             competitionRepository.save(competition);
         }
+        seasonCalendarGenerator.generate(saveGameId, finishingYear + 1, competitions);
 
         // 5. Advance the save into the new season.
         saveGame.advanceToNextSeason();
