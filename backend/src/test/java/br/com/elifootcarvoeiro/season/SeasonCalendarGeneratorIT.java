@@ -88,6 +88,7 @@ class SeasonCalendarGeneratorIT {
         List<SeasonEvent> transfers = events.stream()
                 .filter(e -> e.getType() == SeasonEventType.TRANSFER).toList();
         assertThat(transfers).isNotEmpty();
+        assertThat(transfers).hasSize(8); // 5 pre-season (days 0,10,20,30,40) + 3 mid (days 140,150,160)
         LocalDate start = LocalDate.of(2026, 1, 15);
         assertThat(transfers).allMatch(t -> {
             boolean pre = !t.getEventDate().isBefore(start) && t.getEventDate().isBefore(start.plusDays(42));
@@ -96,11 +97,4 @@ class SeasonCalendarGeneratorIT {
         });
     }
 
-    @Test
-    void isDeterministicForSameSaveAndYear() {
-        // Two saves with identical structure produce identical match-unit date+competition ordering.
-        // (Determinism is by construction: dates from seasonYear, competitions/members id-sorted.)
-        assertThat(true).isTrue(); // structural determinism asserted by the generate() implementation;
-        // covered functionally by generatesInterleavedDatedCalendarForTwoCompetitions (fixed dates).
-    }
 }
