@@ -29,6 +29,7 @@ class NewsFeedIT {
     @Autowired SaveGameService saveGameService;
     @Autowired UserRepository userRepository;
     @Autowired NewsItemRepository newsItemRepository;
+    @Autowired com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -82,14 +83,29 @@ class NewsFeedIT {
         List<NewsItem> items = newsItemRepository.findBySaveGameIdOrderBySeqDesc(c.id());
         assertThat(items).hasSize(2);
 
-        // Then the payload JSON can be deserialized back to AdvanceResponse
-        // (the AdvanceController does this — verify the payload is valid JSON)
-        assertThat(items.get(0).getPayload()).isNotBlank();
-        assertThat(items.get(1).getPayload()).isNotBlank();
+        // Then each stored payload round-trips back to a fully-formed AdvanceResponse
+        // (this is exactly what AdvanceController.getNews does for the feed).
+        AdvanceResponse decoded0 = deserialize(items.get(0).getPayload());
+        AdvanceResponse decoded1 = deserialize(items.get(1).getPayload());
 
-        // The most recent advance (r2) should be at index 0 (seq desc)
-        assertThat(items.get(0).getType()).isEqualTo(r2.type());
-        assertThat(items.get(1).getType()).isEqualTo(r1.type());
+        // Most recent advance (r2) is at index 0 (seq desc), and the decoded payloads
+        // match the advances that produced them.
+        assertThat(decoded0.type()).isEqualTo(r2.type());
+        assertThat(decoded1.type()).isEqualTo(r1.type());
+        // The decoded response carries the same non-null list fields the live response has
+        // (records deserialize with all components populated, never null collections).
+        assertThat(decoded0.results()).isNotNull();
+        assertThat(decoded0.bookings()).isNotNull();
+        assertThat(decoded0.newSuspensions()).isNotNull();
+        assertThat(decoded0.newInjuries()).isNotNull();
+    }
+
+    private AdvanceResponse deserialize(String payload) {
+        try {
+            return objectMapper.readValue(payload, AdvanceResponse.class);
+        } catch (Exception e) {
+            throw new AssertionError("Stored news payload is not valid AdvanceResponse JSON: " + payload, e);
+        }
     }
 
     @Test

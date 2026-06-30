@@ -111,18 +111,24 @@ class AdvancePreviewIT {
         // Re-save a clean eligible XI so every saved starter is eligible right now
         setBestEligibleLineup(c);
 
-        // When one saved starter is injured
+        // When one saved starter is injured and another is suspended
         LineupResponse saved = lineupService.getLineup(c.id(), c.clubId(), c.userId()).orElseThrow();
-        UUID victimId = saved.starters().get(0).playerId();
-        Player victim = playerRepository.findById(victimId).orElseThrow();
-        victim.addInjury(3);
-        playerRepository.save(victim);
+        UUID injuredId = saved.starters().get(0).playerId();
+        UUID suspendedId = saved.starters().get(1).playerId();
+        Player injured = playerRepository.findById(injuredId).orElseThrow();
+        injured.addInjury(3);
+        playerRepository.save(injured);
+        Player suspended = playerRepository.findById(suspendedId).orElseThrow();
+        suspended.addSuspension(2);
+        playerRepository.save(suspended);
 
-        // Then the preview reports that starter as ineligible (reason INJURED)
+        // Then the preview reports both, each with the correct reason
         AdvancePreviewResponse p = advancePreviewService.preview(c.id(), c.userId());
         assertThat(p.managedClubPlaysNext()).isTrue();
         assertThat(p.ineligibleStarters())
-                .anyMatch(s -> s.playerId().equals(victimId.toString()) && s.reason().equals("INJURED"));
+                .anyMatch(s -> s.playerId().equals(injuredId.toString()) && s.reason().equals("INJURED"));
+        assertThat(p.ineligibleStarters())
+                .anyMatch(s -> s.playerId().equals(suspendedId.toString()) && s.reason().equals("SUSPENDED"));
     }
 
     @Test
@@ -151,11 +157,16 @@ class AdvancePreviewIT {
         LocalDate nextDate = next.getEventDate();
         int year = nextDate.getYear();
 
-        // And one pending outgoing offer
+        // And two unresolved offers — one outgoing (we bid) and one incoming (AI bids for us);
+        // both count toward pendingTransfers regardless of direction.
         transferOfferRepository.save(TransferOffer.create(
                 c.id(), UUID.randomUUID(), c.clubId(), UUID.randomUUID(),
                 TransferDirection.OUTGOING, new BigDecimal("1000000.00"), 0,
                 new BigDecimal("50000.00"), 2));
+        transferOfferRepository.save(TransferOffer.create(
+                c.id(), UUID.randomUUID(), UUID.randomUUID(), c.clubId(),
+                TransferDirection.INCOMING, new BigDecimal("800000.00"), 0,
+                new BigDecimal("40000.00"), 2));
 
         // When the current date is forced outside every transfer window (window closed now)
         SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();

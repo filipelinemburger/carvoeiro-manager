@@ -47,7 +47,9 @@ export function NewsPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {items.map((item, i) => (
             <AdvanceEventCard
-              key={i}
+              // Feed is newest-first and server-ordered; a composite of the event's
+              // identifying fields plus the index gives stable, unique keys.
+              key={`${item.type}-${item.date ?? 'na'}-${item.round ?? 'na'}-${i}`}
               result={item}
               saveGameId={saveGameId}
               competitionId={competitionId}

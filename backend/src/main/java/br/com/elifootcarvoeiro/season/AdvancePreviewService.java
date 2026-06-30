@@ -73,7 +73,9 @@ public class AdvancePreviewService {
         }
 
         // The window "closes on this advance" when it is open now but the next event lands outside it.
+        // currentDate is normally always set, but guard defensively (it is nullable on the entity).
         boolean windowClosingAfterAdvance = next != null
+                && currentDate != null
                 && transferWindow.isOpen(currentDate)
                 && !transferWindow.isOpen(next.getEventDate());
 
