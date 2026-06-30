@@ -44,6 +44,17 @@ export function setLineup(
   return apiPut<LineupResponse>(`/save-games/${saveGameId}/clubs/${clubId}/lineup`, req, token)
 }
 
+// Returns the saved lineup to rehydrate the squad screen, or null when none has been
+// saved yet (the endpoint replies 204, which apiGet resolves to undefined).
+export function getLineup(
+  saveGameId: string,
+  clubId: string,
+  token: string,
+): Promise<LineupResponse | null> {
+  return apiGet<LineupResponse | undefined>(`/save-games/${saveGameId}/clubs/${clubId}/lineup`, token)
+    .then(r => r ?? null)
+}
+
 export function advanceRound(saveGameId: string, token: string): Promise<SimulateRoundResponse> {
   return apiPost<SimulateRoundResponse>(`/save-games/${saveGameId}/advance`, {}, token)
 }

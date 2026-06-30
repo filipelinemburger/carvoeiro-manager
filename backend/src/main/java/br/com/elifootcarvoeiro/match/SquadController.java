@@ -34,6 +34,20 @@ public class SquadController {
     }
 
     /**
+     * Returns the saved lineup (formation + starters with roles) for the club,
+     * or 204 No Content when none has been saved yet.
+     */
+    @GetMapping("/lineup")
+    public ResponseEntity<LineupResponse> getLineup(
+            @PathVariable UUID saveGameId,
+            @PathVariable UUID clubId,
+            @CurrentUser UUID userId) {
+        return lineupService.getLineup(saveGameId, clubId, userId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    /**
      * Sets (upserts) the starting XI for the club within a save game.
      * Validates: exactly 11 starters, exactly 1 GK, all from this club.
      */

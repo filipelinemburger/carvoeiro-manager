@@ -20,6 +20,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -109,6 +110,23 @@ public class LineupService {
         }
 
         return new LineupResponse(lineupId, clubId, req.formation(), List.copyOf(starters));
+    }
+
+    /**
+     * Returns the saved lineup (formation + starters with their roles) for the given
+     * (saveGameId, clubId), or {@link Optional#empty()} if the club has never saved one.
+     * Used by the frontend to rehydrate the Escalação screen on revisit.
+     */
+    public Optional<LineupResponse> getLineup(UUID saveGameId, UUID clubId, UUID userId) {
+        requireOwnedClub(saveGameId, clubId, userId);
+        return lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
+                .map(lineup -> {
+                    List<LineupStarter> starters = lineupPlayerRepository.findByLineupId(lineup.getId()).stream()
+                            .filter(LineupPlayer::isStarting)
+                            .map(lp -> new LineupStarter(lp.getPlayerId(), lp.getRole().name()))
+                            .toList();
+                    return new LineupResponse(lineup.getId(), clubId, lineup.getFormation(), starters);
+                });
     }
 
     /**

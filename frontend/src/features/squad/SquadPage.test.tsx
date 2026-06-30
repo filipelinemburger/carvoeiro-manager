@@ -8,15 +8,17 @@ import type { PlayerResponse, SquadResponse } from '../../api/types'
 
 vi.mock('../../api/career', () => ({
   getSquad: vi.fn(),
+  getLineup: vi.fn(),
   setLineup: vi.fn(),
   getTactics: vi.fn(),
   setTactics: vi.fn(),
   renewContract: vi.fn(),
 }))
 
-import { getSquad, setLineup, getTactics, renewContract } from '../../api/career'
+import { getSquad, getLineup, setLineup, getTactics, renewContract } from '../../api/career'
 
 const mockGetSquad = vi.mocked(getSquad)
+const mockGetLineup = vi.mocked(getLineup)
 const mockSetLineup = vi.mocked(setLineup)
 const mockRenewContract = vi.mocked(renewContract)
 
@@ -113,6 +115,7 @@ describe('SquadPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetSquad.mockResolvedValue(squad)
+    mockGetLineup.mockResolvedValue(null)
     mockSetLineup.mockResolvedValue({
       lineupId: 'l-1',
       clubId: 'club-1',
@@ -221,5 +224,62 @@ describe('SquadPage', () => {
     // Options are scoped to the player's position band (DEF), not all roles
     const options = within(select).getAllByRole('option').map(o => o.textContent)
     expect(options).toEqual(['STOPPER', 'FULL_BACK', 'BALL_PLAYING_DEF'])
+  })
+
+  it('rehydrates the saved formation and starters on load', async () => {
+    mockGetLineup.mockResolvedValue({
+      lineupId: 'l-1', clubId: 'club-1', formation: '4-4-2',
+      starters: [
+        { playerId: GK.id, role: 'GOALKEEPER' },
+        { playerId: DEF1.id, role: 'FULL_BACK' },
+        { playerId: DEF2.id, role: 'FULL_BACK' },
+        { playerId: DEF3.id, role: 'FULL_BACK' },
+        { playerId: DEF4.id, role: 'FULL_BACK' },
+        { playerId: MID1.id, role: 'BOX_TO_BOX' },
+        { playerId: MID2.id, role: 'BOX_TO_BOX' },
+        { playerId: MID3.id, role: 'BOX_TO_BOX' },
+        { playerId: ATT1.id, role: 'POACHER' },
+        { playerId: ATT2.id, role: 'POACHER' },
+        { playerId: ATT3.id, role: 'POACHER' },
+      ],
+    })
+    renderWithProviders()
+    // Once the saved lineup resolves, the formation select reflects it (not the 4-3-3 default).
+    await waitFor(() => expect(screen.getByLabelText(/formação/i)).toHaveValue('4-4-2'))
+    expect(screen.getByRole('checkbox', { name: /goleiro teste/i })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /defensor um/i })).toBeChecked()
+    // A complete, all-eligible XI → saving is enabled.
+    expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
+  })
+
+  it('loads an ineligible saved starter, blocks saving, and lets the user swap them out', async () => {
+    mockGetLineup.mockResolvedValue({
+      lineupId: 'l-2', clubId: 'club-1', formation: '4-3-3',
+      starters: [
+        { playerId: GK.id, role: 'GOALKEEPER' },
+        { playerId: DEF1.id, role: 'FULL_BACK' },
+        { playerId: DEF2.id, role: 'FULL_BACK' },
+        { playerId: DEF3.id, role: 'FULL_BACK' },
+        { playerId: DEF4.id, role: 'FULL_BACK' },
+        { playerId: MID1.id, role: 'BOX_TO_BOX' },
+        { playerId: MID2.id, role: 'BOX_TO_BOX' },
+        { playerId: SUSPENDED.id, role: 'BOX_TO_BOX' },
+        { playerId: ATT1.id, role: 'POACHER' },
+        { playerId: ATT2.id, role: 'POACHER' },
+        { playerId: ATT3.id, role: 'POACHER' },
+      ],
+    })
+    renderWithProviders()
+    const banido = await screen.findByRole('checkbox', { name: /banido um/i })
+    // Loaded as a starter despite being suspended, and left checkable so it can be removed.
+    await waitFor(() => expect(banido).toBeChecked())
+    expect(banido).not.toBeDisabled()
+    // Saving is blocked with a message naming the unavailable player.
+    expect(screen.getByRole('button', { name: /salvar escala/i })).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent(/indisponível/i)
+    expect(screen.getByRole('alert')).toHaveTextContent(/Banido Um/i)
+    // The user resolves it themselves — no auto-substitution.
+    fireEvent.click(banido)
+    await waitFor(() => expect(banido).not.toBeChecked())
   })
 })

@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -259,6 +260,37 @@ class LineupServiceIT {
                     assertThat(apiEx.getCode()).isEqualTo("INVALID_ROLE");
                     assertThat(apiEx.getStatus().value()).isEqualTo(422);
                 });
+    }
+
+    // --- (h) getLineup returns the saved formation + starters with roles ---
+
+    @Test
+    void getLineupReturnsTheSavedFormationAndStarters() {
+        Career career = createCareer();
+        UUID saveGameId = career.id();
+        UUID clubId = career.managedClubId();
+        UUID userId = career.userId();
+
+        List<LineupStarter> starters = buildValidStarters(clubId);
+        lineupService.setLineup(saveGameId, clubId, new SetLineupRequest("4-3-3", starters), userId);
+
+        Optional<LineupResponse> saved = lineupService.getLineup(saveGameId, clubId, userId);
+
+        assertThat(saved).isPresent();
+        assertThat(saved.get().formation()).isEqualTo("4-3-3");
+        assertThat(saved.get().clubId()).isEqualTo(clubId);
+        assertThat(idsOf(saved.get().starters())).containsExactlyInAnyOrderElementsOf(idsOf(starters));
+        assertThat(saved.get().starters()).allSatisfy(s -> assertThat(s.role()).isNotBlank());
+    }
+
+    // --- (i) getLineup is empty when the club has never saved a lineup ---
+
+    @Test
+    void getLineupIsEmptyWhenNoneSaved() {
+        Career career = createCareer();
+        Optional<LineupResponse> saved =
+                lineupService.getLineup(career.id(), career.managedClubId(), career.userId());
+        assertThat(saved).isEmpty();
     }
 
     // --- Private helpers ---

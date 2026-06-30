@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
@@ -7,6 +7,43 @@ import {
 import { useAuth } from '../../auth/AuthContext'
 import { formatBRL } from '../../lib/money'
 import { isTransferWindowOpen } from '../../lib/transferWindow'
+
+const labelStyle: CSSProperties = {
+  display: 'flex', flexDirection: 'column', alignItems: 'flex-start', fontSize: '0.72rem', color: '#555',
+}
+
+// A labeled money input: visible caption, an "R$" prefix, and a live formatted preview of
+// the typed value (or the suggested amount as a hint when empty). The `ariaLabel` stays the
+// input's accessible name so existing queries/tests keep working.
+function MoneyField(props: {
+  label: string
+  ariaLabel: string
+  value: string
+  suggested: number
+  onChange: (v: string) => void
+}) {
+  const n = Number(props.value)
+  const preview = props.value !== '' && !Number.isNaN(n) && n > 0
+    ? formatBRL(n)
+    : `sugerido: ${formatBRL(props.suggested)}`
+  return (
+    <span style={labelStyle}>
+      <span>{props.label}</span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+        <span aria-hidden>R$</span>
+        <input
+          aria-label={props.ariaLabel}
+          type="number"
+          min={0}
+          value={props.value}
+          onChange={e => props.onChange(e.target.value)}
+          style={{ width: 130 }}
+        />
+      </span>
+      <span style={{ color: '#888' }}>{preview}</span>
+    </span>
+  )
+}
 
 export function TransferMarketPage() {
   const { token } = useAuth()
@@ -73,11 +110,17 @@ export function TransferMarketPage() {
                   onClick={() => respondMut.mutate({ offerId: o.id, action: 'ACCEPT', counterAmount: null })}>Aceitar venda</button>{' '}
                 <button className="cec-btn" disabled={!windowOpen || respondMut.isPending}
                   onClick={() => respondMut.mutate({ offerId: o.id, action: 'REJECT', counterAmount: null })}>Recusar</button>{' '}
-                <input aria-label={`Contraproposta para ${o.playerName}`} type="number"
-                  value={counters[o.id] ?? ''} onChange={e => setCounters(c => ({ ...c, [o.id]: e.target.value }))}
-                  style={{ width: 110 }} />
-                <button className="cec-btn" disabled={!windowOpen || respondMut.isPending}
-                  onClick={() => respondMut.mutate({ offerId: o.id, action: 'COUNTER', counterAmount: Number(counters[o.id] ?? 0) })}>Contrapor</button>
+                <span style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 6, marginLeft: 8, verticalAlign: 'middle' }}>
+                  <MoneyField
+                    label="Contraproposta"
+                    ariaLabel={`Contraproposta para ${o.playerName}`}
+                    value={counters[o.id] ?? ''}
+                    suggested={o.amount}
+                    onChange={v => setCounters(c => ({ ...c, [o.id]: v }))}
+                  />
+                  <button className="cec-btn" disabled={!windowOpen || respondMut.isPending}
+                    onClick={() => respondMut.mutate({ offerId: o.id, action: 'COUNTER', counterAmount: Number(counters[o.id] ?? 0) })}>Contrapor</button>
+                </span>
               </li>
             ))}
           </ul>
@@ -122,34 +165,42 @@ export function TransferMarketPage() {
               <td>{p.clubName}</td>
               <td style={{ textAlign: 'right' }}>{formatBRL(p.value)}</td>
               <td style={{ textAlign: 'right' }}>{formatBRL(p.wageDemand)}</td>
-              <td style={{ textAlign: 'center' }}>
-                <input
-                  aria-label={`Valor para ${p.name}`}
-                  type="number"
-                  value={amounts[p.playerId] ?? ''}
-                  onChange={e => setAmounts(a => ({ ...a, [p.playerId]: e.target.value }))}
-                  style={{ width: 110 }}
-                />{' '}
-                <input aria-label={`Salário para ${p.name}`} type="number"
-                  value={wages[p.playerId] ?? ''}
-                  onChange={e => setWages(w => ({ ...w, [p.playerId]: e.target.value }))}
-                  style={{ width: 110 }} />{' '}
-                <input aria-label={`Anos para ${p.name}`} type="number" min={1} max={5}
-                  value={years[p.playerId] ?? '3'}
-                  onChange={e => setYears(y => ({ ...y, [p.playerId]: e.target.value }))}
-                  style={{ width: 50 }} />{' '}
-                <button
-                  className="cec-btn"
-                  disabled={!windowOpen || offerMut.isPending}
-                  onClick={() => offerMut.mutate({
-                    playerId: p.playerId,
-                    amount: Number(amounts[p.playerId] ?? 0),
-                    wage: Number(wages[p.playerId] ?? p.wageDemand),
-                    contractYears: Number(years[p.playerId] ?? 3),
-                  })}
-                >
-                  Propor
-                </button>
+              <td style={{ textAlign: 'left' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 10 }}>
+                  <MoneyField
+                    label="Valor da proposta"
+                    ariaLabel={`Valor para ${p.name}`}
+                    value={amounts[p.playerId] ?? ''}
+                    suggested={p.value}
+                    onChange={v => setAmounts(a => ({ ...a, [p.playerId]: v }))}
+                  />
+                  <MoneyField
+                    label="Salário semanal"
+                    ariaLabel={`Salário para ${p.name}`}
+                    value={wages[p.playerId] ?? ''}
+                    suggested={p.wageDemand}
+                    onChange={v => setWages(w => ({ ...w, [p.playerId]: v }))}
+                  />
+                  <span style={labelStyle}>
+                    <span>Anos de contrato</span>
+                    <input aria-label={`Anos para ${p.name}`} type="number" min={1} max={5}
+                      value={years[p.playerId] ?? '3'}
+                      onChange={e => setYears(y => ({ ...y, [p.playerId]: e.target.value }))}
+                      style={{ width: 56 }} />
+                  </span>
+                  <button
+                    className="cec-btn"
+                    disabled={!windowOpen || offerMut.isPending}
+                    onClick={() => offerMut.mutate({
+                      playerId: p.playerId,
+                      amount: Number(amounts[p.playerId] ?? 0),
+                      wage: Number(wages[p.playerId] ?? p.wageDemand),
+                      contractYears: Number(years[p.playerId] ?? 3),
+                    })}
+                  >
+                    Propor
+                  </button>
+                </div>
               </td>
             </tr>
           ))}
