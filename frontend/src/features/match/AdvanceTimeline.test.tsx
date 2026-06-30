@@ -90,6 +90,24 @@ describe('AdvanceTimeline', () => {
       expect(screen.getByText(/Avaí/)).toBeInTheDocument()
     })
 
+    it('shows the managed club match first and in bold', () => {
+      const result: AdvanceResponse = {
+        ...MATCH_RESULT,
+        results: [
+          { fixtureId: 'fx-other', homeClubId: 'cX', homeClubName: 'Outro Clube', homeGoals: 1, awayClubId: 'cY', awayClubName: 'Adversário', awayGoals: 2 },
+          { fixtureId: 'fx-mine', homeClubId: 'club-1', homeClubName: 'Criciúma EC', homeGoals: 3, awayClubId: 'cZ', awayClubName: 'Rival', awayGoals: 0 },
+        ],
+      }
+      renderTimeline(result) // renderTimeline uses managedClubId="club-1"
+      const mine = screen.getByText(/Criciúma EC/)
+      const other = screen.getByText(/Outro Clube/)
+      // The managed club's match is ordered before the other in the DOM, even though
+      // it was second in the response.
+      expect(mine.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      // ...and its line is rendered bold.
+      expect(mine.closest('span')?.style.fontWeight).toBe('700')
+    })
+
     it('renders booking section with card type', () => {
       renderTimeline(MATCH_RESULT)
       expect(screen.getByText(/Cartões/)).toBeInTheDocument()

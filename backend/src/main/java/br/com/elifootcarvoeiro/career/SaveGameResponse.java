@@ -13,5 +13,6 @@ public record SaveGameResponse(
         int currentRound,
         int totalRounds,
         String currentDate,
-        List<CompetitionSummary> competitions
+        List<CompetitionSummary> competitions,
+        String status
 ) {}

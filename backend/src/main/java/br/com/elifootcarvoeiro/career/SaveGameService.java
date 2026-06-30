@@ -192,7 +192,8 @@ public class SaveGameService {
                 saveGame.getCurrentRound(),
                 primaryCompetition.getTotalRounds(),
                 seasonStart.toString(),
-                competitionSummaries);
+                competitionSummaries,
+                saveGame.getStatus().name());
     }
 
     /**
@@ -250,7 +251,8 @@ public class SaveGameService {
                 saveGame.getCurrentRound(),
                 totalRounds,
                 currentDate,
-                competitionSummaries);
+                competitionSummaries,
+                saveGame.getStatus().name());
     }
 
 }

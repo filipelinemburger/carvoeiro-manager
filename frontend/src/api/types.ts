@@ -27,6 +27,7 @@ export type SaveGameResponse = {
   totalRounds: number
   currentDate?: string | null
   competitions?: string[]
+  status?: 'IN_PROGRESS' | 'FINISHED'
 }
 
 export type Mentality = 'DEFENSIVE' | 'BALANCED' | 'ATTACKING'
@@ -134,15 +135,6 @@ export type FinanceRoundResponse = {
   prize: number
   net: number
   balance: number
-}
-
-export type SimulateRoundResponse = {
-  round: number
-  results: FixtureResultResponse[]
-  seasonFinished: boolean
-  bookings: Booking[]
-  newSuspensions: Suspension[]
-  finance: FinanceRoundResponse
 }
 
 export type AdvanceResponse = {

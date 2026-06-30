@@ -62,7 +62,10 @@ export function Layout({ children }: LayoutProps) {
   })
 
   const isDashboard = location.pathname === '/dashboard'
-  const seasonFinished = advanceMutation.data?.seasonFinished === true
+  // Use the persisted save status too, so Avançar stays disabled after a page
+  // reload following a season-ending advance (the mutation result is ephemeral).
+  const seasonFinished =
+    advanceMutation.data?.seasonFinished === true || saveGame?.status === 'FINISHED'
 
   const handleLogout = () => {
     setGearOpen(false)
@@ -75,7 +78,7 @@ export function Layout({ children }: LayoutProps) {
   const competitionId = saveGame?.competitionId
   const sgId = saveGame?.id ?? saveGameId
 
-  const hasSaveGame = Boolean(sgId && managedClubId)
+  const hasSaveGame = Boolean(sgId && managedClubId && competitionId)
 
   return (
     <>

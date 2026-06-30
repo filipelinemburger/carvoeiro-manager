@@ -41,15 +41,32 @@ function MatchTimeline({ result, saveGameId, competitionId, managedClubId }: {
 
   return (
     <>
-      {result.results.map(r => (
-        <TimelineNode key={r.fixtureId}>
-          <span style={{ fontFamily: 'monospace', fontSize: '0.95rem' }}>
-            {r.homeClubName} <strong>{r.homeGoals}</strong>
-            {' — '}
-            <strong>{r.awayGoals}</strong> {r.awayClubName}
-          </span>
-        </TimelineNode>
-      ))}
+      {[...result.results]
+        // Always surface the managed club's match first.
+        .sort((a, b) =>
+          Number(b.homeClubId === managedClubId || b.awayClubId === managedClubId) -
+          Number(a.homeClubId === managedClubId || a.awayClubId === managedClubId))
+        .map(r => {
+          const mine = r.homeClubId === managedClubId || r.awayClubId === managedClubId
+          return (
+            <TimelineNode key={r.fixtureId} dot={mine ? '⭐' : '●'}>
+              <span
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: '0.95rem',
+                  fontWeight: mine ? 700 : undefined,
+                  ...(mine
+                    ? { background: 'rgba(247,212,23,0.3)', padding: '2px 6px', borderRadius: '4px', display: 'inline-block' }
+                    : {}),
+                }}
+              >
+                {r.homeClubName} <strong>{r.homeGoals}</strong>
+                {' — '}
+                <strong>{r.awayGoals}</strong> {r.awayClubName}
+              </span>
+            </TimelineNode>
+          )
+        })}
 
       {result.bookings.length > 0 && (
         <TimelineNode dot="🟨">
@@ -190,7 +207,7 @@ export function AdvanceTimeline({ result, saveGameId, competitionId, managedClub
                 <strong>{result.bidsReceived}</strong> proposta(s) recebida(s)
               </span>
               <div style={{ marginTop: '0.5rem' }}>
-                <Link to={`/transfers?saveGameId=${saveGameId}`}>
+                <Link to={`/transfers?saveGameId=${saveGameId}&clubId=${managedClubId}`}>
                   <button className="cec-btn" style={{ fontSize: '0.875rem' }}>Ver propostas</button>
                 </Link>
               </div>

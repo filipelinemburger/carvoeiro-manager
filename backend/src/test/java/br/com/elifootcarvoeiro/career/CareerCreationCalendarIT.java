@@ -59,9 +59,11 @@ class CareerCreationCalendarIT {
         assertThat(fixtures).allMatch(f -> f.getMatchDate() != null,
                 "Every fixture must have a match_date assigned by SeasonCalendarGenerator");
 
-        // First fixture date is season start (Jan 15 of the seed's season year)
+        // The calendar starts at season start (Jan 15): the first dated match-unit falls on
+        // that day. Which competition owns match-unit 0 depends on competition-id ordering,
+        // so assert over the whole save rather than a single competition.
         LocalDate seasonStart = LocalDate.of(response.seasonYear(), 1, 15);
-        assertThat(fixtures).anyMatch(f -> f.getMatchDate().equals(seasonStart));
+        assertThat(fixtureRepository.findBySaveGameIdAndMatchDate(saveGameId, seasonStart)).isNotEmpty();
 
         // MATCH season events exist (one per round of the Catarinense = 18 rounds for 10 clubs)
         var events = seasonEventRepository.findBySaveGameId(saveGameId);
