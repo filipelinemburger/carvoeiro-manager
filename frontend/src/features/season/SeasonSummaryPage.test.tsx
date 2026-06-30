@@ -29,8 +29,8 @@ function renderPage() {
 describe('SeasonSummaryPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    localStorage.setItem('elifoot_token', 'test-token')
-    localStorage.setItem('elifoot_user', JSON.stringify({ username: 'u', userId: 'u1' }))
+    localStorage.setItem('carvoeiro_manager_token', 'test-token')
+    localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
     vi.mocked(getStandings).mockResolvedValue([
       { clubId: 'club-9', clubName: 'Campeao FC', played: 18, won: 14, drawn: 2, lost: 2, goalsFor: 40, goalsAgainst: 12, goalDifference: 28, points: 44 },
       { clubId: 'club-1', clubName: 'Criciúma EC', played: 18, won: 12, drawn: 4, lost: 2, goalsFor: 35, goalsAgainst: 15, goalDifference: 20, points: 40 },

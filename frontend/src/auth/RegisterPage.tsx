@@ -23,7 +23,7 @@ export function RegisterPage() {
   return (
     <div style={{ maxWidth: 400, margin: '4rem auto', padding: '2rem', background: 'var(--cec-white)', borderRadius: 8 }}>
       <h1 style={{ color: 'var(--cec-black)', marginTop: 0 }}>
-        Elifoot Carvoeiro
+        Carvoeiro Manager
       </h1>
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: '1rem' }}>

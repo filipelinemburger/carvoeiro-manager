@@ -63,10 +63,10 @@ const ADVANCE_RESPONSE: AdvanceResponse = {
 }
 
 function seedAuth(userId = 'U1', saveGameId?: string) {
-  localStorage.setItem('elifoot_token', 'test-token')
-  localStorage.setItem('elifoot_user', JSON.stringify({ username: 'testuser', userId }))
+  localStorage.setItem('carvoeiro_manager_token', 'test-token')
+  localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'testuser', userId }))
   if (saveGameId) {
-    localStorage.setItem(`elifoot_save_game_id_${userId}`, saveGameId)
+    localStorage.setItem(`carvoeiro_manager_save_game_id_${userId}`, saveGameId)
   }
 }
 
@@ -173,7 +173,7 @@ describe('Layout shell', () => {
     fireEvent.click(screen.getByRole('button', { name: /configurações/i }))
     fireEvent.click(screen.getByText('Sair'))
     // After logout, token is cleared
-    expect(localStorage.getItem('elifoot_token')).toBeNull()
+    expect(localStorage.getItem('carvoeiro_manager_token')).toBeNull()
   })
 
   it('clicking Avançar calls advanceRound and redirects to the News tab', async () => {

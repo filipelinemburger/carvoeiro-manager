@@ -10,7 +10,7 @@ interface LayoutProps {
 }
 
 const saveGameKeyFor = (userId: string | undefined) =>
-  `elifoot_save_game_id_${userId ?? 'anon'}`
+  `carvoeiro_manager_save_game_id_${userId ?? 'anon'}`
 
 export function Layout({ children }: LayoutProps) {
   const { user, token, logout } = useAuth()
@@ -146,7 +146,7 @@ export function Layout({ children }: LayoutProps) {
         {/* Middle: title + nav */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.25rem', overflow: 'hidden' }}>
           <span style={{ fontWeight: 700, fontSize: '1rem', marginRight: '0.5rem', whiteSpace: 'nowrap' }}>
-            Elifoot Carvoeiro
+            Carvoeiro Manager
           </span>
 
           <nav style={{ display: 'flex', alignItems: 'center', gap: '0.1rem', flexWrap: 'nowrap', overflow: 'hidden' }}>

@@ -35,8 +35,8 @@ function renderPanel() {
 describe('TacticsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    localStorage.setItem('elifoot_token', 'test-token')
-    localStorage.setItem('elifoot_user', JSON.stringify({ username: 'u', userId: 'u1' }))
+    localStorage.setItem('carvoeiro_manager_token', 'test-token')
+    localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
     mockGet.mockResolvedValue({
       mentality: 'ATTACKING',
       pressing: 'HIGH',

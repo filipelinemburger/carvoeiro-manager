@@ -1,10 +1,10 @@
 spring:
   application:
-    name: elifoot-carvoeiro
+    name: carvoeiro-manager
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5435/elifoot}
-    username: ${DB_USER:elifoot}
-    password: ${DB_PASSWORD:elifoot}
+    url: ${DB_URL:jdbc:postgresql://localhost:5435/carvoeiro_manager}
+    username: ${DB_USER:carvoeiro_manager}
+    password: ${DB_PASSWORD:carvoeiro_manager}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -22,4 +22,4 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
 
 server:
-  port: 8088
+  port: ${PORT:8088}

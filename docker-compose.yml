@@ -1,21 +1,21 @@
 services:
   db:
     image: postgres:16
-    container_name: elifoot-db
+    container_name: carvoeiro-manager-db
     environment:
-      POSTGRES_DB: elifoot
-      POSTGRES_USER: elifoot
-      POSTGRES_PASSWORD: elifoot
+      POSTGRES_DB: carvoeiro_manager
+      POSTGRES_USER: carvoeiro_manager
+      POSTGRES_PASSWORD: carvoeiro_manager
     ports:
       # Host port 5435 -> container 5432, to avoid clashing with other local Postgres containers.
       - "5435:5432"
     volumes:
-      - elifoot-pgdata:/var/lib/postgresql/data
+      - carvoeiro-manager-pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U elifoot"]
+      test: ["CMD-SHELL", "pg_isready -U carvoeiro_manager"]
       interval: 5s
       timeout: 3s
       retries: 10
 
 volumes:
-  elifoot-pgdata:
+  carvoeiro-manager-pgdata:

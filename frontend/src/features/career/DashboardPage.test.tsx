@@ -26,8 +26,8 @@ function renderDashboard() {
 }
 
 function seedAuth(userId: string) {
-  localStorage.setItem('elifoot_token', 'test-token')
-  localStorage.setItem('elifoot_user', JSON.stringify({ username: 'asd', userId }))
+  localStorage.setItem('carvoeiro_manager_token', 'test-token')
+  localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'asd', userId }))
 }
 
 describe('DashboardPage', () => {
@@ -40,7 +40,7 @@ describe('DashboardPage', () => {
     // Given a logged-in user with a stored save game id that no longer loads
     // (e.g. it belonged to a previous user — the ownership guard returns 404)
     seedAuth('U1')
-    localStorage.setItem('elifoot_save_game_id_U1', 'foreign-save')
+    localStorage.setItem('carvoeiro_manager_save_game_id_U1', 'foreign-save')
     localStorage.setItem('elifoot_save_game_id', 'foreign-save') // legacy global key
     ;(getSaveGame as Mock).mockRejectedValue(new Error('Save game not found'))
 
@@ -52,12 +52,12 @@ describe('DashboardPage', () => {
       expect(screen.getByText(/você ainda não tem uma carreira/i)).toBeInTheDocument()
     })
     // and the unusable stored id is cleared
-    expect(localStorage.getItem('elifoot_save_game_id_U1')).toBeNull()
+    expect(localStorage.getItem('carvoeiro_manager_save_game_id_U1')).toBeNull()
   })
 
   it('renders the career when the stored save game loads', async () => {
     seedAuth('U2')
-    localStorage.setItem('elifoot_save_game_id_U2', 'save-2')
+    localStorage.setItem('carvoeiro_manager_save_game_id_U2', 'save-2')
     ;(getSaveGame as Mock).mockResolvedValue({
       id: 'save-2',
       seasonYear: 2026,
@@ -82,7 +82,7 @@ describe('DashboardPage', () => {
   it('keeps save games separate per user (does not load another user\'s id)', () => {
     // Given user U3 logs in but only U_OTHER has a stored save id
     seedAuth('U3')
-    localStorage.setItem('elifoot_save_game_id_U_OTHER', 'someone-elses-save')
+    localStorage.setItem('carvoeiro_manager_save_game_id_U_OTHER', 'someone-elses-save')
 
     renderDashboard()
 

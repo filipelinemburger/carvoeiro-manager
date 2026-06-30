@@ -39,8 +39,8 @@ function renderPage() {
 describe('TransferMarketPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    localStorage.setItem('elifoot_token', 'test-token')
-    localStorage.setItem('elifoot_user', JSON.stringify({ username: 'u', userId: 'u1' }))
+    localStorage.setItem('carvoeiro_manager_token', 'test-token')
+    localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
     vi.mocked(getSaveGame).mockResolvedValue(SAVE_OPEN)
     vi.mocked(getOffers).mockResolvedValue([])
     vi.mocked(getMarket).mockResolvedValue([

@@ -17,8 +17,8 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-const TOKEN_KEY = 'elifoot_token'
-const USER_KEY = 'elifoot_user'
+const TOKEN_KEY = 'carvoeiro_manager_token'
+const USER_KEY = 'carvoeiro_manager_user'
 
 function loadFromStorage(): { token: string | null; user: User | null } {
   const token = localStorage.getItem(TOKEN_KEY)

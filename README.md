@@ -1,4 +1,4 @@
-# Elifoot Carvoeiro
+# Carvoeiro Manager
 
 A Criciúma EC football-manager game combining backend and frontend components.
 
@@ -35,4 +35,4 @@ docker compose down
 ## Deployment
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for step-by-step production deployment instructions.
-For the recommended low-cost setup, use [docs/deployment/hetzner-cloudflare.md](docs/deployment/hetzner-cloudflare.md).
+For the recommended low-cost setup, use [docs/deployment/render.md](docs/deployment/render.md).
