@@ -29,7 +29,7 @@ class NewsFeedIT {
     @Autowired SaveGameService saveGameService;
     @Autowired UserRepository userRepository;
     @Autowired NewsItemRepository newsItemRepository;
-    @Autowired com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    @Autowired tools.jackson.databind.ObjectMapper objectMapper;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }

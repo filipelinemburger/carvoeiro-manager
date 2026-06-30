@@ -16,7 +16,7 @@ import br.com.elifootcarvoeiro.transfer.TransferDirection;
 import br.com.elifootcarvoeiro.transfer.TransferOfferRepository;
 import br.com.elifootcarvoeiro.transfer.TransferOfferStatus;
 import br.com.elifootcarvoeiro.transfer.TransferService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
