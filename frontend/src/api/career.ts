@@ -4,7 +4,7 @@ import type {
   SquadResponse,
   SetLineupRequest,
   LineupResponse,
-  SimulateRoundResponse,
+  AdvanceResponse,
   StandingRow,
   TacticsRequest,
   TacticsResponse,
@@ -55,8 +55,8 @@ export function getLineup(
     .then(r => r ?? null)
 }
 
-export function advanceRound(saveGameId: string, token: string): Promise<SimulateRoundResponse> {
-  return apiPost<SimulateRoundResponse>(`/save-games/${saveGameId}/advance`, {}, token)
+export function advanceRound(saveGameId: string, token: string): Promise<AdvanceResponse> {
+  return apiPost<AdvanceResponse>(`/save-games/${saveGameId}/advance`, {}, token)
 }
 
 export function getStandings(

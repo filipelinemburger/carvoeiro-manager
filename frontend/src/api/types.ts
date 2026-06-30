@@ -25,6 +25,8 @@ export type SaveGameResponse = {
   managedClubName: string
   currentRound: number
   totalRounds: number
+  currentDate?: string | null
+  competitions?: string[]
 }
 
 export type Mentality = 'DEFENSIVE' | 'BALANCED' | 'ATTACKING'
@@ -141,6 +143,19 @@ export type SimulateRoundResponse = {
   bookings: Booking[]
   newSuspensions: Suspension[]
   finance: FinanceRoundResponse
+}
+
+export type AdvanceResponse = {
+  type: 'MATCH' | 'TRANSFER' | 'FINISHED'
+  date: string | null
+  competitionName: string | null
+  round: number | null
+  results: FixtureResultResponse[]
+  bookings: Booking[]
+  newSuspensions: Suspension[]
+  finance: FinanceRoundResponse | null
+  bidsReceived: number
+  seasonFinished: boolean
 }
 
 export type TopScorerResponse = {

@@ -11,7 +11,6 @@ vi.mock('../../api/career', () => ({
   createCareer: vi.fn(),
   getFinances: vi.fn(),
 }))
-vi.mock('../match/AdvancePanel', () => ({ AdvancePanel: () => null }))
 
 function renderDashboard() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
