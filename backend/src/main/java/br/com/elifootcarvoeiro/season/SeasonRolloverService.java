@@ -73,6 +73,7 @@ public class SeasonRolloverService {
     private final TransferOfferRepository transferOfferRepository;
     private final SeasonCalendarGenerator seasonCalendarGenerator;
     private final SeasonEventRepository seasonEventRepository;
+    private final NewsItemRepository newsItemRepository;
 
     public SeasonRolloverService(SaveGameService saveGameService,
                                  SaveGameRepository saveGameRepository,
@@ -94,7 +95,8 @@ public class SeasonRolloverService {
                                  FinanceTransactionRepository financeTransactionRepository,
                                  TransferOfferRepository transferOfferRepository,
                                  SeasonCalendarGenerator seasonCalendarGenerator,
-                                 SeasonEventRepository seasonEventRepository) {
+                                 SeasonEventRepository seasonEventRepository,
+                                 NewsItemRepository newsItemRepository) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.competitionRepository = competitionRepository;
@@ -116,6 +118,7 @@ public class SeasonRolloverService {
         this.transferOfferRepository = transferOfferRepository;
         this.seasonCalendarGenerator = seasonCalendarGenerator;
         this.seasonEventRepository = seasonEventRepository;
+        this.newsItemRepository = newsItemRepository;
     }
 
     @Transactional
@@ -158,6 +161,8 @@ public class SeasonRolloverService {
         transferOfferRepository.deleteBySaveGameId(saveGameId);
         // Purge stale season events so the new calendar can be regenerated cleanly.
         seasonEventRepository.deleteBySaveGameId(saveGameId);
+        // Purge the finished season's news feed (a fresh season starts a fresh feed).
+        newsItemRepository.deleteBySaveGameId(saveGameId);
 
         // 2. Clear the managed club's lineup before deleting players (FK safety).
         lineupRepository.findBySaveGameIdAndClubId(saveGameId, managedClubId).ifPresent(lineup -> {

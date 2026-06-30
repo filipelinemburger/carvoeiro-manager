@@ -59,6 +59,11 @@ export function advanceRound(saveGameId: string, token: string): Promise<Advance
   return apiPost<AdvanceResponse>(`/save-games/${saveGameId}/advance`, {}, token)
 }
 
+// Persisted news feed: every advance is stored and returned here, most recent first.
+export function getNews(saveGameId: string, token: string): Promise<AdvanceResponse[]> {
+  return apiGet<AdvanceResponse[]>(`/save-games/${saveGameId}/news`, token)
+}
+
 export function getStandings(
   saveGameId: string,
   competitionId: string,

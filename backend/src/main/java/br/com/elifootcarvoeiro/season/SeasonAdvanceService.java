@@ -16,6 +16,7 @@ import br.com.elifootcarvoeiro.transfer.TransferDirection;
 import br.com.elifootcarvoeiro.transfer.TransferOfferRepository;
 import br.com.elifootcarvoeiro.transfer.TransferOfferStatus;
 import br.com.elifootcarvoeiro.transfer.TransferService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +59,8 @@ public class SeasonAdvanceService {
     private final FinanceService financeService;
     private final TransferService transferService;
     private final TransferOfferRepository transferOfferRepository;
+    private final NewsItemRepository newsItemRepository;
+    private final ObjectMapper objectMapper;
 
     public SeasonAdvanceService(SaveGameService saveGameService,
                                 SaveGameRepository saveGameRepository,
@@ -67,7 +70,9 @@ public class SeasonAdvanceService {
                                 FixtureSimulator fixtureSimulator,
                                 FinanceService financeService,
                                 TransferService transferService,
-                                TransferOfferRepository transferOfferRepository) {
+                                TransferOfferRepository transferOfferRepository,
+                                NewsItemRepository newsItemRepository,
+                                ObjectMapper objectMapper) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.seasonEventRepository = seasonEventRepository;
@@ -77,6 +82,8 @@ public class SeasonAdvanceService {
         this.financeService = financeService;
         this.transferService = transferService;
         this.transferOfferRepository = transferOfferRepository;
+        this.newsItemRepository = newsItemRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
@@ -113,6 +120,10 @@ public class SeasonAdvanceService {
         event.markProcessed();
         seasonEventRepository.save(event);
         saveGameRepository.save(save);
+
+        // Persist the advance outcome as a news item so the feed survives reloads.
+        persistNewsItem(saveGameId, event.getEventDate(), response);
+
         return response;
     }
 
@@ -172,6 +183,17 @@ public class SeasonAdvanceService {
                         List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED)).stream()
                 .filter(o -> o.getDirection() == TransferDirection.INCOMING)
                 .count();
+    }
+
+    /** Serialize the response and write a news_item row (seq = count + 1). */
+    private void persistNewsItem(UUID saveGameId, LocalDate eventDate, AdvanceResponse response) {
+        try {
+            String payload = objectMapper.writeValueAsString(response);
+            int seq = newsItemRepository.countBySaveGameId(saveGameId) + 1;
+            newsItemRepository.save(NewsItem.create(saveGameId, seq, eventDate, response.type(), payload));
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to serialize news item", e);
+        }
     }
 
     /** True when no other unprocessed MATCH event remains besides the one just popped. */

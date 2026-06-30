@@ -9,6 +9,7 @@ import { SeasonHistoryPage } from './features/season/SeasonHistoryPage'
 import { FinancesPage } from './features/finance/FinancesPage'
 import { TransferMarketPage } from './features/transfer/TransferMarketPage'
 import { FreeAgentsPage } from './features/contract/FreeAgentsPage'
+import { NewsPage } from './features/news/NewsPage'
 import { Layout } from './components/Layout'
 import { useAuth } from './auth/AuthContext'
 import type { ReactNode } from 'react'
@@ -85,6 +86,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <FreeAgentsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/news"
+        element={
+          <ProtectedRoute>
+            <NewsPage />
           </ProtectedRoute>
         }
       />

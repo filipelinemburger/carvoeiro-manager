@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { Layout } from './Layout'
 import { AuthProvider } from '../auth/AuthContext'
 import { getSaveGame, advanceRound } from '../api/career'
@@ -59,6 +59,12 @@ function seedAuth(userId = 'U1', saveGameId?: string) {
   }
 }
 
+// Renders the current location so tests can assert navigation (e.g. the Avançar redirect).
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location">{location.pathname + location.search}</div>
+}
+
 function renderLayout(initialPath = '/dashboard') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -67,6 +73,7 @@ function renderLayout(initialPath = '/dashboard') {
         <AuthProvider>
           <Layout>
             <div>Page content</div>
+            <LocationProbe />
           </Layout>
         </AuthProvider>
       </MemoryRouter>
@@ -118,6 +125,7 @@ describe('Layout shell', () => {
     expect(screen.getByRole('link', { name: /mercado/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /livres/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /histórico/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /news/i })).toBeInTheDocument()
   })
 
   it('shows Avançar button when save game exists', async () => {
@@ -156,7 +164,7 @@ describe('Layout shell', () => {
     expect(localStorage.getItem('elifoot_token')).toBeNull()
   })
 
-  it('clicking Avançar calls advanceRound and opens the timeline modal', async () => {
+  it('clicking Avançar calls advanceRound and redirects to the News tab', async () => {
     const user = userEvent.setup()
     seedAuth('U1', 'sg-1')
     renderLayout('/dashboard')
@@ -168,32 +176,11 @@ describe('Layout shell', () => {
     await user.click(avancarBtn)
     expect(advanceRound).toHaveBeenCalledWith('sg-1', 'test-token')
 
+    // The advance outcome is persisted as a news item; the user is sent to /news.
     await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('location')).toHaveTextContent('/news?saveGameId=sg-1')
     })
-  })
-
-  it('timeline modal is dismissed via the Fechar button', async () => {
-    seedAuth('U1', 'sg-1')
-    renderLayout('/dashboard')
-
-    await waitFor(() => {
-      const btn = screen.queryByRole('button', { name: /^avançar$/i })
-      expect(btn).toBeInTheDocument()
-      expect(btn).not.toBeDisabled()
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: /^avançar$/i }))
-
-    await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeInTheDocument()
-    })
-
-    // Click the bottom "Fechar" button (not the X icon button)
-    fireEvent.click(screen.getByRole('button', { name: /^fechar$/i }))
-
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    })
+    // No modal dialog any more — the timeline now lives on the News page.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

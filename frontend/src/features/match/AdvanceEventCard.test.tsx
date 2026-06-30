@@ -1,7 +1,7 @@
-import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import { describe, it, expect } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
-import { AdvanceTimeline } from './AdvanceTimeline'
+import { AdvanceEventCard } from './AdvanceEventCard'
 import type { AdvanceResponse } from '../../api/types'
 
 const FINANCE = {
@@ -60,35 +60,34 @@ const FINISHED_RESULT: AdvanceResponse = {
   seasonFinished: true,
 }
 
-function renderTimeline(result: AdvanceResponse, onClose = vi.fn()) {
+function renderCard(result: AdvanceResponse) {
   return render(
     <MemoryRouter>
-      <AdvanceTimeline
+      <AdvanceEventCard
         result={result}
         saveGameId="sg-1"
         competitionId="comp-1"
         managedClubId="club-1"
-        onClose={onClose}
       />
     </MemoryRouter>,
   )
 }
 
-describe('AdvanceTimeline', () => {
+describe('AdvanceEventCard', () => {
   describe('MATCH type', () => {
     it('renders the formatted date', () => {
-      renderTimeline(MATCH_RESULT)
+      renderCard(MATCH_RESULT)
       // Date rendered in pt-BR locale
       expect(screen.getByText(/15\/03\/2026/)).toBeInTheDocument()
     })
 
     it('renders competition name and round number (1-based)', () => {
-      renderTimeline(MATCH_RESULT)
+      renderCard(MATCH_RESULT)
       expect(screen.getByText(/Campeonato Catarinense.*Rodada 5/)).toBeInTheDocument()
     })
 
     it('renders fixture nodes with scores', () => {
-      renderTimeline(MATCH_RESULT)
+      renderCard(MATCH_RESULT)
       expect(screen.getByText(/Criciúma/)).toBeInTheDocument()
       expect(screen.getByText(/Figueirense/)).toBeInTheDocument()
       expect(screen.getByText(/Avaí/)).toBeInTheDocument()
@@ -102,7 +101,7 @@ describe('AdvanceTimeline', () => {
           { fixtureId: 'fx-mine', homeClubId: 'club-1', homeClubName: 'Criciúma EC', homeGoals: 3, awayClubId: 'cZ', awayClubName: 'Rival', awayGoals: 0 },
         ],
       }
-      renderTimeline(result) // renderTimeline uses managedClubId="club-1"
+      renderCard(result) // renderCard uses managedClubId="club-1"
       const mine = screen.getByText(/Criciúma EC/)
       const other = screen.getByText(/Outro Clube/)
       // The managed club's match is ordered before the other in the DOM, even though
@@ -113,19 +112,19 @@ describe('AdvanceTimeline', () => {
     })
 
     it('renders booking section with card type', () => {
-      renderTimeline(MATCH_RESULT)
+      renderCard(MATCH_RESULT)
       expect(screen.getByText(/Cartões/)).toBeInTheDocument()
       expect(screen.getByText(/Bruto Um — Vermelho/)).toBeInTheDocument()
     })
 
     it('renders suspension section', () => {
-      renderTimeline(MATCH_RESULT)
+      renderCard(MATCH_RESULT)
       expect(screen.getByText(/Suspensões/)).toBeInTheDocument()
       expect(screen.getByText(/Bruto Um — 1 jogo\(s\)/)).toBeInTheDocument()
     })
 
     it('does not render injuries section when newInjuries is empty', () => {
-      renderTimeline(MATCH_RESULT)
+      renderCard(MATCH_RESULT)
       expect(screen.queryByText(/Lesões/)).not.toBeInTheDocument()
     })
 
@@ -134,13 +133,13 @@ describe('AdvanceTimeline', () => {
         ...MATCH_RESULT,
         newInjuries: [{ playerId: 'p2', playerName: 'Coxa Fraca', matches: 2 }],
       }
-      renderTimeline(withInjuries)
+      renderCard(withInjuries)
       expect(screen.getByText(/Lesões/)).toBeInTheDocument()
       expect(screen.getByText(/Coxa Fraca — 2 jogo\(s\)/)).toBeInTheDocument()
     })
 
     it('renders finance section with gate, match cost, result and balance', () => {
-      renderTimeline(MATCH_RESULT)
+      renderCard(MATCH_RESULT)
       expect(screen.getByText(/Finanças/)).toBeInTheDocument()
       // Per-match: gate and match cost are shown
       expect(screen.getByText(/Bilheteria/)).toBeInTheDocument()
@@ -153,20 +152,20 @@ describe('AdvanceTimeline', () => {
     })
 
     it('does not show season summary link when not finished', () => {
-      renderTimeline(MATCH_RESULT)
+      renderCard(MATCH_RESULT)
       expect(screen.queryByText(/resumo da temporada/i)).not.toBeInTheDocument()
     })
 
     it('shows season summary CTA when season is finished', () => {
       const finished = { ...MATCH_RESULT, seasonFinished: true }
-      renderTimeline(finished)
+      renderCard(finished)
       expect(screen.getByRole('button', { name: /resumo da temporada/i })).toBeInTheDocument()
     })
   })
 
   describe('TRANSFER type', () => {
     it('renders bid count', () => {
-      renderTimeline(TRANSFER_RESULT)
+      renderCard(TRANSFER_RESULT)
       expect(screen.getByText(/proposta\(s\) recebida\(s\)/)).toBeInTheDocument()
       // The strong element with the count
       const countEl = screen.getByText('3')
@@ -174,37 +173,20 @@ describe('AdvanceTimeline', () => {
     })
 
     it('renders a link to transfers page', () => {
-      renderTimeline(TRANSFER_RESULT)
+      renderCard(TRANSFER_RESULT)
       expect(screen.getByRole('button', { name: /ver propostas/i })).toBeInTheDocument()
     })
   })
 
   describe('FINISHED type', () => {
     it('renders temporada encerrada message', () => {
-      renderTimeline(FINISHED_RESULT)
+      renderCard(FINISHED_RESULT)
       expect(screen.getAllByText(/temporada encerrada/i).length).toBeGreaterThan(0)
     })
 
     it('renders season summary CTA', () => {
-      renderTimeline(FINISHED_RESULT)
+      renderCard(FINISHED_RESULT)
       expect(screen.getByRole('button', { name: /resumo da temporada/i })).toBeInTheDocument()
-    })
-  })
-
-  describe('dismiss', () => {
-    it('calls onClose when Fechar button is clicked', () => {
-      const onClose = vi.fn()
-      renderTimeline(MATCH_RESULT, onClose)
-      // The bottom "Fechar" button (text content)
-      fireEvent.click(screen.getByRole('button', { name: /^fechar$/i }))
-      expect(onClose).toHaveBeenCalledTimes(1)
-    })
-
-    it('calls onClose when the X (close) button is clicked', () => {
-      const onClose = vi.fn()
-      renderTimeline(MATCH_RESULT, onClose)
-      fireEvent.click(screen.getByRole('button', { name: /fechar modal/i }))
-      expect(onClose).toHaveBeenCalled()
     })
   })
 })

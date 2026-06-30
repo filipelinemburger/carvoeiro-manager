@@ -3,7 +3,6 @@ import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
 import { advanceRound, getSaveGame } from '../api/career'
-import { AdvanceTimeline } from '../features/match/AdvanceTimeline'
 import type { AdvanceResponse, SaveGameResponse } from '../api/types'
 
 interface LayoutProps {
@@ -33,7 +32,6 @@ export function Layout({ children }: LayoutProps) {
     staleTime: 30_000,
   })
 
-  const [timelineResult, setTimelineResult] = useState<AdvanceResponse | null>(null)
   const [gearOpen, setGearOpen] = useState(false)
   const gearRef = useRef<HTMLDivElement>(null)
 
@@ -51,13 +49,15 @@ export function Layout({ children }: LayoutProps) {
 
   const advanceMutation = useMutation<AdvanceResponse>({
     mutationFn: () => advanceRound(saveGameId!, token ?? ''),
-    onSuccess: (data) => {
-      setTimelineResult(data)
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['saveGame', saveGameId] })
+      void queryClient.invalidateQueries({ queryKey: ['news', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['standings'] })
       void queryClient.invalidateQueries({ queryKey: ['finances'] })
       void queryClient.invalidateQueries({ queryKey: ['offers'] })
       void queryClient.invalidateQueries({ queryKey: ['squad'] })
+      // The advance outcome is persisted as a news item; show it on the News tab.
+      void navigate(`/news?saveGameId=${saveGameId}`)
     },
   })
 
@@ -155,6 +155,13 @@ export function Layout({ children }: LayoutProps) {
                   Histórico
                 </NavLink>
 
+                <NavLink
+                  to={`/news?saveGameId=${sgId}`}
+                  className={({ isActive }) => `cec-nav-link${isActive ? ' active' : ''}`}
+                >
+                  News
+                </NavLink>
+
                 <button
                   className="cec-btn-primary"
                   disabled={advanceMutation.isPending || seasonFinished || !sgId}
@@ -238,17 +245,6 @@ export function Layout({ children }: LayoutProps) {
         >
           Erro ao avançar.
         </div>
-      )}
-
-      {/* Timeline modal */}
-      {timelineResult && (
-        <AdvanceTimeline
-          result={timelineResult}
-          saveGameId={sgId ?? ''}
-          competitionId={competitionId ?? ''}
-          managedClubId={managedClubId ?? ''}
-          onClose={() => setTimelineResult(null)}
-        />
       )}
     </>
   )
