@@ -3,16 +3,16 @@ services:
     image: postgres:16
     container_name: carvoeiro-manager-db
     environment:
-      POSTGRES_DB: carvoeiro_manager
-      POSTGRES_USER: carvoeiro_manager
-      POSTGRES_PASSWORD: carvoeiro_manager
+      POSTGRES_DB: carvoeiro-manager
+      POSTGRES_USER: carvoeiro-manager
+      POSTGRES_PASSWORD: carvoeiro-manager
     ports:
       # Host port 5435 -> container 5432, to avoid clashing with other local Postgres containers.
       - "5435:5432"
     volumes:
       - carvoeiro-manager-pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U carvoeiro_manager"]
+      test: ["CMD-SHELL", "pg_isready -U carvoeiro-manager"]
       interval: 5s
       timeout: 3s
       retries: 10

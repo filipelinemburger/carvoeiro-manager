@@ -2,9 +2,9 @@ spring:
   application:
     name: carvoeiro-manager
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5435/carvoeiro_manager}
-    username: ${DB_USER:carvoeiro_manager}
-    password: ${DB_PASSWORD:carvoeiro_manager}
+    url: ${DB_URL:jdbc:postgresql://localhost:5435/carvoeiro-manager}
+    username: ${DB_USER:carvoeiro-manager}
+    password: ${DB_PASSWORD:carvoeiro-manager}
   jpa:
     hibernate:
       ddl-auto: validate
