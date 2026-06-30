@@ -46,7 +46,7 @@ const ADVANCE_RESPONSE: AdvanceResponse = {
   bookings: [],
   newSuspensions: [],
   newInjuries: [],
-  finance: { gate: 500_000, sponsorship: 100_000, wages: 200_000, upkeep: 50_000, prize: 0, net: 350_000, balance: 1_000_000 },
+  finance: { gate: 500_000, matchCost: 40_000, sponsorship: 0, wages: 0, upkeep: 0, prize: 0, net: 460_000, balance: 1_000_000 },
   bidsReceived: 0,
   seasonFinished: false,
 }

@@ -109,9 +109,12 @@ class SeasonAdvanceServiceIT {
         assertThat(match.type()).isEqualTo("MATCH");
         assertThat(match.round()).isNotNull();
         assertThat(match.finance()).isNotNull();
+        // New model: per-match net = gate - matchCost (sponsorship/wages/upkeep are zero per match)
+        assertThat(match.finance().sponsorship()).isEqualByComparingTo(java.math.BigDecimal.ZERO);
+        assertThat(match.finance().wages()).isEqualByComparingTo(java.math.BigDecimal.ZERO);
+        assertThat(match.finance().upkeep()).isEqualByComparingTo(java.math.BigDecimal.ZERO);
         assertThat(match.finance().net()).isEqualByComparingTo(
-                match.finance().gate().add(match.finance().sponsorship())
-                        .subtract(match.finance().wages()).subtract(match.finance().upkeep()));
+                match.finance().gate().subtract(match.finance().matchCost()));
         assertThat(match.seasonFinished()).isFalse();
 
         // The simulated round's fixtures are played with goals set

@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +32,14 @@ import java.util.stream.Collectors;
  * Runs club finances each round and at season end, and serves the managed club's
  * finances to the API. Deterministic (delegates all amounts to FinanceCalculator).
  * Itemized ledger rows are written ONLY for the managed club.
+ *
+ * <h3>New monthly model (as of V10)</h3>
+ * <ul>
+ *   <li><b>Per match</b> (processMatchday): gate income (home clubs) + matchCost (every playing club).</li>
+ *   <li><b>Per month</b> (processMonth): wages, sponsorship, stadium upkeep — charged once per in-game
+ *       month for ALL clubs. Called from SeasonAdvanceService when the event date enters a new month.</li>
+ *   <li><b>Season end</b> (processSeasonEnd): prize money, unchanged.</li>
+ * </ul>
  */
 @Service
 public class FinanceService {
@@ -67,14 +76,20 @@ public class FinanceService {
     }
 
     /**
-     * Processes finances for a single matchday within a specific competition.
-     * Sponsorship, wages, and upkeep apply only to the competition's member clubs.
-     * Gate income applies only to the home clubs in the provided matchday fixtures.
-     * Ledger rows are written only when the managed club is among the processed members.
+     * Processes per-match finances for a single matchday within a specific competition.
+     * Charges ONLY:
+     * <ul>
+     *   <li>Gate income — home clubs in the provided fixtures.</li>
+     *   <li>Match cost — every club that played in a fixture (home or away).</li>
+     * </ul>
+     * Sponsorship, wages, and upkeep are NOT charged here (they are monthly).
+     * Ledger rows (GATE, MATCH_COST) are written only when the managed club participated.
+     *
+     * @param matchDate the in-game date of the matchday (stamped on ledger rows)
      */
     @Transactional
     public FinanceRoundResponse processMatchday(UUID saveGameId, UUID competitionId,
-                                                List<Fixture> matchdayFixtures) {
+                                                List<Fixture> matchdayFixtures, LocalDate matchDate) {
         SaveGame saveGame = saveGameRepository.findById(saveGameId).orElseThrow();
         final UUID managedClubId = saveGame.getManagedClubId();
         final int seasonYear = saveGame.getSeasonYear();
@@ -86,18 +101,22 @@ public class FinanceService {
 
         Map<UUID, Club> clubById = clubRepository.findBySaveGameId(saveGameId).stream()
                 .collect(Collectors.toMap(Club::getId, c -> c));
-        Map<UUID, BigDecimal> wageBillByClub = wageBills(saveGameId);
 
         Set<UUID> homeClubs = matchdayFixtures.stream()
                 .map(Fixture::getHomeClubId)
                 .collect(Collectors.toCollection(HashSet::new));
 
+        // All clubs that played in any fixture this matchday (home or away).
+        Set<UUID> playingClubs = new HashSet<>();
+        for (Fixture f : matchdayFixtures) {
+            playingClubs.add(f.getHomeClubId());
+            playingClubs.add(f.getAwayClubId());
+        }
+
         int round = matchdayFixtures.isEmpty() ? 0 : matchdayFixtures.get(0).getRound();
 
         BigDecimal mGate = BigDecimal.ZERO;
-        BigDecimal mSpon = BigDecimal.ZERO;
-        BigDecimal mWages = BigDecimal.ZERO;
-        BigDecimal mUpkeep = BigDecimal.ZERO;
+        BigDecimal mMatchCost = BigDecimal.ZERO;
         BigDecimal mBalance = BigDecimal.ZERO;
         boolean managedIsProcessed = false;
 
@@ -117,31 +136,27 @@ public class FinanceService {
                 gate = financeCalculator.gateIncome(club.getReputation(), awayRep, club.getStadiumCapacity());
             }
 
-            BigDecimal sponsorship = club.getSponsorshipPerRound();
-            BigDecimal wages = wageBillByClub.getOrDefault(clubId, BigDecimal.ZERO);
-            BigDecimal upkeep = club.getStadiumUpkeepPerRound();
-            BigDecimal net = gate.add(sponsorship).subtract(wages).subtract(upkeep);
+            BigDecimal matchCost = playingClubs.contains(clubId)
+                    ? financeCalculator.matchCost(club.getStadiumCapacity())
+                    : BigDecimal.ZERO;
+
+            BigDecimal net = gate.subtract(matchCost);
             club.adjustBalance(net);
             clubRepository.save(club);
 
             if (clubId.equals(managedClubId)) {
                 managedIsProcessed = true;
                 mGate = gate;
-                mSpon = sponsorship;
-                mWages = wages;
-                mUpkeep = upkeep;
+                mMatchCost = matchCost;
                 mBalance = club.getBalance();
-                // Ledger rows use the matchday's round, derived from the fixtures.
                 if (gate.signum() > 0) {
                     record(saveGameId, managedClubId, seasonYear, round,
-                            FinanceTransactionType.GATE, gate, "Renda de bilheteria");
+                            FinanceTransactionType.GATE, gate, "Renda de bilheteria", matchDate);
                 }
-                record(saveGameId, managedClubId, seasonYear, round,
-                        FinanceTransactionType.SPONSOR, sponsorship, "Patrocínio");
-                record(saveGameId, managedClubId, seasonYear, round,
-                        FinanceTransactionType.WAGES, wages.negate(), "Salários");
-                record(saveGameId, managedClubId, seasonYear, round,
-                        FinanceTransactionType.UPKEEP, upkeep.negate(), "Manutenção do estádio");
+                if (matchCost.signum() > 0) {
+                    record(saveGameId, managedClubId, seasonYear, round,
+                            FinanceTransactionType.MATCH_COST, matchCost.negate(), "Custo da partida", matchDate);
+                }
             }
         }
 
@@ -150,16 +165,57 @@ public class FinanceService {
             mBalance = managed != null ? managed.getBalance() : BigDecimal.ZERO;
         }
 
-        BigDecimal net = mGate.add(mSpon).subtract(mWages).subtract(mUpkeep);
-        return new FinanceRoundResponse(mGate, mSpon, mWages, mUpkeep, BigDecimal.ZERO, net, mBalance);
+        BigDecimal net = mGate.subtract(mMatchCost);
+        // Sponsorship, wages, upkeep are zero per-match in the new model.
+        return new FinanceRoundResponse(mGate, mMatchCost, BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO, net, mBalance);
+    }
+
+    /**
+     * Charges monthly costs (wages, sponsorship, stadium upkeep) for EVERY club in the save.
+     * Called once per in-game month on first entry into that month during advance.
+     * Ledger rows are written only for the managed club.
+     *
+     * @param monthDate the in-game date that triggered the month boundary (stamped on ledger rows)
+     */
+    @Transactional
+    public void processMonth(UUID saveGameId, LocalDate monthDate) {
+        SaveGame saveGame = saveGameRepository.findById(saveGameId).orElseThrow();
+        final UUID managedClubId = saveGame.getManagedClubId();
+        final int seasonYear = saveGame.getSeasonYear();
+        final int round = saveGame.getCurrentRound();
+
+        List<Club> clubs = clubRepository.findBySaveGameId(saveGameId);
+        Map<UUID, BigDecimal> wageBillByClub = monthlyWageBills(saveGameId);
+
+        for (Club club : clubs) {
+            BigDecimal wages = wageBillByClub.getOrDefault(club.getId(), BigDecimal.ZERO);
+            BigDecimal sponsorship = financeCalculator.monthlySponsorship(club.getReputation());
+            BigDecimal upkeep = financeCalculator.monthlyUpkeep(club.getStadiumCapacity());
+
+            BigDecimal net = sponsorship.subtract(wages).subtract(upkeep);
+            club.adjustBalance(net);
+            clubRepository.save(club);
+
+            if (club.getId().equals(managedClubId)) {
+                record(saveGameId, managedClubId, seasonYear, round,
+                        FinanceTransactionType.SPONSOR, sponsorship, "Patrocínio mensal", monthDate);
+                record(saveGameId, managedClubId, seasonYear, round,
+                        FinanceTransactionType.WAGES, wages.negate(), "Salários mensais", monthDate);
+                record(saveGameId, managedClubId, seasonYear, round,
+                        FinanceTransactionType.UPKEEP, upkeep.negate(), "Manutenção mensal do estádio", monthDate);
+            }
+        }
     }
 
     /**
      * Distributes prize money based on final standings for a specific competition.
      * Returns the managed club's prize (ZERO if managed club is not in this competition).
+     *
+     * @param date the in-game date at which the season ended (stamped on the PRIZE row)
      */
     @Transactional
-    public BigDecimal processSeasonEnd(UUID saveGameId, UUID competitionId) {
+    public BigDecimal processSeasonEnd(UUID saveGameId, UUID competitionId, LocalDate date) {
         SaveGame saveGame = saveGameRepository.findById(saveGameId).orElseThrow();
         final UUID managedClubId = saveGame.getManagedClubId();
         final int seasonYear = saveGame.getSeasonYear();
@@ -188,7 +244,7 @@ public class FinanceService {
                 if (club.getId().equals(managedClubId)) {
                     managedPrize = prize;
                     record(saveGameId, managedClubId, seasonYear, competition.getTotalRounds(),
-                            FinanceTransactionType.PRIZE, prize, "Premiação - " + position + "º lugar");
+                            FinanceTransactionType.PRIZE, prize, "Premiação - " + position + "º lugar", date);
                 }
             }
             position++;
@@ -205,21 +261,27 @@ public class FinanceService {
         List<FinanceTransactionResponse> transactions = financeTransactionRepository
                 .findBySaveGameIdAndClubIdOrderByRoundDescCreatedAtDesc(saveGameId, clubId).stream()
                 .map(t -> new FinanceTransactionResponse(t.getSeasonYear(), t.getRound(),
-                        t.getType().name(), t.getAmount(), t.getDescription()))
+                        t.getType().name(), t.getAmount(), t.getDescription(),
+                        t.getTxDate() != null ? t.getTxDate().toString() : null))
                 .toList();
         return new FinancesResponse(club.getBalance(), transactions);
     }
 
-    private Map<UUID, BigDecimal> wageBills(UUID saveGameId) {
+    // ---- Private helpers ----
+
+    private Map<UUID, BigDecimal> monthlyWageBills(UUID saveGameId) {
         return playerRepository.findBySaveGameId(saveGameId).stream()
                 .filter(p -> p.getClubId() != null)
                 .collect(Collectors.groupingBy(Player::getClubId,
-                        Collectors.reducing(BigDecimal.ZERO, Player::getWage, BigDecimal::add)));
+                        Collectors.reducing(BigDecimal.ZERO,
+                                p -> financeCalculator.monthlyWage(p.getOverall(), p.getAge()),
+                                BigDecimal::add)));
     }
 
     private void record(UUID saveGameId, UUID clubId, int seasonYear, int round,
-                        FinanceTransactionType type, BigDecimal amount, String description) {
+                        FinanceTransactionType type, BigDecimal amount, String description,
+                        LocalDate txDate) {
         financeTransactionRepository.save(FinanceTransaction.create(
-                saveGameId, clubId, seasonYear, round, type, amount, description));
+                saveGameId, clubId, seasonYear, round, type, amount, description, txDate));
     }
 }

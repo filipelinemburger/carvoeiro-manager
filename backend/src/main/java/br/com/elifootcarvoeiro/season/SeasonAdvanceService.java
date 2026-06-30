@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,17 +31,20 @@ import java.util.UUID;
  * to it, and processes it:
  * <ul>
  *   <li>{@code MATCH} — simulate the round's fixtures via {@link FixtureSimulator}, charge
- *       the matchday finances, and award the season-end prize when no MATCH event remains
- *       (which also flips the save to {@code FINISHED}).</li>
+ *       the matchday finances (gate + matchCost), and award the season-end prize when no
+ *       MATCH event remains (which also flips the save to {@code FINISHED}).</li>
  *   <li>{@code TRANSFER} — generate AI incoming bids for the date (window-gated inside
  *       {@link TransferService#generateIncomingOffers}).</li>
  *   <li>{@code FINISHED} — returned when no calendar entries remain and the save is flipped
  *       to {@code FINISHED} (no active event guard already handled the previous last match).</li>
  * </ul>
- * Replaces the old round-based {@code RoundSimulationService}. Match determinism is
- * unchanged (the seed is keyed off {@code fixture.getRound()}); for the single
- * Catarinense competition every club is a member, so the per-matchday finance is
- * equivalent to the old per-round path.
+ *
+ * <h3>Monthly finance</h3>
+ * Before processing each event, if the event's calendar month is later than
+ * {@code save.lastFinanceMonth} (a YYYYMM int), {@link FinanceService#processMonth} is
+ * called and {@code lastFinanceMonth} is updated. This guarantees wages, sponsorship, and
+ * stadium upkeep are charged exactly once per in-game month regardless of how many events
+ * fall within that month or across two interleaved competitions.
  */
 @Service
 public class SeasonAdvanceService {
@@ -92,7 +96,15 @@ public class SeasonAdvanceService {
                     List.of(), List.of(), List.of(), List.of(), null, 0, true);
         }
 
-        save.setCurrentDate(event.getEventDate());
+        LocalDate eventDate = event.getEventDate();
+        save.setCurrentDate(eventDate);
+
+        // Monthly finance: charge wages/sponsorship/upkeep once on first entry to each month.
+        int eventMonth = eventDate.getYear() * 100 + eventDate.getMonthValue();
+        if (eventMonth > save.getLastFinanceMonth()) {
+            financeService.processMonth(saveGameId, eventDate);
+            save.setLastFinanceMonth(eventMonth);
+        }
 
         AdvanceResponse response = switch (event.getType()) {
             case MATCH -> processMatch(save, event);
@@ -109,6 +121,7 @@ public class SeasonAdvanceService {
         final UUID saveGameId = save.getId();
         final UUID competitionId = event.getCompetitionId();
         final int round = event.getRound();
+        final LocalDate eventDate = event.getEventDate();
 
         String competitionName = competitionRepository.findById(competitionId)
                 .map(c -> c.getName())
@@ -123,22 +136,25 @@ public class SeasonAdvanceService {
         save.setCurrentRound(round + 1);
 
         FinanceRoundResponse matchdayFinance =
-                financeService.processMatchday(saveGameId, competitionId, fixtures);
+                financeService.processMatchday(saveGameId, competitionId, fixtures, eventDate);
 
         // The season finishes when this was the last unprocessed MATCH event.
         boolean seasonFinished = noMoreMatchEvents(saveGameId, event.getId());
         BigDecimal prize = BigDecimal.ZERO;
         if (seasonFinished) {
             save.setStatus(SaveGameStatus.FINISHED);
-            prize = financeService.processSeasonEnd(saveGameId, competitionId);
+            prize = financeService.processSeasonEnd(saveGameId, competitionId, eventDate);
         }
 
+        // AdvanceResponse.finance is the per-match response (gate + matchCost + optional prize).
+        // Monthly costs are NOT included — they appear on the Finances page grouped by month.
         FinanceRoundResponse finance = new FinanceRoundResponse(
-                matchdayFinance.gate(), matchdayFinance.sponsorship(), matchdayFinance.wages(),
-                matchdayFinance.upkeep(), prize, matchdayFinance.net(),
-                matchdayFinance.balance().add(prize));
+                matchdayFinance.gate(), matchdayFinance.matchCost(),
+                matchdayFinance.sponsorship(), matchdayFinance.wages(),
+                matchdayFinance.upkeep(), prize,
+                matchdayFinance.net(), matchdayFinance.balance().add(prize));
 
-        return new AdvanceResponse("MATCH", event.getEventDate().toString(), competitionName, round,
+        return new AdvanceResponse("MATCH", eventDate.toString(), competitionName, round,
                 List.copyOf(outcome.results()), List.copyOf(outcome.bookings()),
                 List.copyOf(outcome.newSuspensions()), List.copyOf(outcome.newInjuries()),
                 finance, 0, seasonFinished);

@@ -28,18 +28,43 @@ describe('FinancesPage', () => {
     localStorage.setItem('elifoot_user', JSON.stringify({ username: 'u', userId: 'u1' }))
   })
 
-  it('renders the balance and transactions', async () => {
+  it('renders the balance and groups transactions by month', async () => {
     vi.mocked(getFinances).mockResolvedValue({
       balance: 12500000,
       transactions: [
-        { seasonYear: 2026, round: 3, type: 'GATE', amount: 1935000, description: 'Renda de bilheteria' },
-        { seasonYear: 2026, round: 3, type: 'WAGES', amount: -1352000, description: 'Salários' },
+        { seasonYear: 2026, round: 3, type: 'GATE', amount: 1935000, description: 'Renda de bilheteria', txDate: '2026-03-15' },
+        { seasonYear: 2026, round: 3, type: 'MATCH_COST', amount: -76000, description: 'Custo da partida', txDate: '2026-03-15' },
+        { seasonYear: 2026, round: 0, type: 'WAGES', amount: -6336000, description: 'Salários mensais', txDate: '2026-03-01' },
+        { seasonYear: 2026, round: 0, type: 'SPONSOR', amount: 6000000, description: 'Patrocínio mensal', txDate: '2026-03-01' },
       ],
     })
     renderPage()
     await waitFor(() => expect(screen.getByText(/Saldo:/)).toBeInTheDocument())
+    // Type labels are rendered
+    expect(screen.getByText('Bilheteria')).toBeInTheDocument()
+    // "Custo da partida" appears in both type column and description — use getAllByText
+    expect(screen.getAllByText('Custo da partida').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Salários')).toBeInTheDocument()
+    expect(screen.getByText('Patrocínio')).toBeInTheDocument()
+    // Descriptions
     expect(screen.getByText('Renda de bilheteria')).toBeInTheDocument()
-    expect(screen.getByText('Bilheteria')).toBeInTheDocument() // GATE type label cell
+    // The month heading for March 2026 should appear
+    expect(screen.getByText(/março de 2026/i)).toBeInTheDocument()
+  })
+
+  it('groups rows into separate months', async () => {
+    vi.mocked(getFinances).mockResolvedValue({
+      balance: 10000000,
+      transactions: [
+        { seasonYear: 2026, round: 0, type: 'SPONSOR', amount: 6000000, description: 'Patrocínio mensal', txDate: '2026-01-15' },
+        { seasonYear: 2026, round: 0, type: 'SPONSOR', amount: 6000000, description: 'Patrocínio mensal', txDate: '2026-02-01' },
+      ],
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/Saldo:/)).toBeInTheDocument())
+    // Two distinct month headings
+    expect(screen.getByText(/janeiro de 2026/i)).toBeInTheDocument()
+    expect(screen.getByText(/fevereiro de 2026/i)).toBeInTheDocument()
   })
 
   it('shows a warning when the balance is negative', async () => {
@@ -47,5 +72,12 @@ describe('FinancesPage', () => {
     renderPage()
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
     expect(screen.getByRole('alert')).toHaveTextContent(/negativo/i)
+  })
+
+  it('shows empty state when there are no transactions', async () => {
+    vi.mocked(getFinances).mockResolvedValue({ balance: 5000000, transactions: [] })
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/Saldo:/)).toBeInTheDocument())
+    expect(screen.getByText(/Nenhuma transação/i)).toBeInTheDocument()
   })
 })

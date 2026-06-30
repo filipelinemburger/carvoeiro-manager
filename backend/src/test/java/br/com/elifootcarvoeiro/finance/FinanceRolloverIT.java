@@ -2,9 +2,10 @@ package br.com.elifootcarvoeiro.finance;
 
 import br.com.elifootcarvoeiro.auth.User;
 import br.com.elifootcarvoeiro.auth.UserRepository;
+import br.com.elifootcarvoeiro.career.SaveGame;
+import br.com.elifootcarvoeiro.career.SaveGameRepository;
 import br.com.elifootcarvoeiro.career.SaveGameResponse;
 import br.com.elifootcarvoeiro.career.SaveGameService;
-import br.com.elifootcarvoeiro.career.SaveGameRepository;
 import br.com.elifootcarvoeiro.career.SaveGameStatus;
 import br.com.elifootcarvoeiro.club.ClubRepository;
 import br.com.elifootcarvoeiro.season.SeasonAdvanceService;
@@ -67,5 +68,41 @@ class FinanceRolloverIT {
                 .findBySaveGameIdAndClubIdOrderByRoundDescCreatedAtDesc(c.id(), c.clubId())).isEmpty();
         assertThat(clubRepository.findById(c.clubId()).orElseThrow().getBalance())
                 .isEqualByComparingTo(balanceBefore);
+    }
+
+    @Test
+    void rolloverResetsLastFinanceMonthSoNewSeasonChargesMonthlyFresh() {
+        // Given a fully-played season (lastFinanceMonth > 0 after advance)
+        Career c = createCareer();
+        int guard = 0;
+        while (saveGameRepository.findById(c.id()).orElseThrow().getStatus() != SaveGameStatus.FINISHED
+                && guard++ < 500) {
+            seasonAdvanceService.advance(c.id(), c.userId());
+        }
+
+        // Verify lastFinanceMonth was set during advance
+        SaveGame beforeRollover = saveGameRepository.findById(c.id()).orElseThrow();
+        assertThat(beforeRollover.getLastFinanceMonth()).isGreaterThan(0)
+                .as("lastFinanceMonth should be non-zero after advancing through the season");
+
+        // When the season rolls over
+        rolloverService.rollover(c.id(), c.userId());
+
+        // Then lastFinanceMonth is reset to 0
+        SaveGame afterRollover = saveGameRepository.findById(c.id()).orElseThrow();
+        assertThat(afterRollover.getLastFinanceMonth()).isEqualTo(0)
+                .as("lastFinanceMonth must be reset to 0 after rollover so the new season charges fresh");
+
+        // And the new season can accrue monthly charges again (first advance triggers month charge)
+        int ledgerSizeBefore = financeTransactionRepository
+                .findBySaveGameIdAndClubIdOrderByRoundDescCreatedAtDesc(c.id(), c.clubId()).size();
+
+        // Advance once in the new season to trigger the first monthly finance
+        seasonAdvanceService.advance(c.id(), c.userId());
+
+        int ledgerSizeAfter = financeTransactionRepository
+                .findBySaveGameIdAndClubIdOrderByRoundDescCreatedAtDesc(c.id(), c.clubId()).size();
+        assertThat(ledgerSizeAfter).isGreaterThan(ledgerSizeBefore)
+                .as("new season's first advance should produce monthly finance rows");
     }
 }

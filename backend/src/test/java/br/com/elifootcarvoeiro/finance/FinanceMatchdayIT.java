@@ -40,6 +40,8 @@ class FinanceMatchdayIT {
     @Autowired FinanceService financeService;
     @Autowired FinanceTransactionRepository financeTransactionRepository;
 
+    private static final LocalDate MATCH_DATE = LocalDate.of(2026, 1, 15);
+
     @Test
     void processMatchdayChargesOnlyTheCompetitionsMembers() {
         User u = User.create("fin_" + UUID.randomUUID(), "h");
@@ -58,10 +60,10 @@ class FinanceMatchdayIT {
         BigDecimal a2Before = a2.getBalance();
         BigDecimal outBefore = outsider.getBalance();
 
-        Fixture fx = Fixture.create(s.getId(), compA.getId(), 0, a1.getId(), a2.getId(), LocalDate.of(2026, 1, 15));
+        Fixture fx = Fixture.create(s.getId(), compA.getId(), 0, a1.getId(), a2.getId(), MATCH_DATE);
         fixtureRepository.save(fx);
 
-        financeService.processMatchday(s.getId(), compA.getId(), List.of(fx));
+        financeService.processMatchday(s.getId(), compA.getId(), List.of(fx), MATCH_DATE);
 
         // Members charged (balances change); outsider untouched.
         assertThat(clubRepository.findById(a1.getId()).orElseThrow().getBalance()).isNotEqualByComparingTo(a1Before);
@@ -70,7 +72,7 @@ class FinanceMatchdayIT {
     }
 
     @Test
-    void processMatchdayWritesManagedClubLedgerRowsWithTheMatchdayRound() {
+    void processMatchdayWritesManagedClubLedgerRowsWithGateAndMatchCostOnly() {
         User u = User.create("fin_" + UUID.randomUUID(), "h");
         userRepository.save(u);
         SaveGame s = SaveGame.create(u.getId(), 2026);
@@ -88,26 +90,106 @@ class FinanceMatchdayIT {
         saveGameRepository.save(s);
 
         int round = 5;
-        Fixture fx = Fixture.create(s.getId(), compA.getId(), round, a1.getId(), a2.getId(), LocalDate.of(2026, 1, 15));
+        Fixture fx = Fixture.create(s.getId(), compA.getId(), round, a1.getId(), a2.getId(), MATCH_DATE);
         fixtureRepository.save(fx);
 
-        FinanceRoundResponse breakdown = financeService.processMatchday(s.getId(), compA.getId(), List.of(fx));
+        FinanceRoundResponse breakdown = financeService.processMatchday(s.getId(), compA.getId(), List.of(fx), MATCH_DATE);
 
-        // Managed-club breakdown is populated (not the empty fallback).
+        // New model: sponsorship, wages, upkeep are ZERO per match
+        assertThat(breakdown.sponsorship()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(breakdown.wages()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(breakdown.upkeep()).isEqualByComparingTo(BigDecimal.ZERO);
+
+        // Gate is populated (managed club is home)
         assertThat(breakdown.gate()).isGreaterThan(BigDecimal.ZERO);
-        assertThat(breakdown.sponsorship()).isEqualByComparingTo(new BigDecimal("480000"));
-        assertThat(breakdown.upkeep()).isEqualByComparingTo(new BigDecimal("80000"));
-        assertThat(breakdown.prize()).isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(breakdown.net()).isEqualByComparingTo(
-                breakdown.gate().add(breakdown.sponsorship()).subtract(breakdown.wages()).subtract(breakdown.upkeep()));
 
-        // Ledger rows are written for the managed club and carry the matchday's round (5), not 0.
+        // matchCost is populated (managed club played)
+        assertThat(breakdown.matchCost()).isGreaterThan(BigDecimal.ZERO);
+
+        // Net = gate - matchCost
+        assertThat(breakdown.net()).isEqualByComparingTo(
+                breakdown.gate().subtract(breakdown.matchCost()));
+
+        // Ledger rows: GATE and MATCH_COST present; no SPONSOR/WAGES/UPKEEP
         List<FinanceTransaction> ledger = financeTransactionRepository
                 .findBySaveGameIdAndClubIdOrderByRoundDescCreatedAtDesc(s.getId(), a1.getId());
         assertThat(ledger).extracting(FinanceTransaction::getType)
-                .contains(FinanceTransactionType.GATE, FinanceTransactionType.SPONSOR,
-                        FinanceTransactionType.WAGES, FinanceTransactionType.UPKEEP);
+                .contains(FinanceTransactionType.GATE, FinanceTransactionType.MATCH_COST);
+        assertThat(ledger).noneMatch(t -> t.getType() == FinanceTransactionType.SPONSOR);
+        assertThat(ledger).noneMatch(t -> t.getType() == FinanceTransactionType.WAGES);
+        assertThat(ledger).noneMatch(t -> t.getType() == FinanceTransactionType.UPKEEP);
+
+        // All rows carry the round and txDate
         assertThat(ledger).allSatisfy(t -> assertThat(t.getRound()).isEqualTo(round));
+        assertThat(ledger).allSatisfy(t -> assertThat(t.getTxDate()).isEqualTo(MATCH_DATE));
+
+        // MATCH_COST ledger amount is negative (debit)
+        assertThat(ledger.stream().filter(t -> t.getType() == FinanceTransactionType.MATCH_COST)
+                .findFirst().orElseThrow().getAmount().signum()).isNegative();
+    }
+
+    @Test
+    void awayClubIsAlsoChargedMatchCost() {
+        // Given the away club is also managed
+        User u = User.create("fin_" + UUID.randomUUID(), "h");
+        userRepository.save(u);
+        SaveGame s = SaveGame.create(u.getId(), 2026);
+        saveGameRepository.save(s);
+
+        Competition compA = Competition.create(s.getId(), "A", "LEAGUE", 2026, 2);
+        competitionRepository.save(compA);
+        Club home = club(s.getId(), "H1");
+        Club away = club(s.getId(), "A1");
+        competitionClubRepository.save(CompetitionClub.create(s.getId(), compA.getId(), home.getId()));
+        competitionClubRepository.save(CompetitionClub.create(s.getId(), compA.getId(), away.getId()));
+
+        // Manage the AWAY club
+        s.setManagedClubId(away.getId());
+        saveGameRepository.save(s);
+
+        Fixture fx = Fixture.create(s.getId(), compA.getId(), 0, home.getId(), away.getId(), MATCH_DATE);
+        fixtureRepository.save(fx);
+
+        FinanceRoundResponse breakdown = financeService.processMatchday(s.getId(), compA.getId(), List.of(fx), MATCH_DATE);
+
+        // Away club has no gate income but is charged matchCost
+        assertThat(breakdown.gate()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(breakdown.matchCost()).isGreaterThan(BigDecimal.ZERO);
+        assertThat(breakdown.net()).isEqualByComparingTo(BigDecimal.ZERO.subtract(breakdown.matchCost()));
+
+        // Ledger has MATCH_COST but no GATE
+        List<FinanceTransaction> ledger = financeTransactionRepository
+                .findBySaveGameIdAndClubIdOrderByRoundDescCreatedAtDesc(s.getId(), away.getId());
+        assertThat(ledger).anyMatch(t -> t.getType() == FinanceTransactionType.MATCH_COST);
+        assertThat(ledger).noneMatch(t -> t.getType() == FinanceTransactionType.GATE);
+    }
+
+    @Test
+    void moneyConservation_processMatchdayDebitsByExactComputedAmount() {
+        // Given the managed club is home
+        User u = User.create("fin_" + UUID.randomUUID(), "h");
+        userRepository.save(u);
+        SaveGame s = SaveGame.create(u.getId(), 2026);
+        saveGameRepository.save(s);
+
+        Competition compA = Competition.create(s.getId(), "A", "LEAGUE", 2026, 2);
+        competitionRepository.save(compA);
+        Club a1 = club(s.getId(), "A1");
+        Club a2 = club(s.getId(), "A2");
+        competitionClubRepository.save(CompetitionClub.create(s.getId(), compA.getId(), a1.getId()));
+        competitionClubRepository.save(CompetitionClub.create(s.getId(), compA.getId(), a2.getId()));
+        s.setManagedClubId(a1.getId());
+        saveGameRepository.save(s);
+
+        BigDecimal balanceBefore = a1.getBalance();
+        Fixture fx = Fixture.create(s.getId(), compA.getId(), 0, a1.getId(), a2.getId(), MATCH_DATE);
+        fixtureRepository.save(fx);
+
+        FinanceRoundResponse r = financeService.processMatchday(s.getId(), compA.getId(), List.of(fx), MATCH_DATE);
+
+        BigDecimal balanceAfter = clubRepository.findById(a1.getId()).orElseThrow().getBalance();
+        // balance changed by exactly net = gate - matchCost
+        assertThat(balanceAfter).isEqualByComparingTo(balanceBefore.add(r.net()));
     }
 
     private Club club(UUID save, String shortName) {

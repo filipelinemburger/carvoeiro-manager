@@ -7,5 +7,6 @@ public record FinanceTransactionResponse(
         int round,
         String type,
         BigDecimal amount,
-        String description
+        String description,
+        String txDate
 ) {}

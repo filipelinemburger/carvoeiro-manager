@@ -6,11 +6,12 @@ import type { AdvanceResponse } from '../../api/types'
 
 const FINANCE = {
   gate: 1_935_000,
-  sponsorship: 560_000,
-  wages: 1_352_000,
-  upkeep: 172_000,
+  matchCost: 76_000,
+  sponsorship: 0,
+  wages: 0,
+  upkeep: 0,
   prize: 0,
-  net: 971_000,
+  net: 1_859_000,
   balance: 12_500_000,
 }
 
@@ -138,9 +139,16 @@ describe('AdvanceTimeline', () => {
       expect(screen.getByText(/Coxa Fraca — 2 jogo\(s\)/)).toBeInTheDocument()
     })
 
-    it('renders finance section with balance', () => {
+    it('renders finance section with gate, match cost, result and balance', () => {
       renderTimeline(MATCH_RESULT)
       expect(screen.getByText(/Finanças/)).toBeInTheDocument()
+      // Per-match: gate and match cost are shown
+      expect(screen.getByText(/Bilheteria/)).toBeInTheDocument()
+      expect(screen.getByText(/Custo da partida/)).toBeInTheDocument()
+      // Per-match: sponsorship/wages/upkeep are NOT shown (they are monthly now)
+      expect(screen.queryByText(/Patrocínio/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Salários/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Manutenção/)).not.toBeInTheDocument()
       expect(screen.getByText(/Saldo:/)).toBeInTheDocument()
     })
 

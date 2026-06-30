@@ -45,6 +45,14 @@ public class SaveGame {
     @Column(name = "\"current_date\"")
     private LocalDate currentDate;
 
+    /**
+     * YYYYMM key of the last in-game month for which monthly finance costs were charged.
+     * 0 = nothing charged yet this season. Reset to 0 on season rollover so each new season
+     * charges monthly costs fresh.
+     */
+    @Column(name = "last_finance_month", nullable = false)
+    private int lastFinanceMonth = 0;
+
     protected SaveGame() {
         // for JPA
     }
@@ -78,11 +86,15 @@ public class SaveGame {
     public LocalDate getCurrentDate() { return currentDate; }
     public void setCurrentDate(LocalDate currentDate) { this.currentDate = currentDate; }
 
+    public int getLastFinanceMonth() { return lastFinanceMonth; }
+    public void setLastFinanceMonth(int lastFinanceMonth) { this.lastFinanceMonth = lastFinanceMonth; }
+
     /** Rolls this career forward into the next season. */
     public void advanceToNextSeason() {
         this.seasonYear += 1;
         this.currentRound = 0;
         this.currentDate = LocalDate.of(this.seasonYear, 1, 15);
         this.status = SaveGameStatus.IN_PROGRESS;
+        this.lastFinanceMonth = 0; // reset so each new season charges monthly costs fresh
     }
 }

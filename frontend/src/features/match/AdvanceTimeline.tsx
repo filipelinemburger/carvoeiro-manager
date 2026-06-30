@@ -110,12 +110,10 @@ function MatchTimeline({ result, saveGameId, competitionId, managedClubId }: {
       {result.finance && (
         <TimelineNode dot="💰">
           <strong>Finanças</strong>
-          <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1.25rem', listStyle: 'none', padding: 0 }}>
-            <li>Bilheteria: {formatBRL(result.finance.gate)}</li>
-            <li>Patrocínio: {formatBRL(result.finance.sponsorship)}</li>
-            <li>Salários: −{formatBRL(result.finance.wages)}</li>
-            <li>Manutenção: −{formatBRL(result.finance.upkeep)}</li>
-            {result.finance.prize > 0 && <li>Premiação: {formatBRL(result.finance.prize)}</li>}
+          <ul style={{ margin: '0.25rem 0 0', listStyle: 'none', padding: 0 }}>
+            {result.finance.gate > 0 && <li>Bilheteria: +{formatBRL(result.finance.gate)}</li>}
+            {result.finance.matchCost > 0 && <li>Custo da partida: −{formatBRL(result.finance.matchCost)}</li>}
+            {result.finance.prize > 0 && <li>Premiação: +{formatBRL(result.finance.prize)}</li>}
             <li><strong>Resultado:</strong> {formatBRL(result.finance.net + result.finance.prize)}</li>
             <li><strong>Saldo:</strong> {formatBRL(result.finance.balance)}</li>
           </ul>

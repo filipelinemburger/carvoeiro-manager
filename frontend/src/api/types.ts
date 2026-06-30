@@ -130,6 +130,7 @@ export type FixtureResultResponse = {
 
 export type FinanceRoundResponse = {
   gate: number
+  matchCost: number
   sponsorship: number
   wages: number
   upkeep: number
@@ -211,9 +212,10 @@ export type SeasonDetail = {
 export type FinanceTransaction = {
   seasonYear: number
   round: number
-  type: 'GATE' | 'WAGES' | 'SPONSOR' | 'UPKEEP' | 'PRIZE'
+  type: 'GATE' | 'MATCH_COST' | 'WAGES' | 'SPONSOR' | 'UPKEEP' | 'PRIZE' | 'TRANSFER_IN' | 'TRANSFER_OUT'
   amount: number
   description: string
+  txDate?: string | null
 }
 
 export type FinancesResponse = {
