@@ -54,6 +54,7 @@ export type PlayerResponse = {
   form: number
   yellowCards: number
   suspensionRemaining: number
+  injuryMatches: number
   eligible: boolean
   role: PlayerRole | null
   contractYears: number
@@ -137,6 +138,12 @@ export type FinanceRoundResponse = {
   balance: number
 }
 
+export type Injury = {
+  playerId: string
+  playerName: string
+  matches: number
+}
+
 export type AdvanceResponse = {
   type: 'MATCH' | 'TRANSFER' | 'FINISHED'
   date: string | null
@@ -145,6 +152,7 @@ export type AdvanceResponse = {
   results: FixtureResultResponse[]
   bookings: Booking[]
   newSuspensions: Suspension[]
+  newInjuries: Injury[]
   finance: FinanceRoundResponse | null
   bidsReceived: number
   seasonFinished: boolean

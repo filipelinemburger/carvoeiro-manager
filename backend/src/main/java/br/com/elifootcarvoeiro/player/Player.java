@@ -72,6 +72,9 @@ public class Player {
     @Column(name = "suspension_remaining", nullable = false)
     private int suspensionRemaining;
 
+    @Column(name = "injury_matches", nullable = false)
+    private int injuryMatches;
+
     @Column(name = "wage", nullable = false)
     private BigDecimal wage = BigDecimal.ZERO;
 
@@ -145,7 +148,17 @@ public class Player {
         }
     }
 
-    public boolean isEligible() { return this.suspensionRemaining == 0; }
+    public int getInjuryMatches() { return injuryMatches; }
+
+    public void addInjury(int matches) { this.injuryMatches += matches; }
+
+    public void tickInjury() {
+        if (this.injuryMatches > 0) {
+            this.injuryMatches--;
+        }
+    }
+
+    public boolean isEligible() { return this.suspensionRemaining == 0 && this.injuryMatches == 0; }
 
     /** Replaces all six attributes and overall after the season aging curve. */
     public void evolveAttributes(int pace, int finishing, int passing,
@@ -164,6 +177,7 @@ public class Player {
         this.form = 0;
         this.yellowCards = 0;
         this.suspensionRemaining = 0;
+        this.injuryMatches = 0;
     }
 
     public BigDecimal getWage() { return wage; }

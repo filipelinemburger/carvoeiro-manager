@@ -18,6 +18,7 @@ public record PlayerResponse(
         int form,
         int yellowCards,
         int suspensionRemaining,
+        int injuryMatches,
         boolean eligible,
         String role,
         int contractYears,

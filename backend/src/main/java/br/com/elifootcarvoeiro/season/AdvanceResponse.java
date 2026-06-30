@@ -3,6 +3,7 @@ package br.com.elifootcarvoeiro.season;
 import br.com.elifootcarvoeiro.finance.FinanceRoundResponse;
 import br.com.elifootcarvoeiro.match.BookingResponse;
 import br.com.elifootcarvoeiro.match.FixtureResultResponse;
+import br.com.elifootcarvoeiro.match.InjuryResponse;
 import br.com.elifootcarvoeiro.match.SuspensionResponse;
 
 import java.util.List;
@@ -29,6 +30,7 @@ public record AdvanceResponse(
         List<FixtureResultResponse> results,
         List<BookingResponse> bookings,
         List<SuspensionResponse> newSuspensions,
+        List<InjuryResponse> newInjuries,
         FinanceRoundResponse finance,
         int bidsReceived,
         boolean seasonFinished) {

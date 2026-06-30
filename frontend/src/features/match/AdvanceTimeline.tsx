@@ -94,6 +94,19 @@ function MatchTimeline({ result, saveGameId, competitionId, managedClubId }: {
         </TimelineNode>
       )}
 
+      {result.newInjuries.length > 0 && (
+        <TimelineNode dot="🩹">
+          <strong>Lesões</strong>
+          <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1.25rem' }}>
+            {result.newInjuries.map((inj, i) => (
+              <li key={`${inj.playerId}-${i}`}>
+                {inj.playerName} — {inj.matches} jogo(s)
+              </li>
+            ))}
+          </ul>
+        </TimelineNode>
+      )}
+
       {result.finance && (
         <TimelineNode dot="💰">
           <strong>Finanças</strong>

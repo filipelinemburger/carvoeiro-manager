@@ -89,7 +89,7 @@ public class SeasonAdvanceService {
             save.setStatus(SaveGameStatus.FINISHED);
             saveGameRepository.save(save);
             return new AdvanceResponse("FINISHED", null, null, null,
-                    List.of(), List.of(), List.of(), null, 0, true);
+                    List.of(), List.of(), List.of(), List.of(), null, 0, true);
         }
 
         save.setCurrentDate(event.getEventDate());
@@ -140,7 +140,8 @@ public class SeasonAdvanceService {
 
         return new AdvanceResponse("MATCH", event.getEventDate().toString(), competitionName, round,
                 List.copyOf(outcome.results()), List.copyOf(outcome.bookings()),
-                List.copyOf(outcome.newSuspensions()), finance, 0, seasonFinished);
+                List.copyOf(outcome.newSuspensions()), List.copyOf(outcome.newInjuries()),
+                finance, 0, seasonFinished);
     }
 
     private AdvanceResponse processTransfer(SaveGame save, SeasonEvent event) {
@@ -148,7 +149,7 @@ public class SeasonAdvanceService {
         transferService.generateIncomingOffers(save.getId(), event.getEventDate());
         int bidsReceived = Math.max(0, activeIncomingBids(save.getId()) - before);
         return new AdvanceResponse("TRANSFER", event.getEventDate().toString(), null, null,
-                List.of(), List.of(), List.of(), null, bidsReceived, false);
+                List.of(), List.of(), List.of(), List.of(), null, bidsReceived, false);
     }
 
     private int activeIncomingBids(UUID saveGameId) {

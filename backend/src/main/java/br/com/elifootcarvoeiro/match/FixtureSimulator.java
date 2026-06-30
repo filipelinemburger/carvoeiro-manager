@@ -99,6 +99,15 @@ public class FixtureSimulator {
                     new MatchOutcomeApplier.TeamOutcome(sim.awayXi(), sim.awayGoals(), sim.homeGoals(), awayManaged),
                     summary);
 
+            // Roll injuries AFTER match simulation and event attribution, using a separate
+            // RNG so the existing match/event draws are byte-identical.
+            long injurySeed = saveGameId.getMostSignificantBits()
+                    ^ fixture.getId().getMostSignificantBits()
+                    ^ (long) fixture.getRound();
+            Random injuryRng = new Random(injurySeed ^ 0x1A70F1E5L);
+            matchOutcomeApplier.applyInjuries(sim.homeXi(), injuryRng, homeManaged, summary);
+            matchOutcomeApplier.applyInjuries(sim.awayXi(), injuryRng, awayManaged, summary);
+
             sim.homeXi().forEach(p -> { playedIds.add(p.getId()); toPersist.add(p); });
             sim.awayXi().forEach(p -> { playedIds.add(p.getId()); toPersist.add(p); });
         }
@@ -110,7 +119,8 @@ public class FixtureSimulator {
         toPersist.addAll(nonPlayers);
         playerRepository.saveAll(toPersist);
 
-        return new RoundOutcome(List.copyOf(results), summary.bookings(), summary.newSuspensions());
+        return new RoundOutcome(List.copyOf(results), summary.bookings(), summary.newSuspensions(),
+                List.copyOf(summary.newInjuries()));
     }
 
     private FixtureSim simulateFixture(Fixture fixture, UUID saveGameId, UUID managedClubId,

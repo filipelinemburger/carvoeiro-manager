@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 
@@ -27,9 +28,11 @@ public class MatchOutcomeApplier {
     public static final class Summary {
         private final List<BookingResponse> bookings = new ArrayList<>();
         private final List<SuspensionResponse> newSuspensions = new ArrayList<>();
+        private final List<InjuryResponse> newInjuries = new ArrayList<>();
 
         public List<BookingResponse> bookings() { return bookings; }
         public List<SuspensionResponse> newSuspensions() { return newSuspensions; }
+        public List<InjuryResponse> newInjuries() { return newInjuries; }
     }
 
     public void applyFixture(List<AttributedEvent> events, TeamOutcome home, TeamOutcome away, Summary acc) {
@@ -95,6 +98,27 @@ public class MatchOutcomeApplier {
             }
             if (p.getSuspensionRemaining() > 0) {
                 p.decrementSuspension();
+            }
+            if (p.getInjuryMatches() > 0) {
+                p.tickInjury();
+            }
+        }
+    }
+
+    /**
+     * Rolls injuries for the players who played. Uses a separate {@link Random} seeded
+     * off the match seed so the existing match/event RNG is unaffected.
+     * Each player has a ~3% chance of injury (1–3 matches). When {@code managed} is true,
+     * newly injured players are recorded in {@code acc.newInjuries()}.
+     */
+    public void applyInjuries(List<Player> playedXi, Random rng, boolean managed, Summary acc) {
+        for (Player p : playedXi) {
+            if (rng.nextDouble() < 0.03) {
+                int matches = 1 + rng.nextInt(3);
+                p.addInjury(matches);
+                if (managed) {
+                    acc.newInjuries().add(new InjuryResponse(p.getId(), p.getName(), matches));
+                }
             }
         }
     }

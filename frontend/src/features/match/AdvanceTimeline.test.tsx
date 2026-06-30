@@ -25,6 +25,7 @@ const MATCH_RESULT: AdvanceResponse = {
   ],
   bookings: [{ playerId: 'p1', playerName: 'Bruto Um', type: 'RED_CARD' }],
   newSuspensions: [{ playerId: 'p1', playerName: 'Bruto Um', matches: 1 }],
+  newInjuries: [],
   finance: FINANCE,
   bidsReceived: 0,
   seasonFinished: false,
@@ -38,6 +39,7 @@ const TRANSFER_RESULT: AdvanceResponse = {
   results: [],
   bookings: [],
   newSuspensions: [],
+  newInjuries: [],
   finance: null,
   bidsReceived: 3,
   seasonFinished: false,
@@ -51,6 +53,7 @@ const FINISHED_RESULT: AdvanceResponse = {
   results: [],
   bookings: [],
   newSuspensions: [],
+  newInjuries: [],
   finance: null,
   bidsReceived: 0,
   seasonFinished: true,
@@ -118,6 +121,21 @@ describe('AdvanceTimeline', () => {
       renderTimeline(MATCH_RESULT)
       expect(screen.getByText(/Suspensões/)).toBeInTheDocument()
       expect(screen.getByText(/Bruto Um — 1 jogo\(s\)/)).toBeInTheDocument()
+    })
+
+    it('does not render injuries section when newInjuries is empty', () => {
+      renderTimeline(MATCH_RESULT)
+      expect(screen.queryByText(/Lesões/)).not.toBeInTheDocument()
+    })
+
+    it('renders injuries section with player name and match count when injuries present', () => {
+      const withInjuries: AdvanceResponse = {
+        ...MATCH_RESULT,
+        newInjuries: [{ playerId: 'p2', playerName: 'Coxa Fraca', matches: 2 }],
+      }
+      renderTimeline(withInjuries)
+      expect(screen.getByText(/Lesões/)).toBeInTheDocument()
+      expect(screen.getByText(/Coxa Fraca — 2 jogo\(s\)/)).toBeInTheDocument()
     })
 
     it('renders finance section with balance', () => {

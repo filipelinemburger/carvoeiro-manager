@@ -22,7 +22,7 @@ const mockGetLineup = vi.mocked(getLineup)
 const mockSetLineup = vi.mocked(setLineup)
 const mockRenewContract = vi.mocked(renewContract)
 
-const STATE = { form: 0, yellowCards: 0, suspensionRemaining: 0, eligible: true, role: null, contractYears: 2, wageDemand: 90000 }
+const STATE = { form: 0, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0, eligible: true, role: null, contractYears: 2, wageDemand: 90000 }
 
 const GK: PlayerResponse = {
   id: 'p-gk',
@@ -84,6 +84,10 @@ const SUSPENDED = makeOutfield('p-susp', 'Banido Um', 'MID')
 SUSPENDED.eligible = false
 SUSPENDED.suspensionRemaining = 1
 
+const INJURED = makeOutfield('p-inj', 'Lesionado Um', 'DEF')
+INJURED.eligible = false
+INJURED.injuryMatches = 2
+
 const ALL_OUTFIELD = [DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
 // Extra outfield to allow selecting 11 without a GK
 const ELEVEN_NO_GK = [...ALL_OUTFIELD, ATT4]
@@ -91,7 +95,7 @@ const ELEVEN_NO_GK = [...ALL_OUTFIELD, ATT4]
 const ELEVEN_WITH_TWO_GK = [GK, GK2, DEF1, DEF2, DEF3, DEF4, MID1, MID2, ATT1, ATT2, ATT3]
 
 const squad: SquadResponse = {
-  players: [GK, GK2, ...ALL_OUTFIELD, ATT4, SUSPENDED],
+  players: [GK, GK2, ...ALL_OUTFIELD, ATT4, SUSPENDED, INJURED],
 }
 
 function makeQueryClient() {
@@ -203,6 +207,14 @@ describe('SquadPage', () => {
     const checkbox = screen.getByRole('checkbox', { name: /banido um/i })
     expect(checkbox).toBeDisabled()
     expect(screen.getByText(/\(Suspenso 1\)/i)).toBeInTheDocument()
+  })
+
+  it('shows "(Lesionado N)" label for an injured player and disables their checkbox', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Lesionado Um'))
+    const checkbox = screen.getByRole('checkbox', { name: /lesionado um/i })
+    expect(checkbox).toBeDisabled()
+    expect(screen.getByText(/\(Lesionado 2\)/i)).toBeInTheDocument()
   })
 
   it('shows contract years and a renew control', async () => {

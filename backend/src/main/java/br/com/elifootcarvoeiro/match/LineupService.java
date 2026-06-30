@@ -154,26 +154,49 @@ public class LineupService {
 
     /**
      * Picks the best XI for a club: the top GK by overall + the top 10 outfield players by overall.
-     * Assumes the club has at least 1 GK and at least 10 outfield players (guaranteed by seed data).
+     * Eligible players (not suspended, not injured) are preferred. If there are fewer than 11
+     * eligible players, ineligible players are used as fallback (ordered by overall) to ensure
+     * the match engine always has a full XI. A missing GK is similarly filled from ineligible GKs.
      */
     public List<Player> bestXi(UUID clubId) {
-        List<Player> allPlayers = playerRepository.findByClubId(clubId).stream()
-                .filter(Player::isEligible)
-                .toList();
+        List<Player> allPlayers = playerRepository.findByClubId(clubId);
+        List<Player> eligible = allPlayers.stream().filter(Player::isEligible).toList();
 
-        Player bestGk = allPlayers.stream()
+        // Try to find an eligible GK; fall back to any GK if none are eligible.
+        Player bestGk = eligible.stream()
                 .filter(p -> p.getPosition() == Position.GK)
                 .max(Comparator.comparingInt(Player::getOverall))
-                .orElseThrow(() -> new ApiException(
-                        "NO_GK_FOUND",
-                        "Club " + clubId + " has no eligible goalkeeper",
-                        HttpStatus.UNPROCESSABLE_CONTENT));
+                .orElseGet(() -> allPlayers.stream()
+                        .filter(p -> p.getPosition() == Position.GK)
+                        .max(Comparator.comparingInt(Player::getOverall))
+                        .orElseThrow(() -> new ApiException(
+                                "NO_GK_FOUND",
+                                "Club " + clubId + " has no goalkeeper at all",
+                                HttpStatus.UNPROCESSABLE_CONTENT)));
 
-        List<Player> topOutfield = allPlayers.stream()
-                .filter(p -> p.getPosition() != Position.GK)
+        // Fill 10 outfield slots: prefer eligible, then fill from ineligible if needed.
+        List<Player> eligibleOutfield = eligible.stream()
+                .filter(p -> p.getPosition() != Position.GK && !p.getId().equals(bestGk.getId()))
                 .sorted(Comparator.comparingInt(Player::getOverall).reversed())
-                .limit(10)
-                .toList();
+                .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+
+        List<Player> topOutfield;
+        if (eligibleOutfield.size() >= 10) {
+            topOutfield = eligibleOutfield.subList(0, 10);
+        } else {
+            // Not enough eligible outfield players — fill with ineligible ones (graceful fallback).
+            java.util.Set<UUID> usedIds = new java.util.HashSet<>();
+            eligibleOutfield.forEach(p -> usedIds.add(p.getId()));
+            usedIds.add(bestGk.getId());
+            List<Player> ineligibleOutfield = allPlayers.stream()
+                    .filter(p -> !usedIds.contains(p.getId()) && p.getPosition() != Position.GK)
+                    .sorted(Comparator.comparingInt(Player::getOverall).reversed())
+                    .toList();
+            int needed = 10 - eligibleOutfield.size();
+            List<Player> combined = new java.util.ArrayList<>(eligibleOutfield);
+            combined.addAll(ineligibleOutfield.subList(0, Math.min(needed, ineligibleOutfield.size())));
+            topOutfield = combined;
+        }
 
         return new java.util.ArrayList<>(
                 java.util.stream.Stream.concat(java.util.stream.Stream.of(bestGk), topOutfield.stream())
@@ -307,6 +330,7 @@ public class LineupService {
                 p.getForm(),
                 p.getYellowCards(),
                 p.getSuspensionRemaining(),
+                p.getInjuryMatches(),
                 p.isEligible(),
                 role != null ? role.name() : null,
                 p.getContractYears(),

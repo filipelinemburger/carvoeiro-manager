@@ -204,9 +204,14 @@ export function SquadPage() {
                 </td>
                 <td>
                   {player.name}
-                  {!player.eligible && (
+                  {player.suspensionRemaining > 0 && (
                     <span style={{ color: 'red', marginLeft: '0.5rem' }}>
                       (Suspenso {player.suspensionRemaining})
+                    </span>
+                  )}
+                  {player.injuryMatches > 0 && (
+                    <span style={{ color: 'red', marginLeft: '0.5rem' }}>
+                      (Lesionado {player.injuryMatches})
                     </span>
                   )}
                 </td>

@@ -1,0 +1,1 @@
+ALTER TABLE players ADD COLUMN injury_matches INT NOT NULL DEFAULT 0;
