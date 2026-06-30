@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../../auth/AuthContext'
-import { createCareer, getSaveGame, getFinances } from '../../api/career'
+import { getSaveGame, getFinances } from '../../api/career'
 import { formatBRL } from '../../lib/money'
 import type { SaveGameResponse } from '../../api/types'
 
@@ -12,7 +12,6 @@ const saveGameKeyFor = (userId: string | undefined) =>
 
 export function DashboardPage() {
   const { user, token } = useAuth()
-  const queryClient = useQueryClient()
 
   const saveGameKey = saveGameKeyFor(user?.userId)
   const [saveGameId, setSaveGameId] = useState<string | null>(() =>
@@ -42,27 +41,16 @@ export function DashboardPage() {
     }
   }, [isError, saveGameId, saveGameKey])
 
-  const createMutation = useMutation<SaveGameResponse>({
-    mutationFn: () => createCareer(token ?? ''),
-    onSuccess: (data) => {
-      localStorage.setItem(saveGameKey, data.id)
-      setSaveGameId(data.id)
-      void queryClient.invalidateQueries({ queryKey: ['saveGame', data.id] })
-    },
-  })
-
   return (
     <div>
       <h2>Bem-vindo, {user?.username}</h2>
 
-      {!saveGameId && !createMutation.isPending && (
-        <button className="cec-btn" onClick={() => createMutation.mutate()}>
-          Nova carreira
-        </button>
+      {!saveGameId && (
+        <p style={{ color: '#555' }}>
+          Você ainda não tem uma carreira. Abra o menu <strong>⚙️</strong> no canto superior
+          direito e escolha <strong>Nova Carreira</strong> para começar.
+        </p>
       )}
-
-      {createMutation.isPending && <p>Criando carreira…</p>}
-      {createMutation.isError && <p style={{ color: 'red' }}>Erro ao criar carreira.</p>}
 
       {loadingGame && saveGameId && <p>Carregando carreira…</p>}
 

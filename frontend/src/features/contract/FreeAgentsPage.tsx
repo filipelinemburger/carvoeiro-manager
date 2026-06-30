@@ -4,7 +4,6 @@ import { useSearchParams } from 'react-router-dom'
 import { getSaveGame, getFreeAgents, signFreeAgent } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import { formatBRL } from '../../lib/money'
-import { isTransferWindowOpen } from '../../lib/transferWindow'
 
 export function FreeAgentsPage() {
   const { token } = useAuth()
@@ -29,7 +28,8 @@ export function FreeAgentsPage() {
   if (pool.isLoading) return <p>Carregando agentes livres…</p>
   if (pool.error) return <p>Erro ao carregar agentes livres.</p>
 
-  const windowOpen = save.data ? isTransferWindowOpen(save.data.currentRound, save.data.totalRounds) : true
+  // Date-based window status from the backend (the single source of truth).
+  const windowOpen = save.data?.transferWindowOpen ?? true
 
   return (
     <div style={{ padding: '1.5rem' }}>

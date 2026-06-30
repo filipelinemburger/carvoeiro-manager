@@ -88,8 +88,7 @@ export function TacticsPanel({ saveGameId, clubId, starters }: TacticsPanelProps
   }
 
   return (
-    <div style={{ marginTop: '1.5rem' }}>
-      <h3>Tática</h3>
+    <div>
       <div>
         <label>
           Mentalidade:{' '}

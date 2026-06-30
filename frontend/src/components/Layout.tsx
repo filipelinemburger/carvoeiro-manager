@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
-import { advanceRound, getAdvancePreview, getSaveGame } from '../api/career'
+import { advanceRound, createCareer, getAdvancePreview, getSaveGame } from '../api/career'
 import type { AdvancePreviewResponse, AdvanceResponse, SaveGameResponse } from '../api/types'
 
 interface LayoutProps {
@@ -81,6 +81,26 @@ export function Layout({ children }: LayoutProps) {
     setGearOpen(false)
     logout()
     void navigate('/login')
+  }
+
+  // "Nova Carreira" lives in the gear menu: start a fresh career at any time. The current
+  // save isn't deleted, but the active pointer moves to the new one — confirm to avoid slips.
+  const newCareerMutation = useMutation<SaveGameResponse>({
+    mutationFn: () => createCareer(token ?? ''),
+    onSuccess: (data) => {
+      localStorage.setItem(saveGameKeyFor(user?.userId), data.id)
+      void queryClient.invalidateQueries()
+      void navigate(`/squad?saveGameId=${data.id}&clubId=${data.managedClubId}`)
+    },
+  })
+
+  const handleNewCareer = () => {
+    setGearOpen(false)
+    const hasActive = Boolean(saveGameId)
+    if (hasActive && !window.confirm('Começar uma nova carreira? A carreira atual continuará salva, mas você voltará ao início.')) {
+      return
+    }
+    newCareerMutation.mutate()
   }
 
   // Build navigation links (only when save game is available)
@@ -223,10 +243,28 @@ export function Layout({ children }: LayoutProps) {
                 border: '1px solid #ddd',
                 borderRadius: '6px',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                minWidth: '120px',
+                minWidth: '150px',
                 zIndex: 200,
               }}
             >
+              <button
+                onClick={handleNewCareer}
+                disabled={newCareerMutation.isPending}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '0.6rem 1rem',
+                  background: 'none',
+                  border: 0,
+                  borderBottom: '1px solid #eee',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontSize: '0.9rem',
+                  color: '#111',
+                }}
+              >
+                {newCareerMutation.isPending ? 'Criando…' : 'Nova Carreira'}
+              </button>
               <button
                 onClick={handleLogout}
                 style={{

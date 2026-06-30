@@ -16,6 +16,14 @@ export interface RegisterRequest {
 
 // Career / Save game
 
+export type CompetitionSummary = {
+  id: string
+  name: string
+  type: string
+  seasonYear: number
+  totalRounds: number
+}
+
 export type SaveGameResponse = {
   id: string
   seasonYear: number
@@ -26,8 +34,9 @@ export type SaveGameResponse = {
   currentRound: number
   totalRounds: number
   currentDate?: string | null
-  competitions?: string[]
+  competitions?: CompetitionSummary[]
   status?: 'IN_PROGRESS' | 'FINISHED'
+  transferWindowOpen?: boolean
 }
 
 export type Mentality = 'DEFENSIVE' | 'BALANCED' | 'ATTACKING'

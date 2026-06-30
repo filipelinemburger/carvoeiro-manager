@@ -47,6 +47,7 @@ public class SaveGameService {
     private final OverallCalculator overallCalculator;
     private final FinanceCalculator financeCalculator;
     private final FreeAgentGenerator freeAgentGenerator;
+    private final br.com.elifootcarvoeiro.transfer.TransferWindow transferWindow;
 
     public SaveGameService(SeedLoader seedLoader,
                            SaveGameRepository saveGameRepository,
@@ -57,7 +58,8 @@ public class SaveGameService {
                            SeasonCalendarGenerator seasonCalendarGenerator,
                            OverallCalculator overallCalculator,
                            FinanceCalculator financeCalculator,
-                           FreeAgentGenerator freeAgentGenerator) {
+                           FreeAgentGenerator freeAgentGenerator,
+                           br.com.elifootcarvoeiro.transfer.TransferWindow transferWindow) {
         this.seedLoader = seedLoader;
         this.saveGameRepository = saveGameRepository;
         this.clubRepository = clubRepository;
@@ -68,6 +70,7 @@ public class SaveGameService {
         this.overallCalculator = overallCalculator;
         this.financeCalculator = financeCalculator;
         this.freeAgentGenerator = freeAgentGenerator;
+        this.transferWindow = transferWindow;
     }
 
     /**
@@ -193,7 +196,8 @@ public class SaveGameService {
                 primaryCompetition.getTotalRounds(),
                 seasonStart.toString(),
                 competitionSummaries,
-                saveGame.getStatus().name());
+                saveGame.getStatus().name(),
+                transferWindow.isOpen(seasonStart));
     }
 
     /**
@@ -252,7 +256,8 @@ public class SaveGameService {
                 totalRounds,
                 currentDate,
                 competitionSummaries,
-                saveGame.getStatus().name());
+                saveGame.getStatus().name(),
+                saveGame.getCurrentDate() != null && transferWindow.isOpen(saveGame.getCurrentDate()));
     }
 
 }

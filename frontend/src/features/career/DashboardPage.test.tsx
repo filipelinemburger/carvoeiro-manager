@@ -46,9 +46,10 @@ describe('DashboardPage', () => {
 
     renderDashboard()
 
-    // Then the user can start a new career instead of being stuck on stale data
+    // Then the user is shown the empty-state hint (new career lives in the ⚙️ menu) instead
+    // of being stuck on stale data
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /nova carreira/i })).toBeInTheDocument()
+      expect(screen.getByText(/você ainda não tem uma carreira/i)).toBeInTheDocument()
     })
     // and the unusable stored id is cleared
     expect(localStorage.getItem('elifoot_save_game_id_U1')).toBeNull()
@@ -85,8 +86,8 @@ describe('DashboardPage', () => {
 
     renderDashboard()
 
-    // Then U3 is offered a new career and never fetches the other user's save
-    expect(screen.getByRole('button', { name: /nova carreira/i })).toBeInTheDocument()
+    // Then U3 sees the empty-state hint and never fetches the other user's save
+    expect(screen.getByText(/você ainda não tem uma carreira/i)).toBeInTheDocument()
     expect(getSaveGame).not.toHaveBeenCalled()
   })
 })

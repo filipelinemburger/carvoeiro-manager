@@ -6,7 +6,6 @@ import {
 } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import { formatBRL } from '../../lib/money'
-import { isTransferWindowOpen } from '../../lib/transferWindow'
 
 const labelStyle: CSSProperties = {
   display: 'flex', flexDirection: 'column', alignItems: 'flex-start', fontSize: '0.72rem', color: '#555',
@@ -83,7 +82,8 @@ export function TransferMarketPage() {
   if (market.isLoading) return <p>Carregando mercado…</p>
   if (market.error) return <p>Erro ao carregar o mercado.</p>
 
-  const windowOpen = save.data ? isTransferWindowOpen(save.data.currentRound, save.data.totalRounds) : true
+  // Date-based window status from the backend (the single source of truth).
+  const windowOpen = save.data?.transferWindowOpen ?? true
   const outgoing = (offers.data ?? []).filter(o => o.direction === 'OUTGOING' && o.status === 'COUNTERED')
   const incoming = (offers.data ?? []).filter(o => o.direction === 'INCOMING' && o.status === 'PENDING')
   const last = offerMut.data

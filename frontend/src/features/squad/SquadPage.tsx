@@ -6,8 +6,12 @@ import { formatBRL } from '../../lib/money'
 import { useAuth } from '../../auth/AuthContext'
 import type { PlayerResponse, PlayerRole, LineupStarter } from '../../api/types'
 import { TacticsPanel } from './TacticsPanel'
+import { Collapsible } from '../../components/Collapsible'
 
 const FORMATIONS = ['4-4-2', '4-3-3', '3-5-2', '4-2-3-1', '5-3-2']
+
+// Display order for the squad list: goalkeepers, then defenders, midfielders, attackers.
+const POSITION_ORDER: Record<PlayerResponse['position'], number> = { GK: 0, DEF: 1, MID: 2, ATT: 3 }
 
 const ROLES_BY_POSITION: Record<PlayerResponse['position'], PlayerRole[]> = {
   GK: ['GOALKEEPER'],
@@ -71,6 +75,11 @@ export function SquadPage() {
   })
 
   const players = data?.players ?? []
+
+  // Squad list ordered by position (GK → DEF → MEI → ATA), then overall within each line.
+  const displayPlayers = [...players].sort(
+    (a, b) => POSITION_ORDER[a.position] - POSITION_ORDER[b.position] || b.overall - a.overall,
+  )
 
   // Load the previously saved lineup so the screen reopens with the same XI/formation
   // instead of resetting to the defaults.
@@ -149,51 +158,50 @@ export function SquadPage() {
 
   return (
     <div style={{ padding: '1.5rem' }}>
-      <h2>Escalação</h2>
+      <Collapsible title="Escalação">
+        <div style={{ marginBottom: '1rem' }}>
+          <label htmlFor="formation-select">Formação: </label>
+          <select id="formation-select" value={formation} onChange={e => setFormation(e.target.value)}>
+            {FORMATIONS.map(f => (
+              <option key={f} value={f}>{f}</option>
+            ))}
+          </select>
+        </div>
 
-      <div style={{ marginBottom: '1rem' }}>
-        <label htmlFor="formation-select">Formação: </label>
-        <select id="formation-select" value={formation} onChange={e => setFormation(e.target.value)}>
-          {FORMATIONS.map(f => (
-            <option key={f} value={f}>{f}</option>
-          ))}
-        </select>
-      </div>
+        <p style={{ fontSize: '0.875rem', color: '#888' }}>
+          Selecione 11 jogadores (1 goleiro obrigatório). Selecionados: {selected.length}/11
+        </p>
 
-      <p style={{ fontSize: '0.875rem', color: '#888' }}>
-        Selecione 11 jogadores (1 goleiro obrigatório). Selecionados: {selected.length}/11
-      </p>
+        {validationError && selected.length > 0 && (
+          <p role="alert" style={{ color: 'red' }}>{validationError}</p>
+        )}
+        {saveSuccess && <p style={{ color: 'green' }}>Escalação salva com sucesso!</p>}
+        {mutation.isError && <p style={{ color: 'red' }}>Erro ao salvar escalação.</p>}
 
-      {validationError && selected.length > 0 && (
-        <p role="alert" style={{ color: 'red' }}>{validationError}</p>
-      )}
-      {saveSuccess && <p style={{ color: 'green' }}>Escalação salva com sucesso!</p>}
-      {mutation.isError && <p style={{ color: 'red' }}>Erro ao salvar escalação.</p>}
-
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1rem' }}>
-        <thead>
-          <tr>
-            <th></th>
-            <th style={{ textAlign: 'left' }}>Nome</th>
-            <th>Pos</th>
-            <th>OVR</th>
-            <th>Forma</th>
-            <th>Fôlego</th>
-            <th>Função</th>
-            <th>Contrato</th>
-            <th>Salário Pedido</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {players.map(player => {
-            const isSelected = selected.includes(player.id)
-            return (
-              <tr
-                key={player.id}
-                style={{ background: isSelected ? 'rgba(0,128,0,0.08)' : undefined }}
-              >
-                <td>
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1rem' }}>
+          <thead>
+            <tr>
+              <th></th>
+              <th style={{ textAlign: 'left' }}>Nome</th>
+              <th>Pos</th>
+              <th>OVR</th>
+              <th>Forma</th>
+              <th>Fôlego</th>
+              <th>Função</th>
+              <th>Contrato</th>
+              <th>Salário Pedido</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayPlayers.map(player => {
+              const isSelected = selected.includes(player.id)
+              return (
+                <tr
+                  key={player.id}
+                  style={{ background: isSelected ? '#fff9c4' : undefined }}
+                >
+                  <td>
                   <input
                     type="checkbox"
                     aria-label={player.name}
@@ -250,25 +258,28 @@ export function SquadPage() {
               </tr>
             )
           })}
-        </tbody>
-      </table>
+          </tbody>
+        </table>
 
-      <button
-        className="cec-btn"
-        disabled={!canSave || mutation.isPending}
-        onClick={() => mutation.mutate()}
-      >
-        {mutation.isPending ? 'Salvando…' : 'Salvar escalação'}
-      </button>
+        <button
+          className="cec-btn"
+          disabled={!canSave || mutation.isPending}
+          onClick={() => mutation.mutate()}
+        >
+          {mutation.isPending ? 'Salvando…' : 'Salvar escalação'}
+        </button>
+      </Collapsible>
 
-      <TacticsPanel
-        saveGameId={saveGameId}
-        clubId={clubId}
-        starters={selected.map(id => {
-          const p = players.find(pp => pp.id === id)!
-          return { id, name: p.name }
-        })}
-      />
+      <Collapsible title="Tática">
+        <TacticsPanel
+          saveGameId={saveGameId}
+          clubId={clubId}
+          starters={selected.map(id => {
+            const p = players.find(pp => pp.id === id)!
+            return { id, name: p.name }
+          })}
+        />
+      </Collapsible>
     </div>
   )
 }

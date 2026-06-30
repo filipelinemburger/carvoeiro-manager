@@ -20,6 +20,7 @@ import { getSaveGame, getMarket, getOffers, makeOffer, respondToOffer } from '..
 const SAVE_OPEN = {
   id: 'sg-1', seasonYear: 2026, competitionId: 'c-1', competitionName: 'Catarinense',
   managedClubId: 'club-1', managedClubName: 'Criciúma', currentRound: 0, totalRounds: 18,
+  transferWindowOpen: true,
 }
 
 function renderPage() {
@@ -67,7 +68,7 @@ describe('TransferMarketPage', () => {
   })
 
   it('shows a closed-window banner and disables proposing when the window is closed', async () => {
-    vi.mocked(getSaveGame).mockResolvedValue({ ...SAVE_OPEN, currentRound: 5 })
+    vi.mocked(getSaveGame).mockResolvedValue({ ...SAVE_OPEN, transferWindowOpen: false })
     renderPage()
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/fechada/i))
     expect(screen.getByRole('button', { name: /propor/i })).toBeDisabled()

@@ -13,6 +13,7 @@ vi.mock('../api/career', () => ({
   getSaveGame: vi.fn(),
   advanceRound: vi.fn(),
   getAdvancePreview: vi.fn(),
+  createCareer: vi.fn(),
 }))
 
 const PREVIEW_OK: AdvancePreviewResponse = {
