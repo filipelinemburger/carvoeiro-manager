@@ -2,6 +2,7 @@ package br.com.carvoeiromanager.auth;
 
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.security.JwtService;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -25,12 +26,23 @@ public class AuthService {
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByUsername(request.username())) {
-            throw new ApiException("USERNAME_TAKEN",
-                    "Username '" + request.username() + "' is already taken", HttpStatus.CONFLICT);
+            throw usernameTaken(request.username());
         }
-        User user = User.create(request.username(), passwordEncoder.encode(request.password()));
-        userRepository.save(user);
-        return toResponse(user);
+        try {
+            User user = User.create(request.username(), passwordEncoder.encode(request.password()));
+            // saveAndFlush (not save) forces the INSERT now, so a concurrent duplicate
+            // surfaces as DataIntegrityViolationException here, not at transaction commit.
+            userRepository.saveAndFlush(user);
+            return toResponse(user);
+        } catch (DataIntegrityViolationException e) {
+            // Lost a race: another request inserted the same username between the check and the insert.
+            throw usernameTaken(request.username());
+        }
+    }
+
+    private ApiException usernameTaken(String username) {
+        return new ApiException("USERNAME_TAKEN",
+                "Username '" + username + "' is already taken", HttpStatus.CONFLICT);
     }
 
     @Transactional(readOnly = true)
