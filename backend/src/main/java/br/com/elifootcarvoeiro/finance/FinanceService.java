@@ -181,9 +181,17 @@ public class FinanceService {
     @Transactional
     public void processMonth(UUID saveGameId, LocalDate monthDate) {
         SaveGame saveGame = saveGameRepository.findById(saveGameId).orElseThrow();
+        final int month = monthDate.getYear() * 100 + monthDate.getMonthValue();
+        // Self-idempotency guard (defense in depth): never charge a month at or before the
+        // last one charged. The caller enters each new month at most once, but this also makes
+        // a repeated/direct call safe and lets processMonth own the lastFinanceMonth advance.
+        if (month <= saveGame.getLastFinanceMonth()) {
+            return;
+        }
         final UUID managedClubId = saveGame.getManagedClubId();
         final int seasonYear = saveGame.getSeasonYear();
-        final int round = saveGame.getCurrentRound();
+        // Monthly costs are not tied to a match round; ledger rows are grouped by their tx_date.
+        final int round = 0;
 
         List<Club> clubs = clubRepository.findBySaveGameId(saveGameId);
         Map<UUID, BigDecimal> wageBillByClub = monthlyWageBills(saveGameId);
@@ -206,6 +214,8 @@ public class FinanceService {
                         FinanceTransactionType.UPKEEP, upkeep.negate(), "Manutenção mensal do estádio", monthDate);
             }
         }
+        saveGame.setLastFinanceMonth(month);
+        saveGameRepository.save(saveGame);
     }
 
     /**

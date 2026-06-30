@@ -93,10 +93,12 @@ class FinanceServiceIT {
                 .filter(cl -> memberIds.contains(cl.getId()))
                 .collect(Collectors.toMap(Club::getId, Club::getBalance));
 
-        // Clubs in round0 played → balance changed
-        boolean anyChanged = after.entrySet().stream()
-                .anyMatch(e -> e.getValue().compareTo(before.get(e.getKey())) != 0);
-        assertThat(anyChanged).isTrue();
+        // Every member plays in round 0 of a round-robin, and every playing club is charged a
+        // match cost (away) or gate−matchCost (home), so EVERY member club's balance changed.
+        after.forEach((id, bal) ->
+                assertThat(bal)
+                        .as("member club %s balance must change after the matchday", id)
+                        .isNotEqualByComparingTo(before.get(id)));
 
         // And managed club has GATE/MATCH_COST ledger rows (no SPONSOR/WAGES/UPKEEP here)
         List<FinanceTransaction> ledger = financeTransactionRepository
@@ -156,24 +158,27 @@ class FinanceServiceIT {
 
     @Test
     void processMonthIsIdempotentWithinTheSameMonth() {
-        // Given: calling processMonth twice for the same date should be guarded by the caller,
-        // but the amounts themselves should be deterministic and conserved when called once.
         Career c = createCareer();
-        Club managedBefore = clubRepository.findById(c.clubId()).orElseThrow();
-        BigDecimal balanceBefore = managedBefore.getBalance();
+        BigDecimal balanceBefore = clubRepository.findById(c.clubId()).orElseThrow().getBalance();
 
-        financeService.processMonth(c.id(), LocalDate.of(2026, 3, 1));
+        LocalDate march = LocalDate.of(2026, 3, 1);
+        financeService.processMonth(c.id(), march);
+        BigDecimal balanceAfterFirst = clubRepository.findById(c.clubId()).orElseThrow().getBalance();
+        int rowsAfterFirst = financeTransactionRepository
+                .findBySaveGameIdAndClubIdOrderByRoundDescCreatedAtDesc(c.id(), c.clubId()).size();
 
-        BigDecimal balanceAfter = clubRepository.findById(c.clubId()).orElseThrow().getBalance();
-        BigDecimal delta = balanceAfter.subtract(balanceBefore);
+        // The first call charged the month's costs (sponsorship - wages - upkeep != 0).
+        assertThat(balanceAfterFirst).isNotEqualByComparingTo(balanceBefore);
 
-        // The delta equals sponsorship - wages - upkeep (exact values are deterministic)
-        List<FinanceTransaction> ledger = financeTransactionRepository
-                .findBySaveGameIdAndClubIdOrderByRoundDescCreatedAtDesc(c.id(), c.clubId());
-        BigDecimal expectedDelta = ledger.stream()
-                .map(FinanceTransaction::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        assertThat(delta).isEqualByComparingTo(expectedDelta);
+        // A second call for the SAME month is a no-op: the self-idempotency guard prevents a
+        // double-charge, so neither the balance nor the ledger changes.
+        financeService.processMonth(c.id(), march);
+        BigDecimal balanceAfterSecond = clubRepository.findById(c.clubId()).orElseThrow().getBalance();
+        int rowsAfterSecond = financeTransactionRepository
+                .findBySaveGameIdAndClubIdOrderByRoundDescCreatedAtDesc(c.id(), c.clubId()).size();
+
+        assertThat(balanceAfterSecond).isEqualByComparingTo(balanceAfterFirst);
+        assertThat(rowsAfterSecond).isEqualTo(rowsAfterFirst);
     }
 
     @Test
@@ -208,7 +213,8 @@ class FinanceServiceIT {
         financeService.processMonth(c.id(), LocalDate.of(2026, 2, 1));
 
         FinancesResponse finances = financeService.getFinances(c.id(), c.clubId(), c.userId());
-        assertThat(finances.balance()).isNotNull();
+        // The club is still solvent after one month of costs (starting balance dwarfs monthly net).
+        assertThat(finances.balance()).isGreaterThan(BigDecimal.ZERO);
         assertThat(finances.transactions()).isNotEmpty();
         // All monthly-model rows carry txDate in the response
         assertThat(finances.transactions().stream()

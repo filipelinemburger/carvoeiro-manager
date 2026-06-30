@@ -99,12 +99,11 @@ public class SeasonAdvanceService {
         LocalDate eventDate = event.getEventDate();
         save.setCurrentDate(eventDate);
 
-        // Monthly finance: charge wages/sponsorship/upkeep once on first entry to each month.
-        int eventMonth = eventDate.getYear() * 100 + eventDate.getMonthValue();
-        if (eventMonth > save.getLastFinanceMonth()) {
-            financeService.processMonth(saveGameId, eventDate);
-            save.setLastFinanceMonth(eventMonth);
-        }
+        // Monthly finance: charge wages/sponsorship/upkeep once per in-game month. processMonth
+        // self-guards (no-op if this month was already charged) and advances lastFinanceMonth.
+        // This assumes the calendar never leaves a >1-month gap with no events (SeasonCalendarGenerator
+        // spaces events at most a few days apart), so no month is silently skipped.
+        financeService.processMonth(saveGameId, eventDate);
 
         AdvanceResponse response = switch (event.getType()) {
             case MATCH -> processMatch(save, event);
