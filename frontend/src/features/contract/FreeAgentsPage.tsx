@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { getSaveGame, getFreeAgents, signFreeAgent } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
-import { formatBRL } from '../../lib/money'
+import { formatBRL, formatThousandsBR, parseMoneyInput } from '../../lib/money'
 
 export function FreeAgentsPage() {
   const { token } = useAuth()
@@ -46,7 +46,12 @@ export function FreeAgentsPage() {
           </tr>
         </thead>
         <tbody>
-          {(pool.data ?? []).map(fa => (
+          {(pool.data ?? []).map(fa => {
+            // Default the offer to the demand (ceil so the whole-real value still clears it),
+            // displayed with pt-BR grouping so the amount is easy to read at a glance.
+            const wageStr = wages[fa.playerId] ?? formatThousandsBR(Math.ceil(fa.wageDemand))
+            const offeredWage = parseMoneyInput(wageStr)
+            return (
             <tr key={fa.playerId}>
               <td>{fa.name}</td>
               <td style={{ textAlign: 'center' }}>{fa.position}</td>
@@ -54,21 +59,27 @@ export function FreeAgentsPage() {
               <td style={{ textAlign: 'center' }}>{fa.overall}</td>
               <td style={{ textAlign: 'right' }}>{formatBRL(fa.wageDemand)}</td>
               <td style={{ textAlign: 'center' }}>
-                <input aria-label={`Salário para ${fa.name}`} type="number"
-                  value={wages[fa.playerId] ?? ''} onChange={e => setWages(w => ({ ...w, [fa.playerId]: e.target.value }))}
-                  style={{ width: 110 }} />{' '}
+                <span aria-hidden="true" style={{ color: '#666' }}>R$ </span>
+                <input aria-label={`Salário para ${fa.name}`} type="text" inputMode="numeric"
+                  value={wageStr}
+                  onChange={e => {
+                    const n = parseMoneyInput(e.target.value)
+                    setWages(w => ({ ...w, [fa.playerId]: Number.isNaN(n) ? '' : formatThousandsBR(n) }))
+                  }}
+                  style={{ width: 110, textAlign: 'right' }} />{' '}
                 <input aria-label={`Anos para ${fa.name}`} type="number" min={1} max={5}
                   value={years[fa.playerId] ?? '3'} onChange={e => setYears(y => ({ ...y, [fa.playerId]: e.target.value }))}
                   style={{ width: 50 }} />{' '}
                 <button className="cec-btn" disabled={!windowOpen || signMut.isPending}
                   onClick={() => signMut.mutate({
                     playerId: fa.playerId,
-                    wage: Number(wages[fa.playerId] ?? fa.wageDemand),
+                    wage: Number.isNaN(offeredWage) ? Math.ceil(fa.wageDemand) : offeredWage,
                     contractYears: Number(years[fa.playerId] ?? 3),
                   })}>Contratar</button>
               </td>
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
     </div>

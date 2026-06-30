@@ -2,7 +2,7 @@ spring:
   application:
     name: elifoot-carvoeiro
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/elifoot}
+    url: ${DB_URL:jdbc:postgresql://localhost:5435/elifoot}
     username: ${DB_USER:elifoot}
     password: ${DB_PASSWORD:elifoot}
   jpa:
@@ -22,4 +22,4 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
 
 server:
-  port: 8080
+  port: 8088

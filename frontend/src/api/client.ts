@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api/v1'
+const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8088/api/v1'
 
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {

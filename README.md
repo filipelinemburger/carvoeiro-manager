@@ -31,3 +31,8 @@ To stop the database:
 ```bash
 docker compose down
 ```
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for step-by-step production deployment instructions.
+For the recommended low-cost setup, use [docs/deployment/hetzner-cloudflare.md](docs/deployment/hetzner-cloudflare.md).
