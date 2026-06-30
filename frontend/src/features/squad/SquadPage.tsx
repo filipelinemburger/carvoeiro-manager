@@ -105,6 +105,8 @@ export function SquadPage() {
     onSuccess: () => {
       setSaveSuccess(true)
       void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] })
+      // Re-check the advance gate: fixing the lineup may clear an ineligible-starter block.
+      void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
     },
   })
 

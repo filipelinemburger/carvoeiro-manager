@@ -23,15 +23,18 @@ import java.util.UUID;
 public class AdvanceController {
 
     private final SeasonAdvanceService seasonAdvanceService;
+    private final AdvancePreviewService advancePreviewService;
     private final NewsItemRepository newsItemRepository;
     private final SaveGameService saveGameService;
     private final ObjectMapper objectMapper;
 
     public AdvanceController(SeasonAdvanceService seasonAdvanceService,
+                             AdvancePreviewService advancePreviewService,
                              NewsItemRepository newsItemRepository,
                              SaveGameService saveGameService,
                              ObjectMapper objectMapper) {
         this.seasonAdvanceService = seasonAdvanceService;
+        this.advancePreviewService = advancePreviewService;
         this.newsItemRepository = newsItemRepository;
         this.saveGameService = saveGameService;
         this.objectMapper = objectMapper;
@@ -42,6 +45,13 @@ public class AdvanceController {
             @PathVariable UUID saveGameId,
             @CurrentUser UUID userId) {
         return ResponseEntity.ok(seasonAdvanceService.advance(saveGameId, userId));
+    }
+
+    @GetMapping("/{saveGameId}/advance-preview")
+    public ResponseEntity<AdvancePreviewResponse> advancePreview(
+            @PathVariable UUID saveGameId,
+            @CurrentUser UUID userId) {
+        return ResponseEntity.ok(advancePreviewService.preview(saveGameId, userId));
     }
 
     @GetMapping("/{saveGameId}/news")

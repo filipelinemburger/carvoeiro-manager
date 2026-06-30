@@ -2,8 +2,8 @@ import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
-import { advanceRound, getSaveGame } from '../api/career'
-import type { AdvanceResponse, SaveGameResponse } from '../api/types'
+import { advanceRound, getAdvancePreview, getSaveGame } from '../api/career'
+import type { AdvancePreviewResponse, AdvanceResponse, SaveGameResponse } from '../api/types'
 
 interface LayoutProps {
   children: ReactNode
@@ -32,6 +32,15 @@ export function Layout({ children }: LayoutProps) {
     staleTime: 30_000,
   })
 
+  // Look-ahead at the next advance: drives whether "Avançar" is disabled.
+  const { data: preview } = useQuery<AdvancePreviewResponse>({
+    queryKey: ['advancePreview', saveGameId],
+    queryFn: () => getAdvancePreview(saveGameId!, token ?? ''),
+    enabled: Boolean(saveGameId && token),
+    retry: false,
+    staleTime: 10_000,
+  })
+
   const [gearOpen, setGearOpen] = useState(false)
   const gearRef = useRef<HTMLDivElement>(null)
 
@@ -51,6 +60,7 @@ export function Layout({ children }: LayoutProps) {
     mutationFn: () => advanceRound(saveGameId!, token ?? ''),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['saveGame', saveGameId] })
+      void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['news', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['standings'] })
       void queryClient.invalidateQueries({ queryKey: ['finances'] })
@@ -79,6 +89,22 @@ export function Layout({ children }: LayoutProps) {
   const sgId = saveGame?.id ?? saveGameId
 
   const hasSaveGame = Boolean(sgId && managedClubId && competitionId)
+
+  // Classificação defaults to the latest-played (or next) match's competition.
+  const standingsCompetitionId = preview?.defaultStandingsCompetitionId ?? competitionId
+
+  // Reasons the advance must be blocked before the click (computed from the preview).
+  const blockIneligible =
+    preview?.managedClubPlaysNext === true && (preview?.ineligibleStarters.length ?? 0) > 0
+  const blockWindow =
+    preview?.windowClosingAfterAdvance === true && (preview?.pendingTransfers ?? 0) > 0
+  const advanceBlockReason = blockIneligible
+    ? 'Há titular(es) suspenso(s) ou lesionado(s) na escalação. Ajuste o time antes de avançar.'
+    : blockWindow
+      ? 'A janela de transferências vai fechar e há proposta(s) pendente(s). Resolva-as antes de avançar.'
+      : null
+  const advanceDisabled =
+    advanceMutation.isPending || seasonFinished || !sgId || advanceBlockReason !== null
 
   return (
     <>
@@ -121,7 +147,7 @@ export function Layout({ children }: LayoutProps) {
                 </NavLink>
 
                 <NavLink
-                  to={`/table?saveGameId=${sgId}&competitionId=${competitionId}&managedClubId=${managedClubId}`}
+                  to={`/table?saveGameId=${sgId}&competitionId=${standingsCompetitionId}&managedClubId=${managedClubId}`}
                   className={({ isActive }) => `cec-nav-link${isActive ? ' active' : ''}`}
                 >
                   Classificação
@@ -164,7 +190,8 @@ export function Layout({ children }: LayoutProps) {
 
                 <button
                   className="cec-btn-primary"
-                  disabled={advanceMutation.isPending || seasonFinished || !sgId}
+                  disabled={advanceDisabled}
+                  title={advanceBlockReason ?? undefined}
                   onClick={() => advanceMutation.mutate()}
                   style={{ marginLeft: '0.25rem' }}
                 >
@@ -220,6 +247,41 @@ export function Layout({ children }: LayoutProps) {
           )}
         </div>
       </header>
+
+      {hasSaveGame && advanceBlockReason && (
+        <div
+          role="status"
+          style={{
+            background: '#fff3cd',
+            color: '#664d03',
+            borderBottom: '1px solid #ffe69c',
+            padding: '0.5rem 1rem',
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+          }}
+        >
+          <span aria-hidden>⚠️</span>
+          <span>{advanceBlockReason}</span>
+          {blockIneligible && (
+            <NavLink
+              to={`/squad?saveGameId=${sgId}&clubId=${managedClubId}`}
+              style={{ marginLeft: 'auto', fontWeight: 600, color: '#664d03' }}
+            >
+              Ajustar escalação →
+            </NavLink>
+          )}
+          {!blockIneligible && blockWindow && (
+            <NavLink
+              to={`/transfers?saveGameId=${sgId}&clubId=${managedClubId}`}
+              style={{ marginLeft: 'auto', fontWeight: 600, color: '#664d03' }}
+            >
+              Ver propostas →
+            </NavLink>
+          )}
+        </div>
+      )}
 
       <main style={{ flex: 1 }}>
         <div className="cec-content-panel">

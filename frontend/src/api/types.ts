@@ -165,6 +165,21 @@ export type TopScorerResponse = {
   goals: number
 }
 
+export type IneligibleStarter = {
+  playerId: string
+  playerName: string
+  reason: 'SUSPENDED' | 'INJURED'
+}
+
+export type AdvancePreviewResponse = {
+  nextEventType: 'MATCH' | 'TRANSFER' | 'FINISHED'
+  managedClubPlaysNext: boolean
+  ineligibleStarters: IneligibleStarter[]
+  windowClosingAfterAdvance: boolean
+  pendingTransfers: number
+  defaultStandingsCompetitionId: string | null
+}
+
 export type SquadChange = {
   playerName: string
   position: string

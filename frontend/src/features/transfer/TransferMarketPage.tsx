@@ -62,6 +62,8 @@ export function TransferMarketPage() {
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
     void queryClient.invalidateQueries({ queryKey: ['offers', saveGameId] })
+    // Resolving offers may clear a "window closing with pending bids" advance block.
+    void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
   }
   const offerMut = useMutation({
     mutationFn: (v: { playerId: string; amount: number; wage: number; contractYears: number }) =>

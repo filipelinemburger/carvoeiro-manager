@@ -5,6 +5,7 @@ import type {
   SetLineupRequest,
   LineupResponse,
   AdvanceResponse,
+  AdvancePreviewResponse,
   StandingRow,
   TacticsRequest,
   TacticsResponse,
@@ -62,6 +63,11 @@ export function advanceRound(saveGameId: string, token: string): Promise<Advance
 // Persisted news feed: every advance is stored and returned here, most recent first.
 export function getNews(saveGameId: string, token: string): Promise<AdvanceResponse[]> {
   return apiGet<AdvanceResponse[]>(`/save-games/${saveGameId}/news`, token)
+}
+
+// Look-ahead at the next advance so the UI can disable "Avançar" before the click.
+export function getAdvancePreview(saveGameId: string, token: string): Promise<AdvancePreviewResponse> {
+  return apiGet<AdvancePreviewResponse>(`/save-games/${saveGameId}/advance-preview`, token)
 }
 
 export function getStandings(

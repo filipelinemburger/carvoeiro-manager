@@ -156,6 +156,22 @@ public class LineupService {
     }
 
     /**
+     * Returns the players in the saved starting XI for (saveGameId, clubId) who are currently
+     * ineligible (suspended or injured). Empty when there is no saved lineup or all starters are
+     * eligible. Used by the advance preview to warn the manager before a match they would play
+     * with an ineligible starter still selected.
+     */
+    public List<Player> savedIneligibleStarters(UUID saveGameId, UUID clubId) {
+        return lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
+                .map(lineup -> lineupPlayerRepository.findByLineupId(lineup.getId()).stream()
+                        .filter(LineupPlayer::isStarting)
+                        .map(lp -> playerRepository.findById(lp.getPlayerId()).orElse(null))
+                        .filter(p -> p != null && !p.isEligible())
+                        .toList())
+                .orElseGet(List::of);
+    }
+
+    /**
      * Picks the best XI for a club: the top GK by overall + the top 10 outfield players by overall.
      * Eligible players (not suspended, not injured) are preferred. If there are fewer than 11
      * eligible players, ineligible players are used as fallback (ordered by overall) to ensure

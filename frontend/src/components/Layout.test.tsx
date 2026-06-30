@@ -5,14 +5,24 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { Layout } from './Layout'
 import { AuthProvider } from '../auth/AuthContext'
-import { getSaveGame, advanceRound } from '../api/career'
+import { getSaveGame, advanceRound, getAdvancePreview } from '../api/career'
 import type { Mock } from 'vitest'
-import type { AdvanceResponse, SaveGameResponse } from '../api/types'
+import type { AdvancePreviewResponse, AdvanceResponse, SaveGameResponse } from '../api/types'
 
 vi.mock('../api/career', () => ({
   getSaveGame: vi.fn(),
   advanceRound: vi.fn(),
+  getAdvancePreview: vi.fn(),
 }))
+
+const PREVIEW_OK: AdvancePreviewResponse = {
+  nextEventType: 'MATCH',
+  managedClubPlaysNext: true,
+  ineligibleStarters: [],
+  windowClosingAfterAdvance: false,
+  pendingTransfers: 0,
+  defaultStandingsCompetitionId: null,
+}
 
 const SAVE_GAME: SaveGameResponse = {
   id: 'sg-1',
@@ -87,6 +97,7 @@ describe('Layout shell', () => {
     localStorage.clear()
     ;(getSaveGame as Mock).mockResolvedValue(SAVE_GAME)
     ;(advanceRound as Mock).mockResolvedValue(ADVANCE_RESPONSE)
+    ;(getAdvancePreview as Mock).mockResolvedValue(PREVIEW_OK)
   })
 
   it('renders children inside a content panel', () => {
@@ -182,5 +193,36 @@ describe('Layout shell', () => {
     })
     // No modal dialog any more — the timeline now lives on the News page.
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('disables Avançar and warns when a saved starter is ineligible before a match', async () => {
+    ;(getAdvancePreview as Mock).mockResolvedValue({
+      ...PREVIEW_OK,
+      managedClubPlaysNext: true,
+      ineligibleStarters: [{ playerId: 'p9', playerName: 'Zagueiro Suspenso', reason: 'SUSPENDED' }],
+    } satisfies AdvancePreviewResponse)
+    seedAuth('U1', 'sg-1')
+    renderLayout('/dashboard')
+
+    const avancarBtn = await screen.findByRole('button', { name: /^avançar$/i })
+    await waitFor(() => expect(avancarBtn).toBeDisabled())
+    expect(screen.getByRole('status')).toHaveTextContent(/suspenso|lesionado/i)
+    expect(screen.getByRole('link', { name: /ajustar escalação/i })).toBeInTheDocument()
+  })
+
+  it('disables Avançar and warns when the window is closing with pending transfers', async () => {
+    ;(getAdvancePreview as Mock).mockResolvedValue({
+      ...PREVIEW_OK,
+      managedClubPlaysNext: false,
+      windowClosingAfterAdvance: true,
+      pendingTransfers: 2,
+    } satisfies AdvancePreviewResponse)
+    seedAuth('U1', 'sg-1')
+    renderLayout('/dashboard')
+
+    const avancarBtn = await screen.findByRole('button', { name: /^avançar$/i })
+    await waitFor(() => expect(avancarBtn).toBeDisabled())
+    expect(screen.getByRole('status')).toHaveTextContent(/janela de transferências/i)
+    expect(screen.getByRole('link', { name: /ver propostas/i })).toBeInTheDocument()
   })
 })
