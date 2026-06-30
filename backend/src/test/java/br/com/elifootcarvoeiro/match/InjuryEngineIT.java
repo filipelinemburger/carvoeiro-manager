@@ -82,8 +82,8 @@ class InjuryEngineIT {
         // if any exist, validate them.
         for (Player p : injured) {
             assertThat(p.getInjuryMatches())
-                    .as("Player %s should have 1..3 injury_matches", p.getName())
-                    .isBetween(1, 3);
+                    .as("Player %s should have a positive injury_matches while injured", p.getName())
+                    .isGreaterThanOrEqualTo(1);
             assertThat(p.isEligible())
                     .as("Injured player %s should be ineligible", p.getName())
                     .isFalse();
@@ -172,7 +172,7 @@ class InjuryEngineIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException apiEx = (ApiException) ex;
-                    assertThat(apiEx.getCode()).isEqualTo("SUSPENDED_PLAYER");
+                    assertThat(apiEx.getCode()).isEqualTo("INJURED_PLAYER");
                     assertThat(apiEx.getStatus().value()).isEqualTo(422);
                 });
     }

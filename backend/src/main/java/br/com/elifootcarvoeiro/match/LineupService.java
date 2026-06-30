@@ -88,7 +88,7 @@ public class LineupService {
         List<Player> clubPlayers = playerRepository.findByClubId(clubId);
         validatePlayersOwnedByClub(startingIds, clubPlayers);
         validateGkCount(startingIds, clubPlayers);
-        validateNoSuspended(startingIds, clubPlayers);
+        validateNoIneligible(startingIds, clubPlayers);
         Map<UUID, PlayerRole> resolvedRoles = validateAndParseRoles(starters, clubPlayers);
 
         Lineup lineup = lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId).orElse(null);
@@ -140,7 +140,7 @@ public class LineupService {
                             .filter(LineupPlayer::isStarting)
                             .map(LineupPlayer::getPlayerId)
                             .toList();
-                    return playerIds.stream()
+                    List<Player> eligibleXi = playerIds.stream()
                             .map(playerId -> playerRepository.findById(playerId)
                                     .orElseThrow(() -> new ApiException(
                                             "PLAYER_NOT_FOUND",
@@ -148,6 +148,9 @@ public class LineupService {
                                             HttpStatus.NOT_FOUND)))
                             .filter(Player::isEligible)
                             .collect(java.util.stream.Collectors.toList());
+                    // If suspensions/injuries left the saved XI short, fall back to bestXi so the
+                    // engine always receives a full 11 (TeamStrengthCalculator divides by xi.size()).
+                    return eligibleXi.size() == 11 ? eligibleXi : bestXi(clubId);
                 })
                 .orElseGet(() -> bestXi(clubId));
     }
@@ -267,16 +270,26 @@ public class LineupService {
         }
     }
 
-    private void validateNoSuspended(List<UUID> startingIds, List<Player> clubPlayers) {
+    private void validateNoIneligible(List<UUID> startingIds, List<Player> clubPlayers) {
         Set<UUID> startingSet = Set.copyOf(startingIds);
         List<UUID> suspended = clubPlayers.stream()
                 .filter(p -> startingSet.contains(p.getId()))
-                .filter(p -> !p.isEligible())
+                .filter(p -> p.getSuspensionRemaining() > 0)
                 .map(Player::getId)
                 .toList();
         if (!suspended.isEmpty()) {
             throw new ApiException("SUSPENDED_PLAYER",
                     "These players are suspended and cannot be selected: " + suspended,
+                    HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+        List<UUID> injured = clubPlayers.stream()
+                .filter(p -> startingSet.contains(p.getId()))
+                .filter(p -> p.getInjuryMatches() > 0)
+                .map(Player::getId)
+                .toList();
+        if (!injured.isEmpty()) {
+            throw new ApiException("INJURED_PLAYER",
+                    "These players are injured and cannot be selected: " + injured,
                     HttpStatus.UNPROCESSABLE_CONTENT);
         }
     }
