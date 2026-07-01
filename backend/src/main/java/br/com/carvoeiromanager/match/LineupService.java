@@ -58,10 +58,11 @@ public class LineupService {
      * Enforces that the save game is owned by the user and the club belongs to that save game.
      */
     public SquadResponse getSquad(UUID saveGameId, UUID clubId, UUID userId) {
+        LocalDate onDate = saveGameService.requireOwned(saveGameId, userId).getCurrentDate();
         requireOwnedClub(saveGameId, clubId, userId);
         Map<UUID, PlayerRole> roleByPlayer = currentRoles(saveGameId, clubId);
         List<PlayerResponse> responses = playerRepository.findByClubId(clubId).stream()
-                .map(p -> toPlayerResponse(p, roleByPlayer.get(p.getId())))
+                .map(p -> toPlayerResponse(p, roleByPlayer.get(p.getId()), onDate))
                 .toList();
         return new SquadResponse(responses);
     }
@@ -371,7 +372,8 @@ public class LineupService {
         return map;
     }
 
-    private PlayerResponse toPlayerResponse(Player p, PlayerRole role) {
+    private PlayerResponse toPlayerResponse(Player p, PlayerRole role, LocalDate onDate) {
+        int fitness = fitnessCalculator.effectiveFitness(p.getFitness(), p.getLastMatchDate(), onDate, p.getAge());
         return new PlayerResponse(
                 p.getId(),
                 p.getName(),
@@ -391,7 +393,9 @@ public class LineupService {
                 p.isEligible(),
                 role != null ? role.name() : null,
                 p.getContractYears(),
-                contractValuation.wageDemand(p.getOverall(), p.getAge()));
+                contractValuation.wageDemand(p.getOverall(), p.getAge()),
+                fitness,
+                p.getInjurySeverity().name());
     }
 
     @Transactional

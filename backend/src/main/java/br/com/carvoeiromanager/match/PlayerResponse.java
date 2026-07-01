@@ -22,6 +22,8 @@ public record PlayerResponse(
         boolean eligible,
         String role,
         int contractYears,
-        BigDecimal wageDemand
+        BigDecimal wageDemand,
+        int fitness,
+        String injurySeverity
 ) {
 }
