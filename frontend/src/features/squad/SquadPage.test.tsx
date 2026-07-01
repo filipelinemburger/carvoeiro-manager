@@ -22,7 +22,7 @@ const mockGetLineup = vi.mocked(getLineup)
 const mockSetLineup = vi.mocked(setLineup)
 const mockRenewContract = vi.mocked(renewContract)
 
-const STATE = { form: 0, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0, eligible: true, role: null, contractYears: 2, wageDemand: 90000 }
+const STATE = { form: 0, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0, injurySeverity: 'NONE' as const, eligible: true, role: null, contractYears: 2, wageDemand: 90000, fitness: 100 }
 
 const GK: PlayerResponse = {
   id: 'p-gk',
@@ -87,12 +87,16 @@ SUSPENDED.suspensionRemaining = 1
 
 const INJURED = makeOutfield('p-inj', 'Lesionado Um', 'DEF')
 INJURED.eligible = false
-INJURED.injuryMatches = 2
+INJURED.injuryMatches = 3
+INJURED.injurySeverity = 'MINOR'
+
+const LOW_FITNESS = makeOutfield('p-lf', 'Baixo Fôlego', 'MID')
+LOW_FITNESS.fitness = 45
 
 const ALL_OUTFIELD = [DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
 
 const squad: SquadResponse = {
-  players: [GK, GK2, ...ALL_OUTFIELD, MID4, ATT4, SUSPENDED, INJURED],
+  players: [GK, GK2, ...ALL_OUTFIELD, MID4, ATT4, SUSPENDED, INJURED, LOW_FITNESS],
 }
 
 function makeQueryClient() {
@@ -225,7 +229,7 @@ describe('SquadPage', () => {
     await waitFor(() => screen.getByText('Lesionado Um'))
     const checkbox = screen.getByRole('checkbox', { name: /lesionado um/i })
     expect(checkbox).toBeDisabled()
-    expect(screen.getByText(/\(Lesionado 2\)/i)).toBeInTheDocument()
+    expect(screen.getByText(/\(Lesionado \(Leve\) 3\)/i)).toBeInTheDocument()
   })
 
   it('renews a contract from the details dialog', async () => {
@@ -356,5 +360,11 @@ describe('SquadPage', () => {
     fireEvent.click(screen.getByText('Goleiro Fim'))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByTitle('Contrato terminando')).toBeInTheDocument()
+  })
+
+  it('renders a fitness bar and injury severity for players', async () => {
+    renderWithProviders()
+    expect(await screen.findByLabelText('Condição 45%')).toBeInTheDocument()
+    expect(screen.getByText(/Lesionado \(Leve\) 3/)).toBeInTheDocument()
   })
 })

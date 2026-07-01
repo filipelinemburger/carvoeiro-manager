@@ -12,6 +12,7 @@ import type { PlayerResponse, PlayerRole, LineupStarter } from '../../api/types'
 import { TacticsPanel } from './TacticsPanel'
 import { PlayerDetails } from './PlayerDetails'
 import { Collapsible } from '../../components/Collapsible'
+import { FitnessBar } from './FitnessBar'
 
 const FORMATIONS = ['4-4-2', '4-3-3', '3-5-2', '4-2-3-1', '5-3-2']
 
@@ -62,6 +63,12 @@ function formLabel(form: number): string {
   if (form > 0) return `▲ +${form}`
   if (form < 0) return `▼ ${form}`
   return '–'
+}
+
+const SEVERITY_LABEL: Record<string, string> = {
+  KNOCK: 'Pancada',
+  MINOR: 'Leve',
+  MAJOR: 'Grave',
 }
 
 /** Count selected players per position band. */
@@ -259,7 +266,9 @@ export function SquadPage() {
       return <Typography component="span" color="error" sx={{ ml: 1, fontSize: '0.85em' }}>(Suspenso {player.suspensionRemaining})</Typography>
     }
     if (player.injuryMatches > 0) {
-      return <Typography component="span" color="error" sx={{ ml: 1, fontSize: '0.85em' }}>(Lesionado {player.injuryMatches})</Typography>
+      const tier = SEVERITY_LABEL[player.injurySeverity] ?? ''
+      const label = tier ? `(Lesionado (${tier}) ${player.injuryMatches})` : `(Lesionado ${player.injuryMatches})`
+      return <Typography component="span" color="error" sx={{ ml: 1, fontSize: '0.85em' }}>{label}</Typography>
     }
     return null
   }
@@ -362,6 +371,7 @@ export function SquadPage() {
                       </Box>
                       <Chip size="small" label={positionLabel(player.position)} />
                       <Chip size="small" color="primary" label={`OVR ${player.overall}`} />
+                      <Box sx={{ width: 84 }}><FitnessBar fitness={player.fitness} /></Box>
                     </Stack>
                   </CardContent>
                 </Card>
@@ -379,6 +389,7 @@ export function SquadPage() {
                   <TableCell align="center">OVR</TableCell>
                   <TableCell align="center">Forma</TableCell>
                   <TableCell align="center">Fôlego</TableCell>
+                  <TableCell align="center">Condição</TableCell>
                   <TableCell align="center">Função</TableCell>
                 </TableRow>
               </TableHead>
@@ -396,6 +407,7 @@ export function SquadPage() {
                       <TableCell align="center">{player.overall}</TableCell>
                       <TableCell align="center">{formLabel(player.form)}</TableCell>
                       <TableCell align="center">{player.stamina}</TableCell>
+                      <TableCell align="center"><FitnessBar fitness={player.fitness} /></TableCell>
                       <TableCell align="center">{isSelected && roleSelect(player)}</TableCell>
                     </TableRow>
                   )
