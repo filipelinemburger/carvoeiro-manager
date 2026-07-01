@@ -22,6 +22,12 @@ import java.util.UUID;
 @Service
 public class MatchOutcomeApplier {
 
+    private final FitnessCalculator fitnessCalculator;
+
+    public MatchOutcomeApplier(FitnessCalculator fitnessCalculator) {
+        this.fitnessCalculator = fitnessCalculator;
+    }
+
     public record TeamOutcome(List<Player> xi, int scored, int conceded, boolean managed) {
     }
 
@@ -106,18 +112,22 @@ public class MatchOutcomeApplier {
     }
 
     /**
-     * Rolls injuries for the players who played. Uses a separate {@link Random} seeded
-     * off the match seed so the existing match/event RNG is unaffected.
-     * Each player has a ~3% chance of injury (1–3 matches). When {@code managed} is true,
-     * newly injured players are recorded in {@code acc.newInjuries()}.
+     * Rolls injuries for players who played, using a separate {@link Random} seeded off the match
+     * seed so match/event RNG is unaffected. Chance rises as effective fitness falls and with age;
+     * on a hit a severity tier and its layoff are drawn. Newly injured managed players are recorded.
      */
-    public void applyInjuries(List<Player> playedXi, Random rng, boolean managed, Summary acc) {
+    public void applyInjuries(List<Player> playedXi, Map<UUID, Integer> effectiveFitnessById,
+                              Random rng, boolean managed, Summary acc) {
         for (Player p : playedXi) {
-            if (rng.nextDouble() < 0.03) {
-                int matches = 1 + rng.nextInt(3);
-                p.addInjury(matches);
+            int fitness = effectiveFitnessById.getOrDefault(p.getId(), 100);
+            double chance = fitnessCalculator.injuryChance(fitness, p.getAge());
+            if (rng.nextDouble() < chance) {
+                br.com.carvoeiromanager.player.InjurySeverity severity =
+                        br.com.carvoeiromanager.player.InjurySeverity.roll(rng);
+                int matches = severity.layoffMatches(rng);
+                p.applyInjury(severity, matches);
                 if (managed) {
-                    acc.newInjuries().add(new InjuryResponse(p.getId(), p.getName(), matches));
+                    acc.newInjuries().add(new InjuryResponse(p.getId(), p.getName(), matches, severity.name()));
                 }
             }
         }

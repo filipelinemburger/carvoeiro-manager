@@ -105,8 +105,10 @@ public class FixtureSimulator {
                     ^ fixture.getId().getMostSignificantBits()
                     ^ (long) fixture.getRound();
             Random injuryRng = new Random(injurySeed ^ 0x1A70F1E5L);
-            matchOutcomeApplier.applyInjuries(sim.homeXi(), injuryRng, homeManaged, summary);
-            matchOutcomeApplier.applyInjuries(sim.awayXi(), injuryRng, awayManaged, summary);
+            // Effective fitness map populated by Task 6+; defaults to 100 (full fitness) until then.
+            Map<UUID, Integer> effectiveFitnessById = Map.of();
+            matchOutcomeApplier.applyInjuries(sim.homeXi(), effectiveFitnessById, injuryRng, homeManaged, summary);
+            matchOutcomeApplier.applyInjuries(sim.awayXi(), effectiveFitnessById, injuryRng, awayManaged, summary);
 
             sim.homeXi().forEach(p -> { playedIds.add(p.getId()); toPersist.add(p); });
             sim.awayXi().forEach(p -> { playedIds.add(p.getId()); toPersist.add(p); });

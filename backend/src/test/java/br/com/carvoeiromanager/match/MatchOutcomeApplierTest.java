@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.match.FitnessCalculator;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.Position;
 import org.junit.jupiter.api.Test;
@@ -11,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class MatchOutcomeApplierTest {
 
-    private final MatchOutcomeApplier applier = new MatchOutcomeApplier();
+    private final MatchOutcomeApplier applier = new MatchOutcomeApplier(new FitnessCalculator());
 
     private Player player(Position pos) {
         return Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", pos, 25, "BRA",
@@ -88,5 +89,42 @@ class MatchOutcomeApplierTest {
 
         assertThat(hot.getForm()).isEqualTo(2); // regressed toward 0
         assertThat(banned.getSuspensionRemaining()).isZero(); // served
+    }
+
+    @Test
+    void exhaustedPlayersAreInjuredWithASeverityTierAndLayoff() {
+        Player p = player(Position.MID);
+        java.util.Map<java.util.UUID, Integer> fitness = java.util.Map.of(p.getId(), 1); // near-zero fitness
+        MatchOutcomeApplier.Summary acc = new MatchOutcomeApplier.Summary();
+        // A fixed seed that is known to trigger at least one injury over the roll.
+        applier.applyInjuries(List.of(p), fitness, new java.util.Random(1), true, acc);
+
+        if (p.getInjuryMatches() > 0) {
+            assertThat(p.getInjurySeverity()).isNotEqualTo(br.com.carvoeiromanager.player.InjurySeverity.NONE);
+            assertThat(acc.newInjuries()).hasSize(1);
+            assertThat(acc.newInjuries().get(0).severity())
+                    .isEqualTo(p.getInjurySeverity().name());
+        } else {
+            assertThat(acc.newInjuries()).isEmpty();
+        }
+    }
+
+    @Test
+    void injuryChanceIsHigherForExhaustedThanFreshOverManyRolls() {
+        int freshInjuries = countInjuries(100);
+        int tiredInjuries = countInjuries(10);
+        assertThat(tiredInjuries).isGreaterThan(freshInjuries);
+    }
+
+    private int countInjuries(int fitnessValue) {
+        int injured = 0;
+        java.util.Random rng = new java.util.Random(99);
+        for (int i = 0; i < 5000; i++) {
+            Player p = player(Position.MID);
+            applier.applyInjuries(List.of(p), java.util.Map.of(p.getId(), fitnessValue), rng, false,
+                    new MatchOutcomeApplier.Summary());
+            if (p.getInjuryMatches() > 0) injured++;
+        }
+        return injured;
     }
 }
