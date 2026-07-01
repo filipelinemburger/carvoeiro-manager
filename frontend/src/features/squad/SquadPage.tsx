@@ -13,6 +13,7 @@ import { TacticsPanel } from './TacticsPanel'
 import { PlayerDetails } from './PlayerDetails'
 import { Collapsible } from '../../components/Collapsible'
 import { FitnessBar } from './FitnessBar'
+import { SEVERITY_LABEL } from './injurySeverity'
 
 const FORMATIONS = ['4-4-2', '4-3-3', '3-5-2', '4-2-3-1', '5-3-2']
 
@@ -63,12 +64,6 @@ function formLabel(form: number): string {
   if (form > 0) return `▲ +${form}`
   if (form < 0) return `▼ ${form}`
   return '–'
-}
-
-const SEVERITY_LABEL: Record<string, string> = {
-  KNOCK: 'Pancada',
-  MINOR: 'Leve',
-  MAJOR: 'Grave',
 }
 
 /** Count selected players per position band. */

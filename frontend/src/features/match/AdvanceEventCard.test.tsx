@@ -128,14 +128,14 @@ describe('AdvanceEventCard', () => {
       expect(screen.queryByText(/Lesões/)).not.toBeInTheDocument()
     })
 
-    it('renders injuries section with player name and match count when injuries present', () => {
+    it('renders injuries section with player name, severity and match count when injuries present', () => {
       const withInjuries: AdvanceResponse = {
         ...MATCH_RESULT,
-        newInjuries: [{ playerId: 'p2', playerName: 'Coxa Fraca', matches: 2 }],
+        newInjuries: [{ playerId: 'p2', playerName: 'Coxa Fraca', matches: 2, severity: 'MINOR' }],
       }
       renderCard(withInjuries)
       expect(screen.getByText(/Lesões/)).toBeInTheDocument()
-      expect(screen.getByText(/Coxa Fraca — 2 jogo\(s\)/)).toBeInTheDocument()
+      expect(screen.getByText(/Coxa Fraca — Leve \(2 jogo\(s\)\)/)).toBeInTheDocument()
     })
 
     it('renders finance section with gate, match cost, result and balance', () => {

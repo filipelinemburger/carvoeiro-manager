@@ -324,6 +324,16 @@ export function Layout({ children }: LayoutProps) {
               </Box>
             </Alert>
           )}
+          {hasSaveGame && (preview?.lowFitnessStarters?.length ?? 0) > 0 && (
+            <Alert
+              severity="warning"
+              icon={<WarningAmberIcon fontSize="inherit" />}
+              sx={{ mb: 2, borderRadius: 2 }}
+            >
+              Jogadores com pouca condição:{' '}
+              {preview!.lowFitnessStarters.map(s => s.playerName).join(', ')}
+            </Alert>
+          )}
           <Paper
             elevation={0}
             sx={{

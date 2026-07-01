@@ -29,6 +29,7 @@ const PREVIEW_OK: AdvancePreviewResponse = {
   windowClosingAfterAdvance: false,
   pendingTransfers: 0,
   defaultStandingsCompetitionId: null,
+  lowFitnessStarters: [],
 }
 
 const SAVE_GAME: SaveGameResponse = {
@@ -264,5 +265,21 @@ describe('Layout shell', () => {
     fireEvent.click(screen.getByText('Excluir conta'))
     expect(deleteAccount).not.toHaveBeenCalled()
     expect(localStorage.getItem('carvoeiro_manager_token')).toBe('test-token')
+  })
+
+  it('shows a non-blocking low-fitness warning and keeps Avançar enabled', async () => {
+    ;(getAdvancePreview as Mock).mockResolvedValue({
+      ...PREVIEW_OK,
+      lowFitnessStarters: [{ playerId: 'p5', playerName: 'Cansado Silva', fitness: 42 }],
+    } satisfies AdvancePreviewResponse)
+    seedAuth('U1', 'sg-1')
+    renderLayout('/dashboard')
+
+    const avancarBtn = await screen.findByRole('button', { name: /^avançar$/i })
+    // The button must remain ENABLED — low fitness never blocks advance
+    await waitFor(() => expect(avancarBtn).not.toBeDisabled())
+    // The warning text should be visible
+    expect(screen.getByText(/Cansado Silva/)).toBeInTheDocument()
+    expect(screen.getByText(/pouca condição/i)).toBeInTheDocument()
   })
 })

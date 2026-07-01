@@ -4,6 +4,7 @@ import {
 } from '@mui/material'
 import { formatBRL } from '../../lib/money'
 import type { AdvanceResponse } from '../../api/types'
+import { SEVERITY_LABEL } from '../squad/injurySeverity'
 
 interface AdvanceEventCardProps {
   result: AdvanceResponse
@@ -138,7 +139,7 @@ function MatchTimeline({ result, saveGameId, competitionId, managedClubId }: {
                 size="small"
                 variant="outlined"
                 color="secondary"
-                label={`${inj.playerName} — ${inj.matches} jogo(s)`}
+                label={`${inj.playerName} — ${SEVERITY_LABEL[inj.severity]} (${inj.matches} jogo(s))`}
               />
             ))}
           </Stack>
