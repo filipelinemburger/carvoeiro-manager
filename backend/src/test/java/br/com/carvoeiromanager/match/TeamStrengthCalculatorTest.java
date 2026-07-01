@@ -78,6 +78,20 @@ class TeamStrengthCalculatorTest {
     }
 
     @Test
+    void lowFitnessLowersAttackAndDefenseVsFullFitness() {
+        List<Player> xi = standardXi();
+        TacticalProfile prof = profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, xi);
+        java.util.Map<UUID, Double> tired = new HashMap<>();
+        xi.forEach(pl -> tired.put(pl.getId(), 0.80)); // everyone at the 0-fitness multiplier floor
+
+        TeamMatchInput fresh = calc.compute(xi, prof); // defaults to 1.0
+        TeamMatchInput drained = calc.compute(xi, prof, tired);
+
+        assertThat(drained.attack()).isLessThan(fresh.attack());
+        assertThat(drained.defense()).isLessThan(fresh.defense());
+    }
+
+    @Test
     void setPieceThreatTracksDesignatedTaker() {
         // Squad whose only elite finisher is the ace (99); everyone else is 70.
         List<Player> xi = standardXi();

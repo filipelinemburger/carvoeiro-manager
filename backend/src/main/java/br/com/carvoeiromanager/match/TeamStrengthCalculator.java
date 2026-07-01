@@ -7,6 +7,7 @@ import br.com.carvoeiromanager.player.Position;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -19,6 +20,11 @@ public class TeamStrengthCalculator {
     private static final double DECAY_BASE = 0.15;
 
     public TeamMatchInput compute(List<Player> xi, TacticalProfile profile) {
+        return compute(xi, profile, Map.of());
+    }
+
+    public TeamMatchInput compute(List<Player> xi, TacticalProfile profile,
+                                  Map<UUID, Double> fitnessMultById) {
         double attackSum = 0.0;
         double outfieldDefenseSum = 0.0;
         double gkDefense = 0.0;
@@ -27,10 +33,11 @@ public class TeamStrengthCalculator {
 
         for (Player p : xi) {
             PlayerRole role = resolveRole(profile, p);
-            double formMult = 1.0 + 0.02 * p.getForm();
-            attackSum += role.attackContribution(p) * formMult;
+            double fitnessMult = fitnessMultById.getOrDefault(p.getId(), 1.0);
+            double mult = (1.0 + 0.02 * p.getForm()) * fitnessMult;
+            attackSum += role.attackContribution(p) * mult;
             staminaSum += p.getStamina();
-            double def = role.defenseContribution(p) * formMult;
+            double def = role.defenseContribution(p) * mult;
             if (p.getPosition() == Position.GK) {
                 gkDefense = def;
             } else {
