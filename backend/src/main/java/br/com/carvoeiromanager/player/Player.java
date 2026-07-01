@@ -8,6 +8,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -74,6 +76,16 @@ public class Player {
 
     @Column(name = "injury_matches", nullable = false)
     private int injuryMatches;
+
+    @Column(name = "fitness", nullable = false)
+    private int fitness = 100;
+
+    @Column(name = "last_match_date")
+    private LocalDate lastMatchDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "injury_severity", nullable = false, length = 10)
+    private InjurySeverity injurySeverity = InjurySeverity.NONE;
 
     @Column(name = "wage", nullable = false)
     private BigDecimal wage = BigDecimal.ZERO;
@@ -149,13 +161,32 @@ public class Player {
     }
 
     public int getInjuryMatches() { return injuryMatches; }
+    public int getFitness() { return fitness; }
+    public LocalDate getLastMatchDate() { return lastMatchDate; }
+    public InjurySeverity getInjurySeverity() { return injurySeverity; }
 
     public void addInjury(int matches) { this.injuryMatches += matches; }
 
     public void tickInjury() {
         if (this.injuryMatches > 0) {
             this.injuryMatches--;
+            if (this.injuryMatches == 0) {
+                this.injurySeverity = InjurySeverity.NONE;
+            }
         }
+    }
+
+    /** Persists post-match base fitness and the date the player featured. */
+    public void recordAppearance(int newBaseFitness, LocalDate matchDate) {
+        Objects.requireNonNull(matchDate, "matchDate must not be null");
+        this.fitness = Math.max(0, Math.min(100, newBaseFitness));
+        this.lastMatchDate = matchDate;
+    }
+
+    /** Stamps an injury: severity tier + layoff length in matches. */
+    public void applyInjury(InjurySeverity severity, int matches) {
+        this.injurySeverity = severity;
+        this.injuryMatches += matches;
     }
 
     public boolean isEligible() { return this.suspensionRemaining == 0 && this.injuryMatches == 0; }
@@ -178,6 +209,9 @@ public class Player {
         this.yellowCards = 0;
         this.suspensionRemaining = 0;
         this.injuryMatches = 0;
+        this.injurySeverity = InjurySeverity.NONE;
+        this.fitness = 100;
+        this.lastMatchDate = null;
     }
 
     public BigDecimal getWage() { return wage; }
