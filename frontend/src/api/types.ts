@@ -68,6 +68,8 @@ export type PlayerResponse = {
   role: PlayerRole | null
   contractYears: number
   wageDemand: number
+  fitness: number
+  injurySeverity: 'NONE' | 'KNOCK' | 'MINOR' | 'MAJOR'
 }
 
 export type LineupStarter = {
@@ -154,6 +156,7 @@ export type Injury = {
   playerId: string
   playerName: string
   matches: number
+  severity: 'KNOCK' | 'MINOR' | 'MAJOR'
 }
 
 export type AdvanceResponse = {
@@ -176,6 +179,12 @@ export type TopScorerResponse = {
   goals: number
 }
 
+export type LowFitnessStarter = {
+  playerId: string
+  playerName: string
+  fitness: number
+}
+
 export type IneligibleStarter = {
   playerId: string
   playerName: string
@@ -189,6 +198,7 @@ export type AdvancePreviewResponse = {
   windowClosingAfterAdvance: boolean
   pendingTransfers: number
   defaultStandingsCompetitionId: string | null
+  lowFitnessStarters: LowFitnessStarter[]
 }
 
 export type SquadChange = {
