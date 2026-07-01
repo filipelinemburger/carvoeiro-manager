@@ -5,10 +5,23 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5435/carvoeiro-manager}
     username: ${DB_USER:carvoeiro-manager}
     password: ${DB_PASSWORD:carvoeiro-manager}
+    hikari:
+      # Postgres rewrites batched inserts into multi-row statements, turning the
+      # ~1,400 per-row inserts of career creation into a handful of round-trips.
+      data-source-properties:
+        reWriteBatchedInserts: true
   jpa:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+    properties:
+      hibernate:
+        # Batch inserts/updates so career creation isn't one DB round-trip per row,
+        # which is unusably slow over a high-latency managed DB connection (Render).
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
   flyway:
     enabled: true
 
