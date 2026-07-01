@@ -195,8 +195,10 @@ public class LineupService {
         List<Player> allPlayers = playerRepository.findByClubId(clubId);
         List<Player> eligible = allPlayers.stream().filter(Player::isEligible).toList();
 
+        // Ascending comparator: .max(byRating) yields the highest-rated player,
+        // and .sorted(byRating.reversed()) yields best-first (top 10 outfield).
         Comparator<Player> byRating =
-                Comparator.comparingDouble((Player p) -> rating(p, onDate)).reversed();
+                Comparator.comparingDouble((Player p) -> rating(p, onDate));
 
         // Try to find an eligible GK; fall back to any GK if none are eligible.
         Player bestGk = eligible.stream()
@@ -213,7 +215,7 @@ public class LineupService {
         // Fill 10 outfield slots: prefer eligible, then fill from ineligible if needed.
         List<Player> eligibleOutfield = eligible.stream()
                 .filter(p -> p.getPosition() != Position.GK && !p.getId().equals(bestGk.getId()))
-                .sorted(byRating)
+                .sorted(byRating.reversed())
                 .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
 
         List<Player> topOutfield;
@@ -226,7 +228,7 @@ public class LineupService {
             usedIds.add(bestGk.getId());
             List<Player> ineligibleOutfield = allPlayers.stream()
                     .filter(p -> !usedIds.contains(p.getId()) && p.getPosition() != Position.GK)
-                    .sorted(byRating)
+                    .sorted(byRating.reversed())
                     .toList();
             int needed = 10 - eligibleOutfield.size();
             List<Player> combined = new java.util.ArrayList<>(eligibleOutfield);
