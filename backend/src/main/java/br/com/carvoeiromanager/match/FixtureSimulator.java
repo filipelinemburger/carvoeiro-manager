@@ -137,8 +137,8 @@ public class FixtureSimulator {
         final UUID homeClubId = fixture.getHomeClubId();
         final UUID awayClubId = fixture.getAwayClubId();
 
-        List<Player> homeXi = resolveXi(saveGameId, homeClubId, managedClubId);
-        List<Player> awayXi = resolveXi(saveGameId, awayClubId, managedClubId);
+        List<Player> homeXi = resolveXi(saveGameId, homeClubId, managedClubId, fixture.getMatchDate());
+        List<Player> awayXi = resolveXi(saveGameId, awayClubId, managedClubId, fixture.getMatchDate());
 
         TacticalProfile homeProfile = tacticsService.profileFor(saveGameId, homeClubId, homeXi);
         TacticalProfile awayProfile = tacticsService.profileFor(saveGameId, awayClubId, awayXi);
@@ -254,11 +254,11 @@ public class FixtureSimulator {
         }
     }
 
-    private List<Player> resolveXi(UUID saveGameId, UUID clubId, UUID managedClubId) {
+    private List<Player> resolveXi(UUID saveGameId, UUID clubId, UUID managedClubId, LocalDate matchDate) {
         if (clubId.equals(managedClubId)) {
             return lineupService.startingXi(saveGameId, clubId);
         }
-        return lineupService.bestXi(clubId);
+        return lineupService.bestXi(clubId, matchDate);
     }
 
     private Map<UUID, Club> buildClubMap(UUID saveGameId) {

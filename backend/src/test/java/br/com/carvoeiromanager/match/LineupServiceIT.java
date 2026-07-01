@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -291,6 +293,85 @@ class LineupServiceIT {
         Optional<LineupResponse> saved =
                 lineupService.getLineup(career.id(), career.managedClubId(), career.userId());
         assertThat(saved).isEmpty();
+    }
+
+    // --- (j) bestXi(clubId, date) picks the fresh player over the equally-rated but drained one ---
+
+    @Test
+    void bestXiWithDatePrefersFreshPlayerOverDrainedPlayerWithEqualOverall() {
+        // GIVEN a career club whose player pool we reshape to create a deterministic boundary:
+        //   - 1 GK at overall 90 (unambiguous GK slot)
+        //   - 9 outfield players at overall 75 (guaranteed top-9 outfield)
+        //   - 1 fresh outfield player at overall 60, fitness 100, no lastMatchDate
+        //   - 1 drained outfield player at overall 60, fitness 10, lastMatchDate = matchDate (no recovery)
+        //   - remaining outfield players set to overall 30 (clearly out)
+        Career career = createCareer();
+        UUID clubId = career.managedClubId();
+        LocalDate matchDate = LocalDate.of(2025, 8, 10);
+
+        List<Player> allPlayers = playerRepository.findByClubId(clubId);
+
+        // Partition by position
+        List<Player> gks = allPlayers.stream()
+                .filter(p -> p.getPosition() == Position.GK)
+                .collect(Collectors.toList());
+        List<Player> outfield = allPlayers.stream()
+                .filter(p -> p.getPosition() != Position.GK)
+                .collect(Collectors.toList());
+
+        assertThat(gks).isNotEmpty();
+        assertThat(outfield.size()).isGreaterThanOrEqualTo(11);
+
+        // Ensure exactly one GK dominates
+        Player bestGk = gks.get(0);
+        bestGk.setOverall(90);
+        playerRepository.save(bestGk);
+        for (int i = 1; i < gks.size(); i++) {
+            gks.get(i).setOverall(30);
+            playerRepository.save(gks.get(i));
+        }
+
+        // Top 9 outfield players — clear slots 1-9
+        for (int i = 0; i < 9; i++) {
+            outfield.get(i).setOverall(75);
+            playerRepository.save(outfield.get(i));
+        }
+
+        // Boundary fresh player (slot 10 when ranked by fitness-adjusted rating)
+        Player freshPlayer = outfield.get(9);
+        freshPlayer.setOverall(60);
+        // fitness=100 (default) and no lastMatchDate → effectiveFitness=100, rating=60×1.0=60.0
+        playerRepository.save(freshPlayer);
+
+        // Boundary drained player (loses slot 10 on fitness-adjusted ranking)
+        Player drainedPlayer = outfield.get(10);
+        drainedPlayer.setOverall(60);
+        // lastMatchDate=matchDate, base fitness=10 → effectiveFitness=10, rating=60×0.82=49.2
+        drainedPlayer.recordAppearance(10, matchDate);
+        playerRepository.save(drainedPlayer);
+
+        // Set remaining outfield players to overall 30 so they are clearly excluded
+        for (int i = 11; i < outfield.size(); i++) {
+            outfield.get(i).setOverall(30);
+            playerRepository.save(outfield.get(i));
+        }
+
+        UUID freshId = freshPlayer.getId();
+        UUID drainedId = drainedPlayer.getId();
+
+        // WHEN bestXi with matchDate is computed
+        List<Player> xi = lineupService.bestXi(clubId, matchDate);
+
+        // THEN exactly 11 players, the fresh one is in, the drained one is benched
+        assertThat(xi).hasSize(11);
+        assertThat(xi.stream().anyMatch(p -> p.getId().equals(freshId))).isTrue();
+        assertThat(xi.stream().anyMatch(p -> p.getId().equals(drainedId))).isFalse();
+
+        // AND the null-date overload (raw overall) preserves size/GK invariants —
+        // both boundary players share overall=60, so fitness does not influence the no-date path.
+        List<Player> xiNoDate = lineupService.bestXi(clubId);
+        assertThat(xiNoDate).hasSize(11);
+        assertThat(xiNoDate.stream().filter(p -> p.getPosition() == Position.GK).count()).isEqualTo(1);
     }
 
     // --- Private helpers ---

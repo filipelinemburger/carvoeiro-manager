@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -34,19 +35,22 @@ public class LineupService {
     private final LineupRepository lineupRepository;
     private final LineupPlayerRepository lineupPlayerRepository;
     private final ContractValuation contractValuation;
+    private final FitnessCalculator fitnessCalculator;
 
     public LineupService(SaveGameService saveGameService,
                          PlayerRepository playerRepository,
                          ClubRepository clubRepository,
                          LineupRepository lineupRepository,
                          LineupPlayerRepository lineupPlayerRepository,
-                         ContractValuation contractValuation) {
+                         ContractValuation contractValuation,
+                         FitnessCalculator fitnessCalculator) {
         this.saveGameService = saveGameService;
         this.playerRepository = playerRepository;
         this.clubRepository = clubRepository;
         this.lineupRepository = lineupRepository;
         this.lineupPlayerRepository = lineupPlayerRepository;
         this.contractValuation = contractValuation;
+        this.fitnessCalculator = fitnessCalculator;
     }
 
     /**
@@ -172,22 +176,35 @@ public class LineupService {
     }
 
     /**
-     * Picks the best XI for a club: the top GK by overall + the top 10 outfield players by overall.
-     * Eligible players (not suspended, not injured) are preferred. If there are fewer than 11
-     * eligible players, ineligible players are used as fallback (ordered by overall) to ensure
-     * the match engine always has a full XI. A missing GK is similarly filled from ineligible GKs.
+     * Picks the best XI for a club using raw overall for ranking (no fitness adjustment).
+     * Delegates to {@link #bestXi(UUID, LocalDate)} with a null date.
      */
     public List<Player> bestXi(UUID clubId) {
+        return bestXi(clubId, null);
+    }
+
+    /**
+     * Picks the best XI for a club, ranking candidates by a fitness-adjusted rating when
+     * {@code onDate} is supplied, or by raw overall when {@code onDate} is null.
+     * <p>
+     * Eligible players (not suspended, not injured) are preferred. If there are fewer than 11
+     * eligible players, ineligible players are used as fallback (ordered by rating) to ensure
+     * the match engine always has a full XI. A missing GK is similarly filled from ineligible GKs.
+     */
+    public List<Player> bestXi(UUID clubId, LocalDate onDate) {
         List<Player> allPlayers = playerRepository.findByClubId(clubId);
         List<Player> eligible = allPlayers.stream().filter(Player::isEligible).toList();
+
+        Comparator<Player> byRating =
+                Comparator.comparingDouble((Player p) -> rating(p, onDate)).reversed();
 
         // Try to find an eligible GK; fall back to any GK if none are eligible.
         Player bestGk = eligible.stream()
                 .filter(p -> p.getPosition() == Position.GK)
-                .max(Comparator.comparingInt(Player::getOverall))
+                .max(byRating)
                 .orElseGet(() -> allPlayers.stream()
                         .filter(p -> p.getPosition() == Position.GK)
-                        .max(Comparator.comparingInt(Player::getOverall))
+                        .max(byRating)
                         .orElseThrow(() -> new ApiException(
                                 "NO_GK_FOUND",
                                 "Club " + clubId + " has no goalkeeper at all",
@@ -196,7 +213,7 @@ public class LineupService {
         // Fill 10 outfield slots: prefer eligible, then fill from ineligible if needed.
         List<Player> eligibleOutfield = eligible.stream()
                 .filter(p -> p.getPosition() != Position.GK && !p.getId().equals(bestGk.getId()))
-                .sorted(Comparator.comparingInt(Player::getOverall).reversed())
+                .sorted(byRating)
                 .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
 
         List<Player> topOutfield;
@@ -209,7 +226,7 @@ public class LineupService {
             usedIds.add(bestGk.getId());
             List<Player> ineligibleOutfield = allPlayers.stream()
                     .filter(p -> !usedIds.contains(p.getId()) && p.getPosition() != Position.GK)
-                    .sorted(Comparator.comparingInt(Player::getOverall).reversed())
+                    .sorted(byRating)
                     .toList();
             int needed = 10 - eligibleOutfield.size();
             List<Player> combined = new java.util.ArrayList<>(eligibleOutfield);
@@ -221,6 +238,15 @@ public class LineupService {
                 java.util.stream.Stream.concat(java.util.stream.Stream.of(bestGk), topOutfield.stream())
                         .toList()
         );
+    }
+
+    /** Fitness-adjusted rating used to rank candidates; raw overall when no date is supplied. */
+    private double rating(Player p, LocalDate onDate) {
+        if (onDate == null) {
+            return p.getOverall();
+        }
+        int fit = fitnessCalculator.effectiveFitness(p.getFitness(), p.getLastMatchDate(), onDate, p.getAge());
+        return p.getOverall() * fitnessCalculator.fitnessMult(fit);
     }
 
     // --- Private validation helpers ---
