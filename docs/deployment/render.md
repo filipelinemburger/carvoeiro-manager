@@ -62,17 +62,17 @@ In Neon:
 5. Create a database named:
 
 ```text
-carvoeiro_manager
+carvoeiro-manager
 ```
 
 6. Create or use a role named:
 
 ```text
-carvoeiro_manager
+carvoeiro-manager
 ```
 
 7. Open the **Connection Details** widget.
-8. Select the `carvoeiro_manager` database and `carvoeiro_manager` role.
+8. Select the `carvoeiro-manager` database and `carvoeiro-manager` role.
 9. Turn **Connection pooling** off for the first deployment.
 10. Copy the direct connection string.
 
@@ -93,8 +93,8 @@ DB_PASSWORD=PASSWORD
 Example:
 
 ```bash
-DB_URL=jdbc:postgresql://ep-cool-darkness-a1b2c3d4.us-east-2.aws.neon.tech/carvoeiro_manager?sslmode=require
-DB_USER=carvoeiro_manager
+DB_URL=jdbc:postgresql://ep-cool-darkness-a1b2c3d4.us-east-2.aws.neon.tech/carvoeiro-manager?sslmode=require
+DB_USER=carvoeiro-manager
 DB_PASSWORD=the-password-from-neon
 ```
 
@@ -152,8 +152,8 @@ On the Render backend service, open **Environment** and add:
 
 ```bash
 PORT=8088
-DB_URL=jdbc:postgresql://YOUR_NEON_HOST/carvoeiro_manager?sslmode=require
-DB_USER=carvoeiro_manager
+DB_URL=jdbc:postgresql://YOUR_NEON_HOST/carvoeiro-manager?sslmode=require
+DB_USER=carvoeiro-manager
 DB_PASSWORD=your-neon-password
 JWT_SECRET=replace-with-a-long-random-secret
 JWT_EXP_MIN=720

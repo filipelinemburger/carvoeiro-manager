@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 
@@ -8,15 +8,25 @@ export function RegisterPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  // Synchronous re-entry guard: React state updates are async, so a rapid second
+  // click or Enter press could fire before `submitting` disables the button.
+  const inFlight = useRef(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (inFlight.current) return
+    inFlight.current = true
+    setSubmitting(true)
     setError(null)
     try {
       await register({ username, password })
       void navigate('/dashboard')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao criar conta')
+      // Re-enable only on failure; on success we navigate away and unmount.
+      inFlight.current = false
+      setSubmitting(false)
     }
   }
 
@@ -58,8 +68,8 @@ export function RegisterPage() {
             {error}
           </p>
         )}
-        <button type="submit" className="cec-btn" style={{ width: '100%' }}>
-          Criar conta
+        <button type="submit" className="cec-btn" style={{ width: '100%' }} disabled={submitting}>
+          {submitting ? 'Criando conta…' : 'Criar conta'}
         </button>
       </form>
       <p style={{ marginTop: '1rem', textAlign: 'center' }}>
