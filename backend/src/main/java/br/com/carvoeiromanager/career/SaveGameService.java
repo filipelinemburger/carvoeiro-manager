@@ -100,6 +100,7 @@ public class SaveGameService {
 
         for (SeedClub seedClub : seedClubs) {
             Club club = Club.create(saveGame.getId(), seedClub.name(), seedClub.shortName());
+            club.setCommonName(seedClub.commonName() != null ? seedClub.commonName() : seedClub.name());
             club.setNickname(seedClub.nickname());
             club.setPrimaryColor(seedClub.primaryColor());
             club.setSecondaryColor(seedClub.secondaryColor());

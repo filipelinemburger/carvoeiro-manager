@@ -13,33 +13,3 @@ body {
   min-height: 100vh;
 }
 #root { min-height: 100vh; display: flex; flex-direction: column; }
-.cec-header {
-  background: var(--cec-black);
-  color: var(--cec-yellow);
-  padding: 0 1rem;
-  display: flex;
-  align-items: center;
-  min-height: 48px;
-  gap: 0.5rem;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-.cec-content-panel {
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 8px;
-  padding: 1.5rem;
-  margin: 1.5rem auto;
-  max-width: 960px;
-  width: calc(100% - 2rem);
-  box-shadow: 0 2px 16px rgba(0,0,0,0.25);
-  flex: 1;
-}
-.cec-btn { background: var(--cec-yellow); color: var(--cec-black); border: 0; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600; }
-.cec-btn-primary { background: var(--cec-yellow); color: var(--cec-black); border: 0; padding: 0.5rem 1.25rem; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.95rem; }
-.cec-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.cec-icon-btn { background: transparent; border: 0; color: var(--cec-yellow); cursor: pointer; font-size: 1.25rem; padding: 0.25rem 0.5rem; border-radius: 4px; line-height: 1; }
-.cec-icon-btn:hover { background: rgba(255,255,255,0.1); }
-.cec-nav-link { color: var(--cec-yellow); text-decoration: none; padding: 0.35rem 0.6rem; border-radius: 4px; font-size: 0.875rem; font-weight: 500; white-space: nowrap; }
-.cec-nav-link:hover { background: rgba(255,255,255,0.1); }
-.cec-nav-link.active { background: var(--cec-yellow); color: var(--cec-black); font-weight: 700; }

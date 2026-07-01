@@ -1,14 +1,41 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
+import {
+  Box, Stack, Typography, Button, Checkbox, Chip, Alert, FormControl, NativeSelect, Link,
+  Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Paper, Card, CardContent,
+} from '@mui/material'
 import { getSquad, getLineup, setLineup, renewContract } from '../../api/career'
-import { formatBRL } from '../../lib/money'
 import { useAuth } from '../../auth/AuthContext'
+import { useIsMobile } from '../../lib/useIsMobile'
 import type { PlayerResponse, PlayerRole, LineupStarter } from '../../api/types'
 import { TacticsPanel } from './TacticsPanel'
+import { PlayerDetails } from './PlayerDetails'
 import { Collapsible } from '../../components/Collapsible'
 
 const FORMATIONS = ['4-4-2', '4-3-3', '3-5-2', '4-2-3-1', '5-3-2']
+
+type OutfieldPosition = 'DEF' | 'MID' | 'ATT'
+
+// Outfield players required per line for each formation (goalkeeper is always 1).
+// Numbers collapse the deeper shapes (e.g. 4-2-3-1 → 4 DEF, 5 MID, 1 ATT) and each
+// row sums to 10, so a full XI is exactly 1 GK + these.
+const FORMATION_SHAPE: Record<string, Record<OutfieldPosition, number>> = {
+  '4-4-2': { DEF: 4, MID: 4, ATT: 2 },
+  '4-3-3': { DEF: 4, MID: 3, ATT: 3 },
+  '3-5-2': { DEF: 3, MID: 5, ATT: 2 },
+  '4-2-3-1': { DEF: 4, MID: 5, ATT: 1 },
+  '5-3-2': { DEF: 5, MID: 3, ATT: 2 },
+}
+
+const BAND_LABEL: Record<OutfieldPosition, string> = {
+  DEF: 'defensor(es)', MID: 'meio-campista(s)', ATT: 'atacante(s)',
+}
+
+/** Max players allowed for a position under a formation (goalkeeper is always 1). */
+function positionCap(formation: string, position: PlayerResponse['position']): number {
+  return position === 'GK' ? 1 : FORMATION_SHAPE[formation][position]
+}
 
 // Display order for the squad list: goalkeepers, then defenders, midfielders, attackers.
 const POSITION_ORDER: Record<PlayerResponse['position'], number> = { GK: 0, DEF: 1, MID: 2, ATT: 3 }
@@ -37,13 +64,30 @@ function formLabel(form: number): string {
   return '–'
 }
 
-function validate(selected: string[], players: PlayerResponse[]): string | null {
+/** Count selected players per position band. */
+function countByPosition(selected: string[], players: PlayerResponse[]): Record<PlayerResponse['position'], number> {
+  const counts: Record<PlayerResponse['position'], number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 }
+  for (const p of players) {
+    if (selected.includes(p.id)) counts[p.position]++
+  }
+  return counts
+}
+
+function validate(selected: string[], players: PlayerResponse[], formation: string): string | null {
   if (selected.length !== 11) {
     return `Selecione exatamente 11 jogadores (${selected.length}/11)`
   }
-  const gkCount = players.filter(p => selected.includes(p.id) && p.position === 'GK').length
-  if (gkCount !== 1) {
+  const counts = countByPosition(selected, players)
+  if (counts.GK !== 1) {
     return 'A escalação precisa de exatamente 1 goleiro'
+  }
+  // The line-up must match the chosen formation exactly (e.g. 4-3-3 → 4 DEF, 3 MEI, 3 ATA).
+  // This also catches a saved XI that no longer fits after the formation was switched.
+  const shape = FORMATION_SHAPE[formation]
+  for (const pos of ['DEF', 'MID', 'ATT'] as OutfieldPosition[]) {
+    if (counts[pos] !== shape[pos]) {
+      return `A formação ${formation} exige ${shape[pos]} ${BAND_LABEL[pos]}, mas você selecionou ${counts[pos]}.`
+    }
   }
   // A saved XI can contain a player who has since become unavailable (suspended now;
   // injured once that lands — both flow through `eligible`). Block saving and make the
@@ -59,6 +103,7 @@ export function SquadPage() {
   const { token } = useAuth()
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
+  const isMobile = useIsMobile()
 
   const saveGameId = searchParams.get('saveGameId') ?? ''
   const clubId = searchParams.get('clubId') ?? ''
@@ -67,6 +112,7 @@ export function SquadPage() {
   const [selected, setSelected] = useState<string[]>([])
   const [roles, setRoles] = useState<Record<string, PlayerRole>>({})
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [detailsPlayer, setDetailsPlayer] = useState<PlayerResponse | null>(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['squad', saveGameId, clubId],
@@ -125,8 +171,17 @@ export function SquadPage() {
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] }) },
   })
 
-  const validationError = players.length > 0 ? validate(selected, players) : null
+  const validationError = players.length > 0 ? validate(selected, players, formation) : null
   const canSave = validationError === null
+
+  // Live per-position tally, used for the formation caps and the progress hint.
+  const positionCounts = countByPosition(selected, players)
+
+  // A position band is full once it holds as many players as the formation allows;
+  // further additions to that line are blocked.
+  function isBandFull(position: PlayerResponse['position']): boolean {
+    return positionCounts[position] >= positionCap(formation, position)
+  }
 
   function togglePlayer(player: PlayerResponse) {
     setSaveSuccess(false)
@@ -142,9 +197,10 @@ export function SquadPage() {
       })
       return
     }
-    // Adding: an unavailable player may never be added to the XI.
+    // Adding: an unavailable player may never be added to the XI, and the player's
+    // position line must have room under the current formation.
     if (!player.eligible) return
-    if (selected.length >= 11) return
+    if (isBandFull(player.position)) return
     setSelected(prev => [...prev, player.id])
     setRoles(prev => ({ ...prev, [player.id]: DEFAULT_ROLE[player.position] }))
   }
@@ -153,121 +209,174 @@ export function SquadPage() {
     setRoles(prev => ({ ...prev, [player.id]: role }))
   }
 
-  if (isLoading) return <p>Carregando elenco…</p>
-  if (error) return <p>Erro ao carregar elenco.</p>
+  // ── Per-player controls, shared by the desktop table and the mobile cards ──
+
+  // The player's name doubles as the trigger for the details dialog.
+  function playerNameButton(player: PlayerResponse) {
+    return (
+      <Link
+        component="button"
+        type="button"
+        underline="hover"
+        color="inherit"
+        onClick={() => setDetailsPlayer(player)}
+        sx={{ font: 'inherit', fontWeight: 600, textAlign: 'left', verticalAlign: 'baseline', cursor: 'pointer' }}
+      >
+        {player.name}
+      </Link>
+    )
+  }
+
+  function availabilityBadge(player: PlayerResponse) {
+    if (player.suspensionRemaining > 0) {
+      return <Typography component="span" color="error" sx={{ ml: 1, fontSize: '0.85em' }}>(Suspenso {player.suspensionRemaining})</Typography>
+    }
+    if (player.injuryMatches > 0) {
+      return <Typography component="span" color="error" sx={{ ml: 1, fontSize: '0.85em' }}>(Lesionado {player.injuryMatches})</Typography>
+    }
+    return null
+  }
+
+  function playerCheckbox(player: PlayerResponse, isSelected: boolean) {
+    return (
+      <Checkbox
+        size="small"
+        checked={isSelected}
+        // Block adding when the player is unavailable or their position line is already
+        // full for the formation — but a selected starter always stays uncheckable-able
+        // so the user can swap them out.
+        disabled={!isSelected && (!player.eligible || isBandFull(player.position))}
+        onChange={() => togglePlayer(player)}
+        slotProps={{ input: { 'aria-label': player.name } }}
+        sx={{ p: 0.5 }}
+      />
+    )
+  }
+
+  function roleSelect(player: PlayerResponse) {
+    return (
+      <NativeSelect
+        value={roles[player.id] ?? DEFAULT_ROLE[player.position]}
+        onChange={e => changeRole(player, e.target.value as PlayerRole)}
+        inputProps={{ 'aria-label': `Função de ${player.name}` }}
+        sx={{ fontSize: '0.85rem' }}
+      >
+        {ROLES_BY_POSITION[player.position].map(r => (
+          <option key={r} value={r}>{r}</option>
+        ))}
+      </NativeSelect>
+    )
+  }
+
+  function renewButton(player: PlayerResponse) {
+    return (
+      <Button
+        size="small"
+        color="secondary"
+        disabled={renewMut.isPending}
+        onClick={() => renewMut.mutate({ playerId: player.id, wage: player.wageDemand, contractYears: 3 })}
+      >
+        Renovar
+      </Button>
+    )
+  }
+
+  if (isLoading) return <Typography>Carregando elenco…</Typography>
+  if (error) return <Typography color="error">Erro ao carregar elenco.</Typography>
+
+  const formationSelect = (
+    <FormControl size="small" sx={{ mb: 2, minWidth: 160 }}>
+      <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.25 }}>Formação</Typography>
+      <NativeSelect value={formation} onChange={e => setFormation(e.target.value)} inputProps={{ 'aria-label': 'Formação' }}>
+        {FORMATIONS.map(f => <option key={f} value={f}>{f}</option>)}
+      </NativeSelect>
+    </FormControl>
+  )
+
+  const helperAndAlerts = (
+    <>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+        Formação {formation} — {selected.length}/11 · GOL {positionCounts.GK}/1 · DEF {positionCounts.DEF}/{FORMATION_SHAPE[formation].DEF} · MEI {positionCounts.MID}/{FORMATION_SHAPE[formation].MID} · ATA {positionCounts.ATT}/{FORMATION_SHAPE[formation].ATT}
+      </Typography>
+      {validationError && selected.length > 0 && (
+        <Alert severity="error" sx={{ mb: 2 }}>{validationError}</Alert>
+      )}
+      {saveSuccess && <Alert severity="success" sx={{ mb: 2 }}>Escalação salva com sucesso!</Alert>}
+      {mutation.isError && <Alert severity="error" sx={{ mb: 2 }}>Erro ao salvar escalação.</Alert>}
+    </>
+  )
 
   return (
-    <div style={{ padding: '1.5rem' }}>
+    <Box>
       <Collapsible title="Escalação">
-        <div style={{ marginBottom: '1rem' }}>
-          <label htmlFor="formation-select">Formação: </label>
-          <select id="formation-select" value={formation} onChange={e => setFormation(e.target.value)}>
-            {FORMATIONS.map(f => (
-              <option key={f} value={f}>{f}</option>
-            ))}
-          </select>
-        </div>
+        {formationSelect}
+        {helperAndAlerts}
 
-        <p style={{ fontSize: '0.875rem', color: '#888' }}>
-          Selecione 11 jogadores (1 goleiro obrigatório). Selecionados: {selected.length}/11
-        </p>
-
-        {validationError && selected.length > 0 && (
-          <p role="alert" style={{ color: 'red' }}>{validationError}</p>
-        )}
-        {saveSuccess && <p style={{ color: 'green' }}>Escalação salva com sucesso!</p>}
-        {mutation.isError && <p style={{ color: 'red' }}>Erro ao salvar escalação.</p>}
-
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1rem' }}>
-          <thead>
-            <tr>
-              <th></th>
-              <th style={{ textAlign: 'left' }}>Nome</th>
-              <th>Pos</th>
-              <th>OVR</th>
-              <th>Forma</th>
-              <th>Fôlego</th>
-              <th>Função</th>
-              <th>Contrato</th>
-              <th>Salário Pedido</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
+        {isMobile ? (
+          <Stack spacing={1.5} sx={{ mb: 2 }}>
             {displayPlayers.map(player => {
               const isSelected = selected.includes(player.id)
               return (
-                <tr
-                  key={player.id}
-                  style={{ background: isSelected ? '#fff9c4' : undefined }}
-                >
-                  <td>
-                  <input
-                    type="checkbox"
-                    aria-label={player.name}
-                    checked={isSelected}
-                    // Ineligible players can't be added, but a saved-then-suspended
-                    // starter must stay uncheckable-able so the user can swap them out.
-                    disabled={!player.eligible && !isSelected}
-                    onChange={() => togglePlayer(player)}
-                  />
-                </td>
-                <td>
-                  {player.name}
-                  {player.suspensionRemaining > 0 && (
-                    <span style={{ color: 'red', marginLeft: '0.5rem' }}>
-                      (Suspenso {player.suspensionRemaining})
-                    </span>
-                  )}
-                  {player.injuryMatches > 0 && (
-                    <span style={{ color: 'red', marginLeft: '0.5rem' }}>
-                      (Lesionado {player.injuryMatches})
-                    </span>
-                  )}
-                </td>
-                <td style={{ textAlign: 'center' }}>{positionLabel(player.position)}</td>
-                <td style={{ textAlign: 'center' }}>{player.overall}</td>
-                <td style={{ textAlign: 'center' }}>{formLabel(player.form)}</td>
-                <td style={{ textAlign: 'center' }}>{player.stamina}</td>
-                <td style={{ textAlign: 'center' }}>
-                  {isSelected && (
-                    <select
-                      aria-label={`Função de ${player.name}`}
-                      value={roles[player.id] ?? DEFAULT_ROLE[player.position]}
-                      onChange={e => changeRole(player, e.target.value as PlayerRole)}
-                    >
-                      {ROLES_BY_POSITION[player.position].map(r => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
-                  )}
-                </td>
-                <td style={{ textAlign: 'center', color: player.contractYears <= 1 ? 'red' : undefined }}>
-                  {player.contractYears} ano(s)
-                </td>
-                <td style={{ textAlign: 'right' }}>{formatBRL(player.wageDemand)}</td>
-                <td style={{ textAlign: 'center' }}>
-                  <button
-                    className="cec-btn"
-                    disabled={renewMut.isPending}
-                    onClick={() => renewMut.mutate({ playerId: player.id, wage: player.wageDemand, contractYears: 3 })}
-                  >
-                    Renovar
-                  </button>
-                </td>
-              </tr>
-            )
-          })}
-          </tbody>
-        </table>
+                <Card key={player.id} variant="outlined" sx={{ bgcolor: isSelected ? '#fff9c4' : undefined }}>
+                  <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                      {playerCheckbox(player, isSelected)}
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        {playerNameButton(player)}
+                        {availabilityBadge(player)}
+                      </Box>
+                      <Chip size="small" label={positionLabel(player.position)} />
+                      <Chip size="small" color="primary" label={`OVR ${player.overall}`} />
+                    </Stack>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </Stack>
+        ) : (
+          <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell padding="checkbox" />
+                  <TableCell>Nome</TableCell>
+                  <TableCell align="center">Pos</TableCell>
+                  <TableCell align="center">OVR</TableCell>
+                  <TableCell align="center">Forma</TableCell>
+                  <TableCell align="center">Fôlego</TableCell>
+                  <TableCell align="center">Função</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {displayPlayers.map(player => {
+                  const isSelected = selected.includes(player.id)
+                  return (
+                    <TableRow key={player.id} sx={{ bgcolor: isSelected ? '#fff9c4' : undefined }}>
+                      <TableCell padding="checkbox">{playerCheckbox(player, isSelected)}</TableCell>
+                      <TableCell>
+                        {playerNameButton(player)}
+                        {availabilityBadge(player)}
+                      </TableCell>
+                      <TableCell align="center">{positionLabel(player.position)}</TableCell>
+                      <TableCell align="center">{player.overall}</TableCell>
+                      <TableCell align="center">{formLabel(player.form)}</TableCell>
+                      <TableCell align="center">{player.stamina}</TableCell>
+                      <TableCell align="center">{isSelected && roleSelect(player)}</TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
 
-        <button
-          className="cec-btn"
+        <Button
+          color="secondary"
           disabled={!canSave || mutation.isPending}
           onClick={() => mutation.mutate()}
         >
           {mutation.isPending ? 'Salvando…' : 'Salvar escalação'}
-        </button>
+        </Button>
       </Collapsible>
 
       <Collapsible title="Tática">
@@ -280,6 +389,15 @@ export function SquadPage() {
           })}
         />
       </Collapsible>
-    </div>
+
+      <PlayerDetails
+        player={detailsPlayer}
+        onClose={() => setDetailsPlayer(null)}
+        lineupControl={isMobile && detailsPlayer && selected.includes(detailsPlayer.id)
+          ? roleSelect(detailsPlayer)
+          : undefined}
+        contractAction={detailsPlayer ? renewButton(detailsPlayer) : undefined}
+      />
+    </Box>
   )
 }

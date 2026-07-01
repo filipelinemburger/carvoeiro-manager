@@ -20,7 +20,8 @@ public class StandingsCalculator {
         Map<UUID, MutableRow> rows = new HashMap<>();
 
         for (Club club : clubs) {
-            rows.put(club.getId(), new MutableRow(club.getId(), club.getName()));
+            String commonName = club.getCommonName() != null ? club.getCommonName() : club.getName();
+            rows.put(club.getId(), new MutableRow(club.getId(), club.getName(), commonName));
         }
 
         for (Fixture fixture : playedFixtures) {
@@ -72,6 +73,7 @@ public class StandingsCalculator {
     private static final class MutableRow {
         final UUID clubId;
         final String clubName;
+        final String commonName;
         int played;
         int won;
         int drawn;
@@ -79,15 +81,16 @@ public class StandingsCalculator {
         int goalsFor;
         int goalsAgainst;
 
-        MutableRow(UUID clubId, String clubName) {
+        MutableRow(UUID clubId, String clubName, String commonName) {
             this.clubId = clubId;
             this.clubName = clubName;
+            this.commonName = commonName;
         }
 
         StandingRow toStandingRow() {
             final int points = won * 3 + drawn;
             final int goalDifference = goalsFor - goalsAgainst;
-            return new StandingRow(clubId, clubName, played, won, drawn, lost,
+            return new StandingRow(clubId, clubName, commonName, played, won, drawn, lost,
                     goalsFor, goalsAgainst, goalDifference, points);
         }
     }

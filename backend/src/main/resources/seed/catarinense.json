@@ -3,6 +3,7 @@
     {
       "name": "Criciúma Esporte Clube",
       "shortName": "CRI",
+      "commonName": "Criciúma",
       "nickname": "Tigre",
       "primaryColor": "#f7d417",
       "secondaryColor": "#111111",
@@ -39,6 +40,7 @@
     {
       "name": "Avaí Futebol Clube",
       "shortName": "AVA",
+      "commonName": "Avaí",
       "nickname": "Leão",
       "primaryColor": "#003399",
       "secondaryColor": "#ffffff",
@@ -63,6 +65,7 @@
     {
       "name": "Figueirense Futebol Clube",
       "shortName": "FIG",
+      "commonName": "Figueirense",
       "nickname": "Nação",
       "primaryColor": "#000000",
       "secondaryColor": "#ffffff",
@@ -87,6 +90,7 @@
     {
       "name": "Associação Chapecoense de Futebol",
       "shortName": "CHA",
+      "commonName": "Chapecoense",
       "nickname": "Verdão",
       "primaryColor": "#00a651",
       "secondaryColor": "#ffffff",
@@ -111,6 +115,7 @@
     {
       "name": "Brusque Futebol Clube",
       "shortName": "BRU",
+      "commonName": "Brusque",
       "nickname": "Quadricolor",
       "primaryColor": "#e30613",
       "secondaryColor": "#0054a6",
@@ -134,6 +139,7 @@
     {
       "name": "Clube Náutico Marcílio Dias",
       "shortName": "MAR",
+      "commonName": "Marcílio Dias",
       "nickname": "Marinheiro",
       "primaryColor": "#003080",
       "secondaryColor": "#ffffff",
@@ -157,6 +163,7 @@
     {
       "name": "Associação Desportiva Barra",
       "shortName": "BAR",
+      "commonName": "Barra",
       "nickname": "Tigrão",
       "primaryColor": "#ff6600",
       "secondaryColor": "#000000",
@@ -180,6 +187,7 @@
     {
       "name": "Associação Esportiva Concórdia",
       "shortName": "CON",
+      "commonName": "Concórdia",
       "nickname": "Galinho",
       "primaryColor": "#006400",
       "secondaryColor": "#ffff00",
@@ -203,6 +211,7 @@
     {
       "name": "Hercílio Luz Futebol Clube",
       "shortName": "HER",
+      "commonName": "Hercílio Luz",
       "nickname": "Pontepretano",
       "primaryColor": "#000000",
       "secondaryColor": "#cc0000",
@@ -226,6 +235,7 @@
     {
       "name": "Camboriú Futebol Clube",
       "shortName": "CAM",
+      "commonName": "Camboriú",
       "nickname": "Leão do Vale",
       "primaryColor": "#006699",
       "secondaryColor": "#ffffff",
@@ -249,6 +259,7 @@
     {
       "name": "Goiás Esporte Clube",
       "shortName": "GOI",
+      "commonName": "Goiás",
       "nickname": "Esmeraldino",
       "primaryColor": "#007a33",
       "secondaryColor": "#ffffff",
@@ -272,6 +283,7 @@
     {
       "name": "Coritiba Foot Ball Club",
       "shortName": "COR",
+      "commonName": "Coritiba",
       "nickname": "Coxa-Branca",
       "primaryColor": "#009900",
       "secondaryColor": "#ffffff",
@@ -295,6 +307,7 @@
     {
       "name": "Grêmio Novorizontino",
       "shortName": "NOV",
+      "commonName": "Novorizontino",
       "nickname": "Tigre do Vale",
       "primaryColor": "#ff0000",
       "secondaryColor": "#000000",
@@ -318,6 +331,7 @@
     {
       "name": "Sport Club do Recife",
       "shortName": "SPT",
+      "commonName": "Sport",
       "nickname": "Leão do Norte",
       "primaryColor": "#cc0000",
       "secondaryColor": "#000000",
@@ -341,6 +355,7 @@
     {
       "name": "Ceará Sporting Club",
       "shortName": "CEA",
+      "commonName": "Ceará",
       "nickname": "Vozão",
       "primaryColor": "#000000",
       "secondaryColor": "#ffffff",
@@ -364,6 +379,7 @@
     {
       "name": "Vila Nova Futebol Clube",
       "shortName": "VIL",
+      "commonName": "Vila Nova",
       "nickname": "Tigre Colorado",
       "primaryColor": "#cc0000",
       "secondaryColor": "#ff6600",
@@ -387,6 +403,7 @@
     {
       "name": "Clube Atlético Paysandu",
       "shortName": "PAY",
+      "commonName": "Paysandu",
       "nickname": "Papão da Curuzu",
       "primaryColor": "#003399",
       "secondaryColor": "#ffffff",
@@ -410,6 +427,7 @@
     {
       "name": "Operário Ferroviário Esporte Clube",
       "shortName": "OPE",
+      "commonName": "Operário",
       "nickname": "Fantasma",
       "primaryColor": "#000000",
       "secondaryColor": "#ffffff",
@@ -433,6 +451,7 @@
     {
       "name": "Clube de Regatas Brasil",
       "shortName": "CRB",
+      "commonName": "CRB",
       "nickname": "Galo da Praia",
       "primaryColor": "#cc0000",
       "secondaryColor": "#000000",
@@ -456,6 +475,7 @@
     {
       "name": "Guarani Futebol Clube",
       "shortName": "GUA",
+      "commonName": "Guarani",
       "nickname": "Bugre",
       "primaryColor": "#007a33",
       "secondaryColor": "#ffffff",
@@ -479,6 +499,7 @@
     {
       "name": "Ponte Preta Futebol Clube",
       "shortName": "PPT",
+      "commonName": "Ponte Preta",
       "nickname": "Macaca",
       "primaryColor": "#000000",
       "secondaryColor": "#ffffff",
@@ -502,6 +523,7 @@
     {
       "name": "Mirassol Futebol Clube",
       "shortName": "MIR",
+      "commonName": "Mirassol",
       "nickname": "Leão do Interior",
       "primaryColor": "#ffff00",
       "secondaryColor": "#0000cc",
@@ -532,6 +554,7 @@
     {
       "name": "Clube do Remo",
       "shortName": "REM",
+      "commonName": "Remo",
       "nickname": "Azulino",
       "primaryColor": "#003399",
       "secondaryColor": "#ffffff",
@@ -555,6 +578,7 @@
     {
       "name": "Fortaleza Esporte Clube",
       "shortName": "FOR",
+      "commonName": "Fortaleza",
       "nickname": "Layon",
       "primaryColor": "#003399",
       "secondaryColor": "#ffffff",
@@ -582,6 +606,7 @@
     {
       "name": "Botafogo Futebol Clube (SP)",
       "shortName": "BOT",
+      "commonName": "Botafogo-SP",
       "nickname": "Pantera",
       "primaryColor": "#000000",
       "secondaryColor": "#cc0000",

@@ -1,11 +1,33 @@
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
+import {
+  Box, Button, Card, CardContent, Chip, List, ListItem, Paper, Stack,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography,
+} from '@mui/material'
 import { getStandings, getTopScorers, rolloverSeason } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
-import type { RolloverResponse } from '../../api/types'
+import { useIsMobile } from '../../lib/useIsMobile'
+import type { RolloverResponse, SquadChange } from '../../api/types'
+
+/** A titled block listing squad changes (retirements, newcomers, expired contracts). */
+function SquadChangeList({ title, changes }: { title: string; changes: SquadChange[] }) {
+  return (
+    <Box>
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>{title}</Typography>
+      <List dense disablePadding>
+        {changes.map((c, i) => (
+          <ListItem key={`${title}-${i}`} disableGutters sx={{ py: 0.25 }}>
+            <Typography variant="body2">{c.playerName} ({c.position}, {c.age} anos)</Typography>
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  )
+}
 
 export function SeasonSummaryPage() {
   const { token } = useAuth()
+  const isMobile = useIsMobile()
   const [searchParams] = useSearchParams()
   const saveGameId = searchParams.get('saveGameId') ?? ''
   const competitionId = searchParams.get('competitionId') ?? ''
@@ -27,102 +49,127 @@ export function SeasonSummaryPage() {
     mutationFn: () => rolloverSeason(saveGameId, token ?? ''),
   })
 
-  if (standings.isLoading) return <p>Carregando resumo da temporada…</p>
-  if (standings.error) return <p>Erro ao carregar o resumo da temporada.</p>
+  if (standings.isLoading) return <Typography sx={{ p: 3 }}>Carregando resumo da temporada…</Typography>
+  if (standings.error) return <Typography sx={{ p: 3 }} color="error">Erro ao carregar o resumo da temporada.</Typography>
 
   const table = standings.data ?? []
   const champion = table[0]
   const result = rollover.data
 
   return (
-    <div style={{ padding: '1.5rem' }}>
-      <h2>Fim de Temporada</h2>
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Fim de Temporada</Typography>
+
       {champion && (
-        <p style={{ fontWeight: 'bold', color: 'green' }}>Campeão: {champion.clubName} 🏆</p>
+        <Typography variant="h6" sx={{ fontWeight: 700, color: 'success.main', mb: 2 }}>
+          Campeão: {champion.clubName} 🏆
+        </Typography>
       )}
 
-      <h3>Classificação Final</h3>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1rem' }}>
-        <thead>
-          <tr>
-            <th style={{ textAlign: 'center' }}>Pos</th>
-            <th style={{ textAlign: 'left' }}>Clube</th>
-            <th style={{ textAlign: 'center' }}>P</th>
-            <th style={{ textAlign: 'center' }}>GD</th>
-            <th style={{ textAlign: 'center' }}>Pts</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>Classificação Final</Typography>
+      {isMobile ? (
+        <Stack spacing={1} sx={{ mb: 3 }}>
           {table.map((row, index) => {
             const isManaged = row.clubId === managedClubId
             return (
-              <tr key={row.clubId} data-managed={isManaged ? 'true' : undefined}
-                  style={{ fontWeight: isManaged ? 'bold' : undefined }}>
-                <td style={{ textAlign: 'center' }}>{index + 1}</td>
-                <td>{row.clubName}</td>
-                <td style={{ textAlign: 'center' }}>{row.played}</td>
-                <td style={{ textAlign: 'center' }}>{row.goalDifference}</td>
-                <td style={{ textAlign: 'center' }}>{row.points}</td>
-              </tr>
+              <Card key={row.clubId} variant="outlined" data-managed={isManaged ? 'true' : undefined}
+                sx={{ borderColor: isManaged ? 'primary.main' : undefined }}>
+                <CardContent>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+                    <Chip size="small" label={`${index + 1}º`} />
+                    <Typography sx={{ fontWeight: isManaged ? 700 : 600 }}>{row.clubName}</Typography>
+                  </Stack>
+                  <Stack direction="row" spacing={2}>
+                    <Typography variant="body2" color="text.secondary">J {row.played}</Typography>
+                    <Typography variant="body2" color="text.secondary">SG {row.goalDifference}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>Pts {row.points}</Typography>
+                  </Stack>
+                </CardContent>
+              </Card>
             )
           })}
-        </tbody>
-      </table>
+        </Stack>
+      ) : (
+        <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell align="center">Pos</TableCell>
+                <TableCell>Clube</TableCell>
+                <TableCell align="center">P</TableCell>
+                <TableCell align="center">GD</TableCell>
+                <TableCell align="center">Pts</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {table.map((row, index) => {
+                const isManaged = row.clubId === managedClubId
+                return (
+                  <TableRow key={row.clubId} data-managed={isManaged ? 'true' : undefined}
+                    sx={{ '& td': { fontWeight: isManaged ? 700 : undefined } }}>
+                    <TableCell align="center">{index + 1}</TableCell>
+                    <TableCell>{row.clubName}</TableCell>
+                    <TableCell align="center">{row.played}</TableCell>
+                    <TableCell align="center">{row.goalDifference}</TableCell>
+                    <TableCell align="center">{row.points}</TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
 
-      <h3>Artilheiros</h3>
-      <ul>
+      <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>Artilheiros</Typography>
+      <List dense sx={{ mb: 2 }}>
         {(scorers.data ?? []).map((s, i) => (
-          <li key={`${s.playerName}-${i}`}>{s.playerName} ({s.clubName}) — {s.goals}</li>
+          <ListItem key={`${s.playerName}-${i}`} disableGutters sx={{ py: 0.25 }}>
+            <Typography variant="body2">{s.playerName} ({s.clubName}) — {s.goals}</Typography>
+          </ListItem>
         ))}
-      </ul>
+      </List>
 
       {!result && (
-        <button
-          className="cec-btn"
+        <Button
+          variant="contained"
           disabled={rollover.isPending}
           onClick={() => rollover.mutate()}
         >
           {rollover.isPending ? 'Processando…' : 'Iniciar próxima temporada'}
-        </button>
+        </Button>
       )}
-      {rollover.isError && <p style={{ color: 'red' }}>Erro ao iniciar a próxima temporada.</p>}
+      {rollover.isError && (
+        <Typography color="error" sx={{ mt: 1 }}>Erro ao iniciar a próxima temporada.</Typography>
+      )}
 
       {result && (
-        <div style={{ marginTop: '1rem' }}>
-          <p style={{ color: 'green' }}>Temporada {result.seasonYear} iniciada!</p>
+        <Stack spacing={2} sx={{ mt: 2 }}>
+          <Typography sx={{ color: 'success.main', fontWeight: 600 }}>
+            Temporada {result.seasonYear} iniciada!
+          </Typography>
           {result.retirements.length > 0 && (
-            <div>
-              <h4>Aposentadorias</h4>
-              <ul>
-                {result.retirements.map((c, i) => (
-                  <li key={`ret-${i}`}>{c.playerName} ({c.position}, {c.age} anos)</li>
-                ))}
-              </ul>
-            </div>
+            <SquadChangeList title="Aposentadorias" changes={result.retirements} />
           )}
           {result.newcomers.length > 0 && (
-            <div>
-              <h4>Novatos</h4>
-              <ul>
-                {result.newcomers.map((c, i) => (
-                  <li key={`new-${i}`}>{c.playerName} ({c.position}, {c.age} anos)</li>
-                ))}
-              </ul>
-            </div>
+            <SquadChangeList title="Novatos" changes={result.newcomers} />
           )}
           {(result.expiredContracts?.length ?? 0) > 0 && (
-            <section>
-              <h3>Contratos expirados</h3>
-              <ul>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>Contratos expirados</Typography>
+              <List dense disablePadding>
                 {result.expiredContracts.map((c, i) => (
-                  <li key={i}>{c.playerName} ({c.position}, {c.age})</li>
+                  <ListItem key={i} disableGutters sx={{ py: 0.25 }}>
+                    <Typography variant="body2">{c.playerName} ({c.position}, {c.age})</Typography>
+                  </ListItem>
                 ))}
-              </ul>
-            </section>
+              </List>
+            </Box>
           )}
-          <Link to="/dashboard"><button className="cec-btn">Voltar ao painel</button></Link>
-        </div>
+          <Box>
+            <Button component={Link} to="/dashboard" variant="outlined">Voltar ao painel</Button>
+          </Box>
+        </Stack>
       )}
-    </div>
+    </Box>
   )
 }

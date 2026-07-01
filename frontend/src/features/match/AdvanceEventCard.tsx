@@ -1,4 +1,7 @@
 import { Link } from 'react-router-dom'
+import {
+  Box, Button, Card, CardContent, Chip, Divider, List, ListItem, Stack, Typography,
+} from '@mui/material'
 import { formatBRL } from '../../lib/money'
 import type { AdvanceResponse } from '../../api/types'
 
@@ -17,15 +20,32 @@ export function formatDatePtBR(isoDate: string | null): string {
   return new Date(year, month - 1, day).toLocaleDateString('pt-BR')
 }
 
+/** A single timeline entry: a coloured dot/emoji marker plus its content. */
 function TimelineNode({ children, dot = '●' }: { children: React.ReactNode; dot?: string }) {
   return (
-    <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '20px' }}>
-        <span style={{ color: 'var(--cec-yellow)', fontSize: '0.9rem', lineHeight: 1 }}>{dot}</span>
-        <div style={{ flex: 1, width: '2px', background: '#ddd', marginTop: '4px' }} />
-      </div>
-      <div style={{ flex: 1, paddingBottom: '0.5rem' }}>{children}</div>
-    </div>
+    <Stack direction="row" spacing={1.5} sx={{ mb: 1 }}>
+      <Stack sx={{ alignItems: 'center', minWidth: 20 }}>
+        <Box component="span" sx={{ color: 'var(--cec-yellow)', fontSize: '0.9rem', lineHeight: 1 }}>
+          {dot}
+        </Box>
+        <Box sx={{ flex: 1, width: '2px', bgcolor: '#ddd', mt: '4px' }} />
+      </Stack>
+      <Box sx={{ flex: 1, pb: 1, minWidth: 0 }}>{children}</Box>
+    </Stack>
+  )
+}
+
+/**
+ * A season-summary call-to-action. Kept as a real <button> inside a router <Link>
+ * so it exposes role="button" (the surrounding <a> is the navigation target).
+ */
+function SeasonSummaryCTA({ url }: { url: string }) {
+  return (
+    <Box sx={{ mt: 1 }}>
+      <Link to={url} style={{ textDecoration: 'none' }}>
+        <Button variant="contained">Ver resumo da temporada</Button>
+      </Link>
+    </Box>
   )
 }
 
@@ -49,84 +69,111 @@ function MatchTimeline({ result, saveGameId, competitionId, managedClubId }: {
           const mine = r.homeClubId === managedClubId || r.awayClubId === managedClubId
           return (
             <TimelineNode key={r.fixtureId} dot={mine ? '⭐' : '●'}>
-              <span
-                style={{
+              {/* Kept as a native <span> with inline fontWeight so the "bold managed match"
+                  contract stays observable via element.style. */}
+              <Typography
+                component="span"
+                sx={{
                   fontFamily: 'monospace',
                   fontSize: '0.95rem',
-                  fontWeight: mine ? 700 : undefined,
                   ...(mine
-                    ? { background: 'rgba(247,212,23,0.3)', padding: '2px 6px', borderRadius: '4px', display: 'inline-block' }
+                    ? {
+                        bgcolor: 'rgba(247,212,23,0.3)',
+                        px: 0.75,
+                        py: '2px',
+                        borderRadius: 1,
+                        display: 'inline-block',
+                      }
                     : {}),
                 }}
+                style={mine ? { fontWeight: 700 } : undefined}
               >
                 {r.homeClubName} <strong>{r.homeGoals}</strong>
                 {' — '}
                 <strong>{r.awayGoals}</strong> {r.awayClubName}
-              </span>
+              </Typography>
             </TimelineNode>
           )
         })}
 
       {result.bookings.length > 0 && (
         <TimelineNode dot="🟨">
-          <strong>Cartões</strong>
-          <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1.25rem' }}>
+          <Typography component="strong" sx={{ fontWeight: 700 }}>Cartões</Typography>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mt: 0.5 }}>
             {result.bookings.map((b, i) => (
-              <li key={`${b.playerId}-${i}`}>
-                {b.playerName} — {b.type === 'RED_CARD' ? 'Vermelho' : 'Amarelo'}
-              </li>
+              <Chip
+                key={`${b.playerId}-${i}`}
+                size="small"
+                color={b.type === 'RED_CARD' ? 'error' : 'warning'}
+                label={`${b.playerName} — ${b.type === 'RED_CARD' ? 'Vermelho' : 'Amarelo'}`}
+              />
             ))}
-          </ul>
+          </Stack>
         </TimelineNode>
       )}
 
       {result.newSuspensions.length > 0 && (
         <TimelineNode dot="🚫">
-          <strong>Suspensões</strong>
-          <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1.25rem' }}>
+          <Typography component="strong" sx={{ fontWeight: 700 }}>Suspensões</Typography>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mt: 0.5 }}>
             {result.newSuspensions.map((s, i) => (
-              <li key={`${s.playerId}-${i}`}>
-                {s.playerName} — {s.matches} jogo(s)
-              </li>
+              <Chip
+                key={`${s.playerId}-${i}`}
+                size="small"
+                variant="outlined"
+                label={`${s.playerName} — ${s.matches} jogo(s)`}
+              />
             ))}
-          </ul>
+          </Stack>
         </TimelineNode>
       )}
 
       {result.newInjuries.length > 0 && (
         <TimelineNode dot="🩹">
-          <strong>Lesões</strong>
-          <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1.25rem' }}>
+          <Typography component="strong" sx={{ fontWeight: 700 }}>Lesões</Typography>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mt: 0.5 }}>
             {result.newInjuries.map((inj, i) => (
-              <li key={`${inj.playerId}-${i}`}>
-                {inj.playerName} — {inj.matches} jogo(s)
-              </li>
+              <Chip
+                key={`${inj.playerId}-${i}`}
+                size="small"
+                variant="outlined"
+                color="secondary"
+                label={`${inj.playerName} — ${inj.matches} jogo(s)`}
+              />
             ))}
-          </ul>
+          </Stack>
         </TimelineNode>
       )}
 
       {result.finance && (
         <TimelineNode dot="💰">
-          <strong>Finanças</strong>
-          <ul style={{ margin: '0.25rem 0 0', listStyle: 'none', padding: 0 }}>
-            {result.finance.gate > 0 && <li>Bilheteria: +{formatBRL(result.finance.gate)}</li>}
-            {result.finance.matchCost > 0 && <li>Custo da partida: −{formatBRL(result.finance.matchCost)}</li>}
-            {result.finance.prize > 0 && <li>Premiação: +{formatBRL(result.finance.prize)}</li>}
-            <li><strong>Resultado:</strong> {formatBRL(result.finance.net + result.finance.prize)}</li>
-            <li><strong>Saldo:</strong> {formatBRL(result.finance.balance)}</li>
-          </ul>
+          <Typography component="strong" sx={{ fontWeight: 700 }}>Finanças</Typography>
+          <List dense disablePadding sx={{ mt: 0.25 }}>
+            {result.finance.gate > 0 && (
+              <ListItem disablePadding>Bilheteria: +{formatBRL(result.finance.gate)}</ListItem>
+            )}
+            {result.finance.matchCost > 0 && (
+              <ListItem disablePadding>Custo da partida: −{formatBRL(result.finance.matchCost)}</ListItem>
+            )}
+            {result.finance.prize > 0 && (
+              <ListItem disablePadding>Premiação: +{formatBRL(result.finance.prize)}</ListItem>
+            )}
+            <ListItem disablePadding>
+              <strong>Resultado:</strong>&nbsp;{formatBRL(result.finance.net + result.finance.prize)}
+            </ListItem>
+            <ListItem disablePadding>
+              <strong>Saldo:</strong>&nbsp;{formatBRL(result.finance.balance)}
+            </ListItem>
+          </List>
         </TimelineNode>
       )}
 
       {result.seasonFinished && (
         <TimelineNode dot="🏆">
-          <strong style={{ color: 'var(--cec-green)' }}>Temporada encerrada!</strong>
-          <div style={{ marginTop: '0.5rem' }}>
-            <Link to={seasonSummaryUrl}>
-              <button className="cec-btn">Ver resumo da temporada</button>
-            </Link>
-          </div>
+          <Typography component="strong" sx={{ fontWeight: 700, color: 'var(--cec-green)' }}>
+            Temporada encerrada!
+          </Typography>
+          <SeasonSummaryCTA url={seasonSummaryUrl} />
         </TimelineNode>
       )}
     </>
@@ -148,72 +195,75 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
     : null
 
   return (
-    <article
-      style={{
-        background: '#fff',
-        borderRadius: '10px',
-        padding: '1.25rem',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.12)',
-      }}
+    <Card
+      component="article"
+      elevation={0}
+      sx={{ borderRadius: 2.5, boxShadow: '0 2px 10px rgba(0,0,0,0.12)' }}
     >
-      {/* Header */}
-      <div style={{ marginBottom: '1rem', borderBottom: '2px solid var(--cec-yellow)', paddingBottom: '0.75rem' }}>
-        {dateStr && (
-          <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--cec-black)' }}>
-            {dateStr}
-          </div>
-        )}
-        {roundLabel && (
-          <div style={{ fontSize: '0.875rem', color: '#555', marginTop: '2px' }}>
-            {roundLabel}
-          </div>
-        )}
-        {result.type === 'TRANSFER' && (
-          <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>Janela de Transferências</div>
-        )}
-        {result.type === 'FINISHED' && (
-          <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--cec-green)' }}>
-            Temporada Encerrada
-          </div>
-        )}
-      </div>
+      <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+        {/* Header */}
+        <Box sx={{ mb: 2, pb: 1 }}>
+          {dateStr && (
+            <Typography sx={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--cec-black)' }}>
+              {dateStr}
+            </Typography>
+          )}
+          {roundLabel && (
+            <Typography sx={{ fontSize: '0.875rem', color: '#555', mt: '2px' }}>
+              {roundLabel}
+            </Typography>
+          )}
+          {result.type === 'TRANSFER' && (
+            <Typography sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
+              Janela de Transferências
+            </Typography>
+          )}
+          {result.type === 'FINISHED' && (
+            <Typography sx={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--cec-green)' }}>
+              Temporada Encerrada
+            </Typography>
+          )}
+        </Box>
+        <Divider sx={{ mb: 2, borderBottomWidth: 2, borderColor: 'var(--cec-yellow)' }} />
 
-      {/* Timeline body */}
-      <div>
-        {result.type === 'MATCH' && (
-          <MatchTimeline
-            result={result}
-            saveGameId={saveGameId}
-            competitionId={competitionId}
-            managedClubId={managedClubId}
-          />
-        )}
+        {/* Timeline body */}
+        <Box>
+          {result.type === 'MATCH' && (
+            <MatchTimeline
+              result={result}
+              saveGameId={saveGameId}
+              competitionId={competitionId}
+              managedClubId={managedClubId}
+            />
+          )}
 
-        {result.type === 'TRANSFER' && (
-          <TimelineNode dot="🔄">
-            <span>
-              Janela de transferências —{' '}
-              <strong>{result.bidsReceived}</strong> proposta(s) recebida(s)
-            </span>
-            <div style={{ marginTop: '0.5rem' }}>
-              <Link to={`/transfers?saveGameId=${saveGameId}&clubId=${managedClubId}`}>
-                <button className="cec-btn" style={{ fontSize: '0.875rem' }}>Ver propostas</button>
-              </Link>
-            </div>
-          </TimelineNode>
-        )}
+          {result.type === 'TRANSFER' && (
+            <TimelineNode dot="🔄">
+              <Typography component="span">
+                Janela de transferências —{' '}
+                <strong>{result.bidsReceived}</strong> proposta(s) recebida(s)
+              </Typography>
+              <Box sx={{ mt: 1 }}>
+                <Link
+                  to={`/transfers?saveGameId=${saveGameId}&clubId=${managedClubId}`}
+                  style={{ textDecoration: 'none' }}
+                >
+                  <Button variant="contained" size="small">Ver propostas</Button>
+                </Link>
+              </Box>
+            </TimelineNode>
+          )}
 
-        {result.type === 'FINISHED' && (
-          <TimelineNode dot="🏆">
-            <strong style={{ color: 'var(--cec-green)' }}>Temporada encerrada!</strong>
-            <div style={{ marginTop: '0.5rem' }}>
-              <Link to={seasonSummaryUrl}>
-                <button className="cec-btn">Ver resumo da temporada</button>
-              </Link>
-            </div>
-          </TimelineNode>
-        )}
-      </div>
-    </article>
+          {result.type === 'FINISHED' && (
+            <TimelineNode dot="🏆">
+              <Typography component="strong" sx={{ fontWeight: 700, color: 'var(--cec-green)' }}>
+                Temporada encerrada!
+              </Typography>
+              <SeasonSummaryCTA url={seasonSummaryUrl} />
+            </TimelineNode>
+          )}
+        </Box>
+      </CardContent>
+    </Card>
   )
 }

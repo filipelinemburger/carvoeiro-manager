@@ -1,13 +1,64 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
+import {
+  Box, Collapse, IconButton, NativeSelect, Paper, Stack, Table, TableBody,
+  TableCell, TableContainer, TableHead, TableRow, Typography,
+} from '@mui/material'
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
+import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore'
 import { getStandings, getSaveGame } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
-import type { SaveGameResponse } from '../../api/types'
+import { useIsMobile } from '../../lib/useIsMobile'
+import type { SaveGameResponse, StandingRow } from '../../api/types'
+
+const MANAGED_BG = 'rgba(0, 100, 200, 0.1)'
+
+/** A compact, centered "LABEL / value" pair sized so all stats fit on one row. */
+function Stat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <Box sx={{ textAlign: 'center' }}>
+      <Typography
+        variant="caption"
+        sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: '0.02em', color: 'text.secondary', fontSize: '0.6rem', lineHeight: 1.2 }}
+      >
+        {label}
+      </Typography>
+      <Typography sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '0.8rem' }}>{value}</Typography>
+    </Box>
+  )
+}
+
+/** What each standings abbreviation means (pt-BR), shown as a legend below the table. */
+const STAT_LEGEND: ReadonlyArray<readonly [string, string]> = [
+  ['P', 'Partidas'],
+  ['W', 'Vitórias'],
+  ['D', 'Empates'],
+  ['L', 'Derrotas'],
+  ['GF', 'Gols pró'],
+  ['GA', 'Gols contra'],
+  ['GD', 'Saldo de gols'],
+  ['PTS', 'Pontos'],
+]
+
+/** A caption legend explaining the abbreviations used in the table and the detail rows. */
+function StatLegend() {
+  return (
+    <Box sx={{ mt: 1.5, display: 'flex', flexWrap: 'wrap', columnGap: 1.5, rowGap: 0.5 }}>
+      {STAT_LEGEND.map(([abbr, label]) => (
+        <Typography key={abbr} variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
+          <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>{abbr}</Box> {label}
+        </Typography>
+      ))}
+    </Box>
+  )
+}
 
 export function TablePage() {
   const { token } = useAuth()
   const [searchParams] = useSearchParams()
+  const isMobile = useIsMobile()
 
   const saveGameId = searchParams.get('saveGameId') ?? ''
   const paramCompetitionId = searchParams.get('competitionId') ?? ''
@@ -35,72 +86,163 @@ export function TablePage() {
   const rows = data ?? []
 
   return (
-    <div style={{ padding: '1.5rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0 }}>Classificação</h2>
+    <Box>
+      <Stack
+        direction="row"
+        spacing={2}
+        useFlexGap
+        sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+      >
+        <Typography variant="h5" component="h2" sx={{ fontWeight: 700 }}>
+          Classificação
+        </Typography>
         {competitions.length > 1 && (
-          <label style={{ fontSize: '0.9rem' }}>
-            Campeonato:{' '}
-            <select
-              aria-label="Campeonato"
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+            <Typography component="span" variant="body2">Campeonato:</Typography>
+            <NativeSelect
               value={competitionId}
               onChange={e => setSelectedCompetitionId(e.target.value)}
+              inputProps={{ 'aria-label': 'Campeonato' }}
             >
               {competitions.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
-            </select>
-          </label>
+            </NativeSelect>
+          </Box>
         )}
-      </div>
+      </Stack>
 
-      {isLoading && <p>Carregando classificação…</p>}
-      {error && <p>Erro ao carregar classificação.</p>}
+      {isLoading && <Typography sx={{ mt: 2 }}>Carregando classificação…</Typography>}
+      {error && <Typography sx={{ mt: 2 }} color="error">Erro ao carregar classificação.</Typography>}
 
       {!isLoading && !error && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem' }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: 'center' }}>Pos</th>
-              <th style={{ textAlign: 'left' }}>Clube</th>
-              <th style={{ textAlign: 'center' }}>P</th>
-              <th style={{ textAlign: 'center' }}>W</th>
-              <th style={{ textAlign: 'center' }}>D</th>
-              <th style={{ textAlign: 'center' }}>L</th>
-              <th style={{ textAlign: 'center' }}>GF</th>
-              <th style={{ textAlign: 'center' }}>GA</th>
-              <th style={{ textAlign: 'center' }}>GD</th>
-              <th style={{ textAlign: 'center' }}>Pts</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => {
-              const isManaged = row.clubId === managedClubId
-              return (
-                <tr
-                  key={row.clubId}
-                  data-managed={isManaged ? 'true' : undefined}
-                  style={{
-                    background: isManaged ? 'rgba(0, 100, 200, 0.1)' : undefined,
-                    fontWeight: isManaged ? 'bold' : undefined,
-                  }}
-                >
-                  <td style={{ textAlign: 'center' }}>{index + 1}</td>
-                  <td>{row.clubName}</td>
-                  <td style={{ textAlign: 'center' }}>{row.played}</td>
-                  <td style={{ textAlign: 'center' }}>{row.won}</td>
-                  <td style={{ textAlign: 'center' }}>{row.drawn}</td>
-                  <td style={{ textAlign: 'center' }}>{row.lost}</td>
-                  <td style={{ textAlign: 'center' }}>{row.goalsFor}</td>
-                  <td style={{ textAlign: 'center' }}>{row.goalsAgainst}</td>
-                  <td style={{ textAlign: 'center' }}>{row.goalDifference}</td>
-                  <td style={{ textAlign: 'center' }}>{row.points}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <>
+        {isMobile ? (
+          <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell align="center" sx={{ width: 40, py: 0, px: 0 }} aria-label="Expandir">
+                    <UnfoldMoreIcon fontSize="small" sx={{ color: 'text.secondary', verticalAlign: 'middle' }} />
+                  </TableCell>
+                  <TableCell align="center" sx={{ px: 1 }}>POS</TableCell>
+                  <TableCell align="center">CLUBE</TableCell>
+                  <TableCell align="center">PTS</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {rows.map((row, index) => (
+                  <MobileStandingRow
+                    key={row.clubId}
+                    row={row}
+                    position={index + 1}
+                    managed={row.clubId === managedClubId}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        ) : (
+          <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell align="center">Pos</TableCell>
+                  <TableCell>Clube</TableCell>
+                  <TableCell align="center">P</TableCell>
+                  <TableCell align="center">W</TableCell>
+                  <TableCell align="center">D</TableCell>
+                  <TableCell align="center">L</TableCell>
+                  <TableCell align="center">GF</TableCell>
+                  <TableCell align="center">GA</TableCell>
+                  <TableCell align="center">GD</TableCell>
+                  <TableCell align="center">Pts</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {rows.map((row, index) => {
+                  const isManaged = row.clubId === managedClubId
+                  return (
+                    <TableRow
+                      key={row.clubId}
+                      data-managed={isManaged ? 'true' : undefined}
+                      sx={{
+                        backgroundColor: isManaged ? MANAGED_BG : undefined,
+                        '& td': { fontWeight: isManaged ? 700 : undefined },
+                      }}
+                    >
+                      <TableCell align="center">{index + 1}</TableCell>
+                      <TableCell>{row.commonName ?? row.clubName}</TableCell>
+                      <TableCell align="center">{row.played}</TableCell>
+                      <TableCell align="center">{row.won}</TableCell>
+                      <TableCell align="center">{row.drawn}</TableCell>
+                      <TableCell align="center">{row.lost}</TableCell>
+                      <TableCell align="center">{row.goalsFor}</TableCell>
+                      <TableCell align="center">{row.goalsAgainst}</TableCell>
+                      <TableCell align="center">{row.goalDifference}</TableCell>
+                      <TableCell align="center">{row.points}</TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+        {rows.length > 0 && <StatLegend />}
+        </>
       )}
-    </div>
+    </Box>
+  )
+}
+
+/**
+ * A compact (mobile) standings row: position + club name and points, tappable to
+ * expand a detail panel with the full stats (played, W/D/L, goals). Renders as a
+ * main row plus a collapsible detail row spanning the table width.
+ */
+function MobileStandingRow({ row, position, managed }: { row: StandingRow; position: number; managed: boolean }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <TableRow
+        data-managed={managed ? 'true' : undefined}
+        hover
+        onClick={() => setOpen(o => !o)}
+        sx={{
+          cursor: 'pointer',
+          backgroundColor: managed ? MANAGED_BG : undefined,
+          '& > td': { borderBottom: open ? 'unset' : undefined, fontWeight: managed ? 700 : undefined },
+        }}
+      >
+        <TableCell align="center" sx={{ width: 40, py: 0, px: 0 }}>
+          <IconButton
+            size="small"
+            aria-label={`${open ? 'Ocultar' : 'Ver'} detalhes de ${row.clubName}`}
+          >
+            {open ? <KeyboardArrowUpIcon fontSize="small" /> : <KeyboardArrowDownIcon fontSize="small" />}
+          </IconButton>
+        </TableCell>
+        <TableCell align="center" sx={{ px: 1, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
+          {position}
+        </TableCell>
+        <TableCell align="center" sx={{ fontWeight: managed ? 800 : 600 }}>{row.commonName ?? row.clubName}</TableCell>
+        <TableCell align="center" sx={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{row.points}</TableCell>
+      </TableRow>
+      <TableRow sx={{ backgroundColor: managed ? MANAGED_BG : undefined }}>
+        <TableCell colSpan={4} sx={{ py: 0, borderBottom: open ? undefined : 'unset' }}>
+          <Collapse in={open} timeout="auto" unmountOnExit>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', flexWrap: 'nowrap', gap: 0.5, py: 1.25 }}>
+              <Stat label="P" value={row.played} />
+              <Stat label="W" value={row.won} />
+              <Stat label="D" value={row.drawn} />
+              <Stat label="L" value={row.lost} />
+              <Stat label="GF" value={row.goalsFor} />
+              <Stat label="GA" value={row.goalsAgainst} />
+              <Stat label="GD" value={row.goalDifference} />
+            </Stack>
+          </Collapse>
+        </TableCell>
+      </TableRow>
+    </>
   )
 }

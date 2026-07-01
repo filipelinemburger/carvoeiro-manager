@@ -5,6 +5,7 @@ import java.util.UUID;
 public record StandingRow(
         UUID clubId,
         String clubName,
+        String commonName,
         int played,
         int won,
         int drawn,

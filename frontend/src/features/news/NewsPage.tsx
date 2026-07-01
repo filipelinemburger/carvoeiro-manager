@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
+import { Box, Stack, Typography } from '@mui/material'
 import { getNews, getSaveGame } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import { AdvanceEventCard } from '../match/AdvanceEventCard'
@@ -28,23 +29,25 @@ export function NewsPage() {
     enabled: Boolean(saveGameId && token),
   })
 
-  if (isLoading) return <p>Carregando notícias…</p>
-  if (error) return <p>Erro ao carregar notícias.</p>
+  if (isLoading) return <Typography>Carregando notícias…</Typography>
+  if (error) return <Typography color="error">Erro ao carregar notícias.</Typography>
 
   const competitionId = saveGame?.competitionId ?? ''
   const managedClubId = saveGame?.managedClubId ?? ''
   const items = news ?? []
 
   return (
-    <div>
-      <h2 style={{ marginTop: 0 }}>Notícias</h2>
+    <Box>
+      <Typography variant="h5" component="h2" sx={{ fontWeight: 700, mt: 0, mb: 2 }}>
+        Notícias
+      </Typography>
 
       {items.length === 0 ? (
-        <p style={{ color: '#555' }}>
-          Nenhuma notícia ainda. Clique em <strong>Avançar</strong> para jogar a próxima rodada.
-        </p>
+        <Typography sx={{ color: 'text.secondary' }}>
+          Nenhuma notícia ainda. Clique em <Box component="strong">Avançar</Box> para jogar a próxima rodada.
+        </Typography>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <Stack spacing={2}>
           {items.map((item, i) => (
             <AdvanceEventCard
               // Feed is newest-first and server-ordered; a composite of the event's
@@ -56,8 +59,8 @@ export function NewsPage() {
               managedClubId={managedClubId}
             />
           ))}
-        </div>
+        </Stack>
       )}
-    </div>
+    </Box>
   )
 }

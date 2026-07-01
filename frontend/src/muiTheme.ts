@@ -19,5 +19,15 @@ export const muiTheme = createTheme({
       defaultProps: { variant: 'contained', disableElevation: true },
       styleOverrides: { root: { fontWeight: 700, textTransform: 'none' } },
     },
+    // Outlined-by-default keeps the flat, on-panel card look consistent across
+    // every converted page without each call site repeating the variant.
+    MuiCard: {
+      defaultProps: { variant: 'outlined' },
+    },
+    // Tables sit inside the white content panel; keep cell padding compact so
+    // data-dense grids (squad, standings) breathe on desktop.
+    MuiTableCell: {
+      styleOverrides: { root: { paddingTop: 8, paddingBottom: 8 } },
+    },
   },
 })

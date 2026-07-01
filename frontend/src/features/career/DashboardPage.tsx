@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Box, Card, CardContent, Stack, Typography } from '@mui/material'
 import { useAuth } from '../../auth/AuthContext'
 import { getSaveGame, getFinances } from '../../api/career'
 import { formatBRL } from '../../lib/money'
@@ -9,6 +10,24 @@ import type { SaveGameResponse } from '../../api/types'
 // career id (which would 404 against the ownership guard).
 const saveGameKeyFor = (userId: string | undefined) =>
   `carvoeiro_manager_save_game_id_${userId ?? 'anon'}`
+
+/** A single "Label: value" stat row with a bold label. */
+function StatRow({ label, value, color }: { label: string; value: ReactNode; color?: string }) {
+  return (
+    <Stack
+      direction={{ xs: 'column', sm: 'row' }}
+      spacing={{ xs: 0.25, sm: 1 }}
+      sx={{ alignItems: { sm: 'baseline' }, color }}
+    >
+      <Typography component="span" sx={{ fontWeight: 700 }}>
+        {label}
+      </Typography>
+      <Typography component="span" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </Typography>
+    </Stack>
+  )
+}
 
 export function DashboardPage() {
   const { user, token } = useAuth()
@@ -42,39 +61,42 @@ export function DashboardPage() {
   }, [isError, saveGameId, saveGameKey])
 
   return (
-    <div>
-      <h2>Bem-vindo, {user?.username}</h2>
+    <Box sx={{ p: { xs: 2, sm: 3 } }}>
+      <Typography variant="h5" component="h2" sx={{ fontWeight: 700 }}>
+        Bem-vindo, {user?.username}
+      </Typography>
 
       {!saveGameId && (
-        <p style={{ color: '#555' }}>
-          Você ainda não tem uma carreira. Abra o menu <strong>⚙️</strong> no canto superior
-          direito e escolha <strong>Nova Carreira</strong> para começar.
-        </p>
+        <Typography sx={{ mt: 2, color: 'text.secondary', maxWidth: 640 }}>
+          Você ainda não tem uma carreira. Abra o menu <Box component="strong">⚙️</Box> no canto
+          superior direito e escolha <Box component="strong">Nova Carreira</Box> para começar.
+        </Typography>
       )}
 
-      {loadingGame && saveGameId && <p>Carregando carreira…</p>}
+      {loadingGame && saveGameId && <Typography sx={{ mt: 2 }}>Carregando carreira…</Typography>}
 
       {saveGame && (
-        <div style={{ marginTop: '1.5rem' }}>
-          <p>
-            <strong>Temporada:</strong> {saveGame.seasonYear}
-          </p>
-          <p>
-            <strong>Competição:</strong> {saveGame.competitionName}
-          </p>
-          <p>
-            <strong>Clube:</strong> {saveGame.managedClubName}
-          </p>
-          <p>
-            <strong>Rodada:</strong> {saveGame.currentRound} / {saveGame.totalRounds}
-          </p>
-          {finances && (
-            <p style={{ color: finances.balance < 0 ? 'red' : undefined }}>
-              <strong>Saldo:</strong> {formatBRL(finances.balance)}
-            </p>
-          )}
-        </div>
+        <Card variant="outlined" sx={{ mt: 3, maxWidth: 480 }}>
+          <CardContent>
+            <Stack spacing={1.25}>
+              <StatRow label="Temporada:" value={saveGame.seasonYear} />
+              <StatRow label="Competição:" value={saveGame.competitionName} />
+              <StatRow label="Clube:" value={saveGame.managedClubName} />
+              <StatRow
+                label="Rodada:"
+                value={`${saveGame.currentRound} / ${saveGame.totalRounds}`}
+              />
+              {finances && (
+                <StatRow
+                  label="Saldo:"
+                  value={formatBRL(finances.balance)}
+                  color={finances.balance < 0 ? 'error.main' : undefined}
+                />
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
       )}
-    </div>
+    </Box>
   )
 }

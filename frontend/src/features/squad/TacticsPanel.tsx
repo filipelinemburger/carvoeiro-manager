@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
+import { Box, Stack, Button, NativeSelect, FormControl, Typography, Alert } from '@mui/material'
 import { getTactics, setTactics } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import type { Mentality, Pressing, Marking } from '../../api/types'
@@ -18,6 +19,30 @@ interface TacticsPanelProps {
 const MENTALITIES: Mentality[] = ['DEFENSIVE', 'BALANCED', 'ATTACKING']
 const PRESSINGS: Pressing[] = ['LOW', 'MEDIUM', 'HIGH']
 const MARKINGS: Marking[] = ['ZONAL', 'MAN_TIGHT']
+
+/**
+ * A labeled MUI NativeSelect. Native keeps real <option> elements and an
+ * aria-label (via inputProps) so tests can query by label and read options.
+ */
+function SelectField({ label, value, onChange, children }: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  children: React.ReactNode
+}) {
+  return (
+    <FormControl size="small" fullWidth>
+      <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.25 }}>{label}</Typography>
+      <NativeSelect
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        inputProps={{ 'aria-label': label }}
+      >
+        {children}
+      </NativeSelect>
+    </FormControl>
+  )
+}
 
 export function TacticsPanel({ saveGameId, clubId, starters }: TacticsPanelProps) {
   const { token } = useAuth()
@@ -64,78 +89,59 @@ export function TacticsPanel({ saveGameId, clubId, starters }: TacticsPanelProps
     onSuccess: () => setSaved(true),
   })
 
-  function takerSelect(label: string, value: string, onChange: (v: string) => void) {
-    return (
-      <div>
-        <label>
-          {label}:{' '}
-          <select
-            aria-label={label}
-            value={value}
-            onChange={e => {
-              setSaved(false)
-              onChange(e.target.value)
-            }}
-          >
-            <option value="">—</option>
-            {starters.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-    )
-  }
+  const takerSelect = (label: string, value: string, onChange: (v: string) => void) => (
+    <SelectField
+      label={label}
+      value={value}
+      onChange={v => { setSaved(false); onChange(v) }}
+    >
+      <option value="">—</option>
+      {starters.map(s => (
+        <option key={s.id} value={s.id}>{s.name}</option>
+      ))}
+    </SelectField>
+  )
 
   return (
-    <div>
-      <div>
-        <label>
-          Mentalidade:{' '}
-          <select
-            aria-label="Mentalidade"
-            value={mentality}
-            onChange={e => { setSaved(false); setMentality(e.target.value as Mentality) }}
-          >
-            {MENTALITIES.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
-        </label>
-      </div>
-      <div>
-        <label>
-          Pressão:{' '}
-          <select
-            aria-label="Pressão"
-            value={pressing}
-            onChange={e => { setSaved(false); setPressing(e.target.value as Pressing) }}
-          >
-            {PRESSINGS.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </label>
-      </div>
-      <div>
-        <label>
-          Marcação:{' '}
-          <select
-            aria-label="Marcação"
-            value={marking}
-            onChange={e => { setSaved(false); setMarking(e.target.value as Marking) }}
-          >
-            {MARKINGS.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
-        </label>
-      </div>
-      {takerSelect('Pênaltis', penalty, setPenalty)}
-      {takerSelect('Faltas', freekick, setFreekick)}
-      {takerSelect('Escanteios', corner, setCorner)}
+    <Box>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={2}
+        useFlexGap
+        sx={{ flexWrap: 'wrap', mb: 2 }}
+      >
+        <SelectField label="Mentalidade" value={mentality} onChange={v => { setSaved(false); setMentality(v as Mentality) }}>
+          {MENTALITIES.map(m => <option key={m} value={m}>{m}</option>)}
+        </SelectField>
+        <SelectField label="Pressão" value={pressing} onChange={v => { setSaved(false); setPressing(v as Pressing) }}>
+          {PRESSINGS.map(p => <option key={p} value={p}>{p}</option>)}
+        </SelectField>
+        <SelectField label="Marcação" value={marking} onChange={v => { setSaved(false); setMarking(v as Marking) }}>
+          {MARKINGS.map(m => <option key={m} value={m}>{m}</option>)}
+        </SelectField>
+      </Stack>
 
-      <button className="cec-btn" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={2}
+        useFlexGap
+        sx={{ flexWrap: 'wrap', mb: 2 }}
+      >
+        {takerSelect('Pênaltis', penalty, setPenalty)}
+        {takerSelect('Faltas', freekick, setFreekick)}
+        {takerSelect('Escanteios', corner, setCorner)}
+      </Stack>
+
+      <Button color="secondary" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
         {mutation.isPending ? 'Salvando…' : 'Salvar tática'}
-      </button>
-      {saved && <p style={{ color: 'green' }}>Tática salva!</p>}
+      </Button>
+
+      {saved && <Alert severity="success" sx={{ mt: 2 }}>Tática salva!</Alert>}
       {mutation.isError && (
-        <p style={{ color: 'red' }}>Erro ao salvar tática (defina e salve a escalação primeiro).</p>
+        <Alert severity="error" sx={{ mt: 2 }}>
+          Erro ao salvar tática (defina e salve a escalação primeiro).
+        </Alert>
       )}
-    </div>
+    </Box>
   )
 }

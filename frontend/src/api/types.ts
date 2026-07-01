@@ -117,6 +117,8 @@ export type Suspension = {
 export type StandingRow = {
   clubId: string
   clubName: string
+  /** Common/popular name (e.g. "Criciúma"); falls back to clubName when absent. */
+  commonName?: string
   played: number
   won: number
   drawn: number

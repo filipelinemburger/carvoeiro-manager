@@ -1,6 +1,14 @@
-import { useState, useRef, useEffect, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  AppBar, Toolbar, Box, Button, IconButton, Typography, Menu, MenuItem,
+  Drawer, List, ListItemButton, ListItemText, Alert, Snackbar, Container, Paper, Divider,
+} from '@mui/material'
+import MenuIcon from '@mui/icons-material/Menu'
+import SettingsIcon from '@mui/icons-material/Settings'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { useAuth } from '../auth/AuthContext'
 import { advanceRound, createCareer, getAdvancePreview, getSaveGame } from '../api/career'
 import type { AdvancePreviewResponse, AdvanceResponse, SaveGameResponse } from '../api/types'
@@ -11,6 +19,10 @@ interface LayoutProps {
 
 const saveGameKeyFor = (userId: string | undefined) =>
   `carvoeiro_manager_save_game_id_${userId ?? 'anon'}`
+
+/** Brand colors: black bar, yellow text (Criciúma EC identity). */
+const BAR_BG = '#111111'
+const BAR_FG = '#f7d417'
 
 export function Layout({ children }: LayoutProps) {
   const { user, token, logout } = useAuth()
@@ -41,20 +53,9 @@ export function Layout({ children }: LayoutProps) {
     staleTime: 10_000,
   })
 
-  const [gearOpen, setGearOpen] = useState(false)
-  const gearRef = useRef<HTMLDivElement>(null)
-
-  // Close gear dropdown on outside click
-  useEffect(() => {
-    if (!gearOpen) return
-    const handler = (e: MouseEvent) => {
-      if (gearRef.current && !gearRef.current.contains(e.target as Node)) {
-        setGearOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [gearOpen])
+  const [gearAnchor, setGearAnchor] = useState<null | HTMLElement>(null)
+  const gearOpen = Boolean(gearAnchor)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   const advanceMutation = useMutation<AdvanceResponse>({
     mutationFn: () => advanceRound(saveGameId!, token ?? ''),
@@ -78,7 +79,7 @@ export function Layout({ children }: LayoutProps) {
     advanceMutation.data?.seasonFinished === true || saveGame?.status === 'FINISHED'
 
   const handleLogout = () => {
-    setGearOpen(false)
+    setGearAnchor(null)
     logout()
     void navigate('/login')
   }
@@ -95,7 +96,7 @@ export function Layout({ children }: LayoutProps) {
   })
 
   const handleNewCareer = () => {
-    setGearOpen(false)
+    setGearAnchor(null)
     const hasActive = Boolean(saveGameId)
     if (hasActive && !window.confirm('Começar uma nova carreira? A carreira atual continuará salva, mas você voltará ao início.')) {
       return
@@ -126,226 +127,176 @@ export function Layout({ children }: LayoutProps) {
   const advanceDisabled =
     advanceMutation.isPending || seasonFinished || !sgId || advanceBlockReason !== null
 
+  // Section links shown once a save game exists — reused by the desktop bar and the
+  // mobile Drawer so the two never drift.
+  const saveLinks = hasSaveGame
+    ? [
+        { to: `/squad?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Escalação' },
+        { to: `/table?saveGameId=${sgId}&competitionId=${standingsCompetitionId}&managedClubId=${managedClubId}`, label: 'Classificação' },
+        { to: `/finances?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Finanças' },
+        { to: `/transfers?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Mercado' },
+        { to: `/free-agents?saveGameId=${sgId}`, label: 'Livres' },
+        { to: `/history?saveGameId=${sgId}`, label: 'Histórico' },
+        { to: `/news?saveGameId=${sgId}`, label: 'News' },
+      ]
+    : []
+
+  const navLinks = [{ to: '/dashboard', label: 'Início' }, ...saveLinks]
+
+  // Styles a NavLink as an on-bar pill: yellow text, filled yellow when active.
+  const barLinkSx = {
+    color: BAR_FG,
+    textDecoration: 'none',
+    px: 1,
+    py: 0.5,
+    borderRadius: 1,
+    fontSize: '0.875rem',
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
+    '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
+    '&.active': { bgcolor: BAR_FG, color: BAR_BG, fontWeight: 700 },
+  } as const
+
   return (
     <>
-      <header className="cec-header">
-        {/* Left: back arrow */}
-        <div style={{ minWidth: '36px' }}>
+      <AppBar position="sticky" elevation={0} sx={{ bgcolor: BAR_BG, color: BAR_FG }}>
+        <Toolbar variant="dense" sx={{ gap: 1 }}>
+          {/* Left: back arrow (hidden on the dashboard) */}
           {!isDashboard && (
-            <button
-              className="cec-icon-btn"
+            <IconButton
+              edge="start"
               onClick={() => navigate(-1)}
               aria-label="Voltar"
               title="Voltar"
+              sx={{ color: BAR_FG }}
             >
-              ←
-            </button>
+              <ArrowBackIcon />
+            </IconButton>
           )}
-        </div>
 
-        {/* Middle: title + nav */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.25rem', overflow: 'hidden' }}>
-          <span style={{ fontWeight: 700, fontSize: '1rem', marginRight: '0.5rem', whiteSpace: 'nowrap' }}>
+          <Typography component="span" sx={{ fontWeight: 700, mr: 1, whiteSpace: 'nowrap' }}>
             Carvoeiro Manager
-          </span>
+          </Typography>
 
-          <nav style={{ display: 'flex', alignItems: 'center', gap: '0.1rem', flexWrap: 'nowrap', overflow: 'hidden' }}>
-            <NavLink
-              to="/dashboard"
-              className={({ isActive }) => `cec-nav-link${isActive ? ' active' : ''}`}
+          {/* Desktop: inline nav links */}
+          <Box component="nav" sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 0.25 }}>
+            {navLinks.map(link => (
+              <Box key={link.to} component={NavLink} to={link.to} sx={barLinkSx}>
+                {link.label}
+              </Box>
+            ))}
+          </Box>
+
+          <Box sx={{ flexGrow: 1 }} />
+
+          {hasSaveGame && (
+            <Button
+              color="primary"
+              disabled={advanceDisabled}
+              title={advanceBlockReason ?? undefined}
+              onClick={() => advanceMutation.mutate()}
             >
-              Início
-            </NavLink>
+              {advanceMutation.isPending ? 'Avançando…' : 'Avançar'}
+            </Button>
+          )}
 
-            {hasSaveGame && (
-              <>
-                <NavLink
-                  to={`/squad?saveGameId=${sgId}&clubId=${managedClubId}`}
-                  className={({ isActive }) => `cec-nav-link${isActive ? ' active' : ''}`}
-                >
-                  Escalação
-                </NavLink>
+          {/* Mobile: hamburger opens the Drawer with all sections */}
+          {hasSaveGame && (
+            <IconButton
+              aria-label="Abrir menu"
+              onClick={() => setDrawerOpen(true)}
+              sx={{ color: BAR_FG, display: { xs: 'inline-flex', md: 'none' } }}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
 
-                <NavLink
-                  to={`/table?saveGameId=${sgId}&competitionId=${standingsCompetitionId}&managedClubId=${managedClubId}`}
-                  className={({ isActive }) => `cec-nav-link${isActive ? ' active' : ''}`}
-                >
-                  Classificação
-                </NavLink>
-
-                <NavLink
-                  to={`/finances?saveGameId=${sgId}&clubId=${managedClubId}`}
-                  className={({ isActive }) => `cec-nav-link${isActive ? ' active' : ''}`}
-                >
-                  Finanças
-                </NavLink>
-
-                <NavLink
-                  to={`/transfers?saveGameId=${sgId}&clubId=${managedClubId}`}
-                  className={({ isActive }) => `cec-nav-link${isActive ? ' active' : ''}`}
-                >
-                  Mercado
-                </NavLink>
-
-                <NavLink
-                  to={`/free-agents?saveGameId=${sgId}`}
-                  className={({ isActive }) => `cec-nav-link${isActive ? ' active' : ''}`}
-                >
-                  Livres
-                </NavLink>
-
-                <NavLink
-                  to={`/history?saveGameId=${sgId}`}
-                  className={({ isActive }) => `cec-nav-link${isActive ? ' active' : ''}`}
-                >
-                  Histórico
-                </NavLink>
-
-                <NavLink
-                  to={`/news?saveGameId=${sgId}`}
-                  className={({ isActive }) => `cec-nav-link${isActive ? ' active' : ''}`}
-                >
-                  News
-                </NavLink>
-
-                <button
-                  className="cec-btn-primary"
-                  disabled={advanceDisabled}
-                  title={advanceBlockReason ?? undefined}
-                  onClick={() => advanceMutation.mutate()}
-                  style={{ marginLeft: '0.25rem' }}
-                >
-                  {advanceMutation.isPending ? 'Avançando…' : 'Avançar'}
-                </button>
-              </>
-            )}
-          </nav>
-        </div>
-
-        {/* Right: gear */}
-        <div ref={gearRef} style={{ position: 'relative', minWidth: '36px' }}>
-          <button
-            className="cec-icon-btn"
-            onClick={() => setGearOpen(o => !o)}
+          <IconButton
+            onClick={(e) => setGearAnchor(e.currentTarget)}
             aria-label="Configurações"
             aria-expanded={gearOpen}
+            edge="end"
+            sx={{ color: BAR_FG }}
           >
-            ⚙️
-          </button>
+            <SettingsIcon />
+          </IconButton>
 
-          {gearOpen && (
-            <div
-              style={{
-                position: 'absolute',
-                right: 0,
-                top: '110%',
-                background: '#fff',
-                border: '1px solid #ddd',
-                borderRadius: '6px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                minWidth: '150px',
-                zIndex: 200,
-              }}
-            >
-              <button
-                onClick={handleNewCareer}
-                disabled={newCareerMutation.isPending}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  padding: '0.6rem 1rem',
-                  background: 'none',
-                  border: 0,
-                  borderBottom: '1px solid #eee',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  fontSize: '0.9rem',
-                  color: '#111',
-                }}
-              >
-                {newCareerMutation.isPending ? 'Criando…' : 'Nova Carreira'}
-              </button>
-              <button
-                onClick={handleLogout}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  padding: '0.6rem 1rem',
-                  background: 'none',
-                  border: 0,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  fontSize: '0.9rem',
-                  color: '#111',
-                }}
-              >
-                Sair
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+          <Menu anchorEl={gearAnchor} open={gearOpen} onClose={() => setGearAnchor(null)}>
+            <MenuItem onClick={handleNewCareer} disabled={newCareerMutation.isPending}>
+              {newCareerMutation.isPending ? 'Criando…' : 'Nova Carreira'}
+            </MenuItem>
+            <MenuItem onClick={handleLogout}>Sair</MenuItem>
+          </Menu>
+        </Toolbar>
+      </AppBar>
 
-      {hasSaveGame && advanceBlockReason && (
-        <div
-          role="status"
-          style={{
-            background: '#fff3cd',
-            color: '#664d03',
-            borderBottom: '1px solid #ffe69c',
-            padding: '0.5rem 1rem',
-            fontSize: '0.85rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-          }}
-        >
-          <span aria-hidden>⚠️</span>
-          <span>{advanceBlockReason}</span>
-          {blockIneligible && (
-            <NavLink
-              to={`/squad?saveGameId=${sgId}&clubId=${managedClubId}`}
-              style={{ marginLeft: 'auto', fontWeight: 600, color: '#664d03' }}
-            >
-              Ajustar escalação →
-            </NavLink>
-          )}
-          {!blockIneligible && blockWindow && (
-            <NavLink
-              to={`/transfers?saveGameId=${sgId}&clubId=${managedClubId}`}
-              style={{ marginLeft: 'auto', fontWeight: 600, color: '#664d03' }}
-            >
-              Ver propostas →
-            </NavLink>
-          )}
-        </div>
-      )}
+      {/* Mobile navigation drawer */}
+      <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+        <Box sx={{ width: 240 }} role="presentation" onClick={() => setDrawerOpen(false)}>
+          <Typography sx={{ px: 2, py: 1.5, fontWeight: 700 }}>Menu</Typography>
+          <Divider />
+          <List>
+            {navLinks.map(link => (
+              <ListItemButton key={link.to} component={NavLink} to={link.to}>
+                <ListItemText primary={link.label} />
+              </ListItemButton>
+            ))}
+          </List>
+        </Box>
+      </Drawer>
 
-      <main style={{ flex: 1 }}>
-        <div className="cec-content-panel">
-          {children}
-        </div>
-      </main>
+      <Box component="main" sx={{ flex: 1 }}>
+        <Container maxWidth="md" sx={{ py: { xs: 2, md: 3 } }}>
+          {hasSaveGame && advanceBlockReason && (
+            <Alert
+              role="status"
+              severity="warning"
+              icon={<WarningAmberIcon fontSize="inherit" />}
+              sx={{ mb: 2, borderRadius: 2, '& .MuiAlert-message': { width: '100%' } }}
+            >
+              <Box sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', sm: 'row' },
+                alignItems: { sm: 'center' },
+                gap: { xs: 0.5, sm: 1 },
+              }}>
+                <Box sx={{ flex: 1 }}>{advanceBlockReason}</Box>
+                {blockIneligible && (
+                  <Box component={NavLink} to={`/squad?saveGameId=${sgId}&clubId=${managedClubId}`}
+                    sx={{ fontWeight: 700, color: 'inherit', whiteSpace: 'nowrap' }}>
+                    Ajustar escalação →
+                  </Box>
+                )}
+                {!blockIneligible && blockWindow && (
+                  <Box component={NavLink} to={`/transfers?saveGameId=${sgId}&clubId=${managedClubId}`}
+                    sx={{ fontWeight: 700, color: 'inherit', whiteSpace: 'nowrap' }}>
+                    Ver propostas →
+                  </Box>
+                )}
+              </Box>
+            </Alert>
+          )}
+          <Paper
+            elevation={0}
+            sx={{
+              bgcolor: 'rgba(255,255,255,0.92)',
+              p: { xs: 2, md: 3 },
+              borderRadius: 2,
+              boxShadow: '0 2px 16px rgba(0,0,0,0.25)',
+            }}
+          >
+            {children}
+          </Paper>
+        </Container>
+      </Box>
 
       {/* Advance error toast */}
-      {advanceMutation.isError && (
-        <div
-          role="alert"
-          style={{
-            position: 'fixed',
-            bottom: '1rem',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: '#c00',
-            color: '#fff',
-            padding: '0.6rem 1.25rem',
-            borderRadius: '6px',
-            zIndex: 500,
-          }}
-        >
-          Erro ao avançar.
-        </div>
-      )}
+      <Snackbar
+        open={advanceMutation.isError}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="error" variant="filled">Erro ao avançar.</Alert>
+      </Snackbar>
     </>
   )
 }

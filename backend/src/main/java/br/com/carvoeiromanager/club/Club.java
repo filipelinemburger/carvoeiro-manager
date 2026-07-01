@@ -29,6 +29,9 @@ public class Club {
     @Column(name = "short_name", nullable = false, length = 20)
     private String shortName;
 
+    @Column(name = "common_name", length = 80)
+    private String commonName;
+
     @Column(name = "nickname", length = 40)
     private String nickname;
 
@@ -76,10 +79,12 @@ public class Club {
     public UUID getSaveGameId() { return saveGameId; }
     public String getName() { return name; }
     public String getShortName() { return shortName; }
+    public String getCommonName() { return commonName; }
     public String getNickname() { return nickname; }
     public String getPrimaryColor() { return primaryColor; }
     public String getSecondaryColor() { return secondaryColor; }
 
+    public void setCommonName(String commonName) { this.commonName = commonName; }
     public void setNickname(String nickname) { this.nickname = nickname; }
     public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
     public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }

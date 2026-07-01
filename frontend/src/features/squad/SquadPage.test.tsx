@@ -61,6 +61,7 @@ const DEF4 = makeOutfield('p-d4', 'Defensor Quatro', 'DEF')
 const MID1 = makeOutfield('p-m1', 'Meio Um', 'MID')
 const MID2 = makeOutfield('p-m2', 'Meio Dois', 'MID')
 const MID3 = makeOutfield('p-m3', 'Meio Tres', 'MID')
+const MID4 = makeOutfield('p-m4', 'Meio Quatro', 'MID')
 const ATT1 = makeOutfield('p-a1', 'Atacante Um', 'ATT')
 const ATT2 = makeOutfield('p-a2', 'Atacante Dois', 'ATT')
 const ATT3 = makeOutfield('p-a3', 'Atacante Tres', 'ATT')
@@ -89,13 +90,9 @@ INJURED.eligible = false
 INJURED.injuryMatches = 2
 
 const ALL_OUTFIELD = [DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
-// Extra outfield to allow selecting 11 without a GK
-const ELEVEN_NO_GK = [...ALL_OUTFIELD, ATT4]
-// Two GKs and 9 outfield players = 11 total
-const ELEVEN_WITH_TWO_GK = [GK, GK2, DEF1, DEF2, DEF3, DEF4, MID1, MID2, ATT1, ATT2, ATT3]
 
 const squad: SquadResponse = {
-  players: [GK, GK2, ...ALL_OUTFIELD, ATT4, SUSPENDED, INJURED],
+  players: [GK, GK2, ...ALL_OUTFIELD, MID4, ATT4, SUSPENDED, INJURED],
 }
 
 function makeQueryClient() {
@@ -158,20 +155,37 @@ describe('SquadPage', () => {
     expect(saveBtn).not.toBeDisabled()
   })
 
-  it('keeps button disabled and shows validation message when selection has no GK', async () => {
+  it('blocks selecting more attackers than the formation allows', async () => {
     renderWithProviders()
-    await waitFor(() => screen.getByText('Defensor Um'))
+    await waitFor(() => screen.getByText('Atacante Um'))
 
-    // Select 11 outfield players (no GK)
-    for (const player of ELEVEN_NO_GK) {
-      const checkbox = screen.getByRole('checkbox', { name: new RegExp(player.name, 'i') })
-      fireEvent.click(checkbox)
+    // Default formation 4-3-3 allows exactly 3 attackers.
+    for (const player of [ATT1, ATT2, ATT3]) {
+      fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(player.name, 'i') }))
     }
 
-    const saveBtn = screen.getByRole('button', { name: /salvar escala/i })
-    // 11 players selected, no GK → button disabled, validation message about GK
-    expect(saveBtn).toBeDisabled()
-    expect(screen.getByRole('alert')).toHaveTextContent(/goleiro/i)
+    // The 4th attacker's line is full, so it becomes unselectable.
+    const fourth = screen.getByRole('checkbox', { name: /atacante quatro/i })
+    expect(fourth).toBeDisabled()
+    fireEvent.click(fourth)
+    expect(fourth).not.toBeChecked()
+  })
+
+  it('blocks saving when the line-up no longer fits a changed formation', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+
+    // Build a valid 4-3-3 XI (4 DEF, 3 MEI, 3 ATA + 1 GK).
+    const xi = [GK, DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
+    for (const player of xi) {
+      fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(player.name, 'i') }))
+    }
+    expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
+
+    // Switching to 3-5-2 (3 DEF, 5 MEI, 2 ATA) makes the current shape invalid.
+    fireEvent.change(screen.getByLabelText(/formação/i), { target: { value: '3-5-2' } })
+    expect(screen.getByRole('button', { name: /salvar escala/i })).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent(/3-5-2/)
   })
 
   it('keeps button disabled when fewer than 11 are selected', async () => {
@@ -185,20 +199,17 @@ describe('SquadPage', () => {
     expect(saveBtn).toBeDisabled()
   })
 
-  it('keeps button disabled and shows validation message when selection has 2 GKs', async () => {
+  it('blocks selecting a second goalkeeper', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Dois'))
 
-    // Select 11 players including both GKs
-    for (const player of ELEVEN_WITH_TWO_GK) {
-      const checkbox = screen.getByRole('checkbox', { name: new RegExp(player.name, 'i') })
-      fireEvent.click(checkbox)
-    }
+    fireEvent.click(screen.getByRole('checkbox', { name: /goleiro teste/i }))
 
-    const saveBtn = screen.getByRole('button', { name: /salvar escala/i })
-    // 11 players selected but 2 GKs → button disabled, validation message about exactly 1 GK
-    expect(saveBtn).toBeDisabled()
-    expect(screen.getByRole('alert')).toHaveTextContent(/exatamente 1 goleiro/i)
+    // Only one keeper fits any formation, so the second becomes unselectable.
+    const secondGk = screen.getByRole('checkbox', { name: /goleiro dois/i })
+    expect(secondGk).toBeDisabled()
+    fireEvent.click(secondGk)
+    expect(secondGk).not.toBeChecked()
   })
 
   it('does not let a suspended player be selected', async () => {
@@ -217,14 +228,17 @@ describe('SquadPage', () => {
     expect(screen.getByText(/\(Lesionado 2\)/i)).toBeInTheDocument()
   })
 
-  it('shows contract years and a renew control', async () => {
+  it('renews a contract from the details dialog', async () => {
     mockRenewContract.mockResolvedValue({ playerId: GK.id, name: 'Goleiro Teste', wage: 90000, contractYears: 3 })
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Teste'))
-    // Contract years column should be visible for the GK (contractYears: 2)
-    expect(screen.getAllByText(/ano\(s\)/i).length).toBeGreaterThan(0)
-    // Renovar button should be present
-    expect(screen.getAllByRole('button', { name: /renovar/i }).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByText('Goleiro Teste'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+    // Contract term is shown and Renovar lives alongside the salary in the dialog.
+    expect(within(dialog).getByText(/2 ano\(s\)/)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: /renovar/i }))
+    await waitFor(() => expect(mockRenewContract).toHaveBeenCalled())
   })
 
   it('shows a role selector for a selected outfield player', async () => {
@@ -250,9 +264,9 @@ describe('SquadPage', () => {
         { playerId: MID1.id, role: 'BOX_TO_BOX' },
         { playerId: MID2.id, role: 'BOX_TO_BOX' },
         { playerId: MID3.id, role: 'BOX_TO_BOX' },
+        { playerId: MID4.id, role: 'BOX_TO_BOX' },
         { playerId: ATT1.id, role: 'POACHER' },
         { playerId: ATT2.id, role: 'POACHER' },
-        { playerId: ATT3.id, role: 'POACHER' },
       ],
     })
     renderWithProviders()
@@ -293,5 +307,34 @@ describe('SquadPage', () => {
     // The user resolves it themselves — no auto-substitution.
     fireEvent.click(banido)
     await waitFor(() => expect(banido).not.toBeChecked())
+  })
+
+  it('opens a details dialog with the attribute breakdown when a player name is clicked', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByText('Goleiro Teste'))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Ritmo')).toBeInTheDocument()
+    expect(within(dialog).getByText(/OVR 72/)).toBeInTheDocument()
+  })
+
+  it('shows contract details on the Contrato tab', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByText('Goleiro Teste'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+    expect(within(dialog).getByText(/Salário pedido/i)).toBeInTheDocument()
+    expect(within(dialog).getByText(/2 ano\(s\)/)).toBeInTheDocument()
+  })
+
+  it('marks the Contrato tab with a red dot when the contract is ending', async () => {
+    const endingGk = { ...GK, id: 'p-gk-end', name: 'Goleiro Fim', contractYears: 1 }
+    mockGetSquad.mockResolvedValue({ players: [endingGk, ...ALL_OUTFIELD] })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Fim'))
+    fireEvent.click(screen.getByText('Goleiro Fim'))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByTitle('Contrato terminando')).toBeInTheDocument()
   })
 })
