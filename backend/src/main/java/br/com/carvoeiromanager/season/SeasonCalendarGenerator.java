@@ -3,9 +3,11 @@ package br.com.carvoeiromanager.season;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClubRepository;
 import br.com.carvoeiromanager.competition.Fixture;
-import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.competition.FixtureScheduler;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -29,21 +31,24 @@ public class SeasonCalendarGenerator {
     static final int MID_WINDOW_END_DAYS = 168;
 
     private final CompetitionClubRepository competitionClubRepository;
-    private final FixtureRepository fixtureRepository;
-    private final SeasonEventRepository seasonEventRepository;
     private final FixtureScheduler fixtureScheduler = new FixtureScheduler();
 
-    public SeasonCalendarGenerator(CompetitionClubRepository competitionClubRepository,
-                                   FixtureRepository fixtureRepository,
-                                   SeasonEventRepository seasonEventRepository) {
+    // Fixtures and season events are inserted via persist() (not repository.save()) so the
+    // assigned-UUID ids don't trigger a merge() SELECT-before-INSERT on every one of the
+    // hundreds of rows a season calendar produces. See SaveGameService for the same rationale.
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    public SeasonCalendarGenerator(CompetitionClubRepository competitionClubRepository) {
         this.competitionClubRepository = competitionClubRepository;
-        this.fixtureRepository = fixtureRepository;
-        this.seasonEventRepository = seasonEventRepository;
     }
 
     /** A scheduled match-unit: one competition's round, to be dated and persisted. */
     private record MatchUnit(UUID competitionId, int round, List<Fixture> fixtures) { }
 
+    // Persists via the EntityManager, so it needs an active transaction. In production it joins
+    // createCareer()/rollover's existing transaction (REQUIRED); called standalone it opens its own.
+    @Transactional
     public void generate(UUID saveGameId, int seasonYear, List<Competition> competitions) {
         final LocalDate seasonStart = LocalDate.of(seasonYear, 1, 15);
 
@@ -93,9 +98,9 @@ public class SeasonCalendarGenerator {
             LocalDate date = seasonStart.plusDays((long) i * MATCH_INTERVAL_DAYS);
             for (Fixture fx : unit.fixtures()) {
                 fx.setMatchDate(date);
-                fixtureRepository.save(fx);
+                entityManager.persist(fx);
             }
-            seasonEventRepository.save(
+            entityManager.persist(
                     SeasonEvent.createMatch(saveGameId, date, unit.competitionId(), unit.round(), 0));
         }
 
@@ -106,7 +111,7 @@ public class SeasonCalendarGenerator {
 
     private void addTransferEvents(UUID saveGameId, LocalDate seasonStart, int startOffset, int endOffset) {
         for (int d = startOffset; d < endOffset; d += TRANSFER_INTERVAL_DAYS) {
-            seasonEventRepository.save(
+            entityManager.persist(
                     SeasonEvent.createTransfer(saveGameId, seasonStart.plusDays(d), 1));
         }
     }

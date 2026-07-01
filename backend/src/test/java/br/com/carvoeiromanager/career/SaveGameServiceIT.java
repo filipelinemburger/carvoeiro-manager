@@ -68,9 +68,9 @@ class SaveGameServiceIT {
         // SaveGame persisted in DB
         assertThat(saveGameRepository.findById(saveGameId)).isPresent();
 
-        // All clubs from the pool are created (24 clubs: 10 SC + 14 national)
+        // All clubs from the pool are created (25 clubs: the Catarinense + Série B pool, incl. Criciúma)
         var clubs = clubRepository.findBySaveGameId(saveGameId);
-        assertThat(clubs).hasSize(24);
+        assertThat(clubs).hasSize(25);
 
         // Every club has at least one player
         clubs.forEach(club ->

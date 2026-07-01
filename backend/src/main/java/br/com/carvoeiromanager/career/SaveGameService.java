@@ -5,7 +5,6 @@ import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClub;
-import br.com.carvoeiromanager.competition.CompetitionClubRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.contract.FreeAgentGenerator;
 import br.com.carvoeiromanager.finance.FinanceCalculator;
@@ -19,6 +18,8 @@ import br.com.carvoeiromanager.seed.SeedClub;
 import br.com.carvoeiromanager.seed.SeedCompetition;
 import br.com.carvoeiromanager.seed.SeedLoader;
 import br.com.carvoeiromanager.seed.SeedPlayer;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,19 +43,23 @@ public class SaveGameService {
     private final ClubRepository clubRepository;
     private final PlayerRepository playerRepository;
     private final CompetitionRepository competitionRepository;
-    private final CompetitionClubRepository competitionClubRepository;
     private final SeasonCalendarGenerator seasonCalendarGenerator;
     private final OverallCalculator overallCalculator;
     private final FinanceCalculator financeCalculator;
     private final FreeAgentGenerator freeAgentGenerator;
     private final br.com.carvoeiromanager.transfer.TransferWindow transferWindow;
 
+    // New-entity inserts go through the EntityManager (persist), not repository.save():
+    // with assigned UUID ids, save() routes through merge() and fires a SELECT before
+    // every INSERT, which turns career creation into ~1,400 round-trips.
+    @PersistenceContext
+    private EntityManager entityManager;
+
     public SaveGameService(SeedLoader seedLoader,
                            SaveGameRepository saveGameRepository,
                            ClubRepository clubRepository,
                            PlayerRepository playerRepository,
                            CompetitionRepository competitionRepository,
-                           CompetitionClubRepository competitionClubRepository,
                            SeasonCalendarGenerator seasonCalendarGenerator,
                            OverallCalculator overallCalculator,
                            FinanceCalculator financeCalculator,
@@ -65,7 +70,6 @@ public class SaveGameService {
         this.clubRepository = clubRepository;
         this.playerRepository = playerRepository;
         this.competitionRepository = competitionRepository;
-        this.competitionClubRepository = competitionClubRepository;
         this.seasonCalendarGenerator = seasonCalendarGenerator;
         this.overallCalculator = overallCalculator;
         this.financeCalculator = financeCalculator;
@@ -85,7 +89,7 @@ public class SaveGameService {
         // 1. Create SaveGame (managed club set after clubs exist)
         int seasonYear = seed.competitions().get(0).seasonYear();
         SaveGame saveGame = SaveGame.create(userId, seasonYear);
-        saveGameRepository.save(saveGame);
+        entityManager.persist(saveGame);
 
         // 2. Create clubs and players; capture shortName -> clubId for membership wiring
         List<SeedClub> seedClubs = seed.clubPool();
@@ -99,7 +103,7 @@ public class SaveGameService {
             club.setNickname(seedClub.nickname());
             club.setPrimaryColor(seedClub.primaryColor());
             club.setSecondaryColor(seedClub.secondaryColor());
-            clubRepository.save(club);
+            entityManager.persist(club);
 
             clubIdByShortName.put(seedClub.shortName(), club.getId());
 
@@ -121,7 +125,7 @@ public class SaveGameService {
                         seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina(),
                         overall);
                 player.setWage(financeCalculator.weeklyWage(overall, seedPlayer.age()));
-                playerRepository.save(player);
+                entityManager.persist(player);
                 squad.add(player);
             }
 
@@ -148,7 +152,7 @@ public class SaveGameService {
         // Seed an initial free-agent pool (clubless) so there is always a market to shop.
         Random faRng = new Random(saveGame.getId().getMostSignificantBits() ^ 0xFA11AC0DL);
         for (int i = 0; i < 10; i++) {
-            playerRepository.save(freeAgentGenerator.generate(saveGame.getId(), faRng));
+            entityManager.persist(freeAgentGenerator.generate(saveGame.getId(), faRng));
         }
 
         // 3. Create competitions and save membership rows BEFORE calling SeasonCalendarGenerator
@@ -159,12 +163,12 @@ public class SaveGameService {
             int totalRounds = 2 * (memberCount - 1);
             Competition competition = Competition.create(
                     saveGame.getId(), seedComp.name(), seedComp.type(), seedComp.seasonYear(), totalRounds);
-            competitionRepository.save(competition);
+            entityManager.persist(competition);
             competitions.add(competition);
 
             for (String shortName : seedComp.memberShortNames()) {
                 UUID clubId = clubIdByShortName.get(shortName);
-                competitionClubRepository.save(
+                entityManager.persist(
                         CompetitionClub.create(saveGame.getId(), competition.getId(), clubId));
             }
         }
