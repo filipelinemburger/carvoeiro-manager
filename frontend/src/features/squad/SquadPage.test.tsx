@@ -22,6 +22,8 @@ const mockGetLineup = vi.mocked(getLineup)
 const mockSetLineup = vi.mocked(setLineup)
 const mockRenewContract = vi.mocked(renewContract)
 
+// `as const` narrows injurySeverity to the literal 'NONE' so it satisfies
+// PlayerResponse's union type (not widened to string) when spread into fixtures.
 const STATE = { form: 0, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0, injurySeverity: 'NONE' as const, eligible: true, role: null, contractYears: 2, wageDemand: 90000, fitness: 100 }
 
 const GK: PlayerResponse = {
@@ -224,7 +226,7 @@ describe('SquadPage', () => {
     expect(screen.getByText(/\(Suspenso 1\)/i)).toBeInTheDocument()
   })
 
-  it('shows "(Lesionado N)" label for an injured player and disables their checkbox', async () => {
+  it('shows "(Lesionado (Leve) N)" severity label for an injured player and disables their checkbox', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Lesionado Um'))
     const checkbox = screen.getByRole('checkbox', { name: /lesionado um/i })
