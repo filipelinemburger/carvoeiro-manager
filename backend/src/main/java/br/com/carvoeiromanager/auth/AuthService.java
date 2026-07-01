@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.auth;
 
+import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.security.JwtService;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -8,19 +9,35 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Service
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final SaveGameRepository saveGameRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
     public AuthService(UserRepository userRepository,
+                       SaveGameRepository saveGameRepository,
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService) {
         this.userRepository = userRepository;
+        this.saveGameRepository = saveGameRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+    }
+
+    /**
+     * Permanently deletes a user and every piece of data tied to their account:
+     * all save games and (via ON DELETE CASCADE) their clubs, players, fixtures,
+     * finances, transfers, news and season history.
+     */
+    @Transactional
+    public void deleteAccount(UUID userId) {
+        saveGameRepository.deleteByUserId(userId);
+        userRepository.findById(userId).ifPresent(userRepository::delete);
     }
 
     @Transactional

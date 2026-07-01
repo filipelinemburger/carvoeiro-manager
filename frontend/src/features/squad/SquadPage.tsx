@@ -209,6 +209,33 @@ export function SquadPage() {
     setRoles(prev => ({ ...prev, [player.id]: role }))
   }
 
+  // Fills the XI with the highest-rated eligible players for each line of the current
+  // formation (1 GK + the formation's DEF/MID/ATT counts).
+  function autoPickBestXI() {
+    setSaveSuccess(false)
+    const shape = FORMATION_SHAPE[formation]
+    const bestFor = (position: PlayerResponse['position'], count: number) =>
+      players
+        .filter(p => p.eligible && p.position === position)
+        .sort((a, b) => b.overall - a.overall)
+        .slice(0, count)
+    const picked = [
+      ...bestFor('GK', 1),
+      ...bestFor('DEF', shape.DEF),
+      ...bestFor('MID', shape.MID),
+      ...bestFor('ATT', shape.ATT),
+    ]
+    setSelected(picked.map(p => p.id))
+    setRoles(Object.fromEntries(picked.map(p => [p.id, DEFAULT_ROLE[p.position]])))
+  }
+
+  // Empties the whole selection.
+  function clearSelection() {
+    setSaveSuccess(false)
+    setSelected([])
+    setRoles({})
+  }
+
   // ── Per-player controls, shared by the desktop table and the mobile cards ──
 
   // The player's name doubles as the trigger for the details dialog.
@@ -310,6 +337,14 @@ export function SquadPage() {
     <Box>
       <Collapsible title="Escalação">
         {formationSelect}
+        <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 2, flexWrap: 'wrap' }}>
+          <Button size="small" variant="outlined" color="secondary" onClick={autoPickBestXI}>
+            Selecionar melhores
+          </Button>
+          <Button size="small" variant="outlined" color="inherit" onClick={clearSelection} disabled={selected.length === 0}>
+            Limpar
+          </Button>
+        </Stack>
         {helperAndAlerts}
 
         {isMobile ? (

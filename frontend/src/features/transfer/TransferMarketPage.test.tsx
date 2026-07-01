@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -13,9 +13,12 @@ vi.mock('../../api/career', () => ({
   acceptCounter: vi.fn(),
   withdrawOffer: vi.fn(),
   respondToOffer: vi.fn(),
+  getSquad: vi.fn(),
+  getFreeAgents: vi.fn(),
+  signFreeAgent: vi.fn(),
 }))
 
-import { getSaveGame, getMarket, getOffers, makeOffer, respondToOffer } from '../../api/career'
+import { getSaveGame, getMarket, getOffers, makeOffer, respondToOffer, getFreeAgents, getSquad } from '../../api/career'
 
 const SAVE_OPEN = {
   id: 'sg-1', seasonYear: 2026, competitionId: 'c-1', competitionName: 'Catarinense',
@@ -47,7 +50,14 @@ describe('TransferMarketPage', () => {
       { playerId: 'p1', name: 'Alvo Um', position: 'ATT', age: 24, overall: 80,
         clubId: 'club-9', clubName: 'Rival FC', value: 3000000, wage: 50000, wageDemand: 60000 },
     ])
+    vi.mocked(getFreeAgents).mockResolvedValue([])
+    vi.mocked(getSquad).mockResolvedValue({ players: [] } as never)
   })
+
+  /** The market list lives on the "Jogadores disponíveis" tab. */
+  function openMarketTab() {
+    fireEvent.click(screen.getByRole('tab', { name: /jogadores dispon/i }))
+  }
 
   it('lists market players and shows the AI response to an offer', async () => {
     vi.mocked(makeOffer).mockResolvedValue({
@@ -57,11 +67,12 @@ describe('TransferMarketPage', () => {
     })
 
     renderPage()
+    openMarketTab()
     await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
     expect(screen.getByText('Rival FC')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText(/Valor para Alvo Um/i), { target: { value: '2400000' } })
-    fireEvent.click(screen.getByRole('button', { name: /propor/i }))
+    fireEvent.click(screen.getByRole('button', { name: /fazer proposta/i }))
 
     await waitFor(() => expect(screen.getByText(/Contraproposta/i)).toBeInTheDocument())
     expect(makeOffer).toHaveBeenCalledWith('sg-1', expect.objectContaining({ playerId: 'p1', amount: 2400000 }), 'test-token')
@@ -71,7 +82,8 @@ describe('TransferMarketPage', () => {
     vi.mocked(getSaveGame).mockResolvedValue({ ...SAVE_OPEN, transferWindowOpen: false })
     renderPage()
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/fechada/i))
-    expect(screen.getByRole('button', { name: /propor/i })).toBeDisabled()
+    openMarketTab()
+    expect(await screen.findByRole('button', { name: /fazer proposta/i })).toBeDisabled()
   })
 
   it('sends wage and length with the fee', async () => {
@@ -86,11 +98,12 @@ describe('TransferMarketPage', () => {
     })
 
     renderPage()
+    openMarketTab()
     await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
 
     fireEvent.change(screen.getByLabelText(/Valor para Alvo Um/i), { target: { value: '2400000' } })
     fireEvent.change(screen.getByLabelText(/Salário para Alvo Um/i), { target: { value: '65000' } })
-    fireEvent.click(screen.getByRole('button', { name: /propor/i }))
+    fireEvent.click(screen.getByRole('button', { name: /fazer proposta/i }))
 
     await waitFor(() =>
       expect(makeOffer).toHaveBeenCalledWith(
@@ -114,12 +127,45 @@ describe('TransferMarketPage', () => {
     })
 
     renderPage()
-    await waitFor(() => expect(screen.getByText(/Propostas recebidas/i)).toBeInTheDocument())
-    expect(screen.getByText(/Meu Jogador/)).toBeInTheDocument()
+    // Tab 0 (Propostas recebidas) is active by default; wait for the incoming bid to load.
+    expect(await screen.findByText(/Meu Jogador/)).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /propostas recebidas/i })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /aceitar venda/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Aceitar' }))
     await waitFor(() =>
       expect(respondToOffer).toHaveBeenCalledWith('sg-1', 'in1', { action: 'ACCEPT', counterAmount: null }, 'test-token'),
     )
+  })
+
+  it('shows free agents on the Agentes livres tab', async () => {
+    vi.mocked(getFreeAgents).mockResolvedValue([
+      { playerId: 'fa1', name: 'Agente Livre', position: 'MID', age: 29, overall: 70, wageDemand: 80000 },
+    ] as never)
+    renderPage()
+    fireEvent.click(screen.getByRole('tab', { name: /agentes livres/i }))
+    expect(await screen.findByText('Agente Livre')).toBeInTheDocument()
+  })
+
+  it('opens player details when an incoming proposal name is clicked', async () => {
+    vi.mocked(getOffers).mockResolvedValue([
+      { id: 'in1', playerId: 'mp1', playerName: 'Meu Jogador', fromClubId: 'club-9', fromClubName: 'Rival FC',
+        toClubId: 'club-1', toClubName: 'Criciúma', direction: 'INCOMING', amount: 2000000,
+        counterAmount: null, status: 'PENDING', round: 0, wage: null, contractYears: null },
+    ])
+    vi.mocked(getSquad).mockResolvedValue({
+      players: [
+        { id: 'mp1', name: 'Meu Jogador', position: 'ATT', age: 25, overall: 78, pace: 80, finishing: 75,
+          passing: 70, tackling: 30, goalkeeping: 10, stamina: 75, form: 0, yellowCards: 0,
+          suspensionRemaining: 0, injuryMatches: 0, eligible: true, role: null, contractYears: 3, wageDemand: 90000 },
+      ],
+    } as never)
+
+    renderPage()
+    // Click the player's name; retry until the squad has loaded and the dialog can open.
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Meu Jogador' }))
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+    expect(within(screen.getByRole('dialog')).getByText('Ritmo')).toBeInTheDocument()
   })
 })

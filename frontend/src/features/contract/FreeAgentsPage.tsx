@@ -24,7 +24,11 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
   )
 }
 
-export function FreeAgentsPage() {
+/**
+ * The free-agents list: browse and sign unattached players. Rendered inside the
+ * Mercado de Transferências "Agentes livres" tab and by the standalone page below.
+ */
+export function FreeAgentsPanel() {
   const { token } = useAuth()
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
@@ -44,16 +48,14 @@ export function FreeAgentsPage() {
     },
   })
 
-  if (pool.isLoading) return <Typography sx={{ p: 3 }}>Carregando agentes livres…</Typography>
-  if (pool.error) return <Typography sx={{ p: 3 }} color="error">Erro ao carregar agentes livres.</Typography>
+  if (pool.isLoading) return <Typography>Carregando agentes livres…</Typography>
+  if (pool.error) return <Typography color="error">Erro ao carregar agentes livres.</Typography>
 
   // Date-based window status from the backend (the single source of truth).
   const windowOpen = save.data?.transferWindowOpen ?? true
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Agentes Livres</Typography>
-
+    <>
       {!windowOpen && <Alert role="alert" severity="error" sx={{ mb: 2 }}>Janela de transferências fechada.</Alert>}
       {signMut.isError && (
         <Alert severity="error" sx={{ mb: 2 }}>Não foi possível contratar (salário baixo ou elenco cheio).</Alert>
@@ -137,6 +139,16 @@ export function FreeAgentsPage() {
           )
         })}
       </Stack>
+    </>
+  )
+}
+
+/** Standalone page wrapper, kept for the /free-agents route. */
+export function FreeAgentsPage() {
+  return (
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Agentes Livres</Typography>
+      <FreeAgentsPanel />
     </Box>
   )
 }

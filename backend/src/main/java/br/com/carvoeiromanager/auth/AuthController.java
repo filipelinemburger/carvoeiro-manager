@@ -4,6 +4,7 @@ import br.com.carvoeiromanager.common.security.CurrentUser;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,5 +38,12 @@ public class AuthController {
     @GetMapping("/me")
     public Map<String, UUID> me(@CurrentUser UUID userId) {
         return Map.of("userId", userId);
+    }
+
+    /** Permanently deletes the authenticated user's account and all of its data. */
+    @DeleteMapping("/account")
+    public ResponseEntity<Void> deleteAccount(@CurrentUser UUID userId) {
+        authService.deleteAccount(userId);
+        return ResponseEntity.noContent().build();
     }
 }

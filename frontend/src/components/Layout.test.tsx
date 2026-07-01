@@ -5,7 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { Layout } from './Layout'
 import { AuthProvider } from '../auth/AuthContext'
-import { getSaveGame, advanceRound, getAdvancePreview } from '../api/career'
+import { getSaveGame, advanceRound, getAdvancePreview, getLineup } from '../api/career'
+import { deleteAccount } from '../api/account'
 import type { Mock } from 'vitest'
 import type { AdvancePreviewResponse, AdvanceResponse, SaveGameResponse } from '../api/types'
 
@@ -13,7 +14,12 @@ vi.mock('../api/career', () => ({
   getSaveGame: vi.fn(),
   advanceRound: vi.fn(),
   getAdvancePreview: vi.fn(),
+  getLineup: vi.fn(),
   createCareer: vi.fn(),
+}))
+
+vi.mock('../api/account', () => ({
+  deleteAccount: vi.fn(),
 }))
 
 const PREVIEW_OK: AdvancePreviewResponse = {
@@ -99,6 +105,8 @@ describe('Layout shell', () => {
     ;(getSaveGame as Mock).mockResolvedValue(SAVE_GAME)
     ;(advanceRound as Mock).mockResolvedValue(ADVANCE_RESPONSE)
     ;(getAdvancePreview as Mock).mockResolvedValue(PREVIEW_OK)
+    ;(getLineup as Mock).mockResolvedValue({ lineupId: 'l-1', clubId: 'club-1', formation: '4-4-2', starters: [] })
+    ;(deleteAccount as Mock).mockResolvedValue(undefined)
   })
 
   it('renders children inside a content panel', () => {
@@ -135,7 +143,6 @@ describe('Layout shell', () => {
     expect(screen.getByRole('link', { name: /classificação/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /finanças/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /mercado/i })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /livres/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /histórico/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /news/i })).toBeInTheDocument()
   })
@@ -225,5 +232,37 @@ describe('Layout shell', () => {
     await waitFor(() => expect(avancarBtn).toBeDisabled())
     expect(screen.getByRole('status')).toHaveTextContent(/janela de transferências/i)
     expect(screen.getByRole('link', { name: /ver propostas/i })).toBeInTheDocument()
+  })
+
+  it('blocks Avançar until the managed club has a saved lineup', async () => {
+    ;(getLineup as Mock).mockResolvedValue(null)
+    seedAuth('U1', 'sg-1')
+    renderLayout('/dashboard')
+
+    const avancarBtn = await screen.findByRole('button', { name: /^avançar$/i })
+    await waitFor(() => expect(avancarBtn).toBeDisabled())
+    expect(screen.getByRole('status')).toHaveTextContent(/escale seu time/i)
+    expect(screen.getByRole('link', { name: /escalar time/i })).toBeInTheDocument()
+  })
+
+  it('deletes the account from the gear menu after confirmation', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    seedAuth()
+    renderLayout()
+    fireEvent.click(screen.getByRole('button', { name: /configurações/i }))
+    fireEvent.click(screen.getByText('Excluir conta'))
+    await waitFor(() => expect(deleteAccount).toHaveBeenCalledWith('test-token'))
+    // On success the session is cleared.
+    await waitFor(() => expect(localStorage.getItem('carvoeiro_manager_token')).toBeNull())
+  })
+
+  it('does not delete the account when the confirmation is cancelled', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    seedAuth()
+    renderLayout()
+    fireEvent.click(screen.getByRole('button', { name: /configurações/i }))
+    fireEvent.click(screen.getByText('Excluir conta'))
+    expect(deleteAccount).not.toHaveBeenCalled()
+    expect(localStorage.getItem('carvoeiro_manager_token')).toBe('test-token')
   })
 })

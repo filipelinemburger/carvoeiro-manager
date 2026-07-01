@@ -309,6 +309,26 @@ describe('SquadPage', () => {
     await waitFor(() => expect(banido).not.toBeChecked())
   })
 
+  it('auto-selects the best XI for the formation', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+    // A complete, valid 4-3-3 is picked, so saving is enabled.
+    expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
+    // The higher-rated keeper (Goleiro Dois, 75) beats Goleiro Teste (72).
+    expect(screen.getByRole('checkbox', { name: /goleiro dois/i })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /goleiro teste/i })).not.toBeChecked()
+  })
+
+  it('clears the selected squad', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+    fireEvent.click(screen.getByRole('button', { name: /limpar/i }))
+    expect(screen.getByRole('checkbox', { name: /goleiro dois/i })).not.toBeChecked()
+    expect(screen.getByRole('button', { name: /salvar escala/i })).toBeDisabled()
+  })
+
   it('opens a details dialog with the attribute breakdown when a player name is clicked', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Teste'))

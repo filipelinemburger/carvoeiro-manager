@@ -10,7 +10,8 @@ import SettingsIcon from '@mui/icons-material/Settings'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { useAuth } from '../auth/AuthContext'
-import { advanceRound, createCareer, getAdvancePreview, getSaveGame } from '../api/career'
+import { advanceRound, createCareer, getAdvancePreview, getLineup, getSaveGame } from '../api/career'
+import { deleteAccount } from '../api/account'
 import type { AdvancePreviewResponse, AdvanceResponse, SaveGameResponse } from '../api/types'
 
 interface LayoutProps {
@@ -49,6 +50,17 @@ export function Layout({ children }: LayoutProps) {
     queryKey: ['advancePreview', saveGameId],
     queryFn: () => getAdvancePreview(saveGameId!, token ?? ''),
     enabled: Boolean(saveGameId && token),
+    retry: false,
+    staleTime: 10_000,
+  })
+
+  // Whether the managed club already has a saved line-up. Before the first game the
+  // user must pick one (getLineup resolves to null when none has been saved).
+  const managedClubIdForLineup = saveGame?.managedClubId
+  const { data: managedLineup, isSuccess: lineupLoaded } = useQuery({
+    queryKey: ['lineup', saveGameId, managedClubIdForLineup],
+    queryFn: () => getLineup(saveGameId!, managedClubIdForLineup!, token ?? ''),
+    enabled: Boolean(saveGameId && managedClubIdForLineup && token),
     retry: false,
     staleTime: 10_000,
   })
@@ -104,6 +116,24 @@ export function Layout({ children }: LayoutProps) {
     newCareerMutation.mutate()
   }
 
+  // Permanently deletes the account and every save game/piece of data it owns.
+  const deleteAccountMutation = useMutation({
+    mutationFn: () => deleteAccount(token ?? ''),
+    onSuccess: () => {
+      queryClient.clear()
+      logout()
+      void navigate('/login')
+    },
+  })
+
+  const handleDeleteAccount = () => {
+    setGearAnchor(null)
+    if (!window.confirm('Excluir sua conta? Todos os seus dados (carreiras, elenco, finanças e histórico) serão apagados permanentemente. Esta ação não pode ser desfeita.')) {
+      return
+    }
+    deleteAccountMutation.mutate()
+  }
+
   // Build navigation links (only when save game is available)
   const managedClubId = saveGame?.managedClubId
   const competitionId = saveGame?.competitionId
@@ -115,15 +145,20 @@ export function Layout({ children }: LayoutProps) {
   const standingsCompetitionId = preview?.defaultStandingsCompetitionId ?? competitionId
 
   // Reasons the advance must be blocked before the click (computed from the preview).
+  // No saved line-up before a match the managed club plays: the user must pick a team first.
+  const blockNoLineup =
+    preview?.managedClubPlaysNext === true && lineupLoaded && !managedLineup
   const blockIneligible =
     preview?.managedClubPlaysNext === true && (preview?.ineligibleStarters.length ?? 0) > 0
   const blockWindow =
     preview?.windowClosingAfterAdvance === true && (preview?.pendingTransfers ?? 0) > 0
-  const advanceBlockReason = blockIneligible
-    ? 'Há titular(es) suspenso(s) ou lesionado(s) na escalação. Ajuste o time antes de avançar.'
-    : blockWindow
-      ? 'A janela de transferências vai fechar e há proposta(s) pendente(s). Resolva-as antes de avançar.'
-      : null
+  const advanceBlockReason = blockNoLineup
+    ? 'Escale seu time antes do primeiro jogo.'
+    : blockIneligible
+      ? 'Há titular(es) suspenso(s) ou lesionado(s) na escalação. Ajuste o time antes de avançar.'
+      : blockWindow
+        ? 'A janela de transferências vai fechar e há proposta(s) pendente(s). Resolva-as antes de avançar.'
+        : null
   const advanceDisabled =
     advanceMutation.isPending || seasonFinished || !sgId || advanceBlockReason !== null
 
@@ -135,7 +170,6 @@ export function Layout({ children }: LayoutProps) {
         { to: `/table?saveGameId=${sgId}&competitionId=${standingsCompetitionId}&managedClubId=${managedClubId}`, label: 'Classificação' },
         { to: `/finances?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Finanças' },
         { to: `/transfers?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Mercado' },
-        { to: `/free-agents?saveGameId=${sgId}`, label: 'Livres' },
         { to: `/history?saveGameId=${sgId}`, label: 'Histórico' },
         { to: `/news?saveGameId=${sgId}`, label: 'News' },
       ]
@@ -226,6 +260,14 @@ export function Layout({ children }: LayoutProps) {
               {newCareerMutation.isPending ? 'Criando…' : 'Nova Carreira'}
             </MenuItem>
             <MenuItem onClick={handleLogout}>Sair</MenuItem>
+            <Divider />
+            <MenuItem
+              onClick={handleDeleteAccount}
+              disabled={deleteAccountMutation.isPending}
+              sx={{ color: 'error.main' }}
+            >
+              {deleteAccountMutation.isPending ? 'Excluindo…' : 'Excluir conta'}
+            </MenuItem>
           </Menu>
         </Toolbar>
       </AppBar>
@@ -261,13 +303,19 @@ export function Layout({ children }: LayoutProps) {
                 gap: { xs: 0.5, sm: 1 },
               }}>
                 <Box sx={{ flex: 1 }}>{advanceBlockReason}</Box>
-                {blockIneligible && (
+                {blockNoLineup && (
+                  <Box component={NavLink} to={`/squad?saveGameId=${sgId}&clubId=${managedClubId}`}
+                    sx={{ fontWeight: 700, color: 'inherit', whiteSpace: 'nowrap' }}>
+                    Escalar time →
+                  </Box>
+                )}
+                {!blockNoLineup && blockIneligible && (
                   <Box component={NavLink} to={`/squad?saveGameId=${sgId}&clubId=${managedClubId}`}
                     sx={{ fontWeight: 700, color: 'inherit', whiteSpace: 'nowrap' }}>
                     Ajustar escalação →
                   </Box>
                 )}
-                {!blockIneligible && blockWindow && (
+                {!blockNoLineup && !blockIneligible && blockWindow && (
                   <Box component={NavLink} to={`/transfers?saveGameId=${sgId}&clubId=${managedClubId}`}
                     sx={{ fontWeight: 700, color: 'inherit', whiteSpace: 'nowrap' }}>
                     Ver propostas →

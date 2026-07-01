@@ -32,22 +32,24 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
 
 /** What each standings abbreviation means (pt-BR), shown as a legend below the table. */
 const STAT_LEGEND: ReadonlyArray<readonly [string, string]> = [
+  ['POS', 'Posição'],
+  ['CLUBE', 'Clube'],
   ['P', 'Partidas'],
-  ['W', 'Vitórias'],
-  ['D', 'Empates'],
-  ['L', 'Derrotas'],
-  ['GF', 'Gols pró'],
-  ['GA', 'Gols contra'],
-  ['GD', 'Saldo de gols'],
+  ['V', 'Vitórias'],
+  ['E', 'Empates'],
+  ['D', 'Derrotas'],
+  ['GP', 'Gols pró'],
+  ['GC', 'Gols contra'],
+  ['SG', 'Saldo de gols'],
   ['PTS', 'Pontos'],
 ]
 
 /** A caption legend explaining the abbreviations used in the table and the detail rows. */
 function StatLegend() {
   return (
-    <Box sx={{ mt: 1.5, display: 'flex', flexWrap: 'wrap', columnGap: 1.5, rowGap: 0.5 }}>
+    <Box sx={{ mt: 1.5, display: 'flex', flexWrap: 'wrap', columnGap: 1, rowGap: 0.25 }}>
       {STAT_LEGEND.map(([abbr, label]) => (
-        <Typography key={abbr} variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
+        <Typography key={abbr} sx={{ fontSize: '0.62rem', lineHeight: 1.4, color: 'text.secondary', whiteSpace: 'nowrap' }}>
           <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>{abbr}</Box> {label}
         </Typography>
       ))}
@@ -147,16 +149,16 @@ export function TablePage() {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell align="center">Pos</TableCell>
-                  <TableCell>Clube</TableCell>
+                  <TableCell align="center">POS</TableCell>
+                  <TableCell>CLUBE</TableCell>
                   <TableCell align="center">P</TableCell>
-                  <TableCell align="center">W</TableCell>
+                  <TableCell align="center">V</TableCell>
+                  <TableCell align="center">E</TableCell>
                   <TableCell align="center">D</TableCell>
-                  <TableCell align="center">L</TableCell>
-                  <TableCell align="center">GF</TableCell>
-                  <TableCell align="center">GA</TableCell>
-                  <TableCell align="center">GD</TableCell>
-                  <TableCell align="center">Pts</TableCell>
+                  <TableCell align="center">GP</TableCell>
+                  <TableCell align="center">GC</TableCell>
+                  <TableCell align="center">SG</TableCell>
+                  <TableCell align="center">PTS</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -233,12 +235,12 @@ function MobileStandingRow({ row, position, managed }: { row: StandingRow; posit
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Stack direction="row" sx={{ justifyContent: 'space-between', flexWrap: 'nowrap', gap: 0.5, py: 1.25 }}>
               <Stat label="P" value={row.played} />
-              <Stat label="W" value={row.won} />
-              <Stat label="D" value={row.drawn} />
-              <Stat label="L" value={row.lost} />
-              <Stat label="GF" value={row.goalsFor} />
-              <Stat label="GA" value={row.goalsAgainst} />
-              <Stat label="GD" value={row.goalDifference} />
+              <Stat label="V" value={row.won} />
+              <Stat label="E" value={row.drawn} />
+              <Stat label="D" value={row.lost} />
+              <Stat label="GP" value={row.goalsFor} />
+              <Stat label="GC" value={row.goalsAgainst} />
+              <Stat label="SG" value={row.goalDifference} />
             </Stack>
           </Collapse>
         </TableCell>

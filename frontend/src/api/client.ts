@@ -38,3 +38,11 @@ export async function apiPut<T>(path: string, body: unknown, token?: string): Pr
   })
   return handle<T>(res)
 }
+
+export async function apiDelete<T>(path: string, token?: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'DELETE',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  return handle<T>(res)
+}
