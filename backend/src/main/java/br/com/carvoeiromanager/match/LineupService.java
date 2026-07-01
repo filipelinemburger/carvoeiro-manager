@@ -59,7 +59,10 @@ public class LineupService {
      */
     public SquadResponse getSquad(UUID saveGameId, UUID clubId, UUID userId) {
         LocalDate onDate = saveGameService.requireOwned(saveGameId, userId).getCurrentDate();
-        requireOwnedClub(saveGameId, clubId, userId);
+        Club club = clubRepository.findById(clubId).orElseThrow(this::clubNotFound);
+        if (!club.getSaveGameId().equals(saveGameId)) {
+            throw clubNotFound();
+        }
         Map<UUID, PlayerRole> roleByPlayer = currentRoles(saveGameId, clubId);
         List<PlayerResponse> responses = playerRepository.findByClubId(clubId).stream()
                 .map(p -> toPlayerResponse(p, roleByPlayer.get(p.getId()), onDate))

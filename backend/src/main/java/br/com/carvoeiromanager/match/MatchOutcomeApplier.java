@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.InjurySeverity;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.Position;
 import org.springframework.stereotype.Service;
@@ -122,8 +123,7 @@ public class MatchOutcomeApplier {
             int fitness = effectiveFitnessById.getOrDefault(p.getId(), 100);
             double chance = fitnessCalculator.injuryChance(fitness, p.getAge());
             if (rng.nextDouble() < chance) {
-                br.com.carvoeiromanager.player.InjurySeverity severity =
-                        br.com.carvoeiromanager.player.InjurySeverity.roll(rng);
+                InjurySeverity severity = InjurySeverity.roll(rng);
                 int matches = severity.layoffMatches(rng);
                 p.applyInjury(severity, matches);
                 if (managed) {

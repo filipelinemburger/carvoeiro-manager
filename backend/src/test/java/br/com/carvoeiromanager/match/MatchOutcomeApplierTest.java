@@ -96,17 +96,14 @@ class MatchOutcomeApplierTest {
         Player p = player(Position.MID);
         java.util.Map<java.util.UUID, Integer> fitness = java.util.Map.of(p.getId(), 1); // near-zero fitness
         MatchOutcomeApplier.Summary acc = new MatchOutcomeApplier.Summary();
-        // A fixed seed that is known to trigger at least one injury over the roll.
-        applier.applyInjuries(List.of(p), fitness, new java.util.Random(1), true, acc);
+        // Seed 4608: first nextDouble() = 0.0520 < 0.0621 (injury chance at fitness=1, age=25 PRIME),
+        // so the injury branch is guaranteed to fire for this near-zero-fitness player.
+        applier.applyInjuries(List.of(p), fitness, new java.util.Random(4608), true, acc);
 
-        if (p.getInjuryMatches() > 0) {
-            assertThat(p.getInjurySeverity()).isNotEqualTo(br.com.carvoeiromanager.player.InjurySeverity.NONE);
-            assertThat(acc.newInjuries()).hasSize(1);
-            assertThat(acc.newInjuries().get(0).severity())
-                    .isEqualTo(p.getInjurySeverity().name());
-        } else {
-            assertThat(acc.newInjuries()).isEmpty();
-        }
+        assertThat(p.getInjuryMatches()).isGreaterThan(0);
+        assertThat(p.getInjurySeverity()).isNotEqualTo(br.com.carvoeiromanager.player.InjurySeverity.NONE);
+        assertThat(acc.newInjuries()).hasSize(1);
+        assertThat(acc.newInjuries().get(0).severity()).isEqualTo(p.getInjurySeverity().name());
     }
 
     @Test
