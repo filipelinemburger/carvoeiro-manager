@@ -9,7 +9,9 @@ import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +44,7 @@ public class FixtureSimulator {
     private final PlayerRepository playerRepository;
     private final ClubRepository clubRepository;
     private final FixtureRepository fixtureRepository;
+    private final FitnessCalculator fitnessCalculator;
 
     public FixtureSimulator(LineupService lineupService,
                             TacticsService tacticsService,
@@ -51,7 +54,8 @@ public class FixtureSimulator {
                             MatchOutcomeApplier matchOutcomeApplier,
                             PlayerRepository playerRepository,
                             ClubRepository clubRepository,
-                            FixtureRepository fixtureRepository) {
+                            FixtureRepository fixtureRepository,
+                            FitnessCalculator fitnessCalculator) {
         this.lineupService = lineupService;
         this.tacticsService = tacticsService;
         this.teamStrengthCalculator = teamStrengthCalculator;
@@ -61,10 +65,12 @@ public class FixtureSimulator {
         this.playerRepository = playerRepository;
         this.clubRepository = clubRepository;
         this.fixtureRepository = fixtureRepository;
+        this.fitnessCalculator = fitnessCalculator;
     }
 
     private record FixtureSim(FixtureResultResponse response, List<Player> homeXi, List<Player> awayXi,
-                              int homeGoals, int awayGoals, List<AttributedEvent> events) {
+                              int homeGoals, int awayGoals, List<AttributedEvent> events,
+                              Map<UUID, Integer> homeFitness, Map<UUID, Integer> awayFitness) {
     }
 
     /**
@@ -105,10 +111,11 @@ public class FixtureSimulator {
                     ^ fixture.getId().getMostSignificantBits()
                     ^ (long) fixture.getRound();
             Random injuryRng = new Random(injurySeed ^ 0x1A70F1E5L);
-            // Effective fitness map populated by Task 6+; defaults to 100 (full fitness) until then.
-            Map<UUID, Integer> effectiveFitnessById = Map.of();
-            matchOutcomeApplier.applyInjuries(sim.homeXi(), effectiveFitnessById, injuryRng, homeManaged, summary);
-            matchOutcomeApplier.applyInjuries(sim.awayXi(), effectiveFitnessById, injuryRng, awayManaged, summary);
+            matchOutcomeApplier.applyInjuries(sim.homeXi(), sim.homeFitness(), injuryRng, homeManaged, summary);
+            matchOutcomeApplier.applyInjuries(sim.awayXi(), sim.awayFitness(), injuryRng, awayManaged, summary);
+
+            applyFitnessDecay(sim.homeXi(), sim.homeFitness(), fixture.getMatchDate());
+            applyFitnessDecay(sim.awayXi(), sim.awayFitness(), fixture.getMatchDate());
 
             sim.homeXi().forEach(p -> { playedIds.add(p.getId()); toPersist.add(p); });
             sim.awayXi().forEach(p -> { playedIds.add(p.getId()); toPersist.add(p); });
@@ -136,8 +143,12 @@ public class FixtureSimulator {
         TacticalProfile homeProfile = tacticsService.profileFor(saveGameId, homeClubId, homeXi);
         TacticalProfile awayProfile = tacticsService.profileFor(saveGameId, awayClubId, awayXi);
 
-        TeamMatchInput homeInput = teamStrengthCalculator.compute(homeXi, homeProfile);
-        TeamMatchInput awayInput = teamStrengthCalculator.compute(awayXi, awayProfile);
+        final LocalDate matchDate = fixture.getMatchDate();
+        Map<UUID, Integer> homeFitness = effectiveFitness(homeXi, matchDate);
+        Map<UUID, Integer> awayFitness = effectiveFitness(awayXi, matchDate);
+
+        TeamMatchInput homeInput = teamStrengthCalculator.compute(homeXi, homeProfile, fitnessMult(homeFitness));
+        TeamMatchInput awayInput = teamStrengthCalculator.compute(awayXi, awayProfile, fitnessMult(awayFitness));
 
         // Seed uses fixture.getRound() — identical to the old path's nextRound for
         // all fixtures in a single-round advance, and safe for multi-round date-driven advances.
@@ -161,7 +172,8 @@ public class FixtureSimulator {
                 match.homeGoals(),
                 awayClubId, awayClub != null ? awayClub.getName() : "",
                 match.awayGoals());
-        return new FixtureSim(response, homeXi, awayXi, match.homeGoals(), match.awayGoals(), attributed);
+        return new FixtureSim(response, homeXi, awayXi, match.homeGoals(), match.awayGoals(), attributed,
+                homeFitness, awayFitness);
     }
 
     private List<AttributedEvent> saveEvents(Fixture fixture, SimulatedMatch match,
@@ -217,6 +229,29 @@ public class FixtureSimulator {
             }
         }
         return xi.get(xi.size() - 1);
+    }
+
+    private Map<UUID, Integer> effectiveFitness(List<Player> xi, LocalDate onDate) {
+        Map<UUID, Integer> map = new HashMap<>();
+        for (Player p : xi) {
+            map.put(p.getId(),
+                    fitnessCalculator.effectiveFitness(p.getFitness(), p.getLastMatchDate(), onDate, p.getAge()));
+        }
+        return map;
+    }
+
+    private Map<UUID, Double> fitnessMult(Map<UUID, Integer> effectiveFitnessById) {
+        Map<UUID, Double> map = new HashMap<>();
+        effectiveFitnessById.forEach((id, fit) -> map.put(id, fitnessCalculator.fitnessMult(fit)));
+        return map;
+    }
+
+    private void applyFitnessDecay(List<Player> xi, Map<UUID, Integer> effectiveFitnessById, LocalDate matchDate) {
+        for (Player p : xi) {
+            int eff = effectiveFitnessById.getOrDefault(p.getId(), 100);
+            int newBase = fitnessCalculator.decayedBaseFitness(eff, p.getStamina(), p.getAge());
+            p.recordAppearance(newBase, matchDate);
+        }
     }
 
     private List<Player> resolveXi(UUID saveGameId, UUID clubId, UUID managedClubId) {
