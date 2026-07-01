@@ -32,6 +32,8 @@ class FitnessCalculatorTest {
 
     @Test
     void playingDecaysBaseFitnessAndHigherStaminaDecaysLess() {
+        // prime age, stamina 70: clamp(70/70)=1.0, PRIME.decayFactor()=1.0 -> decay = DECAY_BASE 30 -> 70
+        assertThat(calc.decayedBaseFitness(100, 70, 27)).isEqualTo(70);
         int highStamina = calc.decayedBaseFitness(100, 90, 27);
         int lowStamina = calc.decayedBaseFitness(100, 60, 27);
         assertThat(highStamina).isGreaterThan(lowStamina); // fitter engine tires less
