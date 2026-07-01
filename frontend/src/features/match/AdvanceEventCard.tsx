@@ -139,7 +139,7 @@ function MatchTimeline({ result, saveGameId, competitionId, managedClubId }: {
                 size="small"
                 variant="outlined"
                 color="secondary"
-                label={`${inj.playerName} — ${SEVERITY_LABEL[inj.severity]} (${inj.matches} jogo(s))`}
+                label={`${inj.playerName} — ${SEVERITY_LABEL[inj.severity] ?? inj.severity} (${inj.matches} jogo(s))`}
               />
             ))}
           </Stack>

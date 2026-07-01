@@ -331,7 +331,7 @@ export function Layout({ children }: LayoutProps) {
               sx={{ mb: 2, borderRadius: 2 }}
             >
               Jogadores com pouca condição:{' '}
-              {preview!.lowFitnessStarters.map(s => s.playerName).join(', ')}
+              {(preview?.lowFitnessStarters ?? []).map(s => s.playerName).join(', ')}
             </Alert>
           )}
           <Paper
