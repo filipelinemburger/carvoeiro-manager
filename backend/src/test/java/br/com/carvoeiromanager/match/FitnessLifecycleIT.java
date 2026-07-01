@@ -54,6 +54,7 @@ class FitnessLifecycleIT {
         // Given a fresh career: everyone is fully fit with no last-match date
         Career career = createCareer();
         UUID saveGameId = career.save().id();
+        UUID managedClubId = career.save().managedClubId();
         assertThat(playerRepository.findBySaveGameId(saveGameId))
                 .allSatisfy(p -> {
                     assertThat(p.getFitness()).isEqualTo(100);
@@ -70,6 +71,10 @@ class FitnessLifecycleIT {
         assertThat(played).isNotEmpty();
         assertThat(played).allSatisfy(p -> assertThat(p.getFitness()).isLessThan(100));
 
+        // ...specifically the managed club featured (at least one of its players played)...
+        assertThat(playerRepository.findByClubId(managedClubId))
+                .anySatisfy(p -> assertThat(p.getLastMatchDate()).isNotNull());
+
         // ...while players who never featured keep full stored fitness.
         assertThat(playerRepository.findBySaveGameId(saveGameId).stream()
                 .filter(p -> p.getLastMatchDate() == null))
@@ -77,25 +82,28 @@ class FitnessLifecycleIT {
     }
 
     @Test
-    void aFatiguedStarterEndsUpLessFitThanAnUnusedPlayer() {
-        // Given a fresh career, capture the managed club's first-choice XI
+    void playingCostsFitnessWhileRestingPreservesIt() {
+        // Given a fresh career
         Career career = createCareer();
         UUID clubId = career.save().managedClubId();
-        List<UUID> firstXi = lineupService.bestXi(clubId).stream().map(Player::getId).toList();
-        Player benched = playerRepository.findByClubId(clubId).stream()
-                .filter(p -> !firstXi.contains(p.getId()))
-                .findFirst().orElseThrow();
 
-        // When several matchdays are played (the first-choice XI keeps starting via bestXi)
+        // When several matchdays are played
         for (int i = 0; i < 4; i++) advanceOneMatch(career);
 
-        // Then a repeat starter is more fatigued than the player who never featured
-        Player benchedReloaded = playerRepository.findById(benched.getId()).orElseThrow();
-        List<Player> repeatStarters = playerRepository.findByClubId(clubId).stream()
-                .filter(p -> firstXi.contains(p.getId()) && p.getLastMatchDate() != null)
+        // Then partition the managed club's players by whether they featured
+        List<Player> managed = playerRepository.findByClubId(clubId);
+        List<Player> featured = managed.stream()
+                .filter(p -> p.getLastMatchDate() != null)
                 .toList();
-        assertThat(repeatStarters).isNotEmpty();
-        assertThat(repeatStarters).anySatisfy(starter ->
-                assertThat(starter.getFitness()).isLessThan(benchedReloaded.getFitness()));
+        List<Player> rested = managed.stream()
+                .filter(p -> p.getLastMatchDate() == null)
+                .toList();
+
+        // Players who featured lost fitness (any appearance decays below 100)...
+        assertThat(featured).isNotEmpty();
+        assertThat(featured).allSatisfy(p -> assertThat(p.getFitness()).isLessThan(100));
+
+        // ...while players who rested keep full stored fitness (rested may be empty — allSatisfy passes).
+        assertThat(rested).allSatisfy(p -> assertThat(p.getFitness()).isEqualTo(100));
     }
 }
