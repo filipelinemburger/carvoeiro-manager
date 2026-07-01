@@ -188,6 +188,34 @@ class AdvancePreviewIT {
         assertThat(open.windowClosingAfterAdvance()).isEqualTo(!transferWindow.isOpen(nextDate));
     }
 
+    @Test
+    void lowFitnessStarterIsReportedAsNonBlockingWarningBeforeAManagedClubMatch() {
+        // Given a career whose next event is a managed-club match, with a full eligible XI saved
+        Career c = createCareer();
+        setBestEligibleLineup(c);
+        advanceUntilManagedClubPlaysNext(c);
+        // Re-save a clean eligible XI so every saved starter is eligible
+        setBestEligibleLineup(c);
+
+        // When one saved starter has base fitness 30 recorded on the current date (no recovery yet)
+        LineupResponse saved = lineupService.getLineup(c.id(), c.clubId(), c.userId()).orElseThrow();
+        UUID lowFitnessId = saved.starters().get(0).playerId();
+        Player lowFitnessPlayer = playerRepository.findById(lowFitnessId).orElseThrow();
+        SaveGame saveGame = saveGameRepository.findById(c.id()).orElseThrow();
+        lowFitnessPlayer.recordAppearance(30, saveGame.getCurrentDate());
+        playerRepository.save(lowFitnessPlayer);
+
+        // Then the preview reports that player in lowFitnessStarters with fitness 30
+        AdvancePreviewResponse p = advancePreviewService.preview(c.id(), c.userId());
+        assertThat(p.managedClubPlaysNext()).isTrue();
+        assertThat(p.lowFitnessStarters())
+                .anyMatch(s -> s.playerId().equals(lowFitnessId.toString()) && s.fitness() == 30);
+
+        // And the low-fitness starter does NOT appear in ineligibleStarters (fitness never blocks)
+        assertThat(p.ineligibleStarters())
+                .noneMatch(s -> s.playerId().equals(lowFitnessId.toString()));
+    }
+
     private AdvancePreviewResponse advanceOneMatch(Career c) {
         for (int guard = 0; guard < 500; guard++) {
             AdvanceResponse r = seasonAdvanceService.advance(c.id(), c.userId());

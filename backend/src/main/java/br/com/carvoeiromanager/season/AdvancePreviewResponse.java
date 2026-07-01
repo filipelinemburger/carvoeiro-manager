@@ -28,9 +28,14 @@ public record AdvancePreviewResponse(
         List<IneligibleStarterResponse> ineligibleStarters,
         boolean windowClosingAfterAdvance,
         int pendingTransfers,
-        String defaultStandingsCompetitionId) {
+        String defaultStandingsCompetitionId,
+        List<LowFitnessStarterResponse> lowFitnessStarters) {
 
     /** A saved starter who cannot play the next match. {@code reason} is {@code SUSPENDED} or {@code INJURED}. */
     public record IneligibleStarterResponse(String playerId, String playerName, String reason) {
+    }
+
+    /** A saved starter below the fitness soft-warning threshold. Non-blocking. */
+    public record LowFitnessStarterResponse(String playerId, String playerName, int fitness) {
     }
 }

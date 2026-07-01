@@ -177,6 +177,27 @@ public class LineupService {
     }
 
     /**
+     * Returns saved starters whose effective fitness at {@code onDate} is below {@code threshold}.
+     * Non-blocking soft warning — callers must NOT use this to gate any advance.
+     * Returns an empty list when no lineup has been saved.
+     */
+    public List<AdvancePreviewLowFitness> lowFitnessStarters(UUID saveGameId, UUID clubId,
+                                                              LocalDate onDate, int threshold) {
+        return lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
+                .map(lineup -> lineupPlayerRepository.findByLineupId(lineup.getId()).stream()
+                        .filter(LineupPlayer::isStarting)
+                        .map(lp -> playerRepository.findById(lp.getPlayerId()).orElse(null))
+                        .filter(p -> p != null)
+                        .map(p -> new AdvancePreviewLowFitness(
+                                p.getId().toString(),
+                                p.getName(),
+                                fitnessCalculator.effectiveFitness(p.getFitness(), p.getLastMatchDate(), onDate, p.getAge())))
+                        .filter(row -> row.fitness() < threshold)
+                        .toList())
+                .orElseGet(List::of);
+    }
+
+    /**
      * Picks the best XI for a club using raw overall for ranking (no fitness adjustment).
      * Delegates to {@link #bestXi(UUID, LocalDate)} with a null date.
      */

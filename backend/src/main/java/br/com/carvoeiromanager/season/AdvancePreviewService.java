@@ -6,7 +6,9 @@ import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.match.LineupService;
 import br.com.carvoeiromanager.player.Player;
+import br.com.carvoeiromanager.match.AdvancePreviewLowFitness;
 import br.com.carvoeiromanager.season.AdvancePreviewResponse.IneligibleStarterResponse;
+import br.com.carvoeiromanager.season.AdvancePreviewResponse.LowFitnessStarterResponse;
 import br.com.carvoeiromanager.transfer.TransferOfferStatus;
 import br.com.carvoeiromanager.transfer.TransferOfferRepository;
 import br.com.carvoeiromanager.transfer.TransferWindow;
@@ -60,6 +62,7 @@ public class AdvancePreviewService {
 
         boolean managedClubPlaysNext = false;
         List<IneligibleStarterResponse> ineligibleStarters = List.of();
+        List<LowFitnessStarterResponse> lowFitnessStarters = List.of();
         if (next != null && next.getType() == SeasonEventType.MATCH) {
             List<Fixture> fixtures = fixtureRepository.findBySaveGameIdAndCompetitionIdAndRound(
                     saveGameId, next.getCompetitionId(), next.getRound());
@@ -68,6 +71,9 @@ public class AdvancePreviewService {
             if (managedClubPlaysNext) {
                 ineligibleStarters = lineupService.savedIneligibleStarters(saveGameId, managedClubId).stream()
                         .map(AdvancePreviewService::toIneligibleStarter)
+                        .toList();
+                lowFitnessStarters = lineupService.lowFitnessStarters(saveGameId, managedClubId, currentDate, 50).stream()
+                        .map(r -> new LowFitnessStarterResponse(r.playerId(), r.playerName(), r.fitness()))
                         .toList();
             }
         }
@@ -90,7 +96,8 @@ public class AdvancePreviewService {
                 ineligibleStarters,
                 windowClosingAfterAdvance,
                 pendingTransfers,
-                defaultStandingsCompetitionId == null ? null : defaultStandingsCompetitionId.toString());
+                defaultStandingsCompetitionId == null ? null : defaultStandingsCompetitionId.toString(),
+                lowFitnessStarters);
     }
 
     private static IneligibleStarterResponse toIneligibleStarter(Player p) {
