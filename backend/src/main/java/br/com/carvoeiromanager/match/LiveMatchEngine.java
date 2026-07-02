@@ -50,6 +50,7 @@ public class LiveMatchEngine {
         final Map<UUID, Integer> exitMinute = new HashMap<>();
         final Map<UUID, Boolean> hobbled = new HashMap<>();
         boolean dirty = true;
+        TacticalProfile currentProfile;                    // updated by tactics changes mid-match
 
         Side(boolean home) { this.home = home; }
     }
@@ -62,19 +63,25 @@ public class LiveMatchEngine {
         Side home = buildSide(true, cfg.homeXi(), cfg.homeBench());
         Side away = buildSide(false, cfg.awayXi(), cfg.awayBench());
 
+        // Initialise each side's active profile from config; tactics changes update these mid-match.
+        home.currentProfile = cfg.homeProfile();
+        away.currentProfile = cfg.awayProfile();
+
         List<LiveTimelineEvent> events = new ArrayList<>();
         List<TimedInjury> injuries = new ArrayList<>();
 
-        TeamMatchInput homeInput = strength(home, cfg.homeProfile(), cfg);
+        TeamMatchInput homeInput = strength(home, home.currentProfile, cfg);
         home.dirty = false;
-        TeamMatchInput awayInput = strength(away, cfg.awayProfile(), cfg);
+        TeamMatchInput awayInput = strength(away, away.currentProfile, cfg);
         away.dirty = false;
 
         for (int minute = 1; minute <= MINUTES; minute++) {
+            applyTacticChanges(cfg, minute, home, events);
+            applyTacticChanges(cfg, minute, away, events);
             applySubs(cfg, minute, home, events);
             applySubs(cfg, minute, away, events);
-            if (home.dirty) { homeInput = strength(home, cfg.homeProfile(), cfg); home.dirty = false; }
-            if (away.dirty) { awayInput = strength(away, cfg.awayProfile(), cfg); away.dirty = false; }
+            if (home.dirty) { homeInput = strength(home, home.currentProfile, cfg); home.dirty = false; }
+            if (away.dirty) { awayInput = strength(away, away.currentProfile, cfg); away.dirty = false; }
 
             double tempo = (homeInput.tempo() + awayInput.tempo()) / 2.0;
             double homeFf = fitnessFactor(homeInput.fitnessDecay(), minute);
@@ -87,11 +94,11 @@ public class LiveMatchEngine {
 
             if (rng.nextDouble() < homeChance) {
                 EventType t = rng.nextDouble() < setPiece(homeInput) ? EventType.SET_PIECE_GOAL : EventType.GOAL;
-                events.add(goal(minute, home, cfg.homeProfile(), t, attrRng));
+                events.add(goal(minute, home, home.currentProfile, t, attrRng));
             }
             if (rng.nextDouble() < awayChance) {
                 EventType t = rng.nextDouble() < setPiece(awayInput) ? EventType.SET_PIECE_GOAL : EventType.GOAL;
-                events.add(goal(minute, away, cfg.awayProfile(), t, attrRng));
+                events.add(goal(minute, away, away.currentProfile, t, attrRng));
             }
             maybeCard(minute, home, homeInput, rng, attrRng, events);
             maybeCard(minute, away, awayInput, rng, attrRng, events);
@@ -141,6 +148,35 @@ public class LiveMatchEngine {
         for (UUID id : s.entryMinute.keySet()) {
             int played = Math.max(0, s.exitMinute.getOrDefault(id, MINUTES) - s.entryMinute.get(id));
             out.put(id, played);
+        }
+    }
+
+    // ---- tactics changes ----
+
+    /**
+     * Applies any {@link TimedTactics} scheduled for this minute and side.
+     * Builds a new {@link TacticalProfile} reusing the existing per-player roles and set-piece takers
+     * (those are fixed for the match) but replacing mentality/pressing/marking/formation.
+     * Sets {@code side.dirty} so strength is recomputed before this minute's play — exactly like subs.
+     * Does NOT draw from any RNG, preserving byte-identical match/attr/injury streams when the
+     * tactics schedule is empty.
+     *
+     * <p>The TACTICS_CHANGE event carries {@code side.onPitch.get(0)} as a harmless playerId carrier
+     * so downstream name-lookups in {@link LiveMatchService#toState} (which call {@code nameOf(byId, e.playerId())})
+     * do not NPE — the first on-pitch player is always present and the value is never displayed for
+     * this event type.
+     */
+    private void applyTacticChanges(LiveMatchConfig cfg, int minute, Side side, List<LiveTimelineEvent> events) {
+        for (TimedTactics t : cfg.tacticsSchedule()) {
+            if (t.minute() != minute || t.home() != side.home) continue;
+            TacticalProfile old = side.currentProfile;
+            side.currentProfile = new TacticalProfile(
+                    t.mentality(), t.formation(), t.pressing(), t.marking(),
+                    old.roles(), old.penaltyTakerId(), old.freekickTakerId(), old.cornerTakerId());
+            side.dirty = true;
+            // Use the first on-pitch player as a sentinel playerId — never NPE, never displayed.
+            UUID carrier = side.onPitch.isEmpty() ? null : side.onPitch.get(0);
+            events.add(new LiveTimelineEvent(minute, EventType.TACTICS_CHANGE, side.home, carrier, null, null));
         }
     }
 

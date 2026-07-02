@@ -6,6 +6,7 @@ import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.Pressing;
+import br.com.carvoeiromanager.match.TimedTactics;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -51,6 +52,10 @@ class LiveMatchEngineTest {
             p(Position.DEF, 65));
 
     private LiveMatchConfig config(long seed, List<LiveSub> subs) {
+        return config(seed, subs, List.of());
+    }
+
+    private LiveMatchConfig config(long seed, List<LiveSub> subs, List<TimedTactics> tactics) {
         // fitness map: every player (both XIs + home bench) at 100
         Map<UUID, Integer> fitness = new HashMap<>();
         homeXi.forEach(pl -> fitness.put(pl.getId(), 100));
@@ -61,7 +66,7 @@ class LiveMatchEngineTest {
         TacticalProfile awayProfile = defaultProfile(awayXi);
 
         return new LiveMatchConfig(seed, homeXi, awayXi, homeBench, List.of(),
-                homeProfile, awayProfile, fitness, subs);
+                homeProfile, awayProfile, fitness, subs, tactics);
     }
 
     @Test
@@ -106,5 +111,38 @@ class LiveMatchEngineTest {
         });
         t.events().stream().filter(e -> e.type() == EventType.INJURY)
                 .forEach(e -> assertThat(e.severity()).isNotNull());
+    }
+
+    @Test
+    void emptyTacticsScheduleProducesIdenticalTimelineToLegacyConfig() {
+        // An empty tacticsSchedule must be byte-identical to a config with no tacticsSchedule arg (backward compat).
+        LiveTimeline base = engine.simulate(config(1234L, List.of()));
+        LiveTimeline withEmptyTactics = engine.simulate(config(1234L, List.of(), List.of()));
+        assertThat(withEmptyTactics.events()).isEqualTo(base.events());
+        assertThat(withEmptyTactics.homeGoals()).isEqualTo(base.homeGoals());
+        assertThat(withEmptyTactics.awayGoals()).isEqualTo(base.awayGoals());
+    }
+
+    @Test
+    void aTacticsChangeAppearsAtItsMinuteAndChangesTheFuture() {
+        long seed = 42L;
+        LiveTimeline base = engine.simulate(config(seed, List.of()));
+
+        TimedTactics change = new TimedTactics(60, true, Mentality.ATTACKING, Pressing.HIGH, Marking.ZONAL, "4-3-3");
+        LiveTimeline withTactics = engine.simulate(config(seed, List.of(), List.of(change)));
+
+        // Events up to and including minute 59 must be identical (tactics not yet applied).
+        assertThat(withTactics.eventsThrough(59)).isEqualTo(base.eventsThrough(59));
+
+        // A TACTICS_CHANGE event exists at minute 60 for the home side.
+        assertThat(withTactics.events()).anyMatch(e ->
+                e.type() == EventType.TACTICS_CHANGE && e.minute() == 60 && e.home());
+
+        // The full event lists differ (tactics change influences strength from minute 60 onward).
+        assertThat(withTactics.events()).isNotEqualTo(base.events());
+
+        // Determinism: same tactics schedule → identical timelines.
+        LiveTimeline withTacticsAgain = engine.simulate(config(seed, List.of(), List.of(change)));
+        assertThat(withTacticsAgain.events()).isEqualTo(withTactics.events());
     }
 }

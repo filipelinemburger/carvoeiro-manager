@@ -10,6 +10,8 @@ import java.util.UUID;
  * Immutable inputs for a full live-match simulation. {@code fitness} is the effective fitness at
  * kickoff for EVERY player who might appear (both XIs and both benches). {@code subSchedule} is the
  * ordered list of substitutions applied so far; the timeline is a pure function of these inputs.
+ * {@code tacticsSchedule} is the ordered list of in-match tactics changes; an empty list means the
+ * starting tactical profiles are held constant for the full 90 minutes (backward-compatible default).
  */
 public record LiveMatchConfig(
         long seed,
@@ -20,5 +22,6 @@ public record LiveMatchConfig(
         TacticalProfile homeProfile,
         TacticalProfile awayProfile,
         Map<UUID, Integer> fitness,
-        List<LiveSub> subSchedule) {
+        List<LiveSub> subSchedule,
+        List<TimedTactics> tacticsSchedule) {
 }

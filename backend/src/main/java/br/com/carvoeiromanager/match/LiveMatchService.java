@@ -294,7 +294,7 @@ public class LiveMatchService {
                 clubOf(awayXi), awayXi);
 
         return new LiveMatchConfig(lm.getSeed(), homeXi, awayXi, homeBench, awayBench,
-                homeProfile, awayProfile, fitness, subs);
+                homeProfile, awayProfile, fitness, subs, List.of());
     }
 
     LiveMatchState toState(LiveMatch lm, SaveGame save) {

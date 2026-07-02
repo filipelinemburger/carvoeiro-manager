@@ -27,6 +27,7 @@ public final class LiveCommentary {
             case RED_CARD -> pick(RED, playerName, minute, type);
             case INJURY -> pick(INJURY, playerName, minute, type);
             case SUBSTITUTION -> "Substituição: entra %s, sai %s.".formatted(inName, playerName);
+            case TACTICS_CHANGE -> "Mudança tática do treinador.";
         };
     }
 
