@@ -137,6 +137,27 @@ describe('TransferMarketPage', () => {
     )
   })
 
+  it('surfaces the result after negotiating an incoming offer (regression: no response shown)', async () => {
+    vi.mocked(getOffers).mockResolvedValue([
+      { id: 'in1', playerId: 'mp1', playerName: 'Meu Jogador', fromClubId: 'club-9', fromClubName: 'Rival FC',
+        toClubId: 'club-1', toClubName: 'Criciúma', direction: 'INCOMING', amount: 2000000,
+        counterAmount: null, status: 'PENDING', round: 0, wage: null, contractYears: null },
+    ])
+    // Backend resolves the counter inline: here the AI accepts the user's counter.
+    vi.mocked(respondToOffer).mockResolvedValue({
+      id: 'in1', playerId: 'Meu Jogador', playerName: 'Meu Jogador', fromClubId: 'club-9', fromClubName: 'Rival FC',
+      toClubId: 'club-1', toClubName: 'Criciúma', direction: 'INCOMING', amount: 2000000,
+      counterAmount: 2500000, status: 'ACCEPTED', round: 0, wage: null, contractYears: null,
+    })
+
+    renderPage()
+    expect(await screen.findByText(/Meu Jogador/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Aceitar' }))
+
+    // The negotiation result must be shown to the user, not silently swallowed.
+    expect(await screen.findByText(/Proposta aceita/i)).toBeInTheDocument()
+  })
+
   it('shows free agents on the Agentes livres tab', async () => {
     vi.mocked(getFreeAgents).mockResolvedValue([
       { playerId: 'fa1', name: 'Agente Livre', position: 'MID', age: 29, overall: 70, wageDemand: 80000 },

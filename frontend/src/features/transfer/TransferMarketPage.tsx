@@ -12,7 +12,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { FreeAgentsPanel } from '../contract/FreeAgentsPage'
 import { PlayerDetails } from '../squad/PlayerDetails'
-import type { PlayerResponse } from '../../api/types'
+import type { PlayerResponse, TransferOffer } from '../../api/types'
 import { formatBRL, formatThousandsBR, parseMoneyInput } from '../../lib/money'
 import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
@@ -232,26 +232,35 @@ export function TransferMarketPage() {
     // Resolving offers may clear a "window closing with pending bids" advance block.
     void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
   }
+  // The most recent negotiation outcome (offer / accept-counter / respond), surfaced as the
+  // feedback banner. Every action that produces an AI decision feeds this — not just makeOffer —
+  // so accepting a counter or answering an incoming bid also tells the user what happened.
+  const [lastResult, setLastResult] = useState<TransferOffer | null>(null)
+  const showResult = (offer: TransferOffer) => {
+    invalidate()
+    setLastResult(offer)
+  }
+
   const offerMut = useMutation({
     mutationFn: (v: { playerId: string; amount: number; wage: number; contractYears: number }) =>
       makeOffer(saveGameId, v, token ?? ''),
-    onSuccess: invalidate,
+    onSuccess: showResult,
   })
-  const acceptMut = useMutation({ mutationFn: (id: string) => acceptCounter(saveGameId, id, token ?? ''), onSuccess: invalidate })
+  const acceptMut = useMutation({ mutationFn: (id: string) => acceptCounter(saveGameId, id, token ?? ''), onSuccess: showResult })
   const withdrawMut = useMutation({ mutationFn: (id: string) => withdrawOffer(saveGameId, id, token ?? ''), onSuccess: invalidate })
 
   const [counters, setCounters] = useState<Record<string, string>>({})
   const respondMut = useMutation({
     mutationFn: (v: { offerId: string; action: 'ACCEPT' | 'REJECT' | 'COUNTER'; counterAmount: number | null }) =>
       respondToOffer(saveGameId, v.offerId, { action: v.action, counterAmount: v.counterAmount }, token ?? ''),
-    onSuccess: invalidate,
+    onSuccess: showResult,
   })
 
   // Date-based window status from the backend (the single source of truth).
   const windowOpen = save.data?.transferWindowOpen ?? true
   const outgoing = (offers.data ?? []).filter(o => o.direction === 'OUTGOING' && o.status === 'COUNTERED')
   const incoming = (offers.data ?? []).filter(o => o.direction === 'INCOMING' && o.status === 'PENDING')
-  const last = offerMut.data
+  const last = lastResult
   const hasProposals = incoming.length > 0 || outgoing.length > 0
 
   // Land on the market instead of the (disabled) proposals tab when there's nothing to respond to.
