@@ -7,6 +7,7 @@ import { Layout } from './Layout'
 import { AuthProvider } from '../auth/AuthContext'
 import { getSaveGame, advanceRound, getAdvancePreview, getLineup } from '../api/career'
 import { deleteAccount } from '../api/account'
+import { getLiveMatch } from '../api/liveMatch'
 import type { Mock } from 'vitest'
 import type { AdvancePreviewResponse, AdvanceResponse, SaveGameResponse } from '../api/types'
 
@@ -20,6 +21,14 @@ vi.mock('../api/career', () => ({
 
 vi.mock('../api/account', () => ({
   deleteAccount: vi.fn(),
+}))
+
+vi.mock('../api/liveMatch', () => ({
+  getLiveMatch: vi.fn(),
+  kickoffLiveMatch: vi.fn(),
+  advanceLiveMatch: vi.fn(),
+  substituteLiveMatch: vi.fn(),
+  finishLiveMatch: vi.fn(),
 }))
 
 const PREVIEW_OK: AdvancePreviewResponse = {
@@ -108,6 +117,7 @@ describe('Layout shell', () => {
     ;(getAdvancePreview as Mock).mockResolvedValue(PREVIEW_OK)
     ;(getLineup as Mock).mockResolvedValue({ lineupId: 'l-1', clubId: 'club-1', formation: '4-4-2', starters: [] })
     ;(deleteAccount as Mock).mockResolvedValue(undefined)
+    ;(getLiveMatch as Mock).mockResolvedValue(null)
   })
 
   it('renders children inside a content panel', () => {
@@ -185,6 +195,11 @@ describe('Layout shell', () => {
   })
 
   it('clicking Avançar calls advanceRound and redirects to the News tab', async () => {
+    // The managed club does NOT play next → the instant advance path is taken.
+    ;(getAdvancePreview as Mock).mockResolvedValue({
+      ...PREVIEW_OK,
+      managedClubPlaysNext: false,
+    } satisfies AdvancePreviewResponse)
     const user = userEvent.setup()
     seedAuth('U1', 'sg-1')
     renderLayout('/dashboard')

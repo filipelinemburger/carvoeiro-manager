@@ -12,9 +12,10 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { useAuth } from '../auth/AuthContext'
 import { advanceRound, createCareer, getAdvancePreview, getLineup, getSaveGame } from '../api/career'
 import { deleteAccount } from '../api/account'
+import { getLiveMatch, kickoffLiveMatch } from '../api/liveMatch'
 import { saveGameKeyFor } from '../features/career/saveGameKey'
 import { LoadCareerDialog } from '../features/career/LoadCareerDialog'
-import type { AdvancePreviewResponse, AdvanceResponse, SaveGameResponse } from '../api/types'
+import type { AdvancePreviewResponse, AdvanceResponse, LiveMatchState, SaveGameResponse } from '../api/types'
 
 interface LayoutProps {
   children: ReactNode
@@ -53,6 +54,14 @@ export function Layout({ children }: LayoutProps) {
     staleTime: 10_000,
   })
 
+  const { data: liveMatch } = useQuery<LiveMatchState | null>({
+    queryKey: ['liveMatch', saveGameId],
+    queryFn: () => getLiveMatch(saveGameId!, token ?? ''),
+    enabled: Boolean(saveGameId && token),
+    retry: false,
+    staleTime: 5_000,
+  })
+
   // Whether the managed club already has a saved line-up. Before the first game the
   // user must pick one (getLineup resolves to null when none has been saved).
   const managedClubIdForLineup = saveGame?.managedClubId
@@ -83,6 +92,20 @@ export function Layout({ children }: LayoutProps) {
       void navigate(`/news?saveGameId=${saveGameId}`)
     },
   })
+
+  const kickoffMutation = useMutation<LiveMatchState>({
+    mutationFn: () => kickoffLiveMatch(saveGameId!, token ?? ''),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['liveMatch', saveGameId] })
+      void navigate(`/match?saveGameId=${saveGameId}`)
+    },
+  })
+
+  const handleAdvance = () => {
+    if (liveMatch) { void navigate(`/match?saveGameId=${saveGameId}`); return }
+    if (preview?.managedClubPlaysNext) { kickoffMutation.mutate(); return }
+    advanceMutation.mutate()
+  }
 
   const isDashboard = location.pathname === '/dashboard'
   // Use the persisted save status too, so Avançar stays disabled after a page
@@ -226,11 +249,12 @@ export function Layout({ children }: LayoutProps) {
           {hasSaveGame && (
             <Button
               color="primary"
-              disabled={advanceDisabled}
+              disabled={advanceDisabled || kickoffMutation.isPending}
               title={advanceBlockReason ?? undefined}
-              onClick={() => advanceMutation.mutate()}
+              onClick={handleAdvance}
             >
-              {advanceMutation.isPending ? 'Avançando…' : 'Avançar'}
+              {liveMatch ? 'Retomar partida'
+                : advanceMutation.isPending || kickoffMutation.isPending ? 'Avançando…' : 'Avançar'}
             </Button>
           )}
 
