@@ -119,6 +119,25 @@ public class LiveMatchService {
         return liveMatchRepository.findBySaveGameId(saveGameId).map(lm -> toState(lm, save));
     }
 
+    @Transactional
+    public LiveMatchState advance(UUID saveGameId, UUID userId) {
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        LiveMatch lm = requireLive(saveGameId);
+        if (lm.getCommittedMinute() >= MINUTES) {
+            return toState(lm, save);   // already at full time — no-op
+        }
+        LiveTimeline timeline = liveMatchEngine.simulate(configFor(lm));
+        lm.setCommittedMinute(timeline.nextEventMinute(lm.getCommittedMinute()));
+        liveMatchRepository.save(lm);
+        return toState(lm, save);
+    }
+
+    LiveMatch requireLive(UUID saveGameId) {
+        return liveMatchRepository.findBySaveGameId(saveGameId)
+                .orElseThrow(() -> new ApiException("NO_LIVE_MATCH",
+                        "There is no live match in progress", HttpStatus.CONFLICT));
+    }
+
     // ---- shared building blocks (reused by advance/substitute/finish) ----
 
     LiveMatchConfig configFor(LiveMatch lm) {
