@@ -120,6 +120,42 @@ public class LiveMatchService {
     }
 
     @Transactional
+    public LiveMatchState substitute(UUID saveGameId, UUID userId, SubstituteRequest req) {
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        LiveMatch lm = requireLive(saveGameId);
+        if (lm.getCommittedMinute() >= MINUTES) {
+            throw new ApiException("MATCH_OVER", "The match has ended", HttpStatus.CONFLICT);
+        }
+
+        LiveMatchConfig cfg = configFor(lm);
+        LiveTimeline timeline = liveMatchEngine.simulate(cfg);
+        List<Player> managedXi = lm.isManagedIsHome() ? cfg.homeXi() : cfg.awayXi();
+        List<Player> managedBench = lm.isManagedIsHome() ? cfg.homeBench() : cfg.awayBench();
+        OnPitch managed = onPitchManaged(lm, timeline, lm.getCommittedMinute(), managedXi);
+
+        int used = (int) cfg.subSchedule().stream().filter(s -> s.home() == lm.isManagedIsHome()).count();
+        if (used >= MAX_SUBS) {
+            throw new ApiException("NO_SUBS_REMAINING", "No substitutions remaining", HttpStatus.CONFLICT);
+        }
+        if (!managed.onPitch().contains(req.outPlayerId())) {
+            throw new ApiException("INVALID_SUBSTITUTION",
+                    "The outgoing player is not on the pitch", HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+        boolean onBench = managedBench.stream().anyMatch(p -> p.getId().equals(req.inPlayerId()));
+        if (!onBench || managed.usedIn().contains(req.inPlayerId())) {
+            throw new ApiException("INVALID_SUBSTITUTION",
+                    "The incoming player is not an available bench player", HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+
+        int minute = Math.min(MINUTES, lm.getCommittedMinute() + 1);
+        List<LiveSub> subs = new ArrayList<>(cfg.subSchedule());
+        subs.add(new LiveSub(minute, lm.isManagedIsHome(), req.outPlayerId(), req.inPlayerId()));
+        lm.setSubSchedule(serialize(subs));
+        liveMatchRepository.save(lm);
+        return toState(lm, save);
+    }
+
+    @Transactional
     public LiveMatchState advance(UUID saveGameId, UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         LiveMatch lm = requireLive(saveGameId);
