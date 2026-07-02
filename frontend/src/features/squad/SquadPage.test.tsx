@@ -419,4 +419,51 @@ describe('SquadPage', () => {
       ),
     )
   })
+
+  it('removes auto-picked XI players from the bench when "Selecionar melhores" is clicked', async () => {
+    // Seed a saved lineup that puts MID1 on the bench before auto-pick runs.
+    mockGetLineup.mockResolvedValue({
+      lineupId: 'l-bench', clubId: 'club-1', formation: '4-3-3',
+      starters: [
+        { playerId: GK.id, role: 'GOALKEEPER' },
+        { playerId: DEF1.id, role: 'FULL_BACK' },
+        { playerId: DEF2.id, role: 'FULL_BACK' },
+        { playerId: DEF3.id, role: 'FULL_BACK' },
+        { playerId: DEF4.id, role: 'FULL_BACK' },
+        { playerId: MID1.id, role: 'BOX_TO_BOX' },
+        { playerId: MID2.id, role: 'BOX_TO_BOX' },
+        { playerId: MID3.id, role: 'BOX_TO_BOX' },
+        { playerId: ATT1.id, role: 'POACHER' },
+        { playerId: ATT2.id, role: 'POACHER' },
+        { playerId: ATT3.id, role: 'POACHER' },
+      ],
+      bench: [{ playerId: MID4.id, role: 'BOX_TO_BOX' }],
+    })
+
+    renderWithProviders()
+    // Wait for the saved lineup to hydrate (MID4 on bench).
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+
+    // Click auto-pick — this will place GK2, DEF1-4, MID1-3, ATT1-3 in the XI.
+    // GK2 was not in the bench, but if GK2 had been on the bench it must be evicted.
+    // More critically: any player now in the XI must not appear in the bench payload.
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+
+    // The XI is valid so saving should be enabled.
+    expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: /salvar escalação/i }))
+
+    await waitFor(() => expect(mockSetLineup).toHaveBeenCalled())
+
+    // Extract the bench argument from the setLineup call.
+    const callArgs = mockSetLineup.mock.calls[0]
+    const payload = callArgs[2] as { starters: { playerId: string }[]; bench: { playerId: string }[] }
+    const starterIds = payload.starters.map((s: { playerId: string }) => s.playerId)
+    const benchIds = payload.bench.map((b: { playerId: string }) => b.playerId)
+
+    // No player in the XI should also appear in the bench — mutual-exclusion invariant.
+    const overlap = starterIds.filter((id: string) => benchIds.includes(id))
+    expect(overlap).toHaveLength(0)
+  })
 })

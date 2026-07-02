@@ -248,7 +248,9 @@ export function SquadPage() {
       ...bestFor('MID', shape.MID),
       ...bestFor('ATT', shape.ATT),
     ]
-    setSelected(picked.map(p => p.id))
+    const pickedIds = picked.map(p => p.id)
+    setSelected(pickedIds)
+    setBench(prev => prev.filter(id => !pickedIds.includes(id)))
     setRoles(Object.fromEntries(picked.map(p => [p.id, DEFAULT_ROLE[p.position]])))
   }
 
@@ -434,37 +436,37 @@ export function SquadPage() {
         )}
 
         {selected.length === 11 && (
-        <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-          Banco de reservas — {bench.length}/9
-        </Typography>
-        )}
-        {selected.length === 11 && (
-        <Stack spacing={1} sx={{ mb: 2 }}>
-          {displayPlayers
-            .filter(p => !selected.includes(p.id))
-            .map(player => {
-              const onBench = bench.includes(player.id)
-              return (
-                <Stack key={player.id} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <Checkbox
-                    size="small"
-                    checked={onBench}
-                    disabled={!onBench && (!player.eligible || bench.length >= 9)}
-                    onChange={() => toggleBench(player)}
-                    slotProps={{ input: { 'aria-label': `Banco: ${player.name}` } }}
-                    sx={{ p: 0.5 }}
-                  />
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography component="span" sx={{ fontWeight: 600 }}>{player.name}</Typography>
-                    {availabilityBadge(player)}
-                  </Box>
-                  <Chip size="small" label={positionLabel(player.position)} />
-                  <Chip size="small" color="primary" label={`OVR ${player.overall}`} />
-                  <Box sx={{ width: 84 }}><FitnessBar fitness={player.fitness} /></Box>
-                </Stack>
-              )
-            })}
-        </Stack>
+          <>
+            <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
+              Banco de reservas — {bench.length}/9
+            </Typography>
+            <Stack spacing={1} sx={{ mb: 2 }}>
+              {displayPlayers
+                .filter(p => !selected.includes(p.id))
+                .map(player => {
+                  const onBench = bench.includes(player.id)
+                  return (
+                    <Stack key={player.id} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                      <Checkbox
+                        size="small"
+                        checked={onBench}
+                        disabled={!onBench && (!player.eligible || bench.length >= 9)}
+                        onChange={() => toggleBench(player)}
+                        slotProps={{ input: { 'aria-label': `Banco: ${player.name}` } }}
+                        sx={{ p: 0.5 }}
+                      />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography component="span" sx={{ fontWeight: 600 }}>{player.name}</Typography>
+                        {availabilityBadge(player)}
+                      </Box>
+                      <Chip size="small" label={positionLabel(player.position)} />
+                      <Chip size="small" color="primary" label={`OVR ${player.overall}`} />
+                      <Box sx={{ width: 84 }}><FitnessBar fitness={player.fitness} /></Box>
+                    </Stack>
+                  )
+                })}
+            </Stack>
+          </>
         )}
 
         <Button
