@@ -10,6 +10,7 @@ import { FinancesPage } from './features/finance/FinancesPage'
 import { TransferMarketPage } from './features/transfer/TransferMarketPage'
 import { FreeAgentsPage } from './features/contract/FreeAgentsPage'
 import { NewsPage } from './features/news/NewsPage'
+import { LiveMatchPage } from './features/match/LiveMatchPage'
 import { Layout } from './components/Layout'
 import { useAuth } from './auth/AuthContext'
 import type { ReactNode } from 'react'
@@ -94,6 +95,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <NewsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/match"
+        element={
+          <ProtectedRoute>
+            <LiveMatchPage />
           </ProtectedRoute>
         }
       />
