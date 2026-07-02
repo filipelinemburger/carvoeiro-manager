@@ -11,7 +11,7 @@ vi.mock('../../api/liveMatch', () => ({
   finishLiveMatch: vi.fn(),
   substituteLiveMatch: vi.fn(),
 }))
-import { getLiveMatch, advanceLiveMatch, finishLiveMatch } from '../../api/liveMatch'
+import { getLiveMatch, advanceLiveMatch, finishLiveMatch, substituteLiveMatch } from '../../api/liveMatch'
 
 const STATE = {
   fixtureId: 'f1', competitionName: 'Catarinense', round: 0, matchDate: '2026-03-01',
@@ -54,5 +54,24 @@ describe('LiveMatchPage', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /ver resumo/i }))
     await waitFor(() => expect(finishLiveMatch).toHaveBeenCalledWith('sg-1', 'test-token'))
+  })
+
+  it('opens the sub dialog and substitutes a bench player', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'PAUSED_INJURY',
+      onPitch: [{ playerId: 'p1', name: 'Titular', position: 'MID', overall: 75, fitness: 40, hobbled: true, onPitch: true, used: false, eligible: true }],
+      bench: [{ playerId: 'b1', name: 'Reserva', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true }],
+      subsRemaining: 5,
+    } as never)
+    vi.mocked(substituteLiveMatch).mockResolvedValue({ ...STATE, subsRemaining: 4 } as never)
+
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: /substituir/i }))
+    fireEvent.click(await screen.findByText(/Titular/))
+    fireEvent.click(screen.getByText('Reserva'))
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }))
+
+    await waitFor(() =>
+      expect(substituteLiveMatch).toHaveBeenCalledWith('sg-1', { outPlayerId: 'p1', inPlayerId: 'b1' }, 'test-token'))
   })
 })

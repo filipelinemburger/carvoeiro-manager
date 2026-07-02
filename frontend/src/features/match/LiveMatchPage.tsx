@@ -3,8 +3,9 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Box, Stack, Typography, Button, Chip, Alert, LinearProgress } from '@mui/material'
 import { useAuth } from '../../auth/AuthContext'
-import { getLiveMatch, advanceLiveMatch, finishLiveMatch } from '../../api/liveMatch'
+import { getLiveMatch, advanceLiveMatch, finishLiveMatch, substituteLiveMatch } from '../../api/liveMatch'
 import type { LiveEvent, LiveMatchState } from '../../api/types'
+import { SubDialog } from './SubDialog'
 
 const EVENT_ICON: Record<LiveEvent['type'], string> = {
   GOAL: '⚽', SET_PIECE_GOAL: '⚽', YELLOW_CARD: '🟨', RED_CARD: '🟥',
@@ -21,6 +22,7 @@ export function LiveMatchPage() {
   const saveGameId = searchParams.get('saveGameId') ?? ''
 
   const [playing, setPlaying] = useState(true)
+  const [subOpen, setSubOpen] = useState(false)
 
   const { data: state } = useQuery<LiveMatchState | null>({
     queryKey: ['liveMatch', saveGameId],
@@ -34,6 +36,11 @@ export function LiveMatchPage() {
   const advanceMut = useMutation({
     mutationFn: () => advanceLiveMatch(saveGameId, token ?? ''),
     onSuccess: setState,
+  })
+
+  const subMut = useMutation({
+    mutationFn: (v: { outPlayerId: string; inPlayerId: string }) => substituteLiveMatch(saveGameId, v, token ?? ''),
+    onSuccess: (s) => { setState(s); setSubOpen(false) },
   })
 
   const finishMut = useMutation({
@@ -53,11 +60,11 @@ export function LiveMatchPage() {
   useEffect(() => {
     if (!state) return
     const openPlay = state.status === 'IN_PROGRESS' && state.minute < 90
-    if (playing && openPlay && !advanceMut.isPending) {
+    if (playing && openPlay && !advanceMut.isPending && !subOpen) {
       timer.current = setTimeout(() => advanceMut.mutate(), ADVANCE_MS)
       return () => { if (timer.current) clearTimeout(timer.current) }
     }
-  }, [state, playing, advanceMut.isPending])
+  }, [state, playing, advanceMut.isPending, subOpen])
 
   if (!saveGameId) return <Typography>Partida inválida.</Typography>
   if (!state) return <Typography>Nenhuma partida em andamento.</Typography>
@@ -96,6 +103,12 @@ export function LiveMatchPage() {
         {!fullTime && paused && (
           <Button variant="outlined" onClick={() => advanceMut.mutate()}>Continuar assim mesmo</Button>
         )}
+        {!fullTime && (
+          <Button variant="outlined" color="secondary" disabled={state.subsRemaining <= 0}
+            onClick={() => setSubOpen(true)}>
+            Substituir ({state.subsRemaining})
+          </Button>
+        )}
         {fullTime && (
           <Button variant="contained" disabled={finishMut.isPending} onClick={() => finishMut.mutate()}>
             {finishMut.isPending ? 'Encerrando…' : 'Ver resumo'}
@@ -111,6 +124,15 @@ export function LiveMatchPage() {
           </Stack>
         ))}
       </Stack>
+      <SubDialog
+        open={subOpen}
+        onClose={() => setSubOpen(false)}
+        onPitch={state.onPitch}
+        bench={state.bench}
+        subsRemaining={state.subsRemaining}
+        pending={subMut.isPending}
+        onConfirm={(outPlayerId, inPlayerId) => subMut.mutate({ outPlayerId, inPlayerId })}
+      />
     </Box>
   )
 }
