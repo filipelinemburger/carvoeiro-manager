@@ -2,6 +2,7 @@
 package br.com.carvoeiromanager.match;
 
 import br.com.carvoeiromanager.player.AgeBand;
+import br.com.carvoeiromanager.player.Position;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -14,8 +15,8 @@ import java.time.temporal.ChronoUnit;
 @Service
 public class FitnessCalculator {
 
-    static final double RECOVERY_BASE = 5.0;   // fitness points recovered per rest day (prime age)
-    static final double DECAY_BASE = 30.0;     // base fitness lost for a full match (prime, stamina 70)
+    static final double RECOVERY_BASE = 6.0;   // fitness points recovered per rest day (prime age)
+    static final double DECAY_BASE = 24.0;     // base fitness lost for a full match (prime, stamina 70, outfield)
     static final double BASE_INJURY = 0.025;   // injury chance at full fitness, prime age
     static final double INJURY_FITNESS_K = 1.5;
 
@@ -30,9 +31,19 @@ public class FitnessCalculator {
     }
 
     /** New base fitness after playing a full match from the given kickoff fitness. */
-    public int decayedBaseFitness(int effectiveAtKickoff, int stamina, int age) {
-        double decay = DECAY_BASE * clamp(70.0 / stamina, 0.7, 1.4) * AgeBand.of(age).decayFactor();
+    public int decayedBaseFitness(int effectiveAtKickoff, int stamina, int age, Position position) {
+        double decay = DECAY_BASE * clamp(70.0 / stamina, 0.7, 1.4)
+                * AgeBand.of(age).decayFactor() * positionDecayFactor(position);
         return (int) Math.max(0, Math.round(effectiveAtKickoff - decay));
+    }
+
+    /** Goalkeepers cover far less ground than outfielders, so they tire much less per match. */
+    private double positionDecayFactor(Position position) {
+        return switch (position) {
+            case GK -> 0.45;
+            case DEF -> 0.9;
+            case MID, ATT -> 1.0;
+        };
     }
 
     /** Match-strength multiplier: 1.0 at 100%, 0.90 at 50%, 0.80 at 0%. */

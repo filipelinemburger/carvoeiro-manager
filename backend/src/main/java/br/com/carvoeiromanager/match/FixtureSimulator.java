@@ -249,7 +249,7 @@ public class FixtureSimulator {
     private void applyFitnessDecay(List<Player> xi, Map<UUID, Integer> effectiveFitnessById, LocalDate matchDate) {
         for (Player p : xi) {
             int eff = effectiveFitnessById.getOrDefault(p.getId(), 100);
-            int newBase = fitnessCalculator.decayedBaseFitness(eff, p.getStamina(), p.getAge());
+            int newBase = fitnessCalculator.decayedBaseFitness(eff, p.getStamina(), p.getAge(), p.getPosition());
             p.recordAppearance(newBase, matchDate);
         }
     }

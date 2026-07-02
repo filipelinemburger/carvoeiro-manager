@@ -1,6 +1,7 @@
 // FitnessCalculatorTest.java
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.Position;
 import org.junit.jupiter.api.Test;
 import java.time.LocalDate;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,8 +18,8 @@ class FitnessCalculatorTest {
 
     @Test
     void recoveryClimbsWithRestDaysAndCapsAt100() {
-        // base 60, prime age, RECOVERY_BASE 5/day: +15 after 3 days -> 75
-        assertThat(calc.effectiveFitness(60, D0, D0.plusDays(3), 27)).isEqualTo(75);
+        // base 60, prime age, RECOVERY_BASE 6/day: +18 after 3 days -> 78
+        assertThat(calc.effectiveFitness(60, D0, D0.plusDays(3), 27)).isEqualTo(78);
         // 20 days would overshoot -> capped at 100
         assertThat(calc.effectiveFitness(60, D0, D0.plusDays(20), 27)).isEqualTo(100);
     }
@@ -32,12 +33,21 @@ class FitnessCalculatorTest {
 
     @Test
     void playingDecaysBaseFitnessAndHigherStaminaDecaysLess() {
-        // prime age, stamina 70: clamp(70/70)=1.0, PRIME.decayFactor()=1.0 -> decay = DECAY_BASE 30 -> 70
-        assertThat(calc.decayedBaseFitness(100, 70, 27)).isEqualTo(70);
-        int highStamina = calc.decayedBaseFitness(100, 90, 27);
-        int lowStamina = calc.decayedBaseFitness(100, 60, 27);
+        // prime age, stamina 70, outfield: clamp(70/70)=1.0, PRIME 1.0, MID 1.0 -> decay = DECAY_BASE 24 -> 76
+        assertThat(calc.decayedBaseFitness(100, 70, 27, Position.MID)).isEqualTo(76);
+        int highStamina = calc.decayedBaseFitness(100, 90, 27, Position.MID);
+        int lowStamina = calc.decayedBaseFitness(100, 60, 27, Position.MID);
         assertThat(highStamina).isGreaterThan(lowStamina); // fitter engine tires less
         assertThat(highStamina).isLessThan(100);           // still tired
+    }
+
+    @Test
+    void goalkeepersDecayFarLessThanOutfielders() {
+        // Same kickoff/stamina/age: a GK (x0.45) loses ~11 -> 89, an outfielder ~24 -> 76.
+        int keeper = calc.decayedBaseFitness(100, 70, 27, Position.GK);
+        int outfielder = calc.decayedBaseFitness(100, 70, 27, Position.MID);
+        assertThat(keeper).isGreaterThan(outfielder);
+        assertThat(keeper).isEqualTo(89);
     }
 
     @Test
