@@ -86,6 +86,7 @@ class LiveMatchEngineTest {
                         && e.playerId().equals(out) && e.playerInId().equals(in));
         assertThat(subbed.minutesPlayed().get(out)).isEqualTo(60);
         assertThat(subbed.minutesPlayed().get(in)).isEqualTo(30);
+        assertThat(subbed.events()).isNotEqualTo(base.events());
     }
 
     @Test
@@ -96,7 +97,9 @@ class LiveMatchEngineTest {
 
     @Test
     void injuriesAreTimedAndCarryASeverity() {
-        LiveTimeline t = engine.simulate(config(4242L, List.of()));
+        // Seed 2 is verified to produce at least one injury (MINOR at minute 69, layoff 4).
+        LiveTimeline t = engine.simulate(config(2L, List.of()));
+        assertThat(t.injuries()).isNotEmpty();
         t.injuries().forEach(inj -> {
             assertThat(inj.minute()).isBetween(1, 90);
             assertThat(inj.layoffMatches()).isGreaterThan(0);

@@ -56,7 +56,7 @@ public class LiveMatchEngine {
 
     public LiveTimeline simulate(LiveMatchConfig cfg) {
         Random rng = new Random(cfg.seed());
-        Random attrRng = new Random(cfg.seed() ^ 0x5DEECE66DL);
+        Random attrRng = new Random(cfg.seed() ^ 0x9E3779B97F4A7C15L);
         Random injuryRng = new Random(cfg.seed() ^ 0x1A70F1E5L);
 
         Side home = buildSide(true, cfg.homeXi(), cfg.homeBench());
