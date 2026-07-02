@@ -317,3 +317,51 @@ export type PlayerContract = { playerId: string; name: string; wage: number; con
 
 export type MakeOfferRequest = { playerId: string; amount: number; wage: number; contractYears: number }
 export type RespondOfferRequest = { action: 'ACCEPT' | 'REJECT' | 'COUNTER'; counterAmount: number | null }
+
+// Live match
+
+export type LiveMatchStatus = 'IN_PROGRESS' | 'PAUSED_INJURY' | 'PAUSED_RED' | 'FULL_TIME'
+
+export type LiveEvent = {
+  minute: number
+  type: 'GOAL' | 'SET_PIECE_GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'CHANCE' | 'INJURY' | 'SUBSTITUTION'
+  home: boolean
+  playerId: string
+  playerName: string
+  playerInId: string | null
+  playerInName: string | null
+  severity: string | null
+  text: string
+}
+
+export type LivePlayer = {
+  playerId: string
+  name: string
+  position: string
+  overall: number
+  fitness: number
+  hobbled: boolean
+  onPitch: boolean
+  used: boolean
+  eligible: boolean
+}
+
+export type LiveMatchState = {
+  fixtureId: string
+  competitionName: string | null
+  round: number | null
+  matchDate: string | null
+  homeClubName: string
+  awayClubName: string
+  managedIsHome: boolean
+  minute: number
+  homeGoals: number
+  awayGoals: number
+  status: LiveMatchStatus
+  events: LiveEvent[]
+  onPitch: LivePlayer[]
+  bench: LivePlayer[]
+  subsRemaining: number
+}
+
+export type SubstituteRequest = { outPlayerId: string; inPlayerId: string }
