@@ -97,7 +97,7 @@ class TransferExecutorIT {
         List<LineupStarter> xi = lineupService.bestXi(c.clubId()).stream()
                 .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
                 .toList();
-        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi), c.userId());
+        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi, null), c.userId());
         UUID soldId = xi.get(0).playerId();
         lineupService.setTactics(c.id(), c.clubId(),
                 new SetTacticsRequest("BALANCED", "MEDIUM", "ZONAL", soldId, soldId, soldId), c.userId());

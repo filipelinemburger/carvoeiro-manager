@@ -49,7 +49,7 @@ class TacticsApiIT {
     void setAndGetTacticsRoundTrips() {
         Career c = createCareer();
         List<LineupStarter> xi = starters(c.clubId());
-        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi), c.userId());
+        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi, null), c.userId());
         UUID taker = xi.get(10).playerId();
 
         TacticsResponse saved = lineupService.setTactics(c.id(), c.clubId(),
@@ -76,7 +76,7 @@ class TacticsApiIT {
     @Test
     void invalidEnumIsRejected() {
         Career c = createCareer();
-        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-4-2", starters(c.clubId())), c.userId());
+        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-4-2", starters(c.clubId()), null), c.userId());
         assertThatThrownBy(() -> lineupService.setTactics(c.id(), c.clubId(),
                 new SetTacticsRequest("WILD", "HIGH", "ZONAL", null, null, null), c.userId()))
                 .isInstanceOf(ApiException.class)
@@ -95,7 +95,7 @@ class TacticsApiIT {
     @Test
     void takerNotInXiIsRejected() {
         Career c = createCareer();
-        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-4-2", starters(c.clubId())), c.userId());
+        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-4-2", starters(c.clubId()), null), c.userId());
         assertThatThrownBy(() -> lineupService.setTactics(c.id(), c.clubId(),
                 new SetTacticsRequest("BALANCED", "MEDIUM", "ZONAL", UUID.randomUUID(), null, null), c.userId()))
                 .isInstanceOf(ApiException.class)

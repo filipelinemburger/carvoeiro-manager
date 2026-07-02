@@ -74,7 +74,7 @@ class LineupServiceIT {
         UUID userId = career.userId();
 
         List<LineupStarter> starters = buildValidStarters(clubId);
-        SetLineupRequest req = new SetLineupRequest("4-4-2", starters);
+        SetLineupRequest req = new SetLineupRequest("4-4-2", starters, null);
 
         // When - first call
         LineupResponse response = lineupService.setLineup(saveGameId, clubId, req, userId);
@@ -96,7 +96,7 @@ class LineupServiceIT {
         assertThat(players).allMatch(LineupPlayer::isStarting);
 
         // When - second call (upsert: change formation)
-        SetLineupRequest req2 = new SetLineupRequest("4-3-3", starters);
+        SetLineupRequest req2 = new SetLineupRequest("4-3-3", starters, null);
         LineupResponse response2 = lineupService.setLineup(saveGameId, clubId, req2, userId);
 
         // Then - still only 1 lineup row, formation updated, still 11 players (no duplicates)
@@ -125,7 +125,7 @@ class LineupServiceIT {
                         br.com.carvoeiromanager.player.PlayerRole.defaultFor(
                                 br.com.carvoeiromanager.player.Position.valueOf(p.position())).name()))
                 .collect(Collectors.toList());
-        SetLineupRequest req = new SetLineupRequest("4-4-2", noGk);
+        SetLineupRequest req = new SetLineupRequest("4-4-2", noGk, null);
 
         // When / Then
         assertThatThrownBy(() -> lineupService.setLineup(saveGameId, clubId, req, userId))
@@ -148,7 +148,7 @@ class LineupServiceIT {
         UUID userId = career.userId();
 
         List<LineupStarter> ten = buildValidStarters(clubId).subList(0, 10);
-        SetLineupRequest req = new SetLineupRequest("4-4-2", ten);
+        SetLineupRequest req = new SetLineupRequest("4-4-2", ten, null);
 
         // When / Then
         assertThatThrownBy(() -> lineupService.setLineup(saveGameId, clubId, req, userId))
@@ -198,7 +198,7 @@ class LineupServiceIT {
         assertThat(club2Players).isNotEmpty();
         List<LineupStarter> withForeigner = new java.util.ArrayList<>(validXi1);
         withForeigner.set(10, new LineupStarter(club2Players.get(0).getId(), "POACHER"));
-        SetLineupRequest req = new SetLineupRequest("4-4-2", withForeigner);
+        SetLineupRequest req = new SetLineupRequest("4-4-2", withForeigner, null);
 
         // When / Then
         assertThatThrownBy(() -> lineupService.setLineup(career1.id(), clubId1, req, career1.userId()))
@@ -226,7 +226,7 @@ class LineupServiceIT {
         playerRepository.save(victim);
 
         assertThatThrownBy(() ->
-                lineupService.setLineup(saveGameId, clubId, new SetLineupRequest("4-4-2", starters), career.userId()))
+                lineupService.setLineup(saveGameId, clubId, new SetLineupRequest("4-4-2", starters, null), career.userId()))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException apiEx = (ApiException) ex;
@@ -255,7 +255,7 @@ class LineupServiceIT {
         starters.set(gkIndex, new LineupStarter(starters.get(gkIndex).playerId(), "POACHER"));
 
         assertThatThrownBy(() ->
-                lineupService.setLineup(career.id(), clubId, new SetLineupRequest("4-4-2", starters), career.userId()))
+                lineupService.setLineup(career.id(), clubId, new SetLineupRequest("4-4-2", starters, null), career.userId()))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException apiEx = (ApiException) ex;
@@ -274,7 +274,7 @@ class LineupServiceIT {
         UUID userId = career.userId();
 
         List<LineupStarter> starters = buildValidStarters(clubId);
-        lineupService.setLineup(saveGameId, clubId, new SetLineupRequest("4-3-3", starters), userId);
+        lineupService.setLineup(saveGameId, clubId, new SetLineupRequest("4-3-3", starters, null), userId);
 
         Optional<LineupResponse> saved = lineupService.getLineup(saveGameId, clubId, userId);
 

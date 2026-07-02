@@ -69,7 +69,7 @@ class AdvancePreviewIT {
         List<LineupStarter> starters = lineupService.bestXi(c.clubId()).stream()
                 .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
                 .collect(Collectors.toList());
-        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-4-2", starters), c.userId());
+        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-4-2", starters, null), c.userId());
     }
 
     /** Advances (processing one event each step) until the next event is a managed-club match. */

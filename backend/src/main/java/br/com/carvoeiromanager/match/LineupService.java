@@ -88,16 +88,22 @@ public class LineupService {
         requireOwnedClub(saveGameId, clubId, userId);
 
         List<LineupStarter> starters = req.starters();
+        List<LineupStarter> bench = req.bench();
         List<UUID> startingIds = starters == null ? List.of()
                 : starters.stream().map(LineupStarter::playerId).toList();
+        List<UUID> benchIds = bench.stream().map(LineupStarter::playerId).toList();
 
         validatePlayerCount(startingIds);
+        validateBench(startingIds, benchIds);
 
         List<Player> clubPlayers = playerRepository.findByClubId(clubId);
         validatePlayersOwnedByClub(startingIds, clubPlayers);
+        validatePlayersOwnedByClub(benchIds, clubPlayers);
         validateGkCount(startingIds, clubPlayers);
         validateNoIneligible(startingIds, clubPlayers);
-        Map<UUID, PlayerRole> resolvedRoles = validateAndParseRoles(starters, clubPlayers);
+        validateNoIneligible(benchIds, clubPlayers);
+        Map<UUID, PlayerRole> starterRoles = validateAndParseRoles(starters, clubPlayers);
+        Map<UUID, PlayerRole> benchRoles = validateAndParseRoles(bench, clubPlayers);
 
         Lineup lineup = lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId).orElse(null);
 
@@ -107,17 +113,20 @@ public class LineupService {
         } else {
             lineup.setFormation(req.formation());
             lineupRepository.save(lineup);
-            // Remove all previous lineup_players to avoid stale rows
             lineupPlayerRepository.deleteByLineupId(lineup.getId());
         }
 
         final UUID lineupId = lineup.getId();
         for (LineupStarter starter : starters) {
             lineupPlayerRepository.save(
-                    LineupPlayer.create(lineupId, starter.playerId(), true, resolvedRoles.get(starter.playerId())));
+                    LineupPlayer.create(lineupId, starter.playerId(), true, starterRoles.get(starter.playerId())));
+        }
+        for (LineupStarter sub : bench) {
+            lineupPlayerRepository.save(
+                    LineupPlayer.create(lineupId, sub.playerId(), false, benchRoles.get(sub.playerId())));
         }
 
-        return new LineupResponse(lineupId, clubId, req.formation(), List.copyOf(starters));
+        return new LineupResponse(lineupId, clubId, req.formation(), List.copyOf(starters), List.copyOf(bench));
     }
 
     /**
@@ -129,11 +138,16 @@ public class LineupService {
         requireOwnedClub(saveGameId, clubId, userId);
         return lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
                 .map(lineup -> {
-                    List<LineupStarter> starters = lineupPlayerRepository.findByLineupId(lineup.getId()).stream()
+                    List<LineupPlayer> rows = lineupPlayerRepository.findByLineupId(lineup.getId());
+                    List<LineupStarter> starters = rows.stream()
                             .filter(LineupPlayer::isStarting)
                             .map(lp -> new LineupStarter(lp.getPlayerId(), lp.getRole().name()))
                             .toList();
-                    return new LineupResponse(lineup.getId(), clubId, lineup.getFormation(), starters);
+                    List<LineupStarter> bench = rows.stream()
+                            .filter(lp -> !lp.isStarting())
+                            .map(lp -> new LineupStarter(lp.getPlayerId(), lp.getRole().name()))
+                            .toList();
+                    return new LineupResponse(lineup.getId(), clubId, lineup.getFormation(), starters, bench);
                 });
     }
 
@@ -359,6 +373,25 @@ public class LineupService {
         if (!injured.isEmpty()) {
             throw new ApiException("INJURED_PLAYER",
                     "These players are injured and cannot be selected: " + injured,
+                    HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+    }
+
+    private void validateBench(List<UUID> startingIds, List<UUID> benchIds) {
+        if (benchIds.size() > 9) {
+            throw new ApiException("INVALID_LINEUP",
+                    "The bench may hold at most 9 players, but got " + benchIds.size(),
+                    HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+        if (Set.copyOf(benchIds).size() != benchIds.size()) {
+            throw new ApiException("INVALID_LINEUP",
+                    "The bench contains duplicate players", HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+        Set<UUID> starting = Set.copyOf(startingIds);
+        List<UUID> overlap = benchIds.stream().filter(starting::contains).toList();
+        if (!overlap.isEmpty()) {
+            throw new ApiException("INVALID_LINEUP",
+                    "These players are both starting and on the bench: " + overlap,
                     HttpStatus.UNPROCESSABLE_CONTENT);
         }
     }

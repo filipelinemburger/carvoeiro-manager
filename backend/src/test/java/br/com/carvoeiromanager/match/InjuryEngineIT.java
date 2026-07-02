@@ -168,7 +168,7 @@ class InjuryEngineIT {
         // When trying to set the lineup with the injured player
         assertThatThrownBy(() ->
                 lineupService.setLineup(saveGameId, clubId,
-                        new SetLineupRequest("4-4-2", starters), career.userId()))
+                        new SetLineupRequest("4-4-2", starters, null), career.userId()))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException apiEx = (ApiException) ex;

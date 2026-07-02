@@ -87,7 +87,7 @@ class SeasonRolloverServiceIT {
         List<LineupStarter> xi = lineupService.bestXi(c.clubId()).stream()
                 .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
                 .toList();
-        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi), c.userId());
+        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi, null), c.userId());
         finishSeason(c);
 
         // Scope to Catarinense: 10 members / 18 rounds; Criciúma (managed) is in both competitions
@@ -204,7 +204,7 @@ class SeasonRolloverServiceIT {
         List<LineupStarter> xi = lineupService.bestXi(c.clubId()).stream()
                 .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
                 .toList();
-        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi), c.userId());
+        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi, null), c.userId());
 
         // Designate the first starter as set-piece taker on all three FK columns
         UUID takerId = xi.get(0).playerId();
