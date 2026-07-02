@@ -66,4 +66,15 @@ class FitnessCalculatorTest {
         assertThat(tiredVeteran).isGreaterThan(tired);
         assertThat(fresh).isEqualTo(0.025);
     }
+
+    @Test
+    void partialMinutesScaleTheDecay() {
+        // Full 90' equals the existing 4-arg decay.
+        int full = calc.decayedBaseFitness(100, 70, 27, Position.MID);
+        assertThat(calc.decayedBaseFitness(100, 70, 27, Position.MID, 90)).isEqualTo(full);
+        // A 30' cameo decays ~1/3 as much; an unused sub (0') does not decay.
+        assertThat(calc.decayedBaseFitness(100, 70, 27, Position.MID, 0)).isEqualTo(100);
+        int cameo = calc.decayedBaseFitness(100, 70, 27, Position.MID, 30);
+        assertThat(100 - cameo).isLessThan(100 - full);
+    }
 }

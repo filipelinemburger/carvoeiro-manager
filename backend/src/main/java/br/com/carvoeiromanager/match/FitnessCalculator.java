@@ -32,8 +32,14 @@ public class FitnessCalculator {
 
     /** New base fitness after playing a full match from the given kickoff fitness. */
     public int decayedBaseFitness(int effectiveAtKickoff, int stamina, int age, Position position) {
-        double decay = DECAY_BASE * clamp(70.0 / stamina, 0.7, 1.4)
+        return decayedBaseFitness(effectiveAtKickoff, stamina, age, position, 90);
+    }
+
+    /** New base fitness after playing {@code minutesPlayed} of a match; decay scales linearly with minutes. */
+    public int decayedBaseFitness(int effectiveAtKickoff, int stamina, int age, Position position, int minutesPlayed) {
+        double fullDecay = DECAY_BASE * clamp(70.0 / stamina, 0.7, 1.4)
                 * AgeBand.of(age).decayFactor() * positionDecayFactor(position);
+        double decay = fullDecay * (Math.max(0, Math.min(90, minutesPlayed)) / 90.0);
         return (int) Math.max(0, Math.round(effectiveAtKickoff - decay));
     }
 

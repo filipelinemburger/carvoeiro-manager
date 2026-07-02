@@ -113,6 +113,25 @@ public class MatchOutcomeApplier {
     }
 
     /**
+     * Applies injuries already decided by the live timeline (no roll). Managed-side injuries are
+     * surfaced in the summary. Mirrors {@link #applyInjuries} but consumes pre-drawn {@link TimedInjury}s.
+     */
+    public void applyInjuriesFromTimeline(List<TimedInjury> injuries, Map<UUID, Player> byId,
+                                          boolean managedIsHome, Summary acc) {
+        for (TimedInjury inj : injuries) {
+            Player p = byId.get(inj.playerId());
+            if (p == null) {
+                continue;
+            }
+            p.applyInjury(inj.severity(), inj.layoffMatches());
+            if (inj.home() == managedIsHome) {
+                acc.newInjuries().add(new InjuryResponse(p.getId(), p.getName(),
+                        inj.layoffMatches(), inj.severity().name()));
+            }
+        }
+    }
+
+    /**
      * Rolls injuries for players who played, using a separate {@link Random} seeded off the match
      * seed so match/event RNG is unaffected. Chance rises as effective fitness falls and with age;
      * on a hit a severity tier and its layoff are drawn. Newly injured managed players are recorded.
