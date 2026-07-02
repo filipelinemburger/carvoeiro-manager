@@ -117,6 +117,7 @@ public class LineupService {
         }
 
         final UUID lineupId = lineup.getId();
+        // starters is guaranteed non-null and size == 11 here: validatePlayerCount threw earlier if not
         for (LineupStarter starter : starters) {
             lineupPlayerRepository.save(
                     LineupPlayer.create(lineupId, starter.playerId(), true, starterRoles.get(starter.playerId())));

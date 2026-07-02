@@ -151,4 +151,33 @@ class LineupServiceBenchTest {
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("bench");
     }
+
+    @Test
+    void suspendedBenchPlayerIsRejected() {
+        // Given - a valid XI plus a bench that includes a suspended player
+        Career career = createCareer();
+        UUID saveGameId = career.id();
+        UUID clubId = career.managedClubId();
+        UUID userId = career.userId();
+
+        List<LineupStarter> starters = buildValidStarters(clubId);
+        List<LineupStarter> bench = buildBenchPlayers(clubId, starters, 1);
+        assertThat(bench).hasSize(1);
+
+        // Suspend the bench player (same mechanism as LineupServiceIT.suspendedPlayerCannotBeSelected)
+        Player victim = playerRepository.findById(bench.get(0).playerId()).orElseThrow();
+        victim.addSuspension(1);
+        playerRepository.save(victim);
+
+        SetLineupRequest req = new SetLineupRequest("4-3-3", starters, bench);
+
+        // When / Then
+        assertThatThrownBy(() -> lineupService.setLineup(saveGameId, clubId, req, userId))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException apiEx = (ApiException) ex;
+                    assertThat(apiEx.getCode()).isEqualTo("SUSPENDED_PLAYER");
+                    assertThat(apiEx.getStatus().value()).isEqualTo(422);
+                });
+    }
 }
