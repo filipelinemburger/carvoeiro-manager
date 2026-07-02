@@ -191,6 +191,8 @@ public class FixtureSimulator {
                 case GOAL -> pickWeighted(xi, Player::getFinishing, rng);
                 case SET_PIECE_GOAL -> setPieceTaker(xi, profile, rng);
                 case YELLOW_CARD, RED_CARD -> pickWeighted(xi, Player::getTackling, rng);
+                case CHANCE, INJURY, SUBSTITUTION ->
+                        throw new IllegalStateException("Instant simulation does not emit " + event.type());
             };
             matchEventRepository.save(
                     MatchEvent.create(fixture.getId(), event.minute(), event.type().name(),
