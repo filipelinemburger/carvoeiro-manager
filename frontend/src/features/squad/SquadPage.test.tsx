@@ -351,7 +351,9 @@ describe('SquadPage', () => {
     expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
     // The higher-rated keeper (Goleiro Dois, 75) beats Goleiro Teste (72).
     expect(screen.getByRole('checkbox', { name: /goleiro dois/i })).toBeChecked()
-    expect(screen.getByRole('checkbox', { name: /goleiro teste/i })).not.toBeChecked()
+    // Use exact name match to distinguish the starter checkbox ("Goleiro Teste") from the
+    // bench checkbox ("Banco: Goleiro Teste") which appears for non-starters.
+    expect(screen.getByRole('checkbox', { name: 'Goleiro Teste' })).not.toBeChecked()
   })
 
   it('clears the selected squad', async () => {
@@ -396,5 +398,25 @@ describe('SquadPage', () => {
     renderWithProviders()
     expect(await screen.findByLabelText('Condição 45%')).toBeInTheDocument()
     expect(screen.getByText(/Lesionado \(Leve\) 3/)).toBeInTheDocument()
+  })
+
+  it('sends the selected bench players when saving the lineup', async () => {
+    // "Selecionar melhores" with 4-3-3 picks: GK2, DEF1-4, MID1-3, ATT1-3.
+    // MID4 ("Meio Quatro", id "p-m4") is eligible and won't be in the auto-picked XI.
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+
+    // Add MID4 to the bench (bench checkbox appears for non-starters).
+    fireEvent.click(screen.getByRole('checkbox', { name: /banco: meio quatro/i }))
+    fireEvent.click(screen.getByRole('button', { name: /salvar escalação/i }))
+
+    await waitFor(() =>
+      expect(setLineup).toHaveBeenCalledWith(
+        'sg-1', 'club-1',
+        expect.objectContaining({ bench: expect.arrayContaining([expect.objectContaining({ playerId: 'p-m4' })]) }),
+        'test-token',
+      ),
+    )
   })
 })

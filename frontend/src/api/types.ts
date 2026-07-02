@@ -95,6 +95,7 @@ export type SquadResponse = {
 export type SetLineupRequest = {
   formation: string
   starters: LineupStarter[]
+  bench: LineupStarter[]
 }
 
 export type LineupResponse = {
@@ -102,6 +103,7 @@ export type LineupResponse = {
   clubId: string
   formation: string
   starters: LineupStarter[]
+  bench: LineupStarter[]
 }
 
 export type TacticsRequest = {

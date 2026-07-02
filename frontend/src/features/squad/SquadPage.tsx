@@ -112,6 +112,7 @@ export function SquadPage() {
 
   const [formation, setFormation] = useState('4-3-3')
   const [selected, setSelected] = useState<string[]>([])
+  const [bench, setBench] = useState<string[]>([])
   const [roles, setRoles] = useState<Record<string, PlayerRole>>({})
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [detailsPlayer, setDetailsPlayer] = useState<PlayerResponse | null>(null)
@@ -147,17 +148,20 @@ export function SquadPage() {
       setFormation(lineup.formation)
       setSelected(lineup.starters.map(s => s.playerId))
       setRoles(Object.fromEntries(lineup.starters.map(s => [s.playerId, s.role])))
+      setBench((lineup.bench ?? []).map(s => s.playerId))
     }
     hydrated.current = true
   }, [savedLineup.isSuccess, savedLineup.data])
 
   const mutation = useMutation({
     mutationFn: () => {
-      const starters: LineupStarter[] = selected.map(id => {
+      const toStarter = (id: string): LineupStarter => {
         const player = players.find(p => p.id === id)!
         return { playerId: id, role: roles[id] ?? DEFAULT_ROLE[player.position] }
-      })
-      return setLineup(saveGameId, clubId, { formation, starters }, token ?? '')
+      }
+      const starters: LineupStarter[] = selected.map(toStarter)
+      const benchStarters: LineupStarter[] = bench.map(toStarter)
+      return setLineup(saveGameId, clubId, { formation, starters, bench: benchStarters }, token ?? '')
     },
     onSuccess: () => {
       setSaveSuccess(true)
@@ -206,12 +210,26 @@ export function SquadPage() {
     // position line must have room under the current formation.
     if (!player.eligible) return
     if (isBandFull(player.position)) return
+    // A player entering the XI is dropped from the bench (XI and bench are mutually exclusive).
+    setBench(prev => prev.filter(id => id !== player.id))
     setSelected(prev => [...prev, player.id])
     setRoles(prev => ({ ...prev, [player.id]: DEFAULT_ROLE[player.position] }))
   }
 
   function changeRole(player: PlayerResponse, role: PlayerRole) {
     setRoles(prev => ({ ...prev, [player.id]: role }))
+  }
+
+  // Bench: any eligible player not in the XI, up to 9. Removing from the XI also drops
+  // them from the bench; selecting a benched player into the XI removes them from the bench.
+  function toggleBench(player: PlayerResponse) {
+    setSaveSuccess(false)
+    if (bench.includes(player.id)) {
+      setBench(prev => prev.filter(id => id !== player.id))
+      return
+    }
+    if (!player.eligible || selected.includes(player.id) || bench.length >= 9) return
+    setBench(prev => [...prev, player.id])
   }
 
   // Fills the XI with the highest-rated eligible players for each line of the current
@@ -413,6 +431,40 @@ export function SquadPage() {
               </TableBody>
             </Table>
           </TableContainer>
+        )}
+
+        {selected.length === 11 && (
+        <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
+          Banco de reservas — {bench.length}/9
+        </Typography>
+        )}
+        {selected.length === 11 && (
+        <Stack spacing={1} sx={{ mb: 2 }}>
+          {displayPlayers
+            .filter(p => !selected.includes(p.id))
+            .map(player => {
+              const onBench = bench.includes(player.id)
+              return (
+                <Stack key={player.id} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <Checkbox
+                    size="small"
+                    checked={onBench}
+                    disabled={!onBench && (!player.eligible || bench.length >= 9)}
+                    onChange={() => toggleBench(player)}
+                    slotProps={{ input: { 'aria-label': `Banco: ${player.name}` } }}
+                    sx={{ p: 0.5 }}
+                  />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography component="span" sx={{ fontWeight: 600 }}>{player.name}</Typography>
+                    {availabilityBadge(player)}
+                  </Box>
+                  <Chip size="small" label={positionLabel(player.position)} />
+                  <Chip size="small" color="primary" label={`OVR ${player.overall}`} />
+                  <Box sx={{ width: 84 }}><FitnessBar fitness={player.fitness} /></Box>
+                </Stack>
+              )
+            })}
+        </Stack>
         )}
 
         <Button
