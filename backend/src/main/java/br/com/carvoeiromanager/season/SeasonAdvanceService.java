@@ -10,8 +10,11 @@ import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.finance.FinanceRoundResponse;
 import br.com.carvoeiromanager.finance.FinanceService;
-import br.com.carvoeiromanager.match.RoundOutcome;
+import br.com.carvoeiromanager.match.FixtureResultResponse;
 import br.com.carvoeiromanager.match.FixtureSimulator;
+import br.com.carvoeiromanager.match.LiveMatchRepository;
+import br.com.carvoeiromanager.match.MatchOutcomeApplier;
+import br.com.carvoeiromanager.match.RoundOutcome;
 import br.com.carvoeiromanager.transfer.TransferDirection;
 import br.com.carvoeiromanager.transfer.TransferOfferRepository;
 import br.com.carvoeiromanager.transfer.TransferOfferStatus;
@@ -23,7 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -60,6 +65,7 @@ public class SeasonAdvanceService {
     private final TransferService transferService;
     private final TransferOfferRepository transferOfferRepository;
     private final NewsItemRepository newsItemRepository;
+    private final LiveMatchRepository liveMatchRepository;
     private final ObjectMapper objectMapper;
 
     public SeasonAdvanceService(SaveGameService saveGameService,
@@ -72,6 +78,7 @@ public class SeasonAdvanceService {
                                 TransferService transferService,
                                 TransferOfferRepository transferOfferRepository,
                                 NewsItemRepository newsItemRepository,
+                                LiveMatchRepository liveMatchRepository,
                                 ObjectMapper objectMapper) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
@@ -83,6 +90,7 @@ public class SeasonAdvanceService {
         this.transferService = transferService;
         this.transferOfferRepository = transferOfferRepository;
         this.newsItemRepository = newsItemRepository;
+        this.liveMatchRepository = liveMatchRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -91,6 +99,10 @@ public class SeasonAdvanceService {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         if (save.getStatus() == SaveGameStatus.FINISHED) {
             throw new ApiException("SEASON_FINISHED", "The season has already finished", HttpStatus.CONFLICT);
+        }
+        if (liveMatchRepository.findBySaveGameId(saveGameId).isPresent()) {
+            throw new ApiException("LIVE_MATCH_IN_PROGRESS",
+                    "Finish the live match before advancing", HttpStatus.CONFLICT);
         }
 
         SeasonEvent event = seasonEventRepository
@@ -131,16 +143,27 @@ public class SeasonAdvanceService {
         final UUID saveGameId = save.getId();
         final UUID competitionId = event.getCompetitionId();
         final int round = event.getRound();
+        List<Fixture> fixtures = fixtureRepository
+                .findBySaveGameIdAndCompetitionIdAndRound(saveGameId, competitionId, round);
+        RoundOutcome outcome = fixtureSimulator.simulateRound(save, competitionId, fixtures);
+        return recordMatchRound(save, event, outcome, fixtures);
+    }
+
+    /**
+     * Finalise a MATCH round whose fixtures are already simulated into {@code outcome}: bump the
+     * round, charge matchday finances, award the season-end prize on the final matchday, and build
+     * the response. Shared by the instant advance and the live-match finish.
+     */
+    AdvanceResponse recordMatchRound(SaveGame save, SeasonEvent event, RoundOutcome outcome,
+                                     List<Fixture> fixtures) {
+        final UUID saveGameId = save.getId();
+        final UUID competitionId = event.getCompetitionId();
+        final int round = event.getRound();
         final LocalDate eventDate = event.getEventDate();
 
         String competitionName = competitionRepository.findById(competitionId)
                 .map(c -> c.getName())
                 .orElse(null);
-
-        List<Fixture> fixtures = fixtureRepository
-                .findBySaveGameIdAndCompetitionIdAndRound(saveGameId, competitionId, round);
-
-        RoundOutcome outcome = fixtureSimulator.simulateRound(save, competitionId, fixtures);
 
         // Keep currentRound meaningful for offer round-stamping (offers stamp save.getCurrentRound()).
         save.setCurrentRound(round + 1);
@@ -168,6 +191,51 @@ public class SeasonAdvanceService {
                 List.copyOf(outcome.results()), List.copyOf(outcome.bookings()),
                 List.copyOf(outcome.newSuspensions()), List.copyOf(outcome.newInjuries()),
                 finance, 0, seasonFinished);
+    }
+
+    /**
+     * Called by the live-match finish: the user's fixture is already simulated (result + summary +
+     * played ids); this simulates the rest of the round, merges, finalises, marks the event
+     * processed and persists the news item.
+     */
+    @Transactional
+    public AdvanceResponse completeUserMatch(SaveGame save, FixtureResultResponse userResult,
+                                             MatchOutcomeApplier.Summary userSummary,
+                                             UUID userFixtureId, Set<UUID> userPlayedIds) {
+        final UUID saveGameId = save.getId();
+        SeasonEvent event = seasonEventRepository
+                .findFirstBySaveGameIdAndProcessedFalseOrderByEventDateAscSequenceAsc(saveGameId);
+        final LocalDate eventDate = event.getEventDate();
+        save.setCurrentDate(eventDate);
+        financeService.processMonth(saveGameId, eventDate);
+
+        List<Fixture> fixtures = fixtureRepository
+                .findBySaveGameIdAndCompetitionIdAndRound(saveGameId, event.getCompetitionId(), event.getRound());
+        List<Fixture> others = fixtures.stream().filter(f -> !f.getId().equals(userFixtureId)).toList();
+        RoundOutcome othersOutcome = fixtureSimulator.simulateRound(save, event.getCompetitionId(),
+                others, userPlayedIds);
+
+        List<FixtureResultResponse> results = new ArrayList<>();
+        results.add(userResult);
+        results.addAll(othersOutcome.results());
+        RoundOutcome merged = new RoundOutcome(
+                results,
+                concat(userSummary.bookings(), othersOutcome.bookings()),
+                concat(userSummary.newSuspensions(), othersOutcome.newSuspensions()),
+                concat(userSummary.newInjuries(), othersOutcome.newInjuries()));
+
+        AdvanceResponse response = recordMatchRound(save, event, merged, fixtures);
+        event.markProcessed();
+        seasonEventRepository.save(event);
+        saveGameRepository.save(save);
+        persistNewsItem(saveGameId, eventDate, response);
+        return response;
+    }
+
+    private static <T> List<T> concat(List<T> a, List<T> b) {
+        List<T> out = new ArrayList<>(a);
+        out.addAll(b);
+        return out;
     }
 
     private AdvanceResponse processTransfer(SaveGame save, SeasonEvent event) {

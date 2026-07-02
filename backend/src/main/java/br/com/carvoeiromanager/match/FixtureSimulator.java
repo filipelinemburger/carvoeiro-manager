@@ -84,6 +84,11 @@ public class FixtureSimulator {
      * @param fixtures      the fixtures to simulate
      */
     public RoundOutcome simulateRound(SaveGame save, UUID competitionId, List<Fixture> fixtures) {
+        return simulateRound(save, competitionId, fixtures, Set.of());
+    }
+
+    public RoundOutcome simulateRound(SaveGame save, UUID competitionId, List<Fixture> fixtures,
+                                      Set<UUID> alreadyPlayedElsewhere) {
         final UUID saveGameId = save.getId();
         final UUID managedClubId = save.getManagedClubId();
 
@@ -122,7 +127,7 @@ public class FixtureSimulator {
         }
 
         List<Player> nonPlayers = playerRepository.findBySaveGameId(saveGameId).stream()
-                .filter(p -> !playedIds.contains(p.getId()))
+                .filter(p -> !playedIds.contains(p.getId()) && !alreadyPlayedElsewhere.contains(p.getId()))
                 .toList();
         matchOutcomeApplier.applyNonPlayers(nonPlayers);
         toPersist.addAll(nonPlayers);
