@@ -90,6 +90,8 @@ class LiveMatchServiceKickoffIT {
         // Idempotent: a second kickoff returns the same in-progress session (does not error/duplicate).
         LiveMatchState again = liveMatchService.kickoff(saveGameId, userId);
         assertThat(again.fixtureId()).isEqualTo(first.fixtureId());
-        assertThat(liveMatchRepository.findAll()).hasSize(1);
+        // Save-scoped: the unique constraint on save_game_id means presence after two kickoffs
+        // proves no duplicate was created for this save game (avoids cross-IT flake from shared container).
+        assertThat(liveMatchRepository.findBySaveGameId(saveGameId)).isPresent();
     }
 }
