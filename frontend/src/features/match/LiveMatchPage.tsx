@@ -125,6 +125,7 @@ export function LiveMatchPage() {
         ))}
       </Stack>
       <SubDialog
+        key={String(subOpen)}
         open={subOpen}
         onClose={() => setSubOpen(false)}
         onPitch={state.onPitch}

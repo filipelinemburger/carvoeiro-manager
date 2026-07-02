@@ -7,6 +7,8 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.match.LiveMatch;
+import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
@@ -38,6 +40,7 @@ class TransferServiceSellingIT {
     @Autowired ClubRepository clubRepository;
     @Autowired PlayerRepository playerRepository;
     @Autowired TransferOfferRepository transferOfferRepository;
+    @Autowired LiveMatchRepository liveMatchRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -152,6 +155,30 @@ class TransferServiceSellingIT {
         incomingBidFor(c, p, new BigDecimal("900000.00"));
         List<TransferOfferResponse> inbox = transferService.getOffers(c.id(), c.userId());
         assertThat(inbox).anyMatch(o -> o.direction().equals("INCOMING") && o.status().equals("PENDING"));
+    }
+
+    @Test
+    void acceptingIncomingOfferWhileLiveMatchExistsThrowsConflict() {
+        Career c = createCareer();
+        Player p = aManagedOutfielder(c);
+        TransferOffer bid = incomingBidFor(c, p, new BigDecimal("900000.00"));
+
+        // Simulate a live match row existing for this save (minimal required fields).
+        LiveMatch liveMatch = LiveMatch.create(c.id(), UUID.randomUUID(), UUID.randomUUID(), 1,
+                java.time.LocalDate.of(2026, 3, 1), 42L, true,
+                "[]", "[]", "[]", "[]", "[]");
+        liveMatchRepository.save(liveMatch);
+
+        assertThatThrownBy(() -> transferService.respondToIncoming(c.id(), c.userId(), bid.getId(), "ACCEPT", null))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException api = (ApiException) ex;
+                    assertThat(api.getCode()).isEqualTo("LIVE_MATCH_IN_PROGRESS");
+                    assertThat(api.getStatus().value()).isEqualTo(409);
+                });
+
+        // Cleanup so the live match row doesn't leak between tests (unique constraint on save_game_id).
+        liveMatchRepository.deleteBySaveGameId(c.id());
     }
 
     @Test

@@ -259,6 +259,7 @@ export function SquadPage() {
     setSaveSuccess(false)
     setSelected([])
     setRoles({})
+    setBench([])
   }
 
   // ── Per-player controls, shared by the desktop table and the mobile cards ──
