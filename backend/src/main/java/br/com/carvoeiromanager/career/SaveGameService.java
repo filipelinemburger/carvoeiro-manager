@@ -225,6 +225,35 @@ public class SaveGameService {
         return new ApiException("SAVE_GAME_NOT_FOUND", "Save game not found", HttpStatus.NOT_FOUND);
     }
 
+    /** All of a user's careers, newest first, as lightweight summaries for the load dialog. */
+    @Transactional(readOnly = true)
+    public List<SaveGameSummaryResponse> listCareers(UUID userId) {
+        return saveGameRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .map(this::toSummary)
+                .toList();
+    }
+
+    private SaveGameSummaryResponse toSummary(SaveGame saveGame) {
+        String managedClubName = saveGame.getManagedClubId() == null ? null
+                : clubRepository.findById(saveGame.getManagedClubId()).map(Club::getName).orElse(null);
+        String currentDate = saveGame.getCurrentDate() != null ? saveGame.getCurrentDate().toString() : null;
+        return new SaveGameSummaryResponse(
+                saveGame.getId(),
+                managedClubName,
+                saveGame.getSeasonYear(),
+                saveGame.getCurrentRound(),
+                currentDate,
+                saveGame.getStatus().name(),
+                saveGame.getCreatedAt());
+    }
+
+    /** Deletes one career (ownership-checked). Cascade FKs clear all of that career's data. */
+    @Transactional
+    public void deleteCareer(UUID saveGameId, UUID userId) {
+        requireOwned(saveGameId, userId);
+        saveGameRepository.deleteByIdNative(saveGameId);
+    }
+
     public SaveGameResponse getById(UUID saveGameId, UUID userId) {
         SaveGame saveGame = requireOwned(saveGameId, userId);
 

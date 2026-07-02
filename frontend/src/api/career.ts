@@ -1,6 +1,7 @@
-import { apiGet, apiPost, apiPut } from './client'
+import { apiGet, apiPost, apiPut, apiDelete } from './client'
 import type {
   SaveGameResponse,
+  SaveGameSummary,
   SquadResponse,
   SetLineupRequest,
   LineupResponse,
@@ -30,6 +31,15 @@ export function createCareer(token: string): Promise<SaveGameResponse> {
 
 export function getSaveGame(id: string, token: string): Promise<SaveGameResponse> {
   return apiGet<SaveGameResponse>(`/save-games/${id}`, token)
+}
+
+// The logged-in user's careers, newest first — powers the "Carregar jogo salvo" dialog.
+export function listCareers(token: string): Promise<SaveGameSummary[]> {
+  return apiGet<SaveGameSummary[]>('/save-games', token)
+}
+
+export function deleteCareer(id: string, token: string): Promise<void> {
+  return apiDelete<void>(`/save-games/${id}`, token)
 }
 
 export function getSquad(saveGameId: string, clubId: string, token: string): Promise<SquadResponse> {

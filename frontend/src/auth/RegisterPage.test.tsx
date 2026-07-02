@@ -57,4 +57,17 @@ describe('RegisterPage', () => {
     expect(button).toBeDisabled()
     expect(button).toHaveTextContent(/criando/i)
   })
+
+  it('blocks submit and shows an error when the username has spaces or special characters', () => {
+    ;(apiPost as Mock).mockReturnValue(new Promise(() => {}))
+    renderPage()
+    fireEvent.change(screen.getByLabelText(/usu[aá]rio/i), { target: { value: 'bad name!' } })
+    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: 'password123' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /criar conta/i }))
+
+    // No registration request is sent, and the pt-BR error is shown.
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(screen.getByText(/apenas letras e n[uú]meros/i)).toBeInTheDocument()
+  })
 })

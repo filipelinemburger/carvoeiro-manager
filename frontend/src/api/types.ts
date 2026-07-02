@@ -39,6 +39,17 @@ export type SaveGameResponse = {
   transferWindowOpen?: boolean
 }
 
+// Lightweight career summary for the "Carregar jogo salvo" list.
+export type SaveGameSummary = {
+  id: string
+  managedClubName: string | null
+  seasonYear: number
+  currentRound: number
+  currentDate: string | null
+  status: 'IN_PROGRESS' | 'FINISHED'
+  createdAt: string
+}
+
 export type Mentality = 'DEFENSIVE' | 'BALANCED' | 'ATTACKING'
 export type Pressing = 'LOW' | 'MEDIUM' | 'HIGH'
 export type Marking = 'ZONAL' | 'MAN_TIGHT'

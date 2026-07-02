@@ -5,9 +5,13 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface SaveGameRepository extends JpaRepository<SaveGame, UUID> {
+
+    /** A user's careers, newest first — powers the "Carregar jogo salvo" list. */
+    List<SaveGame> findByUserIdOrderByCreatedAtDesc(UUID userId);
 
     /**
      * Deletes every save game owned by a user. The {@code ON DELETE CASCADE}
@@ -18,4 +22,13 @@ public interface SaveGameRepository extends JpaRepository<SaveGame, UUID> {
     @Modifying
     @Query(value = "DELETE FROM save_games WHERE user_id = :userId", nativeQuery = true)
     void deleteByUserId(@Param("userId") UUID userId);
+
+    /**
+     * Deletes a single save game by id. Same {@code ON DELETE CASCADE} path as
+     * {@link #deleteByUserId} clears all of that career's data. Ownership must be
+     * checked by the caller (service) before invoking this.
+     */
+    @Modifying
+    @Query(value = "DELETE FROM save_games WHERE id = :id", nativeQuery = true)
+    void deleteByIdNative(@Param("id") UUID id);
 }

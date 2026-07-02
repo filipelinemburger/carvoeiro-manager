@@ -12,14 +12,13 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { useAuth } from '../auth/AuthContext'
 import { advanceRound, createCareer, getAdvancePreview, getLineup, getSaveGame } from '../api/career'
 import { deleteAccount } from '../api/account'
+import { saveGameKeyFor } from '../features/career/saveGameKey'
+import { LoadCareerDialog } from '../features/career/LoadCareerDialog'
 import type { AdvancePreviewResponse, AdvanceResponse, SaveGameResponse } from '../api/types'
 
 interface LayoutProps {
   children: ReactNode
 }
-
-const saveGameKeyFor = (userId: string | undefined) =>
-  `carvoeiro_manager_save_game_id_${userId ?? 'anon'}`
 
 /** Brand colors: black bar, yellow text (Criciúma EC identity). */
 const BAR_BG = '#111111'
@@ -68,6 +67,7 @@ export function Layout({ children }: LayoutProps) {
   const [gearAnchor, setGearAnchor] = useState<null | HTMLElement>(null)
   const gearOpen = Boolean(gearAnchor)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [loadCareerOpen, setLoadCareerOpen] = useState(false)
 
   const advanceMutation = useMutation<AdvanceResponse>({
     mutationFn: () => advanceRound(saveGameId!, token ?? ''),
@@ -259,6 +259,9 @@ export function Layout({ children }: LayoutProps) {
             <MenuItem onClick={handleNewCareer} disabled={newCareerMutation.isPending}>
               {newCareerMutation.isPending ? 'Criando…' : 'Nova Carreira'}
             </MenuItem>
+            <MenuItem onClick={() => { setLoadCareerOpen(true); setGearAnchor(null) }}>
+              Carregar jogo salvo
+            </MenuItem>
             <MenuItem onClick={handleLogout}>Sair</MenuItem>
             <Divider />
             <MenuItem
@@ -271,6 +274,8 @@ export function Layout({ children }: LayoutProps) {
           </Menu>
         </Toolbar>
       </AppBar>
+
+      <LoadCareerDialog open={loadCareerOpen} onClose={() => setLoadCareerOpen(false)} />
 
       {/* Mobile navigation drawer */}
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>

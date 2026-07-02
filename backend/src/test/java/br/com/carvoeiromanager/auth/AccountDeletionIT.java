@@ -126,9 +126,11 @@ class AccountDeletionIT {
     }
 
     private JsonNode register(String username) throws Exception {
+        // Usernames must be alphanumeric (^[A-Za-z0-9]+$); strip the '_' and UUID hyphens.
+        String clean = username.replaceAll("[^A-Za-z0-9]", "");
         String response = mockMvc.perform(post("/api/v1/auth/register")
                         .contentType("application/json")
-                        .content("{\"username\":\"" + username + "\",\"password\":\"carvoeiro123\"}"))
+                        .content("{\"username\":\"" + clean + "\",\"password\":\"carvoeiro123\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(response);

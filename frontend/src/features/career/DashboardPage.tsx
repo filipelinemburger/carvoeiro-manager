@@ -3,13 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { Box, Card, CardContent, Stack, Typography } from '@mui/material'
 import { useAuth } from '../../auth/AuthContext'
 import { getSaveGame, getFinances } from '../../api/career'
+import { saveGameKeyFor } from './saveGameKey'
 import { formatBRL } from '../../lib/money'
 import type { SaveGameResponse } from '../../api/types'
-
-// Scope the stored save game per user so one account never inherits another's
-// career id (which would 404 against the ownership guard).
-const saveGameKeyFor = (userId: string | undefined) =>
-  `carvoeiro_manager_save_game_id_${userId ?? 'anon'}`
 
 /** A single "Label: value" stat row with a bold label. */
 function StatRow({ label, value, color }: { label: string; value: ReactNode; color?: string }) {

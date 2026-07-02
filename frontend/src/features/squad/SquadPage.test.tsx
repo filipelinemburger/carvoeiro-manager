@@ -161,6 +161,34 @@ describe('SquadPage', () => {
     expect(saveBtn).not.toBeDisabled()
   })
 
+  it('invalidates the lineup query after saving so the advance gate refreshes', async () => {
+    // Regression: the layout's "Escale seu time" warning + disabled Avançar are driven by the
+    // ['lineup', saveGameId, clubId] query. Saving a lineup must invalidate it, otherwise the
+    // warning persists and Avançar stays disabled until a full page reload.
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+    render(
+      <MemoryRouter initialEntries={['/squad?saveGameId=sg-1&clubId=club-1']}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <SquadPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+
+    const validSelection = [GK, DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
+    for (const player of validSelection) {
+      fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(player.name, 'i') }))
+    }
+    fireEvent.click(screen.getByRole('button', { name: /salvar escala/i }))
+
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['lineup', 'sg-1'] }),
+    )
+  })
+
   it('blocks selecting more attackers than the formation allows', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Atacante Um'))

@@ -17,6 +17,11 @@ export function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (inFlight.current) return
+    // Username must be letters/numbers only — no spaces or special characters.
+    if (!/^[A-Za-z0-9]+$/.test(username)) {
+      setError('O nome de usuário deve conter apenas letras e números, sem espaços ou caracteres especiais.')
+      return
+    }
     inFlight.current = true
     setSubmitting(true)
     setError(null)

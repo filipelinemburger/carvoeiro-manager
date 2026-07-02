@@ -162,6 +162,9 @@ export function SquadPage() {
     onSuccess: () => {
       setSaveSuccess(true)
       void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] })
+      // Refresh the layout's lineup-based advance gate: without this the "Escale seu time"
+      // warning persists and Avançar stays disabled until a full page reload.
+      void queryClient.invalidateQueries({ queryKey: ['lineup', saveGameId] })
       // Re-check the advance gate: fixing the lineup may clear an ineligible-starter block.
       void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
     },
