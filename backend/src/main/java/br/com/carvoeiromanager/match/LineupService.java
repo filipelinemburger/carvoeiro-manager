@@ -194,6 +194,17 @@ public class LineupService {
                 .orElseGet(List::of);
     }
 
+    /** The saved bench (starting=false) for a club, resolved to Players; empty when none saved. */
+    public List<Player> benchPlayers(UUID saveGameId, UUID clubId) {
+        return lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
+                .map(lineup -> lineupPlayerRepository.findByLineupId(lineup.getId()).stream()
+                        .filter(lp -> !lp.isStarting())
+                        .map(lp -> playerRepository.findById(lp.getPlayerId()).orElse(null))
+                        .filter(p -> p != null && p.isEligible())
+                        .toList())
+                .orElseGet(List::of);
+    }
+
     /**
      * Returns saved starters whose effective fitness at {@code onDate} is below {@code threshold}.
      * Non-blocking soft warning — callers must NOT use this to gate any advance.
