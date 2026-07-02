@@ -8,8 +8,12 @@ import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.player.Formation;
+import br.com.carvoeiromanager.player.Marking;
+import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
+import br.com.carvoeiromanager.player.Pressing;
 import br.com.carvoeiromanager.season.AdvanceResponse;
 import br.com.carvoeiromanager.season.SeasonAdvanceService;
 import br.com.carvoeiromanager.season.SeasonEvent;
@@ -167,6 +171,55 @@ public class LiveMatchService {
     }
 
     @Transactional
+    public LiveMatchState changeTactics(UUID saveGameId, UUID userId, LiveTacticsRequest req) {
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        LiveMatch lm = requireLive(saveGameId);
+        if (lm.getCommittedMinute() >= MINUTES) {
+            throw new ApiException("MATCH_OVER", "The match has ended", HttpStatus.CONFLICT);
+        }
+
+        Mentality mentality = parseMentality(req.mentality());
+        Pressing pressing = parsePressing(req.pressing());
+        Marking marking = parseMarking(req.marking());
+        String formation = parseFormation(req.formation());
+
+        int minute = Math.min(MINUTES, lm.getCommittedMinute() + 1);
+        List<TimedTactics> tactics = new ArrayList<>(deserializeTactics(lm.getTacticsSchedule()));
+        tactics.add(new TimedTactics(minute, lm.isManagedIsHome(), mentality, pressing, marking, formation));
+        lm.setTacticsSchedule(serialize(tactics));
+        liveMatchRepository.save(lm);
+        return toState(lm, save);
+    }
+
+    private Mentality parseMentality(String value) {
+        try { return Mentality.valueOf(value); }
+        catch (IllegalArgumentException e) {
+            throw new ApiException("INVALID_TACTICS", "Unknown mentality: " + value, HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+    }
+
+    private Pressing parsePressing(String value) {
+        try { return Pressing.valueOf(value); }
+        catch (IllegalArgumentException e) {
+            throw new ApiException("INVALID_TACTICS", "Unknown pressing: " + value, HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+    }
+
+    private Marking parseMarking(String value) {
+        try { return Marking.valueOf(value); }
+        catch (IllegalArgumentException e) {
+            throw new ApiException("INVALID_TACTICS", "Unknown marking: " + value, HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+    }
+
+    private String parseFormation(String code) {
+        for (Formation f : Formation.values()) {
+            if (f.code().equals(code)) return code;
+        }
+        throw new ApiException("INVALID_TACTICS", "Unknown formation: " + code, HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
+    @Transactional
     public LiveMatchState advance(UUID saveGameId, UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         LiveMatch lm = requireLive(saveGameId);
@@ -293,8 +346,10 @@ public class LiveMatchService {
         TacticalProfile awayProfile = tacticsService.profileFor(lm.getSaveGameId(),
                 clubOf(awayXi), awayXi);
 
+        List<TimedTactics> tacticsSchedule = deserializeTactics(lm.getTacticsSchedule());
+
         return new LiveMatchConfig(lm.getSeed(), homeXi, awayXi, homeBench, awayBench,
-                homeProfile, awayProfile, fitness, subs, List.of());
+                homeProfile, awayProfile, fitness, subs, tacticsSchedule);
     }
 
     LiveMatchState toState(LiveMatch lm, SaveGame save) {
@@ -331,11 +386,33 @@ public class LiveMatchService {
         List<LivePlayerResponse> bench = managedBench.stream()
                 .map(p -> livePlayer(p, cfg, false, managed.usedIn().contains(p.getId()), false)).toList();
 
+        LiveTactics currentTactics = computeCurrentTactics(lm, cfg, minute);
+
         return new LiveMatchState(
                 lm.getFixtureId().toString(), competitionName, lm.getRound(), lm.getMatchDate().toString(),
                 clubs.get(fixture.getHomeClubId()).getName(), clubs.get(fixture.getAwayClubId()).getName(),
                 lm.isManagedIsHome(), minute, timeline.homeGoalsAt(minute), timeline.awayGoalsAt(minute),
-                status, events, onPitch, bench, MAX_SUBS - subsUsed);
+                status, events, onPitch, bench, MAX_SUBS - subsUsed, currentTactics);
+    }
+
+    /** Derives the managed side's active tactics at {@code minute}, applying any scheduled changes. */
+    private LiveTactics computeCurrentTactics(LiveMatch lm, LiveMatchConfig cfg, int minute) {
+        TacticalProfile base = lm.isManagedIsHome() ? cfg.homeProfile() : cfg.awayProfile();
+        String mentality = base.mentality().name();
+        String pressing = base.pressing().name();
+        String marking = base.marking().name();
+        String formation = base.formation();
+
+        // Apply the last scheduled change for the managed side whose minute <= committedMinute
+        for (TimedTactics tt : cfg.tacticsSchedule()) {
+            if (tt.home() == lm.isManagedIsHome() && tt.minute() <= minute) {
+                mentality = tt.mentality().name();
+                pressing = tt.pressing().name();
+                marking = tt.marking().name();
+                formation = tt.formation();
+            }
+        }
+        return new LiveTactics(mentality, pressing, marking, formation);
     }
 
     /** Managed side's current on-pitch set, hobbled set, and bench-players-already-used, at {@code minute}. */
@@ -425,5 +502,10 @@ public class LiveMatchService {
     List<LiveSub> deserializeSubs(String json) {
         try { return objectMapper.readValue(json, new TypeReference<List<LiveSub>>() { }); }
         catch (Exception e) { throw new RuntimeException("Failed to read sub schedule", e); }
+    }
+
+    List<TimedTactics> deserializeTactics(String json) {
+        try { return objectMapper.readValue(json, new TypeReference<List<TimedTactics>>() { }); }
+        catch (Exception e) { throw new RuntimeException("Failed to read tactics schedule", e); }
     }
 }

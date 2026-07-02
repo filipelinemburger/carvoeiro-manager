@@ -17,5 +17,6 @@ public record LiveMatchState(
         List<LiveEventResponse> events,
         List<LivePlayerResponse> onPitch,
         List<LivePlayerResponse> bench,
-        int subsRemaining) {
+        int subsRemaining,
+        LiveTactics currentTactics) {
 }

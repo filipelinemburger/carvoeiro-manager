@@ -54,6 +54,14 @@ public class LiveMatchController {
         return ResponseEntity.ok(liveMatchService.substitute(saveGameId, userId, request));
     }
 
+    @PostMapping("/tactics")
+    public ResponseEntity<LiveMatchState> tactics(
+            @PathVariable UUID saveGameId,
+            @Valid @RequestBody LiveTacticsRequest request,
+            @CurrentUser UUID userId) {
+        return ResponseEntity.ok(liveMatchService.changeTactics(saveGameId, userId, request));
+    }
+
     @PostMapping("/finish")
     public ResponseEntity<AdvanceResponse> finish(
             @PathVariable UUID saveGameId,

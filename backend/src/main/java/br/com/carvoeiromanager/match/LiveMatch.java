@@ -56,6 +56,9 @@ public class LiveMatch {
     @Column(name = "sub_schedule", nullable = false, columnDefinition = "TEXT")
     private String subSchedule;
 
+    @Column(name = "tactics_schedule", nullable = false, columnDefinition = "TEXT")
+    private String tacticsSchedule;
+
     protected LiveMatch() {
     }
 
@@ -76,6 +79,7 @@ public class LiveMatch {
         this.homeBench = homeBench;
         this.awayBench = awayBench;
         this.subSchedule = subSchedule;
+        this.tacticsSchedule = "[]";
     }
 
     public static LiveMatch create(UUID saveGameId, UUID fixtureId, UUID competitionId, int round,
@@ -101,6 +105,9 @@ public class LiveMatch {
     public String getAwayBench() { return awayBench; }
     public String getSubSchedule() { return subSchedule; }
 
+    public String getTacticsSchedule() { return tacticsSchedule; }
+
     public void setCommittedMinute(int committedMinute) { this.committedMinute = committedMinute; }
     public void setSubSchedule(String subSchedule) { this.subSchedule = subSchedule; }
+    public void setTacticsSchedule(String tacticsSchedule) { this.tacticsSchedule = tacticsSchedule; }
 }

@@ -1,0 +1,138 @@
+package br.com.carvoeiromanager.match;
+
+import br.com.carvoeiromanager.auth.User;
+import br.com.carvoeiromanager.auth.UserRepository;
+import br.com.carvoeiromanager.career.SaveGameResponse;
+import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.player.Player;
+import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.support.PostgresTestContainer;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
+
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+@SpringBootTest
+@ActiveProfiles("test")
+@Import(PostgresTestContainer.class)
+class LiveMatchTacticsIT {
+
+    @Autowired
+    LiveMatchService liveMatchService;
+
+    @Autowired
+    SaveGameService saveGameService;
+
+    @Autowired
+    UserRepository userRepository;
+
+    @Autowired
+    LineupService lineupService;
+
+    @Autowired
+    br.com.carvoeiromanager.player.PlayerRepository playerRepository;
+
+    private UUID saveGameId;
+    private UUID userId;
+    private UUID managedClubId;
+
+    @BeforeEach
+    void setUp() {
+        User user = User.create("live_tactics_" + UUID.randomUUID(), "hash");
+        userRepository.save(user);
+        userId = user.getId();
+
+        SaveGameResponse save = saveGameService.createCareer(userId);
+        saveGameId = save.id();
+        managedClubId = save.managedClubId();
+
+        List<Player> bestXi = lineupService.bestXi(managedClubId);
+        List<LineupStarter> starters = bestXi.stream()
+                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .collect(Collectors.toList());
+
+        List<UUID> xiIds = bestXi.stream().map(Player::getId).toList();
+        List<LineupStarter> bench = playerRepository.findByClubId(managedClubId).stream()
+                .filter(p -> !xiIds.contains(p.getId()))
+                .filter(Player::isEligible)
+                .limit(3)
+                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .collect(Collectors.toList());
+
+        lineupService.setLineup(saveGameId, managedClubId, new SetLineupRequest("4-4-2", starters, bench), userId);
+    }
+
+    @Test
+    void changeTacticsScheduledAndReflectedInTimelineAtFullTime() {
+        liveMatchService.kickoff(saveGameId, userId);
+
+        // Change tactics after kickoff (at minute 0, the change will be at minute 1)
+        liveMatchService.changeTactics(saveGameId, userId,
+                new LiveTacticsRequest("ATTACKING", "HIGH", "ZONAL", "4-3-3"));
+
+        // Advance match all the way to FULL_TIME
+        LiveMatchState state = null;
+        for (int i = 0; i < 200; i++) {
+            state = liveMatchService.advance(saveGameId, userId);
+            if ("FULL_TIME".equals(state.status())) break;
+        }
+        assertThat(state).isNotNull();
+        assertThat(state.status()).isEqualTo("FULL_TIME");
+
+        // A TACTICS_CHANGE event must appear in the timeline
+        assertThat(state.events())
+                .anyMatch(e -> "TACTICS_CHANGE".equals(e.type()));
+    }
+
+    @Test
+    void currentTacticsReflectsScheduledChangeAfterAdvancing() {
+        liveMatchService.kickoff(saveGameId, userId);
+
+        // Change tactics: schedules a TimedTactics at minute 1
+        liveMatchService.changeTactics(saveGameId, userId,
+                new LiveTacticsRequest("ATTACKING", "HIGH", "ZONAL", "4-3-3"));
+
+        // Advance past minute 1 so the change is committed
+        LiveMatchState state = liveMatchService.advance(saveGameId, userId);
+        // Keep advancing until minute >= 1 (may already be there)
+        for (int i = 0; i < 90 && state.minute() < 1; i++) {
+            state = liveMatchService.advance(saveGameId, userId);
+        }
+
+        assertThat(state.currentTactics()).isNotNull();
+        assertThat(state.currentTactics().mentality()).isEqualTo("ATTACKING");
+        assertThat(state.currentTactics().pressing()).isEqualTo("HIGH");
+        assertThat(state.currentTactics().marking()).isEqualTo("ZONAL");
+        assertThat(state.currentTactics().formation()).isEqualTo("4-3-3");
+    }
+
+    @Test
+    void invalidMentalityThrowsApiException() {
+        liveMatchService.kickoff(saveGameId, userId);
+
+        assertThatThrownBy(() -> liveMatchService.changeTactics(saveGameId, userId,
+                new LiveTacticsRequest("BOGUS", "HIGH", "ZONAL", "4-3-3")))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo("INVALID_TACTICS"));
+    }
+
+    @Test
+    void invalidFormationThrowsApiException() {
+        liveMatchService.kickoff(saveGameId, userId);
+
+        assertThatThrownBy(() -> liveMatchService.changeTactics(saveGameId, userId,
+                new LiveTacticsRequest("ATTACKING", "HIGH", "ZONAL", "9-9-9")))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo("INVALID_TACTICS"));
+    }
+}
