@@ -10,6 +10,8 @@ import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
+import br.com.carvoeiromanager.season.AdvanceResponse;
+import br.com.carvoeiromanager.season.SeasonAdvanceService;
 import br.com.carvoeiromanager.season.SeasonEvent;
 import br.com.carvoeiromanager.season.SeasonEventRepository;
 import br.com.carvoeiromanager.season.SeasonEventType;
@@ -28,6 +30,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class LiveMatchService {
@@ -46,6 +49,9 @@ public class LiveMatchService {
     private final CompetitionRepository competitionRepository;
     private final ClubRepository clubRepository;
     private final PlayerRepository playerRepository;
+    private final MatchEventRepository matchEventRepository;
+    private final MatchOutcomeApplier matchOutcomeApplier;
+    private final SeasonAdvanceService seasonAdvanceService;
     private final ObjectMapper objectMapper;
 
     public LiveMatchService(SaveGameService saveGameService, LineupService lineupService,
@@ -53,7 +59,9 @@ public class LiveMatchService {
                             LiveMatchEngine liveMatchEngine, LiveMatchRepository liveMatchRepository,
                             SeasonEventRepository seasonEventRepository, FixtureRepository fixtureRepository,
                             CompetitionRepository competitionRepository, ClubRepository clubRepository,
-                            PlayerRepository playerRepository, ObjectMapper objectMapper) {
+                            PlayerRepository playerRepository, MatchEventRepository matchEventRepository,
+                            MatchOutcomeApplier matchOutcomeApplier, SeasonAdvanceService seasonAdvanceService,
+                            ObjectMapper objectMapper) {
         this.saveGameService = saveGameService;
         this.lineupService = lineupService;
         this.tacticsService = tacticsService;
@@ -65,6 +73,9 @@ public class LiveMatchService {
         this.competitionRepository = competitionRepository;
         this.clubRepository = clubRepository;
         this.playerRepository = playerRepository;
+        this.matchEventRepository = matchEventRepository;
+        this.matchOutcomeApplier = matchOutcomeApplier;
+        this.seasonAdvanceService = seasonAdvanceService;
         this.objectMapper = objectMapper;
     }
 
@@ -166,6 +177,92 @@ public class LiveMatchService {
         lm.setCommittedMinute(timeline.nextEventMinute(lm.getCommittedMinute()));
         liveMatchRepository.save(lm);
         return toState(lm, save);
+    }
+
+    @Transactional
+    public AdvanceResponse finish(UUID saveGameId, UUID userId) {
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        LiveMatch lm = requireLive(saveGameId);
+        if (lm.getCommittedMinute() < MINUTES) {
+            throw new ApiException("MATCH_NOT_FINISHED",
+                    "The match has not reached full time", HttpStatus.CONFLICT);
+        }
+
+        LiveMatchConfig cfg = configFor(lm);
+        LiveTimeline timeline = liveMatchEngine.simulate(cfg);
+        Map<UUID, Player> byId = indexAll(cfg);
+
+        Fixture fixture = fixtureRepository.findById(lm.getFixtureId()).orElseThrow();
+        UUID homeClubId = fixture.getHomeClubId();
+        UUID awayClubId = fixture.getAwayClubId();
+        fixture.recordResult(timeline.homeGoals(), timeline.awayGoals());
+        fixtureRepository.save(fixture);
+
+        // Persist real match events (goals + cards), mirroring the instant path's match_events rows.
+        for (LiveTimelineEvent e : timeline.events()) {
+            if (isCardOrGoal(e.type())) {
+                UUID clubId = e.home() ? homeClubId : awayClubId;
+                matchEventRepository.save(
+                        MatchEvent.create(fixture.getId(), e.minute(), e.type().name(), e.playerId(), clubId));
+            }
+        }
+
+        List<Player> homePlayed = playedPlayers(cfg.homeXi(), cfg.homeBench(), timeline);
+        List<Player> awayPlayed = playedPlayers(cfg.awayXi(), cfg.awayBench(), timeline);
+
+        List<AttributedEvent> attributed = timeline.events().stream()
+                .filter(e -> isCardOrGoal(e.type()))
+                .map(e -> new AttributedEvent(e.playerId(), e.type(), e.home()))
+                .toList();
+
+        boolean homeManaged = lm.isManagedIsHome();
+        boolean awayManaged = !lm.isManagedIsHome();
+        MatchOutcomeApplier.Summary summary = new MatchOutcomeApplier.Summary();
+        matchOutcomeApplier.applyFixture(attributed,
+                new MatchOutcomeApplier.TeamOutcome(homePlayed, timeline.homeGoals(), timeline.awayGoals(), homeManaged),
+                new MatchOutcomeApplier.TeamOutcome(awayPlayed, timeline.awayGoals(), timeline.homeGoals(), awayManaged),
+                summary);
+        matchOutcomeApplier.applyInjuriesFromTimeline(timeline.injuries(), byId, lm.isManagedIsHome(), summary);
+
+        List<Player> allPlayed = new ArrayList<>();
+        allPlayed.addAll(homePlayed);
+        allPlayed.addAll(awayPlayed);
+        for (Player p : allPlayed) {
+            int eff = cfg.fitness().getOrDefault(p.getId(), 100);
+            int minutes = timeline.minutesPlayed().getOrDefault(p.getId(), 0);
+            int newBase = fitnessCalculator.decayedBaseFitness(eff, p.getStamina(), p.getAge(), p.getPosition(), minutes);
+            p.recordAppearance(newBase, lm.getMatchDate());
+        }
+        playerRepository.saveAll(allPlayed);
+
+        Map<UUID, Club> clubs = clubRepository.findBySaveGameId(saveGameId).stream()
+                .collect(Collectors.toMap(Club::getId, c -> c));
+        FixtureResultResponse userResult = new FixtureResultResponse(
+                fixture.getId(),
+                homeClubId, clubs.get(homeClubId).getName(), timeline.homeGoals(),
+                awayClubId, clubs.get(awayClubId).getName(), timeline.awayGoals());
+        Set<UUID> userPlayedIds = allPlayed.stream().map(Player::getId).collect(Collectors.toSet());
+
+        AdvanceResponse response = seasonAdvanceService.completeUserMatch(
+                save, userResult, summary, fixture.getId(), userPlayedIds);
+        liveMatchRepository.deleteBySaveGameId(saveGameId);
+        return response;
+    }
+
+    private boolean isCardOrGoal(EventType t) {
+        return t == EventType.GOAL || t == EventType.SET_PIECE_GOAL
+                || t == EventType.YELLOW_CARD || t == EventType.RED_CARD;
+    }
+
+    /** Starters (who all played) plus any bench player who actually came on (minutes > 0). */
+    private List<Player> playedPlayers(List<Player> xi, List<Player> bench, LiveTimeline timeline) {
+        List<Player> out = new ArrayList<>(xi);
+        for (Player p : bench) {
+            if (timeline.minutesPlayed().getOrDefault(p.getId(), 0) > 0) {
+                out.add(p);
+            }
+        }
+        return out;
     }
 
     LiveMatch requireLive(UUID saveGameId) {
