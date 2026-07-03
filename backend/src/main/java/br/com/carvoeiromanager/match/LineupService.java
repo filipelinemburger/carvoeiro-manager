@@ -64,7 +64,7 @@ public class LineupService {
             throw clubNotFound();
         }
         Map<UUID, PlayerRole> roleByPlayer = currentRoles(saveGameId, clubId);
-        List<PlayerResponse> responses = playerRepository.findByClubId(clubId).stream()
+        List<PlayerResponse> responses = playerRepository.findByClubIdAndYouthProspectFalse(clubId).stream()
                 .map(p -> toPlayerResponse(p, roleByPlayer.get(p.getId()), onDate))
                 .toList();
         return new SquadResponse(responses);
@@ -243,7 +243,7 @@ public class LineupService {
      * the match engine always has a full XI. A missing GK is similarly filled from ineligible GKs.
      */
     public List<Player> bestXi(UUID clubId, LocalDate onDate) {
-        List<Player> allPlayers = playerRepository.findByClubId(clubId);
+        List<Player> allPlayers = playerRepository.findByClubIdAndYouthProspectFalse(clubId);
         List<Player> eligible = allPlayers.stream().filter(Player::isEligible).toList();
 
         // Ascending comparator: .max(byRating) yields the highest-rated player,
