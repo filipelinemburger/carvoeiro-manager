@@ -36,34 +36,47 @@ public class NewgenGenerator {
         String name = firstNames.get(rng.nextInt(firstNames.size()))
                 + " " + lastNames.get(rng.nextInt(lastNames.size()));
         int age = 16 + rng.nextInt(4); // 16..19
-
-        int pace, finishing, passing, tackling, goalkeeping, stamina;
-        switch (position) {
-            case GK -> {
-                pace = band(30, 20, rng); finishing = band(20, 15, rng); passing = band(35, 20, rng);
-                tackling = band(25, 15, rng); goalkeeping = band(45, 20, rng); stamina = band(40, 20, rng);
-            }
-            case DEF -> {
-                pace = band(40, 20, rng); finishing = band(25, 15, rng); passing = band(35, 20, rng);
-                tackling = band(45, 20, rng); goalkeeping = band(1, 8, rng); stamina = band(40, 20, rng);
-            }
-            case MID -> {
-                pace = band(40, 20, rng); finishing = band(35, 20, rng); passing = band(45, 20, rng);
-                tackling = band(40, 20, rng); goalkeeping = band(1, 8, rng); stamina = band(45, 20, rng);
-            }
-            case ATT -> {
-                pace = band(45, 20, rng); finishing = band(45, 20, rng); passing = band(40, 20, rng);
-                tackling = band(25, 15, rng); goalkeeping = band(1, 8, rng); stamina = band(35, 20, rng);
-            }
-            default -> throw new IllegalStateException("Unknown position: " + position);
-        }
-
-        int overall = overallCalculator.compute(position, pace, finishing, passing,
-                tackling, goalkeeping, stamina);
+        Attrs a = drawAttributes(position, rng);
+        int overall = overallCalculator.compute(position, a.pace(), a.finishing(), a.passing(),
+                a.tackling(), a.goalkeeping(), a.stamina());
         Player newgen = Player.create(saveGameId, clubId, name, position, age, "Brasil",
-                pace, finishing, passing, tackling, goalkeeping, stamina, overall);
+                a.pace(), a.finishing(), a.passing(), a.tackling(), a.goalkeeping(), a.stamina(), overall);
         newgen.setWage(financeCalculator.weeklyWage(overall, age));
         return newgen;
+    }
+
+    /** Generates a youth-academy prospect: young (15-17), flagged, with a hidden potential ceiling. */
+    public Player generateProspect(UUID saveGameId, UUID clubId, Position position, Random rng) {
+        String name = firstNames.get(rng.nextInt(firstNames.size()))
+                + " " + lastNames.get(rng.nextInt(lastNames.size()));
+        int age = 15 + rng.nextInt(3); // 15..17
+        Attrs a = drawAttributes(position, rng);
+        int overall = overallCalculator.compute(position, a.pace(), a.finishing(), a.passing(),
+                a.tackling(), a.goalkeeping(), a.stamina());
+        // Low-skewed headroom (nextDouble squared): most prospects modest, a few gems. Floor of 4.
+        int headroom = 4 + (int) (rng.nextDouble() * rng.nextDouble() * 32);
+        int potential = Math.min(92, overall + headroom);
+        Player prospect = Player.create(saveGameId, clubId, name, position, age, "Brasil",
+                a.pace(), a.finishing(), a.passing(), a.tackling(), a.goalkeeping(), a.stamina(), overall);
+        prospect.setWage(financeCalculator.weeklyWage(overall, age));
+        prospect.setContractYears(0);
+        prospect.markAsProspect(potential);
+        return prospect;
+    }
+
+    private record Attrs(int pace, int finishing, int passing, int tackling, int goalkeeping, int stamina) { }
+
+    private Attrs drawAttributes(Position position, Random rng) {
+        return switch (position) {
+            case GK -> new Attrs(band(30, 20, rng), band(20, 15, rng), band(35, 20, rng),
+                    band(25, 15, rng), band(45, 20, rng), band(40, 20, rng));
+            case DEF -> new Attrs(band(40, 20, rng), band(25, 15, rng), band(35, 20, rng),
+                    band(45, 20, rng), band(1, 8, rng), band(40, 20, rng));
+            case MID -> new Attrs(band(40, 20, rng), band(35, 20, rng), band(45, 20, rng),
+                    band(40, 20, rng), band(1, 8, rng), band(45, 20, rng));
+            case ATT -> new Attrs(band(45, 20, rng), band(45, 20, rng), band(40, 20, rng),
+                    band(25, 15, rng), band(1, 8, rng), band(35, 20, rng));
+        };
     }
 
     private int band(int base, int span, Random rng) {
