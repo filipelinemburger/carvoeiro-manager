@@ -93,6 +93,16 @@ public class MatchOutcomeApplier {
                 }
             }
             p.applyForm(delta);
+
+            // Morale: match result, plus a lift for scoring and a hit for a red card.
+            int moraleDelta = won ? 1 : (lost ? -1 : 0);
+            if (goals.getOrDefault(p.getId(), 0) > 0) {
+                moraleDelta += 1;
+            }
+            if (reds.contains(p.getId())) {
+                moraleDelta -= 1;
+            }
+            p.applyMorale(moraleDelta);
         }
     }
 
@@ -108,6 +118,12 @@ public class MatchOutcomeApplier {
             }
             if (p.getInjuryMatches() > 0) {
                 p.tickInjury();
+            }
+            // Morale: players who did not feature drift toward mild discontent (-1).
+            if (p.getMorale() > -1) {
+                p.applyMorale(-1);
+            } else if (p.getMorale() < -1) {
+                p.applyMorale(1);
             }
         }
     }

@@ -124,4 +124,47 @@ class MatchOutcomeApplierTest {
         }
         return injured;
     }
+
+    @Test
+    void winnerWhoPlayedGainsMoraleAndLoserLoses() {
+        Player winner = player(Position.MID);
+        Player loser = player(Position.MID);
+        MatchOutcomeApplier.Summary acc = new MatchOutcomeApplier.Summary();
+
+        applier.applyFixture(List.of(),
+                new MatchOutcomeApplier.TeamOutcome(List.of(winner), 2, 0, true),
+                new MatchOutcomeApplier.TeamOutcome(List.of(loser), 0, 2, false), acc);
+
+        assertThat(winner.getMorale()).isEqualTo(1);   // win +1
+        assertThat(loser.getMorale()).isEqualTo(-1);   // loss -1
+    }
+
+    @Test
+    void scorerGainsExtraMoraleAndRedCardCostsMorale() {
+        Player scorer = player(Position.ATT);
+        Player sentOff = player(Position.DEF);
+        List<AttributedEvent> events = List.of(
+                new AttributedEvent(scorer.getId(), EventType.GOAL, true),
+                new AttributedEvent(sentOff.getId(), EventType.RED_CARD, true));
+        MatchOutcomeApplier.Summary acc = new MatchOutcomeApplier.Summary();
+
+        applier.applyFixture(events,
+                new MatchOutcomeApplier.TeamOutcome(List.of(scorer, sentOff), 1, 1, true),
+                new MatchOutcomeApplier.TeamOutcome(List.of(), 1, 1, false), acc);
+
+        assertThat(scorer.getMorale()).isEqualTo(1);    // draw 0 + scored +1
+        assertThat(sentOff.getMorale()).isEqualTo(-1);  // draw 0 + red -1
+    }
+
+    @Test
+    void unusedReservesDriftTowardMildDiscontent() {
+        Player fresh = player(Position.MID);        // morale 0 -> -1
+        Player low = player(Position.MID);
+        low.applyMorale(-3);                         // below -1 -> steps back up toward -1
+
+        applier.applyNonPlayers(List.of(fresh, low));
+
+        assertThat(fresh.getMorale()).isEqualTo(-1);
+        assertThat(low.getMorale()).isEqualTo(-2);
+    }
 }
