@@ -24,7 +24,7 @@ const mockRenewContract = vi.mocked(renewContract)
 
 // `as const` narrows injurySeverity to the literal 'NONE' so it satisfies
 // PlayerResponse's union type (not widened to string) when spread into fixtures.
-const STATE = { form: 0, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0, injurySeverity: 'NONE' as const, eligible: true, role: null, contractYears: 2, wageDemand: 90000, fitness: 100 }
+const STATE = { form: 0, morale: 0, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0, injurySeverity: 'NONE' as const, eligible: true, role: null, contractYears: 2, wageDemand: 90000, fitness: 100 }
 
 const GK: PlayerResponse = {
   id: 'p-gk',
@@ -421,6 +421,17 @@ describe('SquadPage', () => {
         'test-token',
       ),
     )
+  })
+
+  it('shows a morale mood chip per player and a team dressing-room chip', async () => {
+    mockGetSquad.mockResolvedValue({
+      players: [{ ...MID1, id: 'p-happy', name: 'Feliz', morale: 2 }],
+    })
+    renderWithProviders()
+    // Team "dressing room" chip (unique prefix)
+    expect(await screen.findByText(/Elenco:/)).toBeInTheDocument()
+    // At least the player row chip renders the Contente mood
+    expect(screen.getAllByText(/Contente/).length).toBeGreaterThanOrEqual(1)
   })
 
   it('removes auto-picked XI players from the bench when "Selecionar melhores" is clicked', async () => {

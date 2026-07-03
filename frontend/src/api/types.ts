@@ -72,6 +72,7 @@ export type PlayerResponse = {
   goalkeeping: number
   stamina: number
   form: number
+  morale: number
   yellowCards: number
   suspensionRemaining: number
   injuryMatches: number

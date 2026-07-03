@@ -13,6 +13,8 @@ import { TacticsPanel } from './TacticsPanel'
 import { PlayerDetails } from './PlayerDetails'
 import { Collapsible } from '../../components/Collapsible'
 import { FitnessBar } from './FitnessBar'
+import { MoodChip } from './MoodChip'
+import { teamMorale } from './morale'
 import { SEVERITY_LABEL } from './injurySeverity'
 
 const FORMATIONS = ['4-4-2', '4-3-3', '3-5-2', '4-2-3-1', '5-3-2']
@@ -353,6 +355,11 @@ export function SquadPage() {
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
         Formação {formation} — {selected.length}/11 · GOL {positionCounts.GK}/1 · DEF {positionCounts.DEF}/{FORMATION_SHAPE[formation].DEF} · MEI {positionCounts.MID}/{FORMATION_SHAPE[formation].MID} · ATA {positionCounts.ATT}/{FORMATION_SHAPE[formation].ATT}
       </Typography>
+      {players.length > 0 && (
+        <Box sx={{ mb: 2 }}>
+          <MoodChip morale={teamMorale(players.map(p => p.morale))} prefix="Elenco: " />
+        </Box>
+      )}
       {validationError && selected.length > 0 && (
         <Alert severity="error" sx={{ mb: 2 }}>{validationError}</Alert>
       )}
@@ -407,6 +414,7 @@ export function SquadPage() {
                   <TableCell align="center">Pos</TableCell>
                   <TableCell align="center">OVR</TableCell>
                   <TableCell align="center">Forma</TableCell>
+                  <TableCell align="center">Moral</TableCell>
                   <TableCell align="center">Fôlego</TableCell>
                   <TableCell align="center">Condição</TableCell>
                   <TableCell align="center">Função</TableCell>
@@ -425,6 +433,7 @@ export function SquadPage() {
                       <TableCell align="center">{positionLabel(player.position)}</TableCell>
                       <TableCell align="center">{player.overall}</TableCell>
                       <TableCell align="center">{formLabel(player.form)}</TableCell>
+                      <TableCell align="center"><MoodChip morale={player.morale} /></TableCell>
                       <TableCell align="center">{player.stamina}</TableCell>
                       <TableCell align="center"><FitnessBar fitness={player.fitness} /></TableCell>
                       <TableCell align="center">{isSelected && roleSelect(player)}</TableCell>
