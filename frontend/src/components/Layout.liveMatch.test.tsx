@@ -101,4 +101,15 @@ describe('Layout — live match fork', () => {
     renderLayout()
     expect(await screen.findByRole('button', { name: /retomar partida/i })).toBeInTheDocument()
   })
+
+  it('hides the top-bar advance/resume button on the live match screen', async () => {
+    ;(getLiveMatch as Mock).mockResolvedValue({ fixtureId: 'f1', status: 'IN_PROGRESS' } as never)
+    seedAuth()
+    renderLayout('/match?saveGameId=sg-1')
+    // The save game has loaded (nav links appear), so the bar is fully populated…
+    await screen.findByRole('link', { name: 'Escalação' })
+    // …yet the redundant top-bar button is not rendered while watching the match.
+    expect(screen.queryByRole('button', { name: /retomar partida/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /avançar/i })).not.toBeInTheDocument()
+  })
 })

@@ -15,7 +15,9 @@ import { useIsFetching, useIsMutating } from '@tanstack/react-query'
  */
 export function LoadingOverlay() {
   const loading = useIsFetching({ predicate: query => query.state.data === undefined })
-  const mutating = useIsMutating()
+  // Exclude in-game live-match mutations (advance/tactics, keyed ['liveMatch']): they fire
+  // every ~1.5s while a match plays, so a global backdrop would flash constantly during play.
+  const mutating = useIsMutating({ predicate: m => m.options.mutationKey?.[0] !== 'liveMatch' })
   const busy = loading + mutating > 0
 
   return (

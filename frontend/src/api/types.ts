@@ -320,11 +320,25 @@ export type RespondOfferRequest = { action: 'ACCEPT' | 'REJECT' | 'COUNTER'; cou
 
 // Live match
 
-export type LiveMatchStatus = 'IN_PROGRESS' | 'PAUSED_INJURY' | 'PAUSED_RED' | 'FULL_TIME'
+export type LiveMatchStatus = 'IN_PROGRESS' | 'HALF_TIME' | 'PAUSED_INJURY' | 'PAUSED_RED' | 'FULL_TIME'
+
+export type LiveTactics = {
+  mentality: string
+  pressing: string
+  marking: string
+  formation: string
+}
+
+export type LiveTacticsRequest = {
+  mentality: string
+  pressing: string
+  marking: string
+  formation: string
+}
 
 export type LiveEvent = {
   minute: number
-  type: 'GOAL' | 'SET_PIECE_GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'CHANCE' | 'INJURY' | 'SUBSTITUTION'
+  type: 'GOAL' | 'SET_PIECE_GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'CHANCE' | 'INJURY' | 'SUBSTITUTION' | 'TACTICS_CHANGE' | 'HALF_TIME'
   home: boolean
   playerId: string
   playerName: string
@@ -362,6 +376,7 @@ export type LiveMatchState = {
   onPitch: LivePlayer[]
   bench: LivePlayer[]
   subsRemaining: number
+  currentTactics: LiveTactics
 }
 
 export type SubstituteRequest = { outPlayerId: string; inPlayerId: string }

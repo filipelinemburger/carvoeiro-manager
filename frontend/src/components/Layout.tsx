@@ -108,6 +108,9 @@ export function Layout({ children }: LayoutProps) {
   }
 
   const isDashboard = location.pathname === '/dashboard'
+  // On the live-match screen the match has its own controls (Pausar/Substituir), so a
+  // top-bar "Retomar partida" (which just navigates to /match) is redundant — hide it there.
+  const isMatchScreen = location.pathname === '/match'
   // Use the persisted save status too, so Avançar stays disabled after a page
   // reload following a season-ending advance (the mutation result is ephemeral).
   const seasonFinished =
@@ -246,7 +249,7 @@ export function Layout({ children }: LayoutProps) {
 
           <Box sx={{ flexGrow: 1 }} />
 
-          {hasSaveGame && (
+          {hasSaveGame && !isMatchScreen && (
             <Button
               color="primary"
               disabled={advanceDisabled || kickoffMutation.isPending}
