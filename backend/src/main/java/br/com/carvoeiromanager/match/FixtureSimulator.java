@@ -193,7 +193,7 @@ public class FixtureSimulator {
             UUID clubId = event.home() ? homeClubId : awayClubId;
 
             Player player = switch (event.type()) {
-                case GOAL -> pickWeighted(xi, Player::getFinishing, rng);
+                case GOAL -> pickByWeight(xi, FixtureSimulator::goalWeight, rng);
                 case SET_PIECE_GOAL -> setPieceTaker(xi, profile, rng);
                 case YELLOW_CARD, RED_CARD -> pickWeighted(xi, Player::getTackling, rng);
                 case CHANCE, INJURY, SUBSTITUTION, TACTICS_CHANGE, HALF_TIME ->
@@ -216,7 +216,7 @@ public class FixtureSimulator {
                 }
             }
         }
-        return pickWeighted(xi, Player::getFinishing, rng);
+        return pickByWeight(xi, FixtureSimulator::goalWeight, rng);
     }
 
     private Player pickWeighted(List<Player> xi, ToIntFunction<Player> attribute, Random rng) {
@@ -236,6 +236,41 @@ public class FixtureSimulator {
             }
         }
         return xi.get(xi.size() - 1);
+    }
+
+    /** Weighted pick over an XI where a player with weight 0 (e.g. a keeper scoring) is never chosen. */
+    private Player pickByWeight(List<Player> xi, ToIntFunction<Player> weight, Random rng) {
+        if (xi.isEmpty()) {
+            throw new IllegalStateException("Cannot attribute a match event to an empty XI");
+        }
+        int totalWeight = xi.stream().mapToInt(p -> Math.max(0, weight.applyAsInt(p))).sum();
+        if (totalWeight <= 0) {
+            return xi.get(rng.nextInt(xi.size()));   // degenerate XI (e.g. keeper only)
+        }
+        int pick = rng.nextInt(totalWeight);
+        int accumulated = 0;
+        for (Player player : xi) {
+            accumulated += Math.max(0, weight.applyAsInt(player));
+            if (pick < accumulated) {
+                return player;
+            }
+        }
+        return xi.get(xi.size() - 1);
+    }
+
+    /**
+     * Goal / chance likelihood by position (attackers most, keepers never in open play) blended with
+     * finishing. Mirrors {@code LiveMatchEngine.goalWeight} so live and instant matches attribute
+     * scorers consistently — a keeper does not top the scorers' chart.
+     */
+    private static int goalWeight(Player p) {
+        int positionFactor = switch (p.getPosition()) {
+            case ATT -> 12;
+            case MID -> 6;
+            case DEF -> 2;
+            case GK -> 0;
+        };
+        return positionFactor * (p.getFinishing() + 10);
     }
 
     private Map<UUID, Integer> effectiveFitness(List<Player> xi, LocalDate onDate) {

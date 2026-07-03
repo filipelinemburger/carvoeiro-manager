@@ -10,6 +10,7 @@ import br.com.carvoeiromanager.match.TimedTactics;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -147,6 +148,34 @@ class LiveMatchEngineTest {
         LiveTimeline a = engine.simulate(cfg);
         LiveTimeline b = engine.simulate(cfg);
         assertThat(a.events()).isEqualTo(b.events());
+    }
+
+    @Test
+    void keepersNeverScoreFromOpenPlayAndAttackersOutscoreDefenders() {
+        // Every player in buildXi() has finishing 70, so a position-blind, finishing-only weighting
+        // would let the keeper score ~1/11 of goals. Scoring must instead be driven by position.
+        Map<UUID, Player> byId = new HashMap<>();
+        homeXi.forEach(p -> byId.put(p.getId(), p));
+        awayXi.forEach(p -> byId.put(p.getId(), p));
+        homeBench.forEach(p -> byId.put(p.getId(), p));
+
+        Map<Position, Integer> goalsByPosition = new EnumMap<>(Position.class);
+        for (long seed = 0; seed < 200; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            for (LiveTimelineEvent e : t.events()) {
+                if (e.type() == EventType.GOAL || e.type() == EventType.SET_PIECE_GOAL) {
+                    Position pos = byId.get(e.playerId()).getPosition();
+                    goalsByPosition.merge(pos, 1, Integer::sum);
+                }
+            }
+        }
+
+        assertThat(goalsByPosition.getOrDefault(Position.GK, 0))
+                .as("keepers must not score from open play")
+                .isZero();
+        assertThat(goalsByPosition.getOrDefault(Position.ATT, 0))
+                .as("attackers should outscore defenders")
+                .isGreaterThan(goalsByPosition.getOrDefault(Position.DEF, 0));
     }
 
     @Test

@@ -105,11 +105,11 @@ public class LiveMatchEngine {
 
             if (rng.nextDouble() < CHANCE_RATE && !home.onPitch.isEmpty()) {
                 events.add(new LiveTimelineEvent(minute, EventType.CHANCE, true,
-                        pickWeighted(home, Player::getFinishing, attrRng), null, null));
+                        pickByWeight(home, LiveMatchEngine::goalWeight, attrRng), null, null));
             }
             if (rng.nextDouble() < CHANCE_RATE && !away.onPitch.isEmpty()) {
                 events.add(new LiveTimelineEvent(minute, EventType.CHANCE, false,
-                        pickWeighted(away, Player::getFinishing, attrRng), null, null));
+                        pickByWeight(away, LiveMatchEngine::goalWeight, attrRng), null, null));
             }
 
             maybeInjury(minute, home, cfg, injuryRng, events, injuries);
@@ -224,7 +224,8 @@ public class LiveMatchEngine {
                            List<LiveTimelineEvent> events) {
         if (rng.nextDouble() < BASE_CARD_RATE * input.aggression() && !side.onPitch.isEmpty()) {
             EventType t = rng.nextDouble() < RED_SHARE ? EventType.RED_CARD : EventType.YELLOW_CARD;
-            UUID booked = pickWeighted(side, Player::getTackling, attrRng);
+            // Fouls skew toward aggressive tacklers; the +1 keeps everyone eligible (unchanged formula).
+            UUID booked = pickByWeight(side, p -> p.getTackling() + 1, attrRng);
             events.add(new LiveTimelineEvent(minute, t, side.home, booked, null, null));
             if (t == EventType.RED_CARD) {
                 side.onPitch.remove(booked);
@@ -236,7 +237,7 @@ public class LiveMatchEngine {
 
     private LiveTimelineEvent goal(int minute, Side side, TacticalProfile profile, EventType type, Random attrRng) {
         UUID scorer = type == EventType.SET_PIECE_GOAL ? setPieceTaker(side, profile, attrRng)
-                : pickWeighted(side, Player::getFinishing, attrRng);
+                : pickByWeight(side, LiveMatchEngine::goalWeight, attrRng);
         return new LiveTimelineEvent(minute, type, side.home, scorer, null, null);
     }
 
@@ -280,19 +281,40 @@ public class LiveMatchEngine {
     private UUID setPieceTaker(Side side, TacticalProfile profile, Random rng) {
         UUID takerId = profile.penaltyTakerId() != null ? profile.penaltyTakerId() : profile.freekickTakerId();
         if (takerId != null && side.onPitch.contains(takerId)) return takerId;
-        return pickWeighted(side, Player::getFinishing, rng);
+        return pickByWeight(side, LiveMatchEngine::goalWeight, rng);
     }
 
-    private UUID pickWeighted(Side side, ToIntFunction<Player> attribute, Random rng) {
+    /** Weighted random pick over the on-pitch players. A player with weight 0 is never chosen. */
+    private UUID pickByWeight(Side side, ToIntFunction<Player> weight, Random rng) {
         List<UUID> xi = side.onPitch;
-        int totalWeight = xi.stream().mapToInt(id -> attribute.applyAsInt(side.all.get(id)) + 1).sum();
+        int totalWeight = xi.stream().mapToInt(id -> Math.max(0, weight.applyAsInt(side.all.get(id)))).sum();
+        if (totalWeight <= 0) {
+            // Degenerate case (e.g. only the keeper left on the pitch): fall back to a uniform pick.
+            return xi.get(rng.nextInt(xi.size()));
+        }
         int pick = rng.nextInt(totalWeight);
         int acc = 0;
         for (UUID id : xi) {
-            acc += attribute.applyAsInt(side.all.get(id)) + 1;
+            acc += Math.max(0, weight.applyAsInt(side.all.get(id)));
             if (pick < acc) return id;
         }
         return xi.get(xi.size() - 1);
+    }
+
+    /**
+     * How likely a player is to score a goal or create a chance: driven by position (attackers most,
+     * midfielders and defenders progressively less, keepers never in open play) and by finishing.
+     * Keepers get weight 0 so a goalkeeper does not score from open play. The {@code + 10} floor keeps
+     * a poor finisher able to score occasionally while still trailing a clinical one.
+     */
+    private static int goalWeight(Player p) {
+        int positionFactor = switch (p.getPosition()) {
+            case ATT -> 12;
+            case MID -> 6;
+            case DEF -> 2;
+            case GK -> 0;
+        };
+        return positionFactor * (p.getFinishing() + 10);
     }
 
     // ---- math mirrored from MatchSimulationService ----
