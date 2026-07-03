@@ -5,6 +5,7 @@ import {
 import { formatBRL } from '../../lib/money'
 import type { AdvanceResponse } from '../../api/types'
 import { SEVERITY_LABEL } from '../squad/injurySeverity'
+import { PlayerRatingsList } from './PlayerRatingsList'
 
 interface AdvanceEventCardProps {
   result: AdvanceResponse
@@ -96,6 +97,13 @@ function MatchTimeline({ result, saveGameId, competitionId, managedClubId }: {
             </TimelineNode>
           )
         })}
+
+      {result.playerRatings && result.playerRatings.length > 0 && (
+        <TimelineNode dot="📊">
+          <Typography component="strong" sx={{ fontWeight: 700 }}>Atuações</Typography>
+          <PlayerRatingsList ratings={result.playerRatings} />
+        </TimelineNode>
+      )}
 
       {result.bookings.length > 0 && (
         <TimelineNode dot="🟨">

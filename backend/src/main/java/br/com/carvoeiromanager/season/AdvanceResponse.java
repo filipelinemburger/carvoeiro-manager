@@ -4,6 +4,7 @@ import br.com.carvoeiromanager.finance.FinanceRoundResponse;
 import br.com.carvoeiromanager.match.BookingResponse;
 import br.com.carvoeiromanager.match.FixtureResultResponse;
 import br.com.carvoeiromanager.match.InjuryResponse;
+import br.com.carvoeiromanager.match.PlayerRating;
 import br.com.carvoeiromanager.match.SuspensionResponse;
 
 import java.util.List;
@@ -21,6 +22,9 @@ import java.util.List;
  *   <li>{@code FINISHED} — all event-specific fields are null/zero/empty; the season is
  *       over with no calendar entries remaining.</li>
  * </ul>
+ * {@code playerRatings} holds the managed club's 0–10 performance grades and is populated only for
+ * the user's own (live-played) match; it is empty for AI-simulated rounds, transfers and older
+ * news items persisted before the feature existed.
  */
 public record AdvanceResponse(
         String type,
@@ -33,5 +37,6 @@ public record AdvanceResponse(
         List<InjuryResponse> newInjuries,
         FinanceRoundResponse finance,
         int bidsReceived,
-        boolean seasonFinished) {
+        boolean seasonFinished,
+        List<PlayerRating> playerRatings) {
 }

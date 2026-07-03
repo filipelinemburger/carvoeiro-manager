@@ -100,4 +100,30 @@ class LiveMatchFinishIT {
         assertThatThrownBy(() -> liveMatchService.finish(saveGameId, userId))
                 .isInstanceOf(ApiException.class);
     }
+
+    @Test
+    void gradesStartEmptyAppearDuringPlayAndAreCarriedIntoTheFinishResponse() {
+        LiveMatchState start = liveMatchService.kickoff(saveGameId, userId);
+        // At kickoff (minute 0) nobody has played yet, so there are no grades.
+        assertThat(start.playerRatings()).isEmpty();
+
+        // One advance moves past the first event (<= minute 45): the managed XI now carry live grades.
+        LiveMatchState mid = liveMatchService.advance(saveGameId, userId);
+        assertThat(mid.minute()).isGreaterThanOrEqualTo(1);
+        assertThat(mid.playerRatings()).isNotEmpty();
+        assertThat(mid.playerRatings()).allSatisfy(r -> {
+            assertThat(r.rating()).isBetween(3.0, 10.0);
+            assertThat(r.minutesPlayed()).isGreaterThan(0);
+            assertThat(r.name()).isNotBlank();
+        });
+
+        LiveMatchState s = mid;
+        for (int i = 0; i < 200 && !"FULL_TIME".equals(s.status()); i++) s = liveMatchService.advance(saveGameId, userId);
+        assertThat(s.status()).isEqualTo("FULL_TIME");
+        assertThat(s.playerRatings()).isNotEmpty();
+
+        AdvanceResponse resp = liveMatchService.finish(saveGameId, userId);
+        // The persisted news summary carries the same set of final grades.
+        assertThat(resp.playerRatings()).hasSameSizeAs(s.playerRatings());
+    }
 }

@@ -22,6 +22,7 @@ const STATE = {
     playerInId: null, playerInName: null, severity: null, text: 'GOL! Camisa 9 balança as redes!' }],
   onPitch: [], bench: [], subsRemaining: 5,
   currentTactics: { mentality: 'BALANCED', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-3-3' },
+  playerRatings: [],
 }
 
 function renderPage() {
@@ -59,6 +60,42 @@ describe('LiveMatchPage', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /continuar/i }))
     await waitFor(() => expect(finishLiveMatch).toHaveBeenCalledWith('sg-1', 'test-token'))
+  })
+
+  it('at full time, auto-switches to the Atuações tab and shows final grades', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, minute: 90, status: 'FULL_TIME',
+      playerRatings: [
+        { playerId: 'p1', name: 'Camisa 9', position: 'ATT', minutesPlayed: 90, goals: 1, rating: 7.6 },
+        { playerId: 'p2', name: 'Zagueiro', position: 'DEF', minutesPlayed: 90, goals: 0, rating: 6.1 },
+      ],
+    } as never)
+    renderPage()
+    // The Atuações tab is auto-selected at full time, so the grades render without a click.
+    expect(await screen.findByText('Camisa 9')).toBeInTheDocument()
+    expect(screen.getByText('7.6')).toBeInTheDocument()
+    expect(screen.getByText('Zagueiro')).toBeInTheDocument()
+  })
+
+  it('shows live player grades in the Atuações tab during the game', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS',
+      playerRatings: [
+        { playerId: 'px', name: 'Meia Vivo', position: 'MID', minutesPlayed: 20, goals: 0, rating: 6.7 },
+      ],
+    } as never)
+    renderPage()
+    // Default tab is Lances (the feed); the grades only show after switching to Atuações.
+    fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
+    expect(await screen.findByText('Meia Vivo')).toBeInTheDocument()
+    expect(screen.getByText('6.7')).toBeInTheDocument()
+  })
+
+  it('shows a hint in the Atuações tab before any grades exist', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', playerRatings: [] } as never)
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
+    expect(await screen.findByText(/atuações aparecem conforme/i)).toBeInTheDocument()
   })
 
   it('clears the cached live match after finishing so the top bar stops showing Retomar (regression)', async () => {

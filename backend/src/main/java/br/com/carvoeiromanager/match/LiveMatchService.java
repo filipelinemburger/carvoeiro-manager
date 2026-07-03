@@ -28,6 +28,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +48,7 @@ public class LiveMatchService {
     private final TacticsService tacticsService;
     private final FitnessCalculator fitnessCalculator;
     private final LiveMatchEngine liveMatchEngine;
+    private final PlayerRatingCalculator playerRatingCalculator;
     private final LiveMatchRepository liveMatchRepository;
     private final SeasonEventRepository seasonEventRepository;
     private final FixtureRepository fixtureRepository;
@@ -60,7 +62,8 @@ public class LiveMatchService {
 
     public LiveMatchService(SaveGameService saveGameService, LineupService lineupService,
                             TacticsService tacticsService, FitnessCalculator fitnessCalculator,
-                            LiveMatchEngine liveMatchEngine, LiveMatchRepository liveMatchRepository,
+                            LiveMatchEngine liveMatchEngine, PlayerRatingCalculator playerRatingCalculator,
+                            LiveMatchRepository liveMatchRepository,
                             SeasonEventRepository seasonEventRepository, FixtureRepository fixtureRepository,
                             CompetitionRepository competitionRepository, ClubRepository clubRepository,
                             PlayerRepository playerRepository, MatchEventRepository matchEventRepository,
@@ -71,6 +74,7 @@ public class LiveMatchService {
         this.tacticsService = tacticsService;
         this.fitnessCalculator = fitnessCalculator;
         this.liveMatchEngine = liveMatchEngine;
+        this.playerRatingCalculator = playerRatingCalculator;
         this.liveMatchRepository = liveMatchRepository;
         this.seasonEventRepository = seasonEventRepository;
         this.fixtureRepository = fixtureRepository;
@@ -226,10 +230,13 @@ public class LiveMatchService {
         if (lm.getCommittedMinute() >= MINUTES) {
             return toState(lm, save);   // already at full time — no-op
         }
-        LiveTimeline timeline = liveMatchEngine.simulate(configFor(lm));
+        // Resolve the lineup and simulate once, then reuse both for building the state below —
+        // this is the per-event hot path, so avoid a second configFor()+simulate() in toState().
+        LiveMatchConfig cfg = configFor(lm);
+        LiveTimeline timeline = liveMatchEngine.simulate(cfg);
         lm.setCommittedMinute(timeline.nextEventMinute(lm.getCommittedMinute()));
         liveMatchRepository.save(lm);
-        return toState(lm, save);
+        return toState(lm, save, cfg, timeline);
     }
 
     @Transactional
@@ -296,8 +303,9 @@ public class LiveMatchService {
                 awayClubId, clubs.get(awayClubId).getName(), timeline.awayGoals());
         Set<UUID> userPlayedIds = allPlayed.stream().map(Player::getId).collect(Collectors.toSet());
 
+        List<PlayerRating> playerRatings = managedRatings(lm, cfg, timeline, MINUTES);
         AdvanceResponse response = seasonAdvanceService.completeUserMatch(
-                save, userResult, summary, fixture.getId(), userPlayedIds);
+                save, userResult, summary, fixture.getId(), userPlayedIds, playerRatings);
         liveMatchRepository.deleteBySaveGameId(saveGameId);
         return response;
     }
@@ -355,6 +363,15 @@ public class LiveMatchService {
     LiveMatchState toState(LiveMatch lm, SaveGame save) {
         LiveMatchConfig cfg = configFor(lm);
         LiveTimeline timeline = liveMatchEngine.simulate(cfg);
+        return toState(lm, save, cfg, timeline);
+    }
+
+    /**
+     * Builds the state from an already-resolved config and simulated timeline. Lets the hot
+     * {@link #advance} path reuse the single config/simulation it just computed instead of
+     * resolving every player and re-simulating the whole match a second time.
+     */
+    private LiveMatchState toState(LiveMatch lm, SaveGame save, LiveMatchConfig cfg, LiveTimeline timeline) {
         int minute = lm.getCommittedMinute();
 
         List<LiveTimelineEvent> revealed = timeline.eventsThrough(minute);
@@ -388,11 +405,75 @@ public class LiveMatchService {
 
         LiveTactics currentTactics = computeCurrentTactics(lm, cfg, minute);
 
+        // Live grades: computed from what has been revealed so far (goals/cards/minutes/score through
+        // the committed minute). They start near 6.0 and diverge as the game unfolds; at minute 90
+        // they equal the final full-time grades. Empty at kickoff (nobody has played yet).
+        List<PlayerRating> playerRatings = managedRatings(lm, cfg, timeline, minute);
+
         return new LiveMatchState(
                 lm.getFixtureId().toString(), competitionName, lm.getRound(), lm.getMatchDate().toString(),
                 clubs.get(fixture.getHomeClubId()).getName(), clubs.get(fixture.getAwayClubId()).getName(),
                 lm.isManagedIsHome(), minute, timeline.homeGoalsAt(minute), timeline.awayGoalsAt(minute),
-                status, events, onPitch, bench, MAX_SUBS - subsUsed, currentTactics);
+                status, events, onPitch, bench, MAX_SUBS - subsUsed, currentTactics, playerRatings);
+    }
+
+    /**
+     * Computes the managed club's 0–10 grades from everything revealed through {@code minute}: the
+     * managed players who have featured, their goals/cards so far, minutes played so far, and the
+     * score at that minute. Used live on every advance and, with {@code minute == MINUTES}, produces
+     * the final full-time grades persisted into the news summary.
+     */
+    private List<PlayerRating> managedRatings(LiveMatch lm, LiveMatchConfig cfg, LiveTimeline timeline, int minute) {
+        boolean managedIsHome = lm.isManagedIsHome();
+        List<Player> managedXi = managedIsHome ? cfg.homeXi() : cfg.awayXi();
+        List<Player> managedBench = managedIsHome ? cfg.homeBench() : cfg.awayBench();
+
+        Map<UUID, Integer> minutes = minutesThrough(managedXi, timeline, minute, managedIsHome);
+        List<Player> everyone = new ArrayList<>(managedXi);
+        everyone.addAll(managedBench);   // rate() self-filters to players with minutes > 0
+
+        List<AttributedEvent> sideEvents = timeline.eventsThrough(minute).stream()
+                .filter(e -> e.home() == managedIsHome && isCardOrGoal(e.type()))
+                .map(e -> new AttributedEvent(e.playerId(), e.type(), e.home()))
+                .toList();
+
+        int scored = managedIsHome ? timeline.homeGoalsAt(minute) : timeline.awayGoalsAt(minute);
+        int conceded = managedIsHome ? timeline.awayGoalsAt(minute) : timeline.homeGoalsAt(minute);
+        return playerRatingCalculator.rate(everyone, sideEvents, minutes, scored, conceded);
+    }
+
+    /**
+     * Minutes each managed player has spent on the pitch through {@code minute}, derived from the
+     * revealed events: starters enter at kickoff, a substitution moves the exit/entry minute, a red
+     * card ends a player's game. Players still on the pitch are credited up to {@code minute}. Only
+     * players with more than zero minutes are returned.
+     */
+    private Map<UUID, Integer> minutesThrough(List<Player> managedXi, LiveTimeline timeline,
+                                              int minute, boolean managedIsHome) {
+        Map<UUID, Integer> entry = new LinkedHashMap<>();
+        Map<UUID, Integer> exit = new HashMap<>();
+        for (Player p : managedXi) {
+            entry.put(p.getId(), 0);
+        }
+        for (LiveTimelineEvent e : timeline.eventsThrough(minute)) {
+            if (e.home() != managedIsHome) continue;
+            switch (e.type()) {
+                case SUBSTITUTION -> {
+                    exit.put(e.playerId(), e.minute());
+                    entry.put(e.playerInId(), e.minute());
+                }
+                case RED_CARD -> exit.put(e.playerId(), e.minute());
+                default -> { }
+            }
+        }
+        Map<UUID, Integer> out = new LinkedHashMap<>();
+        for (Map.Entry<UUID, Integer> en : entry.entrySet()) {
+            int played = Math.max(0, exit.getOrDefault(en.getKey(), minute) - en.getValue());
+            if (played > 0) {
+                out.put(en.getKey(), played);
+            }
+        }
+        return out;
     }
 
     /** Derives the managed side's active tactics at {@code minute}, applying any scheduled changes. */
@@ -466,9 +547,17 @@ public class LiveMatchService {
         return serialize(players.stream().map(p -> p.getId().toString()).toList());
     }
 
+    /** Fetches every player in one query (not N+1) and returns them in the requested id order. */
     private List<Player> resolve(List<UUID> ids) {
-        return ids.stream().map(id -> playerRepository.findById(id).orElseThrow(() ->
-                new ApiException("PLAYER_NOT_FOUND", "Player " + id + " not found", HttpStatus.NOT_FOUND))).toList();
+        Map<UUID, Player> byId = playerRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Player::getId, p -> p));
+        return ids.stream().map(id -> {
+            Player p = byId.get(id);
+            if (p == null) {
+                throw new ApiException("PLAYER_NOT_FOUND", "Player " + id + " not found", HttpStatus.NOT_FOUND);
+            }
+            return p;
+        }).toList();
     }
 
     private UUID clubOf(List<Player> xi) {

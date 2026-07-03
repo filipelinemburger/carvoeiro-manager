@@ -184,6 +184,8 @@ export type AdvanceResponse = {
   finance: FinanceRoundResponse | null
   bidsReceived: number
   seasonFinished: boolean
+  /** Managed club's 0–10 grades for the user's own live-played match; absent for AI rounds and old items. */
+  playerRatings?: PlayerRating[] | null
 }
 
 export type TopScorerResponse = {
@@ -360,6 +362,16 @@ export type LivePlayer = {
   eligible: boolean
 }
 
+/** A managed player's 0–10 performance grade for a finished match. */
+export type PlayerRating = {
+  playerId: string
+  name: string
+  position: string
+  minutesPlayed: number
+  goals: number
+  rating: number
+}
+
 export type LiveMatchState = {
   fixtureId: string
   competitionName: string | null
@@ -377,6 +389,8 @@ export type LiveMatchState = {
   bench: LivePlayer[]
   subsRemaining: number
   currentTactics: LiveTactics
+  /** Managed players' 0–10 grades; populated only at full time, empty otherwise. */
+  playerRatings: PlayerRating[]
 }
 
 export type SubstituteRequest = { outPlayerId: string; inPlayerId: string }

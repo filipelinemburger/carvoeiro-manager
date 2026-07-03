@@ -151,6 +151,26 @@ describe('AdvanceEventCard', () => {
       expect(screen.getByText(/Saldo:/)).toBeInTheDocument()
     })
 
+    it('renders the Atuações grades section when playerRatings are present', () => {
+      const withGrades: AdvanceResponse = {
+        ...MATCH_RESULT,
+        playerRatings: [
+          { playerId: 'p9', name: 'Camisa 9', position: 'ATT', minutesPlayed: 90, goals: 2, rating: 8.6 },
+          { playerId: 'p2', name: 'Zagueirão', position: 'DEF', minutesPlayed: 90, goals: 0, rating: 6.4 },
+        ],
+      }
+      renderCard(withGrades)
+      expect(screen.getByText(/Atuações/)).toBeInTheDocument()
+      expect(screen.getByText('Camisa 9')).toBeInTheDocument()
+      expect(screen.getByText('8.6')).toBeInTheDocument()
+      expect(screen.getByText('Zagueirão')).toBeInTheDocument()
+    })
+
+    it('does not render the Atuações section for older items without playerRatings', () => {
+      renderCard(MATCH_RESULT)
+      expect(screen.queryByText(/Atuações/)).not.toBeInTheDocument()
+    })
+
     it('does not show season summary link when not finished', () => {
       renderCard(MATCH_RESULT)
       expect(screen.queryByText(/resumo da temporada/i)).not.toBeInTheDocument()

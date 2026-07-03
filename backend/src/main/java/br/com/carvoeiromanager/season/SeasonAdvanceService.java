@@ -14,6 +14,7 @@ import br.com.carvoeiromanager.match.FixtureResultResponse;
 import br.com.carvoeiromanager.match.FixtureSimulator;
 import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.match.MatchOutcomeApplier;
+import br.com.carvoeiromanager.match.PlayerRating;
 import br.com.carvoeiromanager.match.RoundOutcome;
 import br.com.carvoeiromanager.transfer.TransferDirection;
 import br.com.carvoeiromanager.transfer.TransferOfferRepository;
@@ -112,7 +113,7 @@ public class SeasonAdvanceService {
             save.setStatus(SaveGameStatus.FINISHED);
             saveGameRepository.save(save);
             return new AdvanceResponse("FINISHED", null, null, null,
-                    List.of(), List.of(), List.of(), List.of(), null, 0, true);
+                    List.of(), List.of(), List.of(), List.of(), null, 0, true, List.of());
         }
 
         LocalDate eventDate = event.getEventDate();
@@ -146,16 +147,17 @@ public class SeasonAdvanceService {
         List<Fixture> fixtures = fixtureRepository
                 .findBySaveGameIdAndCompetitionIdAndRound(saveGameId, competitionId, round);
         RoundOutcome outcome = fixtureSimulator.simulateRound(save, competitionId, fixtures);
-        return recordMatchRound(save, event, outcome, fixtures);
+        return recordMatchRound(save, event, outcome, fixtures, List.of());
     }
 
     /**
      * Finalise a MATCH round whose fixtures are already simulated into {@code outcome}: bump the
      * round, charge matchday finances, award the season-end prize on the final matchday, and build
-     * the response. Shared by the instant advance and the live-match finish.
+     * the response. Shared by the instant advance and the live-match finish. {@code playerRatings}
+     * carries the managed club's 0–10 grades from a live-played match (empty for AI-simulated rounds).
      */
     AdvanceResponse recordMatchRound(SaveGame save, SeasonEvent event, RoundOutcome outcome,
-                                     List<Fixture> fixtures) {
+                                     List<Fixture> fixtures, List<PlayerRating> playerRatings) {
         final UUID saveGameId = save.getId();
         final UUID competitionId = event.getCompetitionId();
         final int round = event.getRound();
@@ -190,7 +192,7 @@ public class SeasonAdvanceService {
         return new AdvanceResponse("MATCH", eventDate.toString(), competitionName, round,
                 List.copyOf(outcome.results()), List.copyOf(outcome.bookings()),
                 List.copyOf(outcome.newSuspensions()), List.copyOf(outcome.newInjuries()),
-                finance, 0, seasonFinished);
+                finance, 0, seasonFinished, List.copyOf(playerRatings));
     }
 
     /**
@@ -201,7 +203,8 @@ public class SeasonAdvanceService {
     @Transactional
     public AdvanceResponse completeUserMatch(SaveGame save, FixtureResultResponse userResult,
                                              MatchOutcomeApplier.Summary userSummary,
-                                             UUID userFixtureId, Set<UUID> userPlayedIds) {
+                                             UUID userFixtureId, Set<UUID> userPlayedIds,
+                                             List<PlayerRating> playerRatings) {
         final UUID saveGameId = save.getId();
         SeasonEvent event = seasonEventRepository
                 .findFirstBySaveGameIdAndProcessedFalseOrderByEventDateAscSequenceAsc(saveGameId);
@@ -224,7 +227,7 @@ public class SeasonAdvanceService {
                 concat(userSummary.newSuspensions(), othersOutcome.newSuspensions()),
                 concat(userSummary.newInjuries(), othersOutcome.newInjuries()));
 
-        AdvanceResponse response = recordMatchRound(save, event, merged, fixtures);
+        AdvanceResponse response = recordMatchRound(save, event, merged, fixtures, playerRatings);
         event.markProcessed();
         seasonEventRepository.save(event);
         saveGameRepository.save(save);
@@ -243,7 +246,7 @@ public class SeasonAdvanceService {
         transferService.generateIncomingOffers(save.getId(), event.getEventDate());
         int bidsReceived = Math.max(0, activeIncomingBids(save.getId()) - before);
         return new AdvanceResponse("TRANSFER", event.getEventDate().toString(), null, null,
-                List.of(), List.of(), List.of(), List.of(), null, bidsReceived, false);
+                List.of(), List.of(), List.of(), List.of(), null, bidsReceived, false, List.of());
     }
 
     private int activeIncomingBids(UUID saveGameId) {

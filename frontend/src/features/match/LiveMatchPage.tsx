@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Box, Stack, Typography, Button, Chip, Alert, LinearProgress } from '@mui/material'
+import { Box, Stack, Typography, Button, Chip, Alert, LinearProgress, Tabs, Tab } from '@mui/material'
 import { useAuth } from '../../auth/AuthContext'
 import { getLiveMatch, advanceLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics } from '../../api/liveMatch'
 import type { LiveEvent, LiveMatchState, LiveTacticsRequest } from '../../api/types'
 import { MatchActionsDialog } from './MatchActionsDialog'
 import type { SubPair } from './MatchActionsDialog'
+import { PlayerRatingsList } from './PlayerRatingsList'
 
 const EVENT_ICON: Record<LiveEvent['type'], string> = {
   GOAL: '⚽', SET_PIECE_GOAL: '⚽', YELLOW_CARD: '🟨', RED_CARD: '🟥',
@@ -25,6 +26,7 @@ export function LiveMatchPage() {
   const [playing, setPlaying] = useState(true)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [actionsTab, setActionsTab] = useState<0 | 1>(0)
+  const [feedTab, setFeedTab] = useState<0 | 1>(0)   // 0 = Lances (feed), 1 = Atuações (grades)
   const [applyPending, setApplyPending] = useState(false)
   const [subError, setSubError] = useState<string | null>(null)
 
@@ -122,6 +124,15 @@ export function LiveMatchPage() {
     }
   }, [state?.status])
 
+  // At full time, surface the final grades by switching to the Atuações tab once.
+  const fullTimeTabRef = useRef(false)
+  useEffect(() => {
+    if (state?.status === 'FULL_TIME' && !fullTimeTabRef.current) {
+      fullTimeTabRef.current = true
+      setFeedTab(1)
+    }
+  }, [state?.status])
+
   if (!saveGameId) return <Typography>Partida inválida.</Typography>
   if (!state) return <Typography>Nenhuma partida em andamento.</Typography>
 
@@ -189,14 +200,33 @@ export function LiveMatchPage() {
         )}
       </Stack>
 
-      <Stack spacing={0.5} sx={{ mt: 1 }}>
-        {feed.map((e, i) => (
-          <Stack key={`${e.minute}-${i}`} direction="row" spacing={1}>
-            <Typography sx={{ minWidth: 32, color: 'text.secondary' }}>{e.minute}'</Typography>
-            <Typography component="span">{EVENT_ICON[e.type]} {e.text}</Typography>
-          </Stack>
-        ))}
-      </Stack>
+      <Tabs value={feedTab} onChange={(_, v) => setFeedTab(v as 0 | 1)} sx={{ mt: 2, minHeight: 40 }}>
+        <Tab label="Lances" sx={{ minHeight: 40 }} />
+        <Tab label="Atuações" sx={{ minHeight: 40 }} />
+      </Tabs>
+
+      {feedTab === 0 && (
+        <Stack spacing={0.5} sx={{ mt: 1 }}>
+          {feed.map((e, i) => (
+            <Stack key={`${e.minute}-${i}`} direction="row" spacing={1}>
+              <Typography sx={{ minWidth: 32, color: 'text.secondary' }}>{e.minute}'</Typography>
+              <Typography component="span">{EVENT_ICON[e.type]} {e.text}</Typography>
+            </Stack>
+          ))}
+        </Stack>
+      )}
+
+      {feedTab === 1 && (
+        state.playerRatings.length > 0 ? (
+          <Box sx={{ mt: 1 }}>
+            <PlayerRatingsList ratings={state.playerRatings} />
+          </Box>
+        ) : (
+          <Typography sx={{ mt: 1, color: 'text.secondary' }}>
+            As atuações aparecem conforme o jogo evolui.
+          </Typography>
+        )
+      )}
 
       <MatchActionsDialog
         key={String(actionsOpen)}
