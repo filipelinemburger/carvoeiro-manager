@@ -83,6 +83,12 @@ public class Player {
     @Column(name = "fitness", nullable = false)
     private int fitness = 100;
 
+    @Column(name = "youth_prospect", nullable = false)
+    private boolean youthProspect;
+
+    @Column(name = "potential", nullable = false)
+    private int potential;
+
     @Column(name = "last_match_date")
     private LocalDate lastMatchDate;
 
@@ -133,6 +139,18 @@ public class Player {
     public Position getPosition() { return position; }
     public int getAge() { return age; }
     public String getNationality() { return nationality; }
+
+    public boolean isYouthProspect() { return youthProspect; }
+    public int getPotential() { return potential; }
+
+    public void markAsProspect(int potential) {
+        this.youthProspect = true;
+        this.potential = potential;
+    }
+
+    public void promoteFromYouth() {
+        this.youthProspect = false;
+    }
     public int getPace() { return pace; }
     public int getFinishing() { return finishing; }
     public int getPassing() { return passing; }
