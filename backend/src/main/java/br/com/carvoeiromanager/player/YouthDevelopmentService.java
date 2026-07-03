@@ -33,7 +33,7 @@ public class YouthDevelopmentService {
      */
     public void develop(Player p) {
         int gap = p.getPotential() - p.getOverall();
-        if (gap <= 0) {
+        if (gap <= 1) {
             return;
         }
         int step = Math.max(1, (int) Math.round(gap * DEV_RATE));

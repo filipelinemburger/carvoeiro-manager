@@ -22,8 +22,12 @@ class YouthDevelopmentServiceTest {
         assertThat(dev.potentialStars(90)).isEqualTo(5);
         assertThat(dev.potentialStars(85)).isEqualTo(5);
         assertThat(dev.potentialStars(80)).isEqualTo(4);
+        assertThat(dev.potentialStars(78)).isEqualTo(4);
+        assertThat(dev.potentialStars(77)).isEqualTo(3);
         assertThat(dev.potentialStars(72)).isEqualTo(3);
         assertThat(dev.potentialStars(65)).isEqualTo(2);
+        assertThat(dev.potentialStars(62)).isEqualTo(2);
+        assertThat(dev.potentialStars(61)).isEqualTo(1);
         assertThat(dev.potentialStars(50)).isEqualTo(1);
     }
 
@@ -41,6 +45,15 @@ class YouthDevelopmentServiceTest {
     void aProspectAtItsCeilingDoesNotGrow() {
         int ov = overall.compute(Position.MID, 50, 50, 50, 50, 10, 50);
         Player q = prospect(ov); // potential == current overall
+        int before = q.getOverall();
+        dev.develop(q);
+        assertThat(q.getOverall()).isEqualTo(before);
+    }
+
+    @Test
+    void aProspectWithinOnePointOfItsCeilingDoesNotGrow() {
+        int ov = overall.compute(Position.MID, 50, 50, 50, 50, 10, 50);
+        Player q = prospect(ov + 1); // potential exactly one above current overall
         int before = q.getOverall();
         dev.develop(q);
         assertThat(q.getOverall()).isEqualTo(before);
