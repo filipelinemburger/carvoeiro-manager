@@ -441,11 +441,13 @@ public class LiveMatchService {
 
     private String statusAt(LiveMatch lm, LiveTimeline timeline, int minute) {
         if (minute >= MINUTES) return "FULL_TIME";
-        // A forced pause happens when the LAST revealed event is a managed-side injury or red card.
+        // A forced pause happens when the LAST revealed event at the committed minute is a special marker.
+        // HALF_TIME is appended last at minute 45 and therefore wins when present.
         List<LiveTimelineEvent> revealed = timeline.eventsThrough(minute);
         for (int i = revealed.size() - 1; i >= 0; i--) {
             LiveTimelineEvent e = revealed.get(i);
             if (e.minute() != minute) break;
+            if (e.type() == EventType.HALF_TIME) return "HALF_TIME";
             if (e.home() == lm.isManagedIsHome() && e.type() == EventType.INJURY) return "PAUSED_INJURY";
             if (e.home() == lm.isManagedIsHome() && e.type() == EventType.RED_CARD) return "PAUSED_RED";
         }

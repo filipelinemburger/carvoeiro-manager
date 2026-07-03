@@ -114,6 +114,14 @@ public class LiveMatchEngine {
 
             maybeInjury(minute, home, cfg, injuryRng, events, injuries);
             maybeInjury(minute, away, cfg, injuryRng, events, injuries);
+
+            // Emit a half-time marker at the END of minute 45 (after all RNG draws for this minute).
+            // Consumes zero RNG — the marker sorts last among minute-45 events when the list is
+            // stable-sorted by minute, ensuring determinism is byte-identical to before.
+            if (minute == 45) {
+                UUID carrier = home.onPitch.isEmpty() ? null : home.onPitch.get(0);
+                events.add(new LiveTimelineEvent(45, EventType.HALF_TIME, true, carrier, null, null));
+            }
         }
 
         finalizeMinutes(home);

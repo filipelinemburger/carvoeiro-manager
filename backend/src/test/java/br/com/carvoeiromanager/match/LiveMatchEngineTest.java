@@ -124,6 +124,32 @@ class LiveMatchEngineTest {
     }
 
     @Test
+    void halfTimeMarkerEmittedAtMinute45() {
+        // Every simulated timeline must contain exactly one HALF_TIME event at minute 45.
+        for (long seed : new long[]{1L, 2L, 7L, 42L, 99L, 1234L}) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            long halfTimeCount = t.events().stream()
+                    .filter(e -> e.type() == EventType.HALF_TIME)
+                    .count();
+            assertThat(halfTimeCount)
+                    .as("seed %d should have exactly one HALF_TIME event", seed)
+                    .isEqualTo(1);
+            assertThat(t.events().stream().filter(e -> e.type() == EventType.HALF_TIME).findFirst())
+                    .get()
+                    .satisfies(e -> assertThat(e.minute()).isEqualTo(45));
+        }
+    }
+
+    @Test
+    void halfTimeDeterminism() {
+        // Both runs include the HALF_TIME marker — determinism must hold.
+        LiveMatchConfig cfg = config(1234L, List.of());
+        LiveTimeline a = engine.simulate(cfg);
+        LiveTimeline b = engine.simulate(cfg);
+        assertThat(a.events()).isEqualTo(b.events());
+    }
+
+    @Test
     void aTacticsChangeAppearsAtItsMinuteAndChangesTheFuture() {
         long seed = 42L;
         LiveTimeline base = engine.simulate(config(seed, List.of()));
