@@ -129,7 +129,9 @@ class TeamStrengthCalculatorTest {
         TeamMatchInput baseline = calc.compute(xi, profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, xi));
         xi.forEach(pl -> IntStream.range(0, 5).forEach(i -> pl.applyMorale(1))); // +5 morale -> +10%
         TeamMatchInput happy = calc.compute(xi, profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, xi));
+        // Morale multiplies into the same per-player term as form, so it lifts both attack and defense.
         assertThat(happy.attack()).isGreaterThan(baseline.attack());
+        assertThat(happy.defense()).isGreaterThan(baseline.defense());
     }
 
     @Test
@@ -139,5 +141,21 @@ class TeamStrengthCalculatorTest {
         xi.forEach(pl -> IntStream.range(0, 5).forEach(i -> pl.applyMorale(-1))); // -5 morale -> -10%
         TeamMatchInput sad = calc.compute(xi, profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, xi));
         assertThat(sad.attack()).isLessThan(baseline.attack());
+        assertThat(sad.defense()).isLessThan(baseline.defense());
+    }
+
+    @Test
+    void neutralMoraleLeavesStrengthUnchanged() {
+        // Determinism contract: at the default morale 0 the morale term is exactly x1.0, so a squad's
+        // strength is identical to what it was before morale existed. This locks the backward-compat
+        // guarantee the whole feature relies on (existing seeded match results stay byte-identical).
+        List<Player> neutral = standardXi();
+        List<Player> alsoNeutral = standardXi();
+        neutral.forEach(pl -> assertThat(pl.getMorale()).isZero());
+
+        TeamMatchInput a = calc.compute(neutral, profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, neutral));
+        TeamMatchInput b = calc.compute(alsoNeutral, profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, alsoNeutral));
+        assertThat(a.attack()).isEqualTo(b.attack());
+        assertThat(a.defense()).isEqualTo(b.defense());
     }
 }

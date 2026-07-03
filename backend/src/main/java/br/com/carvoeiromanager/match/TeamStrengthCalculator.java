@@ -35,6 +35,8 @@ public class TeamStrengthCalculator {
         for (Player p : xi) {
             PlayerRole role = resolveRole(profile, p);
             double fitnessMult = fitnessMultById.getOrDefault(p.getId(), 1.0);
+            // Each term is exactly 1.0 at its neutral value (form 0, morale 0, full fitness), so a
+            // neutral squad's strength is unchanged — keep it that way to preserve seeded-result determinism.
             double mult = (1.0 + 0.02 * p.getForm()) * (1.0 + MORALE_COEFF * p.getMorale()) * fitnessMult;
             attackSum += role.attackContribution(p) * mult;
             staminaSum += p.getStamina();
