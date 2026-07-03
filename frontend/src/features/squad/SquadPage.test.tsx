@@ -128,6 +128,7 @@ describe('SquadPage', () => {
       clubId: 'club-1',
       formation: '4-3-3',
       starters: [],
+      bench: [],
     })
     vi.mocked(getTactics).mockResolvedValue({
       mentality: 'BALANCED', pressing: 'MEDIUM', marking: 'ZONAL',
@@ -302,6 +303,7 @@ describe('SquadPage', () => {
         { playerId: ATT1.id, role: 'POACHER' },
         { playerId: ATT2.id, role: 'POACHER' },
       ],
+      bench: [],
     })
     renderWithProviders()
     // Once the saved lineup resolves, the formation select reflects it (not the 4-3-3 default).
@@ -328,6 +330,7 @@ describe('SquadPage', () => {
         { playerId: ATT2.id, role: 'POACHER' },
         { playerId: ATT3.id, role: 'POACHER' },
       ],
+      bench: [],
     })
     renderWithProviders()
     const banido = await screen.findByRole('checkbox', { name: /banido um/i })
