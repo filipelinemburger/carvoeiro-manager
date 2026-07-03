@@ -18,6 +18,7 @@ import java.util.UUID;
 public class TeamStrengthCalculator {
 
     private static final double DECAY_BASE = 0.15;
+    private static final double MORALE_COEFF = 0.02;   // morale +/-5 -> +/-10% per player, same weight as form
 
     public TeamMatchInput compute(List<Player> xi, TacticalProfile profile) {
         return compute(xi, profile, Map.of());
@@ -34,7 +35,7 @@ public class TeamStrengthCalculator {
         for (Player p : xi) {
             PlayerRole role = resolveRole(profile, p);
             double fitnessMult = fitnessMultById.getOrDefault(p.getId(), 1.0);
-            double mult = (1.0 + 0.02 * p.getForm()) * fitnessMult;
+            double mult = (1.0 + 0.02 * p.getForm()) * (1.0 + MORALE_COEFF * p.getMorale()) * fitnessMult;
             attackSum += role.attackContribution(p) * mult;
             staminaSum += p.getStamina();
             double def = role.defenseContribution(p) * mult;

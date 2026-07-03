@@ -122,4 +122,22 @@ class TeamStrengthCalculatorTest {
         assertThat(weakThreat).isLessThan(fallbackThreat);
         assertThat(weakThreat).isBetween(0.0, 1.0);
     }
+
+    @Test
+    void moraleMultiplierRaisesContribution() {
+        List<Player> xi = standardXi();
+        TeamMatchInput baseline = calc.compute(xi, profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, xi));
+        xi.forEach(pl -> IntStream.range(0, 5).forEach(i -> pl.applyMorale(1))); // +5 morale -> +10%
+        TeamMatchInput happy = calc.compute(xi, profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, xi));
+        assertThat(happy.attack()).isGreaterThan(baseline.attack());
+    }
+
+    @Test
+    void lowMoraleLowersContribution() {
+        List<Player> xi = standardXi();
+        TeamMatchInput baseline = calc.compute(xi, profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, xi));
+        xi.forEach(pl -> IntStream.range(0, 5).forEach(i -> pl.applyMorale(-1))); // -5 morale -> -10%
+        TeamMatchInput sad = calc.compute(xi, profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, xi));
+        assertThat(sad.attack()).isLessThan(baseline.attack());
+    }
 }
