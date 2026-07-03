@@ -456,6 +456,7 @@ public class LineupService {
                 p.getGoalkeeping(),
                 p.getStamina(),
                 p.getForm(),
+                p.getMorale(),
                 p.getYellowCards(),
                 p.getSuspensionRemaining(),
                 p.getInjuryMatches(),

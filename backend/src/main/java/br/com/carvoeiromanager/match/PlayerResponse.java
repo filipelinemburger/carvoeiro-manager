@@ -16,6 +16,7 @@ public record PlayerResponse(
         int goalkeeping,
         int stamina,
         int form,
+        int morale,
         int yellowCards,
         int suspensionRemaining,
         int injuryMatches,

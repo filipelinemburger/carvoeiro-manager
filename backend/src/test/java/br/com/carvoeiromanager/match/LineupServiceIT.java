@@ -406,6 +406,16 @@ class LineupServiceIT {
         assertThat(xi.stream().anyMatch(p -> p.getId().equals(drainedId))).isFalse();
     }
 
+    // --- (k) squadResponse exposes morale in [-5, 5] for all players ---
+
+    @Test
+    void squadResponseExposesMorale() {
+        Career career = createCareer();
+        SquadResponse squad = lineupService.getSquad(career.id(), career.managedClubId(), career.userId());
+        assertThat(squad.players()).isNotEmpty();
+        assertThat(squad.players()).allSatisfy(pr -> assertThat(pr.morale()).isBetween(-5, 5));
+    }
+
     // --- Private helpers ---
 
     private List<LineupStarter> buildValidStarters(UUID clubId) {
