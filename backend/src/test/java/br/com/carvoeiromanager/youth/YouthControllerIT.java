@@ -74,9 +74,7 @@ class YouthControllerIT {
 
     @Test
     void listProspectsReturns200WithPotentialStarsButNoPotentialField() throws Exception {
-        mockMvc.perform(get("/api/v1/youth-prospects")
-                        .param("clubId", clubId)
-                        .param("saveGameId", saveGameId)
+        mockMvc.perform(get("/api/v1/save-games/{saveGameId}/youth-prospects", saveGameId)
                         .header("Authorization", bearer))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.id == '" + prospectId + "')]").exists())
@@ -87,8 +85,7 @@ class YouthControllerIT {
     @Test
     void promoteProspectReturns200AndProspectAppearsInSquad() throws Exception {
         // POST promote → 200
-        mockMvc.perform(post("/api/v1/youth-prospects/{id}/promote", prospectId)
-                        .param("saveGameId", saveGameId)
+        mockMvc.perform(post("/api/v1/save-games/{saveGameId}/youth-prospects/{prospectId}/promote", saveGameId, prospectId)
                         .header("Authorization", bearer))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(prospectId.toString()))
@@ -103,8 +100,7 @@ class YouthControllerIT {
 
     @Test
     void releaseProspectReturns204() throws Exception {
-        mockMvc.perform(post("/api/v1/youth-prospects/{id}/release", prospectId)
-                        .param("saveGameId", saveGameId)
+        mockMvc.perform(post("/api/v1/save-games/{saveGameId}/youth-prospects/{prospectId}/release", saveGameId, prospectId)
                         .header("Authorization", bearer))
                 .andExpect(status().isNoContent());
     }

@@ -49,7 +49,7 @@ class YouthAcademyServiceIT {
     @Test
     void listsProspectsWithStarsButNeverRawPotential() {
         setup();
-        var list = youthAcademyService.listProspects(saveId, clubId, userId);
+        var list = youthAcademyService.listProspects(saveId, userId);
         assertThat(list).extracting(YouthProspectResponse::id).contains(prospectId);
         assertThat(list).allSatisfy(pr -> assertThat(pr.potentialStars()).isBetween(1, 5));
     }
@@ -63,7 +63,7 @@ class YouthAcademyServiceIT {
         assertThat(promoted.getContractYears()).isEqualTo(3);
         assertThat(lineupService.getSquad(saveId, clubId, userId).players())
                 .anyMatch(pr -> pr.id().equals(prospectId));
-        assertThat(youthAcademyService.listProspects(saveId, clubId, userId))
+        assertThat(youthAcademyService.listProspects(saveId, userId))
                 .noneMatch(pr -> pr.id().equals(prospectId));
     }
 

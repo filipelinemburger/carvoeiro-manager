@@ -34,9 +34,9 @@ public class YouthAcademyService {
     }
 
     @Transactional(readOnly = true)
-    public List<YouthProspectResponse> listProspects(UUID saveGameId, UUID clubId, UUID userId) {
-        saveGameService.requireOwned(saveGameId, userId);
-        return playerRepository.findByClubIdAndYouthProspectTrue(clubId).stream()
+    public List<YouthProspectResponse> listProspects(UUID saveGameId, UUID userId) {
+        var save = saveGameService.requireOwned(saveGameId, userId);
+        return playerRepository.findByClubIdAndYouthProspectTrue(save.getManagedClubId()).stream()
                 .map(this::toResponse)
                 .toList();
     }

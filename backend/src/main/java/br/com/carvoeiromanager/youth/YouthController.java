@@ -6,14 +6,13 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/youth-prospects")
+@RequestMapping("/api/v1/save-games/{saveGameId}/youth-prospects")
 public class YouthController {
 
     private final YouthAcademyService youthAcademyService;
@@ -23,22 +22,18 @@ public class YouthController {
     }
 
     @GetMapping
-    public List<YouthProspectResponse> list(@RequestParam("clubId") UUID clubId,
-                                            @RequestParam("saveGameId") UUID saveGameId,
-                                            @CurrentUser UUID userId) {
-        return youthAcademyService.listProspects(saveGameId, clubId, userId);
+    public List<YouthProspectResponse> list(@PathVariable UUID saveGameId, @CurrentUser UUID userId) {
+        return youthAcademyService.listProspects(saveGameId, userId);
     }
 
-    @PostMapping("/{id}/promote")
-    public YouthProspectResponse promote(@PathVariable("id") UUID prospectId,
-                                         @RequestParam("saveGameId") UUID saveGameId,
+    @PostMapping("/{prospectId}/promote")
+    public YouthProspectResponse promote(@PathVariable UUID saveGameId, @PathVariable UUID prospectId,
                                          @CurrentUser UUID userId) {
         return youthAcademyService.promote(saveGameId, prospectId, userId);
     }
 
-    @PostMapping("/{id}/release")
-    public ResponseEntity<Void> release(@PathVariable("id") UUID prospectId,
-                                        @RequestParam("saveGameId") UUID saveGameId,
+    @PostMapping("/{prospectId}/release")
+    public ResponseEntity<Void> release(@PathVariable UUID saveGameId, @PathVariable UUID prospectId,
                                         @CurrentUser UUID userId) {
         youthAcademyService.release(saveGameId, prospectId, userId);
         return ResponseEntity.noContent().build();
