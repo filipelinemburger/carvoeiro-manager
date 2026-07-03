@@ -96,7 +96,7 @@ public class LineupService {
         validatePlayerCount(startingIds);
         validateBench(startingIds, benchIds);
 
-        List<Player> clubPlayers = playerRepository.findByClubId(clubId);
+        List<Player> clubPlayers = playerRepository.findByClubIdAndYouthProspectFalse(clubId);
         validatePlayersOwnedByClub(startingIds, clubPlayers);
         validatePlayersOwnedByClub(benchIds, clubPlayers);
         validateGkCount(startingIds, clubPlayers);
