@@ -68,6 +68,9 @@ public class Player {
     @Column(name = "form", nullable = false)
     private int form;
 
+    @Column(name = "morale", nullable = false)
+    private int morale;
+
     @Column(name = "yellow_cards", nullable = false)
     private int yellowCards;
 
@@ -143,11 +146,16 @@ public class Player {
     public void setOverall(int overall) { this.overall = overall; }
 
     public int getForm() { return form; }
+    public int getMorale() { return morale; }
     public int getYellowCards() { return yellowCards; }
     public int getSuspensionRemaining() { return suspensionRemaining; }
 
     public void applyForm(int delta) {
         this.form = Math.max(-5, Math.min(5, this.form + delta));
+    }
+
+    public void applyMorale(int delta) {
+        this.morale = Math.max(-5, Math.min(5, this.morale + delta));
     }
 
     public void addYellowCard() { this.yellowCards++; }
@@ -206,6 +214,7 @@ public class Player {
     /** Clears per-season state when a player carries over into a new season. */
     public void resetSeasonState() {
         this.form = 0;
+        this.morale = 0;
         this.yellowCards = 0;
         this.suspensionRemaining = 0;
         this.injuryMatches = 0;
