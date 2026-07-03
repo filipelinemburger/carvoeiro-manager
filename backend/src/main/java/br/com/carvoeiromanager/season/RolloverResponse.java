@@ -7,5 +7,7 @@ public record RolloverResponse(
         int currentRound,
         List<SquadChangeResponse> retirements,
         List<SquadChangeResponse> newcomers,
-        List<SquadChangeResponse> expiredContracts
+        List<SquadChangeResponse> expiredContracts,
+        List<SquadChangeResponse> youthIntake,
+        List<SquadChangeResponse> youthDepartures
 ) {}

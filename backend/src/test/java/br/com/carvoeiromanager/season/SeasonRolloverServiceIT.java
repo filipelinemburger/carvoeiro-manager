@@ -108,8 +108,10 @@ class SeasonRolloverServiceIT {
         allPlayers.forEach(p -> p.setContractYears(5));
         playerRepository.saveAll(allPlayers);
 
+        // Count only senior (non-prospect) AI-club players; the managed club is excluded because
+        // managed retirees are no longer replaced by newgens (squad size can legitimately shrink).
         Map<UUID, Long> squadSizeBefore = playerRepository.findBySaveGameId(c.id()).stream()
-                .filter(p -> p.getClubId() != null)
+                .filter(p -> p.getClubId() != null && !p.isYouthProspect() && !p.getClubId().equals(c.clubId()))
                 .collect(Collectors.groupingBy(Player::getClubId, Collectors.counting()));
 
         // When rolling over
@@ -148,9 +150,9 @@ class SeasonRolloverServiceIT {
                 .extracting(SeasonStanding::getPosition).first().isEqualTo(1);
         assertThat(seasonTopScorerRepository.findBySeasonIdOrderByRank(catSeason.getId())).isNotEmpty();
 
-        // Players: every club's squad size is unchanged; carried players aged +1 and have clean state
+        // AI clubs' senior squad sizes should be unchanged (newgen-on-retirement still applies to them).
         Map<UUID, Long> squadSizeAfter = playerRepository.findBySaveGameId(c.id()).stream()
-                .filter(p -> p.getClubId() != null)
+                .filter(p -> p.getClubId() != null && !p.isYouthProspect() && !p.getClubId().equals(c.clubId()))
                 .collect(Collectors.groupingBy(Player::getClubId, Collectors.counting()));
         assertThat(squadSizeAfter).isEqualTo(squadSizeBefore);
         List<Player> after = playerRepository.findBySaveGameId(c.id());
@@ -217,18 +219,25 @@ class SeasonRolloverServiceIT {
         taker.setAge(37);
         playerRepository.save(taker);
 
-        // Record squad size before rollover so we can verify one-out/one-in invariant
-        long squadSizeBefore = playerRepository.findBySaveGameId(c.id()).stream()
-                .filter(p -> p.getClubId() != null && p.getClubId().equals(c.clubId()))
-                .count();
-
         // Complete the season so rollover is allowed
         finishSeason(c);
 
         // Contracts must not interfere with the retirement/newgen invariants under test.
+        // Pin all non-taker managed players to age 20 so only the forced retiree retires;
+        // this isolates the one-out/no-replacement assertion under the new managed behavior.
         List<Player> allPlayersBeforeRollover = playerRepository.findBySaveGameId(c.id());
-        allPlayersBeforeRollover.forEach(p -> p.setContractYears(5));
+        allPlayersBeforeRollover.forEach(p -> {
+            p.setContractYears(5);
+            if (c.clubId().equals(p.getClubId()) && !p.getId().equals(takerId)) {
+                p.setAge(20);
+            }
+        });
         playerRepository.saveAll(allPlayersBeforeRollover);
+
+        // Record squad size (senior only) right before rollover — after age pinning.
+        long squadSizeBefore = playerRepository.findBySaveGameId(c.id()).stream()
+                .filter(p -> c.clubId().equals(p.getClubId()) && !p.isYouthProspect())
+                .count();
 
         // When: rolling over (must NOT throw a FK violation)
         rolloverService.rollover(c.id(), c.userId());
@@ -236,11 +245,11 @@ class SeasonRolloverServiceIT {
         // Then: the retired taker has been deleted
         assertThat(playerRepository.findById(takerId)).isEmpty();
 
-        // And: the managed club's squad size is unchanged (one retired, one newgen added)
+        // And: the managed club's senior squad shrank by exactly one (the taker; no newgen added).
         long squadSizeAfter = playerRepository.findBySaveGameId(c.id()).stream()
-                .filter(p -> c.clubId().equals(p.getClubId()))
+                .filter(p -> c.clubId().equals(p.getClubId()) && !p.isYouthProspect())
                 .count();
-        assertThat(squadSizeAfter).isEqualTo(squadSizeBefore);
+        assertThat(squadSizeAfter).isEqualTo(squadSizeBefore - 1);
 
         // And: the managed lineup was cleared so the user must re-pick after rollover
         assertThat(lineupRepository.findBySaveGameIdAndClubId(c.id(), c.clubId())).isEmpty();

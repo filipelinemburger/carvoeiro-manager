@@ -25,6 +25,8 @@ import br.com.carvoeiromanager.player.NewgenGenerator;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerAgingService;
 import br.com.carvoeiromanager.player.PlayerRepository;
+import br.com.carvoeiromanager.player.Position;
+import br.com.carvoeiromanager.player.YouthDevelopmentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -74,6 +76,11 @@ public class SeasonRolloverService {
     private final SeasonCalendarGenerator seasonCalendarGenerator;
     private final SeasonEventRepository seasonEventRepository;
     private final NewsItemRepository newsItemRepository;
+    private final YouthDevelopmentService youthDevelopmentService;
+
+    private static final int MAX_INTAKE_PER_SEASON = 3;
+    private static final int ACADEMY_TARGET = 10;
+    private static final int DEPARTURE_AGE = 20;
 
     public SeasonRolloverService(SaveGameService saveGameService,
                                  SaveGameRepository saveGameRepository,
@@ -96,7 +103,8 @@ public class SeasonRolloverService {
                                  TransferOfferRepository transferOfferRepository,
                                  SeasonCalendarGenerator seasonCalendarGenerator,
                                  SeasonEventRepository seasonEventRepository,
-                                 NewsItemRepository newsItemRepository) {
+                                 NewsItemRepository newsItemRepository,
+                                 YouthDevelopmentService youthDevelopmentService) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.competitionRepository = competitionRepository;
@@ -119,6 +127,7 @@ public class SeasonRolloverService {
         this.seasonCalendarGenerator = seasonCalendarGenerator;
         this.seasonEventRepository = seasonEventRepository;
         this.newsItemRepository = newsItemRepository;
+        this.youthDevelopmentService = youthDevelopmentService;
     }
 
     @Transactional
@@ -178,10 +187,28 @@ public class SeasonRolloverService {
         List<SquadChangeResponse> retirements = new ArrayList<>();
         List<SquadChangeResponse> newcomers = new ArrayList<>();
         List<SquadChangeResponse> expiredContracts = new ArrayList<>();
+        List<SquadChangeResponse> youthIntake = new ArrayList<>();
+        List<SquadChangeResponse> youthDepartures = new ArrayList<>();
         List<Player> toDelete = new ArrayList<>();
         List<Player> toSave = new ArrayList<>();
 
         for (Player player : players) {
+            if (player.isYouthProspect()) {
+                player.setAge(player.getAge() + 1);
+                boolean managedYouth = !player.isFreeAgent() && player.getClubId().equals(managedClubId);
+                if (player.getAge() >= DEPARTURE_AGE) {
+                    if (managedYouth) {
+                        youthDepartures.add(new SquadChangeResponse(
+                                player.getName(), player.getPosition().name(), player.getAge()));
+                    }
+                    toDelete.add(player);
+                } else {
+                    youthDevelopmentService.develop(player);
+                    toSave.add(player);
+                }
+                continue;
+            }
+
             player.setAge(player.getAge() + 1);
             playerAgingService.applyAgeCurve(player, rng);
             boolean retires = rng.nextDouble() < playerAgingService.retirementProbability(player.getAge());
@@ -198,13 +225,12 @@ public class SeasonRolloverService {
                     retirements.add(new SquadChangeResponse(
                             player.getName(), player.getPosition().name(), player.getAge()));
                 }
-                Player newgen = newgenGenerator.generate(
-                        saveGameId, player.getClubId(), player.getPosition(), rng);
-                newgen.setContractYears(2 + rng.nextInt(3));
-                toSave.add(newgen);
-                if (managed) {
-                    newcomers.add(new SquadChangeResponse(
-                            newgen.getName(), newgen.getPosition().name(), newgen.getAge()));
+                if (!managed) {
+                    // AI clubs keep newgen-on-retirement; the managed club fills gaps from its academy.
+                    Player newgen = newgenGenerator.generate(
+                            saveGameId, player.getClubId(), player.getPosition(), rng);
+                    newgen.setContractYears(2 + rng.nextInt(3));
+                    toSave.add(newgen);
                 }
                 toDelete.add(player);
                 continue;
@@ -237,6 +263,18 @@ public class SeasonRolloverService {
             playerRepository.save(freeAgentGenerator.generate(saveGameId, rng));
         }
 
+        // Top up the managed club's youth academy toward the target.
+        int academySize = playerRepository.findByClubIdAndYouthProspectTrue(managedClubId).size();
+        int intake = Math.min(MAX_INTAKE_PER_SEASON, Math.max(0, ACADEMY_TARGET - academySize));
+        Position[] positions = Position.values();
+        for (int i = 0; i < intake; i++) {
+            Position pos = positions[rng.nextInt(positions.length)];
+            Player prospect = newgenGenerator.generateProspect(saveGameId, managedClubId, pos, rng);
+            playerRepository.save(prospect);
+            youthIntake.add(new SquadChangeResponse(
+                    prospect.getName(), prospect.getPosition().name(), prospect.getAge()));
+        }
+
         // 4. Roll each competition's year forward, then regenerate the dated calendar
         //    (fixtures over each competition's members + the season_event queue).
         for (Competition competition : competitions) {
@@ -250,7 +288,8 @@ public class SeasonRolloverService {
         saveGameRepository.save(saveGame);
 
         return new RolloverResponse(saveGame.getSeasonYear(), saveGame.getCurrentRound(),
-                List.copyOf(retirements), List.copyOf(newcomers), List.copyOf(expiredContracts));
+                List.copyOf(retirements), List.copyOf(newcomers), List.copyOf(expiredContracts),
+                List.copyOf(youthIntake), List.copyOf(youthDepartures));
     }
 
     private void archive(UUID saveGameId, UUID userId, Competition competition, int finishingYear,
