@@ -416,6 +416,19 @@ class LineupServiceIT {
         assertThat(squad.players()).allSatisfy(pr -> assertThat(pr.morale()).isBetween(-5, 5));
     }
 
+    // --- (l) squadResponse carries the managed club's kit colours ---
+
+    @Test
+    void squadResponseCarriesTheManagedClubKitColours() {
+        Career c = createCareer();
+
+        SquadResponse squad = lineupService.getSquad(c.id(), c.managedClubId(), c.userId());
+
+        // Criciúma's seeded kit is yellow/black.
+        assertThat(squad.primaryColor()).isEqualTo("#f7d417");
+        assertThat(squad.secondaryColor()).isEqualTo("#111111");
+    }
+
     // --- Private helpers ---
 
     private List<LineupStarter> buildValidStarters(UUID clubId) {

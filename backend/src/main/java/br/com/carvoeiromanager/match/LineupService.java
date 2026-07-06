@@ -67,7 +67,7 @@ public class LineupService {
         List<PlayerResponse> responses = playerRepository.findByClubIdAndYouthProspectFalse(clubId).stream()
                 .map(p -> toPlayerResponse(p, roleByPlayer.get(p.getId()), onDate))
                 .toList();
-        return new SquadResponse(responses);
+        return new SquadResponse(responses, club.getPrimaryColor(), club.getSecondaryColor());
     }
 
     /**
