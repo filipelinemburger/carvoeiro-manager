@@ -52,8 +52,9 @@ describe('SeasonSummaryPage', () => {
       seasonYear: 2027,
       currentRound: 0,
       retirements: [{ playerName: 'Veterano', position: 'DEF', age: 38 }],
-      newcomers: [{ playerName: 'Jovem Silva', position: 'DEF', age: 17 }],
       expiredContracts: [],
+      youthIntake: [{ playerName: 'Jovem Silva', position: 'DEF', age: 17 }],
+      youthDepartures: [],
     })
 
     renderPage()
@@ -63,6 +64,7 @@ describe('SeasonSummaryPage', () => {
     await waitFor(() => expect(screen.getByText(/Aposentadorias/i)).toBeInTheDocument())
     expect(screen.getByText(/Veterano/)).toBeInTheDocument()
     expect(screen.getByText(/Jovem Silva/)).toBeInTheDocument()
+    expect(screen.getByText(/Reforços da Base/i)).toBeInTheDocument()
     expect(rolloverSeason).toHaveBeenCalledWith('sg-1', 'test-token')
   })
 
@@ -71,8 +73,9 @@ describe('SeasonSummaryPage', () => {
       seasonYear: 2027,
       currentRound: 0,
       retirements: [],
-      newcomers: [],
       expiredContracts: [{ playerName: 'Zé Tigre', position: 'MID', age: 31 }],
+      youthIntake: [],
+      youthDepartures: [],
     })
 
     renderPage()

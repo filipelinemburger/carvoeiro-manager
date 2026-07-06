@@ -227,8 +227,9 @@ export type RolloverResponse = {
   seasonYear: number
   currentRound: number
   retirements: SquadChange[]
-  newcomers: SquadChange[]
   expiredContracts: SquadChange[]
+  youthIntake: SquadChange[]
+  youthDepartures: SquadChange[]
 }
 
 export type SeasonSummary = {

@@ -9,7 +9,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import type { RolloverResponse, SquadChange } from '../../api/types'
 
-/** A titled block listing squad changes (retirements, newcomers, expired contracts). */
+/** A titled block listing squad changes (retirements, expired contracts, youth intake/departures). */
 function SquadChangeList({ title, changes }: { title: string; changes: SquadChange[] }) {
   return (
     <Box>
@@ -150,9 +150,6 @@ export function SeasonSummaryPage() {
           {result.retirements.length > 0 && (
             <SquadChangeList title="Aposentadorias" changes={result.retirements} />
           )}
-          {result.newcomers.length > 0 && (
-            <SquadChangeList title="Novatos" changes={result.newcomers} />
-          )}
           {(result.expiredContracts?.length ?? 0) > 0 && (
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>Contratos expirados</Typography>
@@ -164,6 +161,12 @@ export function SeasonSummaryPage() {
                 ))}
               </List>
             </Box>
+          )}
+          {result.youthIntake.length > 0 && (
+            <SquadChangeList title="Reforços da Base" changes={result.youthIntake} />
+          )}
+          {result.youthDepartures.length > 0 && (
+            <SquadChangeList title="Saídas da Base" changes={result.youthDepartures} />
           )}
           <Box>
             <Button component={Link} to="/dashboard" variant="outlined">Voltar ao painel</Button>
