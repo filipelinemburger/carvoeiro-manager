@@ -86,7 +86,7 @@ public class ContractService {
     }
 
     private void requireSquadRoom(UUID managedClubId) {
-        if (playerRepository.findByClubId(managedClubId).size() >= MAX_SQUAD_SIZE) {
+        if (playerRepository.findByClubIdAndYouthProspectFalse(managedClubId).size() >= MAX_SQUAD_SIZE) {
             throw new ApiException("SQUAD_FULL", "Squad is full", HttpStatus.UNPROCESSABLE_CONTENT);
         }
     }

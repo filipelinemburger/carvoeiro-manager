@@ -229,7 +229,7 @@ public class TransferService {
                 .map(TransferOffer::getPlayerId)
                 .collect(Collectors.toSet());
 
-        List<Player> managedPlayers = playerRepository.findByClubId(managedClubId).stream()
+        List<Player> managedPlayers = playerRepository.findByClubIdAndYouthProspectFalse(managedClubId).stream()
                 .sorted(Comparator.comparing(Player::getId)).toList();
         Random rng = new Random(saveGameId.getMostSignificantBits() ^ eventDate.toEpochDay());
         int created = 0;
@@ -271,7 +271,7 @@ public class TransferService {
     }
 
     private void requireSellAllowed(UUID managedClubId, Player player) {
-        List<Player> squad = playerRepository.findByClubId(managedClubId);
+        List<Player> squad = playerRepository.findByClubIdAndYouthProspectFalse(managedClubId);
         if (squad.size() <= MIN_SQUAD_SIZE) {
             throw new ApiException("SQUAD_TOO_SMALL",
                     "Squad would be too small", HttpStatus.UNPROCESSABLE_CONTENT);
@@ -315,7 +315,7 @@ public class TransferService {
     }
 
     void requireSquadRoom(UUID managedClubId) {
-        if (playerRepository.findByClubId(managedClubId).size() >= MAX_SQUAD_SIZE) {
+        if (playerRepository.findByClubIdAndYouthProspectFalse(managedClubId).size() >= MAX_SQUAD_SIZE) {
             throw new ApiException("SQUAD_FULL",
                     "Squad is full", HttpStatus.UNPROCESSABLE_CONTENT);
         }

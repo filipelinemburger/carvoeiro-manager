@@ -154,4 +154,28 @@ class TransferServiceBuyingIT {
         assertThat(market).noneMatch(m -> m.clubId().equals(c.clubId()));
         assertThat(market).allMatch(m -> m.value().signum() > 0);
     }
+
+    @Test
+    void youthProspectsDoNotCountAgainstTheSquadCapWhenBuying() {
+        Career c = createCareer();
+        int seniors = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).size();
+        int toAdd = Math.max(0, 30 - seniors) + 5;
+        for (int i = 0; i < toAdd; i++) {
+            Player prospect = Player.create(c.id(), c.clubId(), "Base " + i,
+                    br.com.carvoeiromanager.player.Position.MID, 16, "Brasil",
+                    55, 55, 55, 45, 10, 60, 55);
+            prospect.markAsProspect(80);
+            playerRepository.save(prospect);
+        }
+        assertThat(playerRepository.findByClubId(c.clubId()).size()).isGreaterThanOrEqualTo(30);
+
+        Player target = anAiPlayer(c);
+        BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
+        TransferOfferResponse r = transferService.makeOffer(
+                c.id(), c.userId(), target.getId(), value, okWage(target), 3);
+
+        assertThat(r.status()).isEqualTo("ACCEPTED");
+        assertThat(playerRepository.findById(target.getId()).orElseThrow().getClubId())
+                .isEqualTo(c.clubId());
+    }
 }

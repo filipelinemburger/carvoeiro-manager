@@ -100,4 +100,29 @@ class ContractServiceSignIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getStatus().value()).isEqualTo(404));
     }
+
+    @Test
+    void youthProspectsDoNotCountAgainstTheSquadCapWhenSigning() {
+        Career c = createCareer();
+        int seniors = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).size();
+        // Fill the academy so the club, counting prospects, exceeds the 30-player senior cap...
+        int toAdd = Math.max(0, 30 - seniors) + 5;
+        for (int i = 0; i < toAdd; i++) {
+            Player prospect = Player.create(c.id(), c.clubId(), "Base " + i,
+                    br.com.carvoeiromanager.player.Position.MID, 16, "Brasil",
+                    55, 55, 55, 45, 10, 60, 55);
+            prospect.markAsProspect(80);
+            playerRepository.save(prospect);
+        }
+        assertThat(playerRepository.findByClubId(c.clubId()).size()).isGreaterThanOrEqualTo(30);
+
+        // ...but seniors are still under the cap, so signing a free agent must succeed.
+        FreeAgentResponse fa = anyFreeAgent(c);
+        PlayerContractResponse r = contractService.signFreeAgent(
+                c.id(), c.userId(), fa.playerId(), fa.wageDemand(), 3);
+
+        assertThat(r.contractYears()).isEqualTo(3);
+        assertThat(playerRepository.findById(fa.playerId()).orElseThrow().getClubId())
+                .isEqualTo(c.clubId());
+    }
 }
