@@ -88,4 +88,23 @@ describe('BasePage', () => {
     expect(mockRelease).not.toHaveBeenCalled()
     confirmSpy.mockRestore()
   })
+
+  it('releases a prospect after confirmation', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderWithProviders()
+    await waitFor(() => expect(screen.getByText('Joia da Base')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Liberar' }))
+    await waitFor(() => expect(mockRelease).toHaveBeenCalledWith('sg-1', 'p-1', 'test-token'))
+    confirmSpy.mockRestore()
+  })
+
+  it('shows an error alert when a promote fails', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    mockPromote.mockRejectedValueOnce(new Error('Falha ao promover'))
+    renderWithProviders()
+    await waitFor(() => expect(screen.getByText('Joia da Base')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Promover' }))
+    expect(await screen.findByText('Falha ao promover')).toBeInTheDocument()
+    confirmSpy.mockRestore()
+  })
 })

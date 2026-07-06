@@ -10,6 +10,10 @@ import { useIsMobile } from '../../lib/useIsMobile'
 import { PotentialStars } from './PotentialStars'
 import type { YouthProspectResponse } from '../../api/types'
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : 'Ação falhou.'
+}
+
 const POSITION_LABEL: Record<YouthProspectResponse['position'], string> = {
   GK: 'GOL',
   DEF: 'ZAG',
@@ -68,7 +72,7 @@ export function BasePage() {
 
       {(promote.isError || release.isError) && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {(promote.error as Error)?.message ?? (release.error as Error)?.message ?? 'Ação falhou.'}
+          {promote.isError ? errorMessage(promote.error) : errorMessage(release.error)}
         </Alert>
       )}
 
