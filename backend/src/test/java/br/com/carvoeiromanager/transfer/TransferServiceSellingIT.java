@@ -208,4 +208,90 @@ class TransferServiceSellingIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getStatus().value()).isEqualTo(404));
     }
+
+    @Test
+    void youthProspectsDoNotCountTowardTheMinimumSquadWhenSelling() {
+        Career c = createCareer();
+        // Trim seniors to exactly the minimum so the squad sits on the floor.
+        List<Player> seniors = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId());
+        List<Player> drop = seniors.subList(TransferService.MIN_SQUAD_SIZE, seniors.size());
+        playerRepository.deleteAll(drop);
+        List<Player> kept = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId());
+        assertThat(kept).hasSize(TransferService.MIN_SQUAD_SIZE);
+
+        // Add prospects that MUST NOT be counted toward the squad minimum.
+        for (int i = 0; i < 5; i++) {
+            Player prospect = Player.create(c.id(), c.clubId(), "Base " + i, Position.MID, 16, "Brasil",
+                    55, 55, 55, 45, 10, 55, 55);
+            prospect.markAsProspect(85);
+            playerRepository.save(prospect);
+        }
+
+        // Selling any senior while at the floor must be blocked despite the 5 prospects present.
+        Player p = kept.stream().filter(pl -> pl.getPosition() != Position.GK).findFirst().orElse(kept.get(0));
+        TransferOffer bid = incomingBidFor(c, p, new BigDecimal("900000.00"));
+
+        assertThatThrownBy(() -> transferService.respondToIncoming(c.id(), c.userId(), bid.getId(), "ACCEPT", null))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException api = (ApiException) ex;
+                    assertThat(api.getCode()).isEqualTo("SQUAD_TOO_SMALL");
+                    assertThat(api.getStatus().value()).isEqualTo(422);
+                });
+        assertThat(playerRepository.findById(p.getId()).orElseThrow().getClubId()).isEqualTo(c.clubId());
+    }
+
+    @Test
+    void aYouthProspectGoalkeeperDoesNotUnblockSellingTheLastSeniorGoalkeeper() {
+        Career c = createCareer();
+        // Reduce senior goalkeepers to exactly one (same setup as cannotSellTheLastGoalkeeper).
+        List<Player> gks = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).stream()
+                .filter(p -> p.getPosition() == Position.GK).toList();
+        if (gks.size() > 1) {
+            playerRepository.deleteAll(gks.subList(1, gks.size()));
+        }
+        // Add a PROSPECT goalkeeper — it must not count as senior GK cover.
+        Player prospectGk = Player.create(c.id(), c.clubId(), "Goleiro da Base", Position.GK, 16, "Brasil",
+                55, 40, 45, 45, 60, 55, 50);
+        prospectGk.markAsProspect(88);
+        playerRepository.save(prospectGk);
+
+        Player lastSeniorGk = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).stream()
+                .filter(p -> p.getPosition() == Position.GK).findFirst().orElseThrow();
+        TransferOffer bid = incomingBidFor(c, lastSeniorGk, new BigDecimal("800000.00"));
+
+        assertThatThrownBy(() -> transferService.respondToIncoming(c.id(), c.userId(), bid.getId(), "ACCEPT", null))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException api = (ApiException) ex;
+                    assertThat(api.getCode()).isEqualTo("SQUAD_TOO_SMALL");
+                    assertThat(api.getStatus().value()).isEqualTo(422);
+                });
+        assertThat(playerRepository.findById(lastSeniorGk.getId()).orElseThrow().getClubId()).isEqualTo(c.clubId());
+    }
+
+    @Test
+    void aiClubsNeverBidOnYouthProspects() {
+        Career c = createCareer();
+        // Seed a prospect for the managed club.
+        Player prospect = Player.create(c.id(), c.clubId(), "Promessa Cobicada", Position.ATT, 16, "Brasil",
+                70, 72, 70, 55, 10, 55, 65);
+        prospect.markAsProspect(92);
+        playerRepository.save(prospect);
+
+        // Sweep the whole pre-season window (many independent seeds) so senior bids accumulate.
+        LocalDate seasonStart = LocalDate.of(2026, 1, 15);
+        for (int d = 0; d < TransferWindow.PRE_SEASON_DAYS; d++) {
+            transferService.generateIncomingOffers(c.id(), seasonStart.plusDays(d));
+        }
+
+        List<TransferOffer> incoming = transferOfferRepository.findBySaveGameIdAndStatusIn(
+                        c.id(), List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED)).stream()
+                .filter(o -> o.getDirection() == TransferDirection.INCOMING).toList();
+
+        // Non-vacuous: the loop actually ran and generated bids on seniors...
+        assertThat(incoming).isNotEmpty();
+        // ...but the prospect was never a candidate.
+        assertThat(incoming).noneMatch(o -> o.getPlayerId().equals(prospect.getId()));
+    }
 }
