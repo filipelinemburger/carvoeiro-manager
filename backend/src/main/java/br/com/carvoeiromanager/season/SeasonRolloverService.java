@@ -185,7 +185,6 @@ public class SeasonRolloverService {
         players.sort(Comparator.comparing(Player::getId));
 
         List<SquadChangeResponse> retirements = new ArrayList<>();
-        List<SquadChangeResponse> newcomers = new ArrayList<>();
         List<SquadChangeResponse> expiredContracts = new ArrayList<>();
         List<SquadChangeResponse> youthIntake = new ArrayList<>();
         List<SquadChangeResponse> youthDepartures = new ArrayList<>();
@@ -288,7 +287,7 @@ public class SeasonRolloverService {
         saveGameRepository.save(saveGame);
 
         return new RolloverResponse(saveGame.getSeasonYear(), saveGame.getCurrentRound(),
-                List.copyOf(retirements), List.copyOf(newcomers), List.copyOf(expiredContracts),
+                List.copyOf(retirements), List.copyOf(expiredContracts),
                 List.copyOf(youthIntake), List.copyOf(youthDepartures));
     }
 
