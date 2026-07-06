@@ -3,6 +3,7 @@ import { LoginPage } from './auth/LoginPage'
 import { RegisterPage } from './auth/RegisterPage'
 import { DashboardPage } from './features/career/DashboardPage'
 import { SquadPage } from './features/squad/SquadPage'
+import { BasePage } from './features/base/BasePage'
 import { TablePage } from './features/competition/TablePage'
 import { SeasonSummaryPage } from './features/season/SeasonSummaryPage'
 import { SeasonHistoryPage } from './features/season/SeasonHistoryPage'
@@ -39,6 +40,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <SquadPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/base"
+        element={
+          <ProtectedRoute>
+            <BasePage />
           </ProtectedRoute>
         }
       />

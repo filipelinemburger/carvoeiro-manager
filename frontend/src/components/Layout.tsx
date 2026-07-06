@@ -193,6 +193,7 @@ export function Layout({ children }: LayoutProps) {
   const saveLinks = hasSaveGame
     ? [
         { to: `/squad?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Escalação' },
+        { to: `/base?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Base' },
         { to: `/table?saveGameId=${sgId}&competitionId=${standingsCompetitionId}&managedClubId=${managedClubId}`, label: 'Classificação' },
         { to: `/finances?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Finanças' },
         { to: `/transfers?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Mercado' },
