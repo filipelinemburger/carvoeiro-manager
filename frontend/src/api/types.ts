@@ -261,6 +261,21 @@ export type SeasonDetail = {
   topScorers: TopScorerResponse[]
 }
 
+export type YouthProspectResponse = {
+  id: string
+  name: string
+  position: 'GK' | 'DEF' | 'MID' | 'ATT'
+  age: number
+  overall: number
+  pace: number
+  finishing: number
+  passing: number
+  tackling: number
+  goalkeeping: number
+  stamina: number
+  potentialStars: number
+}
+
 export type FinanceTransaction = {
   seasonYear: number
   round: number
