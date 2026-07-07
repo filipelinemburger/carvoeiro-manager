@@ -120,6 +120,13 @@ public class Player {
                 attributes, overall);
     }
 
+    /** Creates a player from a full attribute profile (generators + seed loader). */
+    public static Player create(UUID saveGameId, UUID clubId, String name, Position position,
+                                int age, String nationality, Attributes attributes, int overall) {
+        return new Player(UUID.randomUUID(), saveGameId, clubId, name, position, age, nationality,
+                attributes, overall);
+    }
+
     public UUID getId() { return id; }
     public UUID getSaveGameId() { return saveGameId; }
     public UUID getClubId() { return clubId; }

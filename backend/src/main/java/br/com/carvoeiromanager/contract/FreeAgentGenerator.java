@@ -1,5 +1,7 @@
 package br.com.carvoeiromanager.contract;
 
+import br.com.carvoeiromanager.player.AttributeDeriver;
+import br.com.carvoeiromanager.player.Attributes;
 import br.com.carvoeiromanager.player.OverallCalculator;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.Position;
@@ -59,9 +61,10 @@ public class FreeAgentGenerator {
 
         int overall = overallCalculator.compute(position, pace, finishing, passing,
                 tackling, goalkeeping, stamina);
+        Attributes attributes = AttributeDeriver.derive(position, pace, finishing, passing,
+                tackling, goalkeeping, stamina, overall);
         // clubId null => free agent; wage stays 0 (not employed); contractYears stays 0.
-        return Player.create(saveGameId, null, name, position, age, "Brasil",
-                pace, finishing, passing, tackling, goalkeeping, stamina, overall);
+        return Player.create(saveGameId, null, name, position, age, "Brasil", attributes, overall);
     }
 
     private int band(int base, int span, Random rng) {

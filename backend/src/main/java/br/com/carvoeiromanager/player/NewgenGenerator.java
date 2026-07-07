@@ -39,8 +39,9 @@ public class NewgenGenerator {
         Attrs a = drawAttributes(position, rng);
         int overall = overallCalculator.compute(position, a.pace(), a.finishing(), a.passing(),
                 a.tackling(), a.goalkeeping(), a.stamina());
-        Player newgen = Player.create(saveGameId, clubId, name, position, age, "Brasil",
-                a.pace(), a.finishing(), a.passing(), a.tackling(), a.goalkeeping(), a.stamina(), overall);
+        Attributes attributes = AttributeDeriver.derive(position, a.pace(), a.finishing(), a.passing(),
+                a.tackling(), a.goalkeeping(), a.stamina(), overall);
+        Player newgen = Player.create(saveGameId, clubId, name, position, age, "Brasil", attributes, overall);
         newgen.setWage(financeCalculator.weeklyWage(overall, age));
         return newgen;
     }
@@ -56,8 +57,9 @@ public class NewgenGenerator {
         // Low-skewed headroom (nextDouble squared): most prospects modest, a few gems. Floor of 4.
         int headroom = 4 + (int) (rng.nextDouble() * rng.nextDouble() * 32);
         int potential = Math.min(92, overall + headroom);
-        Player prospect = Player.create(saveGameId, clubId, name, position, age, "Brasil",
-                a.pace(), a.finishing(), a.passing(), a.tackling(), a.goalkeeping(), a.stamina(), overall);
+        Attributes attributes = AttributeDeriver.derive(position, a.pace(), a.finishing(), a.passing(),
+                a.tackling(), a.goalkeeping(), a.stamina(), overall);
+        Player prospect = Player.create(saveGameId, clubId, name, position, age, "Brasil", attributes, overall);
         prospect.setWage(financeCalculator.weeklyWage(overall, age));
         prospect.setContractYears(0);
         prospect.markAsProspect(potential);
