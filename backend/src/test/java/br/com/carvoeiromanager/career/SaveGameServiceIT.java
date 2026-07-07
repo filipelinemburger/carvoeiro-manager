@@ -68,9 +68,9 @@ class SaveGameServiceIT {
         // SaveGame persisted in DB
         assertThat(saveGameRepository.findById(saveGameId)).isPresent();
 
-        // All clubs from the pool are created (25 clubs: the Catarinense + Série B pool, incl. Criciúma)
+        // All clubs from the pool are created (28 clubs: 20 Série B + 8 Catarinense-only, CRI/AVA in both)
         var clubs = clubRepository.findBySaveGameId(saveGameId);
-        assertThat(clubs).hasSize(25);
+        assertThat(clubs).hasSize(28);
 
         // Every club has at least one player
         clubs.forEach(club ->
@@ -100,6 +100,55 @@ class SaveGameServiceIT {
         assertThat(allFixtures).allMatch(f -> !f.isPlayed());
         assertThat(allFixtures).allMatch(f -> f.getHomeGoals() == null);
         assertThat(allFixtures).allMatch(f -> f.getAwayGoals() == null);
+    }
+
+    @Test
+    void criciumaPlayersGetAuthoredAttributesThroughCareerCreation() {
+        // Given a persisted user
+        User user = User.create("tigre_attrs", "hash");
+        userRepository.save(user);
+
+        // When a career is created (managed club is Criciúma)
+        SaveGameResponse response = saveGameService.createCareer(user.getId());
+
+        // Then Criciúma's Otero carries the hand-authored ("real") attributes, not derived values.
+        var otero = playerRepository.findByClubId(response.managedClubId()).stream()
+                .filter(p -> p.getName().equals("Otero"))
+                .findFirst().orElseThrow();
+        assertThat(otero.attributes().get(br.com.carvoeiromanager.player.Attribute.BOLA_PARADA)).isEqualTo(88);
+        assertThat(otero.attributes().get(br.com.carvoeiromanager.player.Attribute.CHUTE_LONGE)).isEqualTo(82);
+        assertThat(otero.attributes().get(br.com.carvoeiromanager.player.Attribute.VISAO)).isEqualTo(80);
+        // Anchors are untouched (passing 80 → PASSE), so overall/strength are unchanged.
+        assertThat(otero.attributes().get(br.com.carvoeiromanager.player.Attribute.PASSE)).isEqualTo(80);
+    }
+
+    @Test
+    void newClubPlayersGetAuthoredAttributesThroughCareerCreation() {
+        // Given a persisted user
+        User user = User.create("tigre_nau", "hash");
+        userRepository.save(user);
+
+        // When a career is created
+        SaveGameResponse response = saveGameService.createCareer(user.getId());
+        UUID saveGameId = response.id();
+
+        // Then the newly added club Náutico (NAU) has a full, authored squad
+        var nau = clubRepository.findBySaveGameId(saveGameId).stream()
+                .filter(c -> c.getShortName().equals("NAU"))
+                .findFirst().orElseThrow();
+        var squad = playerRepository.findByClubId(nau.getId());
+        assertThat(squad).isNotEmpty();
+        assertThat(squad).allSatisfy(p ->
+                assertThat(p.attributes()).as("%s attributes", p.getName()).isNotNull());
+
+        // And its goalkeeper carries a real (authored) REFLEXOS value, not a low derived one
+        var bestGoalkeeper = squad.stream()
+                .filter(p -> p.getPosition() == br.com.carvoeiromanager.player.Position.GK)
+                .max(java.util.Comparator.comparingInt(
+                        p -> p.attributes().get(br.com.carvoeiromanager.player.Attribute.REFLEXOS)))
+                .orElseThrow();
+        assertThat(bestGoalkeeper.attributes().get(br.com.carvoeiromanager.player.Attribute.REFLEXOS))
+                .isGreaterThanOrEqualTo(60);
     }
 
     @Test

@@ -121,9 +121,15 @@ public class SaveGameService {
                 int overall = overallCalculator.compute(position,
                         seedPlayer.pace(), seedPlayer.finishing(), seedPlayer.passing(),
                         seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina());
-                Attributes attributes = AttributeDeriver.derive(position,
-                        seedPlayer.pace(), seedPlayer.finishing(), seedPlayer.passing(),
-                        seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina(), overall);
+                // Prefer hand-authored ("real") attributes when the seed carries them (all Série B
+                // clubs); otherwise derive the 22 non-anchor attributes from the six anchors.
+                Attributes attributes = seedPlayer.attributes() != null
+                        ? seedPlayer.attributes().toAttributes(
+                                seedPlayer.pace(), seedPlayer.finishing(), seedPlayer.passing(),
+                                seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina())
+                        : AttributeDeriver.derive(position,
+                                seedPlayer.pace(), seedPlayer.finishing(), seedPlayer.passing(),
+                                seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina(), overall);
                 Player player = Player.create(
                         saveGame.getId(), club.getId(), seedPlayer.name(), position,
                         seedPlayer.age(), seedPlayer.nationality(), attributes, overall);

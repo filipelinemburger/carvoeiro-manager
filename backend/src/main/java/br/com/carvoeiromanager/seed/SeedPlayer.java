@@ -10,5 +10,6 @@ public record SeedPlayer(
         int passing,
         int tackling,
         int goalkeeping,
-        int stamina
+        int stamina,
+        SeedAttributes attributes
 ) {}

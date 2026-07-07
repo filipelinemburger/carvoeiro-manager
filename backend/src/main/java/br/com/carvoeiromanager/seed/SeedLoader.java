@@ -13,7 +13,7 @@ public class SeedLoader {
     private final ObjectMapper mapper = new ObjectMapper();
 
     public SeedCareer loadCareer() {
-        try (InputStream in = new ClassPathResource("seed/catarinense.json").getInputStream()) {
+        try (InputStream in = new ClassPathResource("seed/clubs.json").getInputStream()) {
             return mapper.readValue(in, SeedCareer.class);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to load career seed", e);
