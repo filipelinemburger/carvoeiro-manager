@@ -274,15 +274,15 @@ describe('SquadPage', () => {
     await waitFor(() => screen.getByText('Banido Um'))
     const btn = pickBtn('banido um')
     expect(btn).toBeDisabled()
-    expect(screen.getByText(/\(Suspenso 1\)/i)).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /suspenso — 1 jogo/i })).toBeInTheDocument()
   })
 
-  it('shows "(Lesionado (Leve) N)" severity label for an injured player and disables their button', async () => {
+  it('shows a "(Leve)" injury icon for an injured player and disables their button', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Lesionado Um'))
     const btn = pickBtn('lesionado um')
     expect(btn).toBeDisabled()
-    expect(screen.getByText(/\(Lesionado \(Leve\) 3\)/i)).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /lesionado \(leve\) — 3 jogo/i })).toBeInTheDocument()
   })
 
   it('renews a contract from the details dialog', async () => {
@@ -422,7 +422,7 @@ describe('SquadPage', () => {
   it('renders a fitness bar and injury severity for players', async () => {
     renderWithProviders()
     expect(await screen.findByLabelText('Condição 45%')).toBeInTheDocument()
-    expect(screen.getByText(/Lesionado \(Leve\) 3/)).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /lesionado \(leve\) — 3 jogo/i })).toBeInTheDocument()
   })
 
   it('sends the selected bench players when saving the lineup', async () => {

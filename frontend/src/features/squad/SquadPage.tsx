@@ -5,6 +5,7 @@ import {
   Box, Stack, Typography, Button, Chip, Alert, FormControl, NativeSelect, Link,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Paper, Card, CardContent,
 } from '@mui/material'
+import HealingIcon from '@mui/icons-material/Healing'
 import { getSquad, getLineup, setLineup, renewContract } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
@@ -317,14 +318,28 @@ export function SquadPage() {
     )
   }
 
+  // Availability shown as an icon (a red card for a suspension, a bandage for an injury)
+  // plus the number of matches remaining. The full wording lives in the hover tooltip.
   function availabilityBadge(player: PlayerResponse) {
+    const wrapperSx = { display: 'inline-flex', alignItems: 'center', gap: 0.25, ml: 0.75, verticalAlign: 'middle' } as const
     if (player.suspensionRemaining > 0) {
-      return <Typography component="span" color="error" sx={{ ml: 1, fontSize: '0.85em' }}>(Suspenso {player.suspensionRemaining})</Typography>
+      const label = `Suspenso — ${player.suspensionRemaining} jogo(s)`
+      return (
+        <Box component="span" role="img" aria-label={label} title={label} sx={wrapperSx}>
+          <Box component="span" sx={{ width: 11, height: 15, borderRadius: '2px', bgcolor: '#d32f2f', border: '1px solid #7f1010' }} />
+          <Typography component="span" color="error" sx={{ fontSize: '0.72rem', fontWeight: 700 }}>{player.suspensionRemaining}</Typography>
+        </Box>
+      )
     }
     if (player.injuryMatches > 0) {
       const tier = SEVERITY_LABEL[player.injurySeverity] ?? ''
-      const label = tier ? `(Lesionado (${tier}) ${player.injuryMatches})` : `(Lesionado ${player.injuryMatches})`
-      return <Typography component="span" color="error" sx={{ ml: 1, fontSize: '0.85em' }}>{label}</Typography>
+      const label = tier ? `Lesionado (${tier}) — ${player.injuryMatches} jogo(s)` : `Lesionado — ${player.injuryMatches} jogo(s)`
+      return (
+        <Box component="span" role="img" aria-label={label} title={label} sx={wrapperSx}>
+          <HealingIcon sx={{ fontSize: 16, color: 'error.main' }} />
+          <Typography component="span" color="error" sx={{ fontSize: '0.72rem', fontWeight: 700 }}>{player.injuryMatches}</Typography>
+        </Box>
+      )
     }
     return null
   }
