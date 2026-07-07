@@ -1,6 +1,7 @@
 package br.com.carvoeiromanager.player;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -44,23 +45,8 @@ public class Player {
     @Column(name = "nationality", nullable = false, length = 40)
     private String nationality;
 
-    @Column(name = "pace", nullable = false)
-    private int pace;
-
-    @Column(name = "finishing", nullable = false)
-    private int finishing;
-
-    @Column(name = "passing", nullable = false)
-    private int passing;
-
-    @Column(name = "tackling", nullable = false)
-    private int tackling;
-
-    @Column(name = "goalkeeping", nullable = false)
-    private int goalkeeping;
-
-    @Column(name = "stamina", nullable = false)
-    private int stamina;
+    @Embedded
+    private Attributes attributes = new Attributes();
 
     @Column(name = "overall", nullable = false)
     private int overall;
@@ -107,8 +93,7 @@ public class Player {
     }
 
     private Player(UUID id, UUID saveGameId, UUID clubId, String name, Position position,
-                   int age, String nationality, int pace, int finishing, int passing,
-                   int tackling, int goalkeeping, int stamina, int overall) {
+                   int age, String nationality, Attributes attributes, int overall) {
         this.id = id;
         this.saveGameId = saveGameId;
         this.clubId = clubId;
@@ -116,20 +101,23 @@ public class Player {
         this.position = position;
         this.age = age;
         this.nationality = nationality;
-        this.pace = pace;
-        this.finishing = finishing;
-        this.passing = passing;
-        this.tackling = tackling;
-        this.goalkeeping = goalkeeping;
-        this.stamina = stamina;
+        this.attributes = attributes;
         this.overall = overall;
     }
 
     public static Player create(UUID saveGameId, UUID clubId, String name, Position position,
                                 int age, String nationality, int pace, int finishing,
                                 int passing, int tackling, int goalkeeping, int stamina, int overall) {
+        Attributes attributes = Attributes.builder()
+                .set(Attribute.VELOCIDADE, pace)
+                .set(Attribute.FINALIZACAO, finishing)
+                .set(Attribute.PASSE, passing)
+                .set(Attribute.DESARME, tackling)
+                .set(Attribute.REFLEXOS, goalkeeping)
+                .set(Attribute.FOLEGO, stamina)
+                .build();
         return new Player(UUID.randomUUID(), saveGameId, clubId, name, position, age, nationality,
-                pace, finishing, passing, tackling, goalkeeping, stamina, overall);
+                attributes, overall);
     }
 
     public UUID getId() { return id; }
@@ -151,13 +139,18 @@ public class Player {
     public void promoteFromYouth() {
         this.youthProspect = false;
     }
-    public int getPace() { return pace; }
-    public int getFinishing() { return finishing; }
-    public int getPassing() { return passing; }
-    public int getTackling() { return tackling; }
-    public int getGoalkeeping() { return goalkeeping; }
-    public int getStamina() { return stamina; }
+    // The six legacy getters delegate to the embedded attribute profile (anchors), so every
+    // existing caller and scoring path is unchanged by the storage move.
+    public int getPace() { return attributes.get(Attribute.VELOCIDADE); }
+    public int getFinishing() { return attributes.get(Attribute.FINALIZACAO); }
+    public int getPassing() { return attributes.get(Attribute.PASSE); }
+    public int getTackling() { return attributes.get(Attribute.DESARME); }
+    public int getGoalkeeping() { return attributes.get(Attribute.REFLEXOS); }
+    public int getStamina() { return attributes.get(Attribute.FOLEGO); }
     public int getOverall() { return overall; }
+
+    public Attributes attributes() { return attributes; }
+    public int attribute(Attribute a) { return attributes.get(a); }
 
     public void setClubId(UUID clubId) { this.clubId = clubId; }
     public void setAge(int age) { this.age = age; }
@@ -217,15 +210,16 @@ public class Player {
 
     public boolean isEligible() { return this.suspensionRemaining == 0 && this.injuryMatches == 0; }
 
-    /** Replaces all six attributes and overall after the season aging curve. */
+    /** Replaces the six anchor attributes + overall after the season aging curve; the other attributes carry over. */
     public void evolveAttributes(int pace, int finishing, int passing,
                                  int tackling, int goalkeeping, int stamina, int overall) {
-        this.pace = pace;
-        this.finishing = finishing;
-        this.passing = passing;
-        this.tackling = tackling;
-        this.goalkeeping = goalkeeping;
-        this.stamina = stamina;
+        this.attributes = this.attributes
+                .with(Attribute.VELOCIDADE, pace)
+                .with(Attribute.FINALIZACAO, finishing)
+                .with(Attribute.PASSE, passing)
+                .with(Attribute.DESARME, tackling)
+                .with(Attribute.REFLEXOS, goalkeeping)
+                .with(Attribute.FOLEGO, stamina);
         this.overall = overall;
     }
 
