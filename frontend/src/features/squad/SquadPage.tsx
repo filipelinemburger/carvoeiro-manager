@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Box, Stack, Typography, Button, Checkbox, Chip, Alert, FormControl, NativeSelect, Link,
+  Box, Stack, Typography, Button, Chip, Alert, FormControl, NativeSelect, Link,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Paper, Card, CardContent,
 } from '@mui/material'
 import { getSquad, getLineup, setLineup, renewContract } from '../../api/career'
@@ -69,6 +69,14 @@ const DEFAULT_ROLE: Record<PlayerResponse['position'], PlayerRole> = {
   DEF: 'FULL_BACK',
   MID: 'BOX_TO_BOX',
   ATT: 'POACHER',
+}
+
+// Championship-Manager-style squad-slot abbreviation shown on the selection button.
+const POS_ABBR: Record<PlayerResponse['position'], string> = { GK: 'GK', DEF: 'DC', MID: 'MC', ATT: 'AT' }
+
+// Selection-button colour per position band (a starter). MUI palette keys.
+const BAND_BTN_COLOR: Record<PlayerResponse['position'], 'warning' | 'info' | 'success' | 'error'> = {
+  GK: 'warning', DEF: 'info', MID: 'success', ATT: 'error',
 }
 
 function positionLabel(pos: PlayerResponse['position']): string {
@@ -213,19 +221,32 @@ export function SquadPage() {
       .map((p): PlacedPlayer => ({ id: p.id, surname: p.name, position: p.position, fitness: p.fitness })),
   } : null
 
-  // A position band is full once it holds as many players as the formation allows;
-  // further additions to that line are blocked.
+  // A position band is full once it holds as many starters as the formation allows.
   function isBandFull(position: PlayerResponse['position']): boolean {
     return positionCounts[position] >= positionCap(formation, position)
   }
 
-  function togglePlayer(player: PlayerResponse) {
+  type Involvement = { kind: 'OUT' } | { kind: 'TITULAR' } | { kind: 'RESERVA'; sub: number }
+
+  // A player is either a starter, a numbered substitute, or unpicked.
+  function involvementOf(playerId: string): Involvement {
+    if (selected.includes(playerId)) return { kind: 'TITULAR' }
+    const benchIndex = bench.indexOf(playerId)
+    if (benchIndex >= 0) return { kind: 'RESERVA', sub: benchIndex + 1 }
+    return { kind: 'OUT' }
+  }
+
+  // One-click squad assignment (Championship-Manager style): clicking an unpicked player
+  // sends them to the next available slot — a starting place in their position band when the
+  // band has room, otherwise the next numbered bench place. Clicking a picked player removes
+  // them. XI and bench are one list; no separate bench control.
+  function cyclePlayer(player: PlayerResponse) {
     setSaveSuccess(false)
-    // Deselect first — always allowed, even for an ineligible player, so the user can
-    // remove a starter who became suspended/injured after the lineup was saved. Drop the
-    // role too so reselecting starts from the position default.
-    if (selected.includes(player.id)) {
-      setSelected(prev => prev.filter(p => p !== player.id))
+    if (involvementOf(player.id).kind !== 'OUT') {
+      // Removing is always allowed (even for a now-ineligible saved starter). Drop the role
+      // so a later reselect starts from the position default.
+      setSelected(prev => prev.filter(id => id !== player.id))
+      setBench(prev => prev.filter(id => id !== player.id))
       setRoles(prev => {
         const next = { ...prev }
         delete next[player.id]
@@ -233,30 +254,21 @@ export function SquadPage() {
       })
       return
     }
-    // Adding: an unavailable player may never be added to the XI, and the player's
-    // position line must have room under the current formation.
     if (!player.eligible) return
-    if (isBandFull(player.position)) return
-    // A player entering the XI is dropped from the bench (XI and bench are mutually exclusive).
-    setBench(prev => prev.filter(id => id !== player.id))
-    setSelected(prev => [...prev, player.id])
-    setRoles(prev => ({ ...prev, [player.id]: DEFAULT_ROLE[player.position] }))
+    if (!isBandFull(player.position)) {
+      setSelected(prev => [...prev, player.id])
+      setRoles(prev => ({ ...prev, [player.id]: DEFAULT_ROLE[player.position] }))
+      return
+    }
+    // Starting band full → take the next bench place if one is free; otherwise no-op.
+    if (bench.length < 9) {
+      setBench(prev => [...prev, player.id])
+      setRoles(prev => ({ ...prev, [player.id]: DEFAULT_ROLE[player.position] }))
+    }
   }
 
   function changeRole(player: PlayerResponse, role: PlayerRole) {
     setRoles(prev => ({ ...prev, [player.id]: role }))
-  }
-
-  // Bench: any eligible player not in the XI, up to 9. Removing from the XI also drops
-  // them from the bench; selecting a benched player into the XI removes them from the bench.
-  function toggleBench(player: PlayerResponse) {
-    setSaveSuccess(false)
-    if (bench.includes(player.id)) {
-      setBench(prev => prev.filter(id => id !== player.id))
-      return
-    }
-    if (!player.eligible || selected.includes(player.id) || bench.length >= 9) return
-    setBench(prev => [...prev, player.id])
   }
 
   // Fills the XI with the highest-rated eligible players for each line of the current
@@ -319,19 +331,27 @@ export function SquadPage() {
     return null
   }
 
-  function playerCheckbox(player: PlayerResponse, isSelected: boolean) {
+  // The squad-selection button: shows the player's slot (GK/DC/MC/AT for a starter,
+  // "Sub N" for a substitute, "+" when unpicked) and cycles them on click.
+  function statusButton(player: PlayerResponse) {
+    const inv = involvementOf(player.id)
+    const label = inv.kind === 'TITULAR' ? POS_ABBR[player.position]
+      : inv.kind === 'RESERVA' ? `Sub ${inv.sub}`
+      : '+'
     return (
-      <Checkbox
+      <Button
         size="small"
-        checked={isSelected}
-        // Block adding when the player is unavailable or their position line is already
-        // full for the formation — but a selected starter always stays uncheckable-able
-        // so the user can swap them out.
-        disabled={!isSelected && (!player.eligible || isBandFull(player.position))}
-        onChange={() => togglePlayer(player)}
-        slotProps={{ input: { 'aria-label': player.name } }}
-        sx={{ p: 0.5 }}
-      />
+        variant={inv.kind === 'OUT' ? 'outlined' : 'contained'}
+        color={inv.kind === 'TITULAR' ? BAND_BTN_COLOR[player.position] : 'inherit'}
+        // Unpicked-and-ineligible players can't be added; a picked player always stays
+        // clickable so the user can remove them.
+        disabled={inv.kind === 'OUT' && !player.eligible}
+        onClick={() => cyclePlayer(player)}
+        aria-label={`Escalar ${player.name}`}
+        sx={{ minWidth: 60, px: 1 }}
+      >
+        {label}
+      </Button>
     )
   }
 
@@ -378,7 +398,7 @@ export function SquadPage() {
   const helperAndAlerts = (
     <>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
-        Formação {formation} — {selected.length}/11 · GOL {positionCounts.GK}/1 · DEF {positionCounts.DEF}/{FORMATION_SHAPE[formation].DEF} · MEI {positionCounts.MID}/{FORMATION_SHAPE[formation].MID} · ATA {positionCounts.ATT}/{FORMATION_SHAPE[formation].ATT}
+        Formação {formation} — Titulares {selected.length}/11 · Banco {bench.length}/9 · GOL {positionCounts.GK}/1 · DEF {positionCounts.DEF}/{FORMATION_SHAPE[formation].DEF} · MEI {positionCounts.MID}/{FORMATION_SHAPE[formation].MID} · ATA {positionCounts.ATT}/{FORMATION_SHAPE[formation].ATT}
       </Typography>
       {players.length > 0 && (
         <Box sx={{ mb: 2 }}>
@@ -416,12 +436,12 @@ export function SquadPage() {
         {isMobile ? (
           <Stack spacing={1.5} sx={{ mb: 2 }}>
             {displayPlayers.map(player => {
-              const isSelected = selected.includes(player.id)
+              const inv = involvementOf(player.id)
               return (
-                <Card key={player.id} variant="outlined" sx={{ bgcolor: isSelected ? '#fff9c4' : undefined }}>
+                <Card key={player.id} variant="outlined" sx={{ bgcolor: inv.kind === 'TITULAR' ? '#fff9c4' : inv.kind === 'RESERVA' ? '#e3f2fd' : undefined }}>
                   <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                      {playerCheckbox(player, isSelected)}
+                      {statusButton(player)}
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         {playerNameButton(player)}
                         {availabilityBadge(player)}
@@ -440,7 +460,7 @@ export function SquadPage() {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell padding="checkbox" />
+                  <TableCell align="center">Escalação</TableCell>
                   <TableCell>Nome</TableCell>
                   <TableCell align="center">Pos</TableCell>
                   <TableCell align="center">OVR</TableCell>
@@ -453,10 +473,10 @@ export function SquadPage() {
               </TableHead>
               <TableBody>
                 {displayPlayers.map(player => {
-                  const isSelected = selected.includes(player.id)
+                  const inv = involvementOf(player.id)
                   return (
-                    <TableRow key={player.id} sx={{ bgcolor: isSelected ? '#fff9c4' : undefined }}>
-                      <TableCell padding="checkbox">{playerCheckbox(player, isSelected)}</TableCell>
+                    <TableRow key={player.id} sx={{ bgcolor: inv.kind === 'TITULAR' ? '#fff9c4' : inv.kind === 'RESERVA' ? '#e3f2fd' : undefined }}>
+                      <TableCell align="center">{statusButton(player)}</TableCell>
                       <TableCell>
                         {playerNameButton(player)}
                         {availabilityBadge(player)}
@@ -467,47 +487,13 @@ export function SquadPage() {
                       <TableCell align="center"><MoodChip morale={player.morale} /></TableCell>
                       <TableCell align="center">{player.stamina}</TableCell>
                       <TableCell align="center"><FitnessBar fitness={player.fitness} /></TableCell>
-                      <TableCell align="center">{isSelected && roleSelect(player)}</TableCell>
+                      <TableCell align="center">{inv.kind === 'TITULAR' && roleSelect(player)}</TableCell>
                     </TableRow>
                   )
                 })}
               </TableBody>
             </Table>
           </TableContainer>
-        )}
-
-        {selected.length === 11 && (
-          <>
-            <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-              Banco de reservas — {bench.length}/9
-            </Typography>
-            <Stack spacing={1} sx={{ mb: 2 }}>
-              {displayPlayers
-                .filter(p => !selected.includes(p.id))
-                .map(player => {
-                  const onBench = bench.includes(player.id)
-                  return (
-                    <Stack key={player.id} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                      <Checkbox
-                        size="small"
-                        checked={onBench}
-                        disabled={!onBench && (!player.eligible || bench.length >= 9)}
-                        onChange={() => toggleBench(player)}
-                        slotProps={{ input: { 'aria-label': `Banco: ${player.name}` } }}
-                        sx={{ p: 0.5 }}
-                      />
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography component="span" sx={{ fontWeight: 600 }}>{player.name}</Typography>
-                        {availabilityBadge(player)}
-                      </Box>
-                      <Chip size="small" label={positionLabel(player.position)} />
-                      <Chip size="small" color="primary" label={`OVR ${player.overall}`} />
-                      <Box sx={{ width: 84 }}><FitnessBar fitness={player.fitness} /></Box>
-                    </Stack>
-                  )
-                })}
-            </Stack>
-          </>
         )}
 
         <Button

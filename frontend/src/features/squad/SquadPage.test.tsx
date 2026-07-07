@@ -120,6 +120,10 @@ function renderWithProviders(saveGameId = 'sg-1', clubId = 'club-1') {
   )
 }
 
+// The squad-selection button for a player (aria-label "Escalar <name>"). A starter's button
+// shows their position abbreviation (GK/DC/MC/AT), a substitute shows "Sub N", unpicked "+".
+const pickBtn = (name: string) => screen.getByRole('button', { name: new RegExp(`escalar ${name}`, 'i') })
+
 describe('SquadPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -174,8 +178,7 @@ describe('SquadPage', () => {
     // Select 11 players: 1 GK + 10 outfield (excluding GK2)
     const validSelection = [GK, DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
     for (const player of validSelection) {
-      const checkbox = screen.getByRole('checkbox', { name: new RegExp(player.name, 'i') })
-      fireEvent.click(checkbox)
+      fireEvent.click(pickBtn(player.name))
     }
 
     const saveBtn = screen.getByRole('button', { name: /salvar escala/i })
@@ -201,7 +204,7 @@ describe('SquadPage', () => {
 
     const validSelection = [GK, DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
     for (const player of validSelection) {
-      fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(player.name, 'i') }))
+      fireEvent.click(pickBtn(player.name))
     }
     fireEvent.click(screen.getByRole('button', { name: /salvar escala/i }))
 
@@ -216,14 +219,14 @@ describe('SquadPage', () => {
 
     // Default formation 4-3-3 allows exactly 3 attackers.
     for (const player of [ATT1, ATT2, ATT3]) {
-      fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(player.name, 'i') }))
+      fireEvent.click(pickBtn(player.name))
     }
+    expect(pickBtn('atacante um')).toHaveTextContent('AT')
 
-    // The 4th attacker's line is full, so it becomes unselectable.
-    const fourth = screen.getByRole('checkbox', { name: /atacante quatro/i })
-    expect(fourth).toBeDisabled()
-    fireEvent.click(fourth)
-    expect(fourth).not.toBeChecked()
+    // The attacking line is full, so a 4th attacker can't take a starting slot — the click
+    // sends them to the bench instead.
+    fireEvent.click(pickBtn('atacante quatro'))
+    expect(pickBtn('atacante quatro')).toHaveTextContent(/sub/i)
   })
 
   it('blocks saving when the line-up no longer fits a changed formation', async () => {
@@ -233,7 +236,7 @@ describe('SquadPage', () => {
     // Build a valid 4-3-3 XI (4 DEF, 3 MEI, 3 ATA + 1 GK).
     const xi = [GK, DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
     for (const player of xi) {
-      fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(player.name, 'i') }))
+      fireEvent.click(pickBtn(player.name))
     }
     expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
 
@@ -247,8 +250,7 @@ describe('SquadPage', () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Teste'))
 
-    const checkbox = screen.getByRole('checkbox', { name: /goleiro teste/i })
-    fireEvent.click(checkbox)
+    fireEvent.click(pickBtn('goleiro teste'))
 
     const saveBtn = screen.getByRole('button', { name: /salvar escala/i })
     expect(saveBtn).toBeDisabled()
@@ -258,28 +260,28 @@ describe('SquadPage', () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Dois'))
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /goleiro teste/i }))
+    fireEvent.click(pickBtn('goleiro teste'))
+    expect(pickBtn('goleiro teste')).toHaveTextContent('GK')
 
-    // Only one keeper fits any formation, so the second becomes unselectable.
-    const secondGk = screen.getByRole('checkbox', { name: /goleiro dois/i })
-    expect(secondGk).toBeDisabled()
-    fireEvent.click(secondGk)
-    expect(secondGk).not.toBeChecked()
+    // Only one keeper can start, so clicking a second keeper can't take the GK slot — they go
+    // to the bench instead.
+    fireEvent.click(pickBtn('goleiro dois'))
+    expect(pickBtn('goleiro dois')).toHaveTextContent(/sub/i)
   })
 
   it('does not let a suspended player be selected', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Banido Um'))
-    const checkbox = screen.getByRole('checkbox', { name: /banido um/i })
-    expect(checkbox).toBeDisabled()
+    const btn = pickBtn('banido um')
+    expect(btn).toBeDisabled()
     expect(screen.getByText(/\(Suspenso 1\)/i)).toBeInTheDocument()
   })
 
-  it('shows "(Lesionado (Leve) N)" severity label for an injured player and disables their checkbox', async () => {
+  it('shows "(Lesionado (Leve) N)" severity label for an injured player and disables their button', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Lesionado Um'))
-    const checkbox = screen.getByRole('checkbox', { name: /lesionado um/i })
-    expect(checkbox).toBeDisabled()
+    const btn = pickBtn('lesionado um')
+    expect(btn).toBeDisabled()
     expect(screen.getByText(/\(Lesionado \(Leve\) 3\)/i)).toBeInTheDocument()
   })
 
@@ -299,7 +301,7 @@ describe('SquadPage', () => {
   it('shows a role selector for a selected outfield player', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Defensor Um'))
-    fireEvent.click(screen.getByRole('checkbox', { name: /defensor um/i }))
+    fireEvent.click(pickBtn('defensor um'))
     const select = screen.getByRole('combobox', { name: /função de defensor um/i })
     expect(select).toBeInTheDocument()
     // Options are scoped to the player's position band (DEF), not all roles
@@ -328,8 +330,8 @@ describe('SquadPage', () => {
     renderWithProviders()
     // Once the saved lineup resolves, the formation select reflects it (not the 4-3-3 default).
     await waitFor(() => expect(screen.getByLabelText(/formação/i)).toHaveValue('4-4-2'))
-    expect(screen.getByRole('checkbox', { name: /goleiro teste/i })).toBeChecked()
-    expect(screen.getByRole('checkbox', { name: /defensor um/i })).toBeChecked()
+    expect(pickBtn('goleiro teste')).toHaveTextContent('GK')
+    expect(pickBtn('defensor um')).toHaveTextContent('DC')
     // A complete, all-eligible XI → saving is enabled.
     expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
   })
@@ -353,9 +355,10 @@ describe('SquadPage', () => {
       bench: [],
     })
     renderWithProviders()
-    const banido = await screen.findByRole('checkbox', { name: /banido um/i })
-    // Loaded as a starter despite being suspended, and left checkable so it can be removed.
-    await waitFor(() => expect(banido).toBeChecked())
+    const banido = await screen.findByRole('button', { name: /escalar banido um/i })
+    // Loaded as a starter despite being suspended (a position label, not "+"), and left
+    // clickable so it can be removed.
+    await waitFor(() => expect(banido).not.toHaveTextContent('+'))
     expect(banido).not.toBeDisabled()
     // Saving is blocked with a message naming the unavailable player.
     expect(screen.getByRole('button', { name: /salvar escala/i })).toBeDisabled()
@@ -363,7 +366,7 @@ describe('SquadPage', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/Banido Um/i)
     // The user resolves it themselves — no auto-substitution.
     fireEvent.click(banido)
-    await waitFor(() => expect(banido).not.toBeChecked())
+    await waitFor(() => expect(banido).toHaveTextContent('+'))
   })
 
   it('auto-selects the best XI for the formation', async () => {
@@ -372,11 +375,10 @@ describe('SquadPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
     // A complete, valid 4-3-3 is picked, so saving is enabled.
     expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
-    // The higher-rated keeper (Goleiro Dois, 75) beats Goleiro Teste (72).
-    expect(screen.getByRole('checkbox', { name: /goleiro dois/i })).toBeChecked()
-    // Use exact name match to distinguish the starter checkbox ("Goleiro Teste") from the
-    // bench checkbox ("Banco: Goleiro Teste") which appears for non-starters.
-    expect(screen.getByRole('checkbox', { name: 'Goleiro Teste' })).not.toBeChecked()
+    // The higher-rated keeper (Goleiro Dois, 75) beats Goleiro Teste (72), so he starts…
+    expect(pickBtn('goleiro dois')).toHaveTextContent('GK')
+    // …and Goleiro Teste is left unpicked.
+    expect(pickBtn('goleiro teste')).toHaveTextContent('+')
   })
 
   it('clears the selected squad', async () => {
@@ -384,7 +386,7 @@ describe('SquadPage', () => {
     await waitFor(() => screen.getByText('Goleiro Teste'))
     fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
     fireEvent.click(screen.getByRole('button', { name: /limpar/i }))
-    expect(screen.getByRole('checkbox', { name: /goleiro dois/i })).not.toBeChecked()
+    expect(pickBtn('goleiro dois')).toHaveTextContent('+')
     expect(screen.getByRole('button', { name: /salvar escala/i })).toBeDisabled()
   })
 
@@ -430,8 +432,10 @@ describe('SquadPage', () => {
     await waitFor(() => screen.getByText('Goleiro Teste'))
     fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
 
-    // Add MID4 to the bench (bench checkbox appears for non-starters).
-    fireEvent.click(screen.getByRole('checkbox', { name: /banco: meio quatro/i }))
+    // The MID line is full after auto-pick, so clicking Meio Quatro can't start him — he
+    // drops to the bench (one unified list, no separate bench control).
+    fireEvent.click(pickBtn('meio quatro'))
+    expect(pickBtn('meio quatro')).toHaveTextContent(/sub/i)
     fireEvent.click(screen.getByRole('button', { name: /salvar escalação/i }))
 
     await waitFor(() =>
