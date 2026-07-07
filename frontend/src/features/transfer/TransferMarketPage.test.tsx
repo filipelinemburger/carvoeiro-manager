@@ -187,6 +187,6 @@ describe('TransferMarketPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Meu Jogador' }))
       expect(screen.getByRole('dialog')).toBeInTheDocument()
     })
-    expect(within(screen.getByRole('dialog')).getByText('Ritmo')).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog')).getByText(/OVR 78/)).toBeInTheDocument()
   })
 })

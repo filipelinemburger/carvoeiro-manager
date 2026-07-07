@@ -24,7 +24,12 @@ const mockRenewContract = vi.mocked(renewContract)
 
 // `as const` narrows injurySeverity to the literal 'NONE' so it satisfies
 // PlayerResponse's union type (not widened to string) when spread into fixtures.
-const STATE = { form: 0, morale: 0, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0, injurySeverity: 'NONE' as const, eligible: true, role: null, contractYears: 2, wageDemand: 90000, fitness: 100 }
+const STATE = { form: 0, morale: 0, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0, injurySeverity: 'NONE' as const, eligible: true, role: null, contractYears: 2, wageDemand: 90000, fitness: 100, attributes: [
+  { key: 'FINALIZACAO', label: 'Finalização', group: 'TECNICO' as const, value: 55 },
+  { key: 'VISAO', label: 'Visão de jogo', group: 'MENTAL' as const, value: 50 },
+  { key: 'VELOCIDADE', label: 'Velocidade', group: 'FISICO' as const, value: 60 },
+  { key: 'REFLEXOS', label: 'Reflexos', group: 'GOLEIRO' as const, value: 70 },
+] }
 
 const GK: PlayerResponse = {
   id: 'p-gk',
@@ -419,7 +424,9 @@ describe('SquadPage', () => {
     await waitFor(() => screen.getByText('Goleiro Teste'))
     fireEvent.click(screen.getByText('Goleiro Teste'))
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText('Ritmo')).toBeInTheDocument()
+    // The CM-style attribute board renders the grouped attributes.
+    expect(within(dialog).getByText('Velocidade')).toBeInTheDocument()
+    expect(within(dialog).getByText('Técnico')).toBeInTheDocument()
     expect(within(dialog).getByText(/OVR 72/)).toBeInTheDocument()
   })
 

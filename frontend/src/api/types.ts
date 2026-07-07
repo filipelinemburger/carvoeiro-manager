@@ -82,6 +82,16 @@ export type PlayerResponse = {
   wageDemand: number
   fitness: number
   injurySeverity: 'NONE' | 'KNOCK' | 'MINOR' | 'MAJOR'
+  /** Full 28-attribute board, in canonical order (always sent by the API). */
+  attributes?: AttributeView[]
+}
+
+/** One attribute as sent by the API: enum key, pt-BR label, group key, value. */
+export type AttributeView = {
+  key: string
+  label: string
+  group: 'TECNICO' | 'MENTAL' | 'FISICO' | 'GOLEIRO'
+  value: number
 }
 
 export type LineupStarter = {

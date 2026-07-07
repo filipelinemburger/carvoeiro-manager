@@ -1,25 +1,22 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   Dialog, DialogTitle, DialogContent, IconButton, Box, Stack, Typography,
-  Chip, LinearProgress, Tabs, Tab,
+  Chip, Tabs, Tab,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import { formatBRL } from '../../lib/money'
 import { moraleMood } from './morale'
-import type { PlayerResponse } from '../../api/types'
+import type { PlayerResponse, AttributeView } from '../../api/types'
 
 const POSITION_LABEL: Record<PlayerResponse['position'], string> = {
   GK: 'Goleiro', DEF: 'Defensor', MID: 'Meio-campo', ATT: 'Atacante',
 }
 
-// Attribute rows shown as labeled bars, in a scouting-style order.
-const ATTRIBUTES: ReadonlyArray<{ key: keyof PlayerResponse; label: string }> = [
-  { key: 'pace', label: 'Ritmo' },
-  { key: 'finishing', label: 'Finalização' },
-  { key: 'passing', label: 'Passe' },
-  { key: 'tackling', label: 'Desarme' },
-  { key: 'goalkeeping', label: 'Goleiro' },
-]
+// Attribute-board columns, in display order (matches a Championship-Manager profile).
+const GROUP_ORDER: AttributeView['group'][] = ['TECNICO', 'MENTAL', 'FISICO', 'GOLEIRO']
+const GROUP_LABEL: Record<AttributeView['group'], string> = {
+  TECNICO: 'Técnico', MENTAL: 'Mental', FISICO: 'Físico', GOLEIRO: 'Goleiro',
+}
 
 function formLabel(form: number): string {
   if (form > 0) return `▲ +${form}`
@@ -27,17 +24,12 @@ function formLabel(form: number): string {
   return '–'
 }
 
-/** A labeled attribute bar (0–100 scale). */
-function AttrBar({ label, value }: { label: string; value: number }) {
-  return (
-    <Box>
-      <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.25 }}>
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>{label}</Typography>
-        <Typography variant="body2" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{value}</Typography>
-      </Stack>
-      <LinearProgress variant="determinate" value={Math.min(100, Math.max(0, value))} sx={{ height: 6, borderRadius: 3 }} />
-    </Box>
-  )
+/** Colour a 0–99 attribute value on a green→red scale (higher is better). */
+function attrColor(value: number): string {
+  if (value >= 75) return '#1b5e20'
+  if (value >= 55) return '#2e7d32'
+  if (value >= 40) return 'text.primary'
+  return '#c62828'
 }
 
 /** A small "LABEL / value" stat. */
@@ -52,14 +44,27 @@ function Stat({ label, value, color }: { label: string; value: ReactNode; color?
   )
 }
 
+/** One "label ..... value" attribute row. */
+function AttrRow({ attr }: { attr: AttributeView }) {
+  return (
+    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 1, py: 0.15 }}>
+      <Typography variant="body2" sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {attr.label}
+      </Typography>
+      <Typography variant="body2" sx={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: attrColor(attr.value) }}>
+        {attr.value}
+      </Typography>
+    </Stack>
+  )
+}
+
 /**
- * A modal breakdown of one player. Identity (position/OVR/age/status) stays pinned
- * at the top; the rest splits into an "Atributos" tab (attribute bars) and a
- * "Contrato" tab (contract term + wage). A red dot marks the Contrato tab when the
- * deal is running out (<= 1 year).
+ * A modal breakdown of one player. Identity (position/OVR/age/status) stays pinned at the top;
+ * the "Atributos" tab shows the Championship-Manager-style board (Técnico / Mental / Físico /
+ * Goleiro columns), and "Contrato" shows the contract term + wage. A red dot marks the Contrato
+ * tab when the deal is running out (<= 1 year).
  *
- * `lineupControl` (the role selector) and `contractAction` (Renovar) render when
- * provided, so compact layouts can host those controls here.
+ * `lineupControl` (the role selector) and `contractAction` (Renovar) render when provided.
  */
 export function PlayerDetails({ player, onClose, lineupControl, contractAction }: {
   player: PlayerResponse | null
@@ -73,8 +78,10 @@ export function PlayerDetails({ player, onClose, lineupControl, contractAction }
   // Reset to the Atributos tab whenever a different player opens.
   useEffect(() => { setTab(0) }, [player?.id])
 
+  const attributes = player?.attributes ?? []
+
   return (
-    <Dialog open={Boolean(player)} onClose={onClose} fullWidth maxWidth="xs">
+    <Dialog open={Boolean(player)} onClose={onClose} fullWidth maxWidth="md">
       {player && (
         <>
           <DialogTitle sx={{ pr: 6, fontWeight: 700 }}>
@@ -129,11 +136,20 @@ export function PlayerDetails({ player, onClose, lineupControl, contractAction }
                   <Stat label="Fôlego" value={player.stamina} />
                   <Stat label="Condição" value={`${player.fitness}%`} />
                 </Stack>
-                <Stack spacing={1}>
-                  {ATTRIBUTES.map(attr => (
-                    <AttrBar key={attr.key} label={attr.label} value={player[attr.key] as number} />
-                  ))}
-                </Stack>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' }, gap: 2.5 }}>
+                  {GROUP_ORDER.map(group => {
+                    const rows = attributes.filter(a => a.group === group)
+                    if (rows.length === 0) return null
+                    return (
+                      <Box key={group}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5, pb: 0.25, borderBottom: '2px solid', borderColor: 'divider' }}>
+                          {GROUP_LABEL[group]}
+                        </Typography>
+                        {rows.map(a => <AttrRow key={a.key} attr={a} />)}
+                      </Box>
+                    )
+                  })}
+                </Box>
               </Box>
             )}
 
