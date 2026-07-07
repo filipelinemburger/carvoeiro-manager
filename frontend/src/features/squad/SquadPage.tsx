@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Box, Stack, Typography, Button, Chip, Alert, FormControl, NativeSelect, Link,
+  Box, Stack, Typography, Button, Chip, Alert, Snackbar, FormControl, NativeSelect, Link,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Paper, Card, CardContent,
 } from '@mui/material'
 import HealingIcon from '@mui/icons-material/Healing'
@@ -428,8 +428,6 @@ export function SquadPage() {
       {validationError && selected.length > 0 && (
         <Alert severity="error" sx={{ mb: 2 }}>{validationError}</Alert>
       )}
-      {saveSuccess && <Alert severity="success" sx={{ mb: 2 }}>Escalação salva com sucesso!</Alert>}
-      {mutation.isError && <Alert severity="error" sx={{ mb: 2 }}>Erro ao salvar escalação.</Alert>}
     </>
   )
 
@@ -541,6 +539,23 @@ export function SquadPage() {
           : undefined}
         contractAction={detailsPlayer ? renewButton(detailsPlayer) : undefined}
       />
+
+      {/* Save outcome shown as a transient toast rather than pinned into the layout. */}
+      <Snackbar
+        open={saveSuccess || mutation.isError}
+        autoHideDuration={4000}
+        onClose={() => { setSaveSuccess(false); mutation.reset() }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={mutation.isError ? 'error' : 'success'}
+          variant="filled"
+          onClose={() => { setSaveSuccess(false); mutation.reset() }}
+          sx={{ width: '100%' }}
+        >
+          {mutation.isError ? 'Erro ao salvar escalação.' : 'Escalação salva com sucesso!'}
+        </Alert>
+      </Snackbar>
     </Box>
   )
 }
