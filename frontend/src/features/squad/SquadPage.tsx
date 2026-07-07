@@ -74,10 +74,8 @@ const DEFAULT_ROLE: Record<PlayerResponse['position'], PlayerRole> = {
 // Championship-Manager-style squad-slot abbreviation shown on the selection button.
 const POS_ABBR: Record<PlayerResponse['position'], string> = { GK: 'GK', DEF: 'DC', MID: 'MC', ATT: 'AT' }
 
-// Selection-button colour per position band (a starter). MUI palette keys.
-const BAND_BTN_COLOR: Record<PlayerResponse['position'], 'warning' | 'info' | 'success' | 'error'> = {
-  GK: 'warning', DEF: 'info', MID: 'success', ATT: 'error',
-}
+// Criciúma yellow — every starter's selection button.
+const CRICIUMA_YELLOW = '#f7d417'
 
 function positionLabel(pos: PlayerResponse['position']): string {
   return { GK: 'GK', DEF: 'DEF', MID: 'MEI', ATT: 'ATA' }[pos]
@@ -331,26 +329,33 @@ export function SquadPage() {
     return null
   }
 
-  // The squad-selection button: shows the player's slot (GK/DC/MC/AT for a starter,
-  // "Sub N" for a substitute, "+" when unpicked) and cycles them on click.
+  // The squad-selection button: a starter is Criciúma yellow with their slot label
+  // (GK/DC/MC/AT); a substitute is grey ("Sub N"); an unpicked player is white with a "+".
   function statusButton(player: PlayerResponse) {
     const inv = involvementOf(player.id)
-    const label = inv.kind === 'TITULAR' ? POS_ABBR[player.position]
-      : inv.kind === 'RESERVA' ? `Sub ${inv.sub}`
-      : '+'
+    const base = { minWidth: 60, px: 1, fontWeight: 800 }
+    if (inv.kind === 'TITULAR') {
+      return (
+        <Button size="small" variant="contained" onClick={() => cyclePlayer(player)} aria-label={`Escalar ${player.name}`}
+          sx={{ ...base, bgcolor: CRICIUMA_YELLOW, color: '#111', '&:hover': { bgcolor: '#e3c200' } }}>
+          {POS_ABBR[player.position]}
+        </Button>
+      )
+    }
+    if (inv.kind === 'RESERVA') {
+      return (
+        <Button size="small" variant="contained" onClick={() => cyclePlayer(player)} aria-label={`Escalar ${player.name}`}
+          sx={{ ...base, bgcolor: '#cfcfcf', color: '#111', '&:hover': { bgcolor: '#bcbcbc' } }}>
+          {`Sub ${inv.sub}`}
+        </Button>
+      )
+    }
+    // Unpicked: white button with a black "+". Ineligible (suspended/injured) players can't
+    // be added, so their button is disabled; a picked player always stays clickable to remove.
     return (
-      <Button
-        size="small"
-        variant={inv.kind === 'OUT' ? 'outlined' : 'contained'}
-        color={inv.kind === 'TITULAR' ? BAND_BTN_COLOR[player.position] : 'inherit'}
-        // Unpicked-and-ineligible players can't be added; a picked player always stays
-        // clickable so the user can remove them.
-        disabled={inv.kind === 'OUT' && !player.eligible}
-        onClick={() => cyclePlayer(player)}
-        aria-label={`Escalar ${player.name}`}
-        sx={{ minWidth: 60, px: 1 }}
-      >
-        {label}
+      <Button size="small" variant="outlined" disabled={!player.eligible} onClick={() => cyclePlayer(player)} aria-label={`Escalar ${player.name}`}
+        sx={{ ...base, bgcolor: '#fff', color: '#000', borderColor: '#bdbdbd', '&:hover': { bgcolor: '#f5f5f5', borderColor: '#9e9e9e' } }}>
+        +
       </Button>
     )
   }
@@ -436,9 +441,8 @@ export function SquadPage() {
         {isMobile ? (
           <Stack spacing={1.5} sx={{ mb: 2 }}>
             {displayPlayers.map(player => {
-              const inv = involvementOf(player.id)
               return (
-                <Card key={player.id} variant="outlined" sx={{ bgcolor: inv.kind === 'TITULAR' ? '#fff9c4' : inv.kind === 'RESERVA' ? '#e3f2fd' : undefined }}>
+                <Card key={player.id} variant="outlined">
                   <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                       {statusButton(player)}
@@ -466,7 +470,6 @@ export function SquadPage() {
                   <TableCell align="center">OVR</TableCell>
                   <TableCell align="center">Forma</TableCell>
                   <TableCell align="center">Moral</TableCell>
-                  <TableCell align="center">Fôlego</TableCell>
                   <TableCell align="center">Condição</TableCell>
                   <TableCell align="center">Função</TableCell>
                 </TableRow>
@@ -475,7 +478,7 @@ export function SquadPage() {
                 {displayPlayers.map(player => {
                   const inv = involvementOf(player.id)
                   return (
-                    <TableRow key={player.id} sx={{ bgcolor: inv.kind === 'TITULAR' ? '#fff9c4' : inv.kind === 'RESERVA' ? '#e3f2fd' : undefined }}>
+                    <TableRow key={player.id}>
                       <TableCell align="center">{statusButton(player)}</TableCell>
                       <TableCell>
                         {playerNameButton(player)}
@@ -484,8 +487,7 @@ export function SquadPage() {
                       <TableCell align="center">{positionLabel(player.position)}</TableCell>
                       <TableCell align="center">{player.overall}</TableCell>
                       <TableCell align="center">{formLabel(player.form)}</TableCell>
-                      <TableCell align="center"><MoodChip morale={player.morale} /></TableCell>
-                      <TableCell align="center">{player.stamina}</TableCell>
+                      <TableCell align="center"><MoodChip morale={player.morale} emojiOnly /></TableCell>
                       <TableCell align="center"><FitnessBar fitness={player.fitness} /></TableCell>
                       <TableCell align="center">{inv.kind === 'TITULAR' && roleSelect(player)}</TableCell>
                     </TableRow>

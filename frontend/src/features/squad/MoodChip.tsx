@@ -1,9 +1,19 @@
-import { Chip } from '@mui/material'
+import { Chip, Typography } from '@mui/material'
 import { moraleMood } from './morale'
 
-/** A small coloured chip showing a morale value's mood (emoji + label). */
-export function MoodChip({ morale, prefix = '' }: { morale: number; prefix?: string }) {
+/**
+ * Shows a morale value's mood. By default a small coloured chip (emoji + label);
+ * with `emojiOnly` just the bare emoji, no label and no background — for dense lists.
+ */
+export function MoodChip({ morale, prefix = '', emojiOnly = false }: { morale: number; prefix?: string; emojiOnly?: boolean }) {
   const mood = moraleMood(morale)
+  if (emojiOnly) {
+    return (
+      <Typography component="span" role="img" aria-label={mood.label} title={mood.label} sx={{ fontSize: '1.15rem', lineHeight: 1 }}>
+        {mood.emoji}
+      </Typography>
+    )
+  }
   return (
     <Chip
       size="small"

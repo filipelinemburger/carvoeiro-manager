@@ -5,6 +5,7 @@ import {
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import { formatBRL } from '../../lib/money'
+import { moraleMood } from './morale'
 import type { PlayerResponse } from '../../api/types'
 
 const POSITION_LABEL: Record<PlayerResponse['position'], string> = {
@@ -18,7 +19,6 @@ const ATTRIBUTES: ReadonlyArray<{ key: keyof PlayerResponse; label: string }> = 
   { key: 'passing', label: 'Passe' },
   { key: 'tackling', label: 'Desarme' },
   { key: 'goalkeeping', label: 'Goleiro' },
-  { key: 'stamina', label: 'Fôlego' },
 ]
 
 function formLabel(form: number): string {
@@ -123,9 +123,12 @@ export function PlayerDetails({ player, onClose, lineupControl, contractAction }
 
             {tab === 0 && (
               <Box>
-                <Box sx={{ mb: 1.5 }}>
+                <Stack direction="row" spacing={3} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }}>
                   <Stat label="Forma" value={formLabel(player.form)} />
-                </Box>
+                  <Stat label="Moral" value={`${moraleMood(player.morale).emoji} ${moraleMood(player.morale).label}`} />
+                  <Stat label="Fôlego" value={player.stamina} />
+                  <Stat label="Condição" value={`${player.fitness}%`} />
+                </Stack>
                 <Stack spacing={1}>
                   {ATTRIBUTES.map(attr => (
                     <AttrBar key={attr.key} label={attr.label} value={player[attr.key] as number} />
