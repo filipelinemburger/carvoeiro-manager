@@ -72,6 +72,21 @@ const DEFAULT_ROLE: Record<PlayerResponse['position'], PlayerRole> = {
   ATT: 'POACHER',
 }
 
+// Human-readable Portuguese labels for the tactical roles. The <option> value stays the
+// enum (what the API expects); only the displayed text changes.
+const ROLE_LABEL: Record<PlayerRole, string> = {
+  GOALKEEPER: 'Goleiro',
+  STOPPER: 'Zagueiro',
+  FULL_BACK: 'Lateral',
+  BALL_PLAYING_DEF: 'Zagueiro construtor',
+  HOLDING_MID: 'Volante',
+  BOX_TO_BOX: 'Meia box a box',
+  PLAYMAKER: 'Armador',
+  POACHER: 'Finalizador',
+  TARGET_MAN: 'Centroavante',
+  WINGER: 'Ponta',
+}
+
 // Championship-Manager-style squad-slot abbreviation shown on the selection button.
 const POS_ABBR: Record<PlayerResponse['position'], string> = { GK: 'GK', DEF: 'DC', MID: 'MC', ATT: 'AT' }
 
@@ -398,7 +413,7 @@ export function SquadPage() {
         sx={{ fontSize: '0.85rem' }}
       >
         {ROLES_BY_POSITION[player.position].map(r => (
-          <option key={r} value={r}>{r}</option>
+          <option key={r} value={r}>{ROLE_LABEL[r]}</option>
         ))}
       </NativeSelect>
     )

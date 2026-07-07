@@ -304,9 +304,10 @@ describe('SquadPage', () => {
     fireEvent.click(pickBtn('defensor um'))
     const select = screen.getByRole('combobox', { name: /função de defensor um/i })
     expect(select).toBeInTheDocument()
-    // Options are scoped to the player's position band (DEF), not all roles
+    // Options are scoped to the player's position band (DEF), not all roles, and shown with
+    // readable Portuguese labels (the underlying value stays the enum).
     const options = within(select).getAllByRole('option').map(o => o.textContent)
-    expect(options).toEqual(['STOPPER', 'FULL_BACK', 'BALL_PLAYING_DEF'])
+    expect(options).toEqual(['Zagueiro', 'Lateral', 'Zagueiro construtor'])
   })
 
   it('rehydrates the saved formation and starters on load', async () => {
