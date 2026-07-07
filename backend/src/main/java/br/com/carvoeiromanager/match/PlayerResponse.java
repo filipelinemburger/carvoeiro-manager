@@ -1,6 +1,7 @@
 package br.com.carvoeiromanager.match;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 public record PlayerResponse(
@@ -25,6 +26,7 @@ public record PlayerResponse(
         int contractYears,
         BigDecimal wageDemand,
         int fitness,
-        String injurySeverity
+        String injurySeverity,
+        List<AttributeView> attributes
 ) {
 }

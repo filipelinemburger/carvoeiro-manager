@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.contract.ContractValuation;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
@@ -443,6 +444,9 @@ public class LineupService {
 
     private PlayerResponse toPlayerResponse(Player p, PlayerRole role, LocalDate onDate) {
         int fitness = fitnessCalculator.effectiveFitness(p.getFitness(), p.getLastMatchDate(), onDate, p.getAge());
+        List<AttributeView> attributes = java.util.Arrays.stream(Attribute.values())
+                .map(a -> new AttributeView(a.name(), a.label(), a.group().name(), p.attribute(a)))
+                .toList();
         return new PlayerResponse(
                 p.getId(),
                 p.getName(),
@@ -465,7 +469,8 @@ public class LineupService {
                 p.getContractYears(),
                 contractValuation.wageDemand(p.getOverall(), p.getAge()),
                 fitness,
-                p.getInjurySeverity().name());
+                p.getInjurySeverity().name(),
+                attributes);
     }
 
     @Transactional
