@@ -1,22 +1,53 @@
 package br.com.carvoeiromanager.player;
 
+import java.util.Map;
+
+/**
+ * A tactical role bound to a position band, carrying the attribute weights that turn a
+ * player's attributes into an attack and a defence contribution.
+ *
+ * <p>Weights are keyed by {@link Attribute} (absent = zero), so new attributes can enter the
+ * scoring without shifting any index. The initial weights reproduce the previous 5-attribute
+ * model exactly — the six anchor attributes carry the legacy values, so scoring is unchanged
+ * until the weights are enriched.
+ */
 public enum PlayerRole {
-    GOALKEEPER(Position.GK,       new double[]{0,    0,   0,   0,    0},   new double[]{0, 0, 0, 0,    1.0}),
-    STOPPER(Position.DEF,         new double[]{0.1,  0.1, 0,   0,    0},   new double[]{0, 0, 0, 1.0,  0}),
-    FULL_BACK(Position.DEF,       new double[]{0.3,  0,   0.2, 0,    0},   new double[]{0, 0, 0, 0.8,  0}),
-    BALL_PLAYING_DEF(Position.DEF,new double[]{0.1,  0,   0.4, 0,    0},   new double[]{0, 0, 0, 0.85, 0}),
-    HOLDING_MID(Position.MID,     new double[]{0,    0,   0.3, 0,    0},   new double[]{0, 0, 0, 0.8,  0}),
-    BOX_TO_BOX(Position.MID,      new double[]{0.2,  0.3, 0.3, 0,    0},   new double[]{0, 0, 0, 0.5,  0}),
-    PLAYMAKER(Position.MID,       new double[]{0,    0.2, 0.6, 0,    0},   new double[]{0, 0, 0, 0.2,  0}),
-    POACHER(Position.ATT,         new double[]{0.2,  0.8, 0,   0,    0},   new double[]{0, 0, 0, 0,    0}),
-    TARGET_MAN(Position.ATT,      new double[]{0,    0.6, 0.2, 0,    0},   new double[]{0, 0, 0, 0.1,  0}),
-    WINGER(Position.ATT,          new double[]{0.6,  0.2, 0.2, 0,    0},   new double[]{0, 0, 0, 0.05, 0});
+    GOALKEEPER(Position.GK,
+            Map.of(),
+            Map.of(Attribute.REFLEXOS, 1.0)),
+    STOPPER(Position.DEF,
+            Map.of(Attribute.VELOCIDADE, 0.1, Attribute.FINALIZACAO, 0.1),
+            Map.of(Attribute.DESARME, 1.0)),
+    FULL_BACK(Position.DEF,
+            Map.of(Attribute.VELOCIDADE, 0.3, Attribute.PASSE, 0.2),
+            Map.of(Attribute.DESARME, 0.8)),
+    BALL_PLAYING_DEF(Position.DEF,
+            Map.of(Attribute.VELOCIDADE, 0.1, Attribute.PASSE, 0.4),
+            Map.of(Attribute.DESARME, 0.85)),
+    HOLDING_MID(Position.MID,
+            Map.of(Attribute.PASSE, 0.3),
+            Map.of(Attribute.DESARME, 0.8)),
+    BOX_TO_BOX(Position.MID,
+            Map.of(Attribute.VELOCIDADE, 0.2, Attribute.FINALIZACAO, 0.3, Attribute.PASSE, 0.3),
+            Map.of(Attribute.DESARME, 0.5)),
+    PLAYMAKER(Position.MID,
+            Map.of(Attribute.FINALIZACAO, 0.2, Attribute.PASSE, 0.6),
+            Map.of(Attribute.DESARME, 0.2)),
+    POACHER(Position.ATT,
+            Map.of(Attribute.VELOCIDADE, 0.2, Attribute.FINALIZACAO, 0.8),
+            Map.of()),
+    TARGET_MAN(Position.ATT,
+            Map.of(Attribute.FINALIZACAO, 0.6, Attribute.PASSE, 0.2),
+            Map.of(Attribute.DESARME, 0.1)),
+    WINGER(Position.ATT,
+            Map.of(Attribute.VELOCIDADE, 0.6, Attribute.FINALIZACAO, 0.2, Attribute.PASSE, 0.2),
+            Map.of(Attribute.DESARME, 0.05));
 
     private final Position band;
-    private final double[] attackWeights;
-    private final double[] defenseWeights;
+    private final Map<Attribute, Double> attackWeights;
+    private final Map<Attribute, Double> defenseWeights;
 
-    PlayerRole(Position band, double[] attackWeights, double[] defenseWeights) {
+    PlayerRole(Position band, Map<Attribute, Double> attackWeights, Map<Attribute, Double> defenseWeights) {
         this.band = band;
         this.attackWeights = attackWeights;
         this.defenseWeights = defenseWeights;
@@ -24,16 +55,21 @@ public enum PlayerRole {
 
     public boolean isValidFor(Position position) { return band == position; }
 
-    public double attackContribution(Player p) { return weighted(attackWeights, p); }
+    public Map<Attribute, Double> attackWeights() { return attackWeights; }
 
-    public double defenseContribution(Player p) { return weighted(defenseWeights, p); }
+    public Map<Attribute, Double> defenseWeights() { return defenseWeights; }
 
-    private double weighted(double[] w, Player p) {
-        return w[0] * p.getPace()
-                + w[1] * p.getFinishing()
-                + w[2] * p.getPassing()
-                + w[3] * p.getTackling()
-                + w[4] * p.getGoalkeeping();
+    public double attackContribution(Player p) { return weighted(attackWeights, p.attributes()); }
+
+    public double defenseContribution(Player p) { return weighted(defenseWeights, p.attributes()); }
+
+    /** Weighted sum of the given attribute weights against a player's attribute profile. */
+    public static double weighted(Map<Attribute, Double> weights, Attributes attrs) {
+        double sum = 0.0;
+        for (Map.Entry<Attribute, Double> e : weights.entrySet()) {
+            sum += e.getValue() * attrs.get(e.getKey());
+        }
+        return sum;
     }
 
     public static PlayerRole defaultFor(Position position) {
