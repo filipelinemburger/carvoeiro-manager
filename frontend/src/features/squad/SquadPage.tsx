@@ -134,7 +134,9 @@ export function SquadPage() {
 
   const [formation, setFormation] = useState('4-3-3')
   const [selected, setSelected] = useState<string[]>([])
-  const [bench, setBench] = useState<string[]>([])
+  // Bench is slotted: index i is "Sub i+1"; a null is an empty slot left by a removal, so
+  // removing a substitute never renumbers the others — the hole is reused on the next add.
+  const [bench, setBench] = useState<(string | null)[]>([])
   const [roles, setRoles] = useState<Record<string, PlayerRole>>({})
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [detailsPlayer, setDetailsPlayer] = useState<PlayerResponse | null>(null)
@@ -182,7 +184,7 @@ export function SquadPage() {
         return { playerId: id, role: roles[id] ?? DEFAULT_ROLE[player.position] }
       }
       const starters: LineupStarter[] = selected.map(toStarter)
-      const benchStarters: LineupStarter[] = bench.map(toStarter)
+      const benchStarters: LineupStarter[] = bench.filter((id): id is string => id !== null).map(toStarter)
       return setLineup(saveGameId, clubId, { formation, starters, bench: benchStarters }, token ?? '')
     },
     onSuccess: () => {
@@ -242,10 +244,11 @@ export function SquadPage() {
   function cyclePlayer(player: PlayerResponse) {
     setSaveSuccess(false)
     if (involvementOf(player.id).kind !== 'OUT') {
-      // Removing is always allowed (even for a now-ineligible saved starter). Drop the role
-      // so a later reselect starts from the position default.
+      // Removing is always allowed (even for a now-ineligible saved starter). A removed
+      // substitute leaves its bench slot empty (null) instead of renumbering the others; the
+      // freed "Sub N" is reused by the next player sent to the bench. Drop the role too.
       setSelected(prev => prev.filter(id => id !== player.id))
-      setBench(prev => prev.filter(id => id !== player.id))
+      setBench(prev => prev.map(id => (id === player.id ? null : id)))
       setRoles(prev => {
         const next = { ...prev }
         delete next[player.id]
@@ -259,9 +262,19 @@ export function SquadPage() {
       setRoles(prev => ({ ...prev, [player.id]: DEFAULT_ROLE[player.position] }))
       return
     }
-    // Starting band full → take the next bench place if one is free; otherwise no-op.
-    if (bench.length < 9) {
-      setBench(prev => [...prev, player.id])
+    // Starting band full → take the next free bench place: reuse the lowest empty slot (a
+    // hole from an earlier removal) before appending, so bench numbers stay stable. Capped at 9.
+    const benchHasRoom = bench.some(id => id === null) || bench.length < 9
+    if (benchHasRoom) {
+      setBench(prev => {
+        const hole = prev.findIndex(id => id === null)
+        if (hole >= 0) {
+          const next = [...prev]
+          next[hole] = player.id
+          return next
+        }
+        return [...prev, player.id]
+      })
       setRoles(prev => ({ ...prev, [player.id]: DEFAULT_ROLE[player.position] }))
     }
   }
@@ -288,7 +301,8 @@ export function SquadPage() {
     ]
     const pickedIds = picked.map(p => p.id)
     setSelected(pickedIds)
-    setBench(prev => prev.filter(id => !pickedIds.includes(id)))
+    // Any bench player promoted into the XI vacates their bench slot (keeps the rest stable).
+    setBench(prev => prev.map(id => (id !== null && pickedIds.includes(id) ? null : id)))
     setRoles(Object.fromEntries(picked.map(p => [p.id, DEFAULT_ROLE[p.position]])))
   }
 
@@ -418,7 +432,7 @@ export function SquadPage() {
   const helperAndAlerts = (
     <>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
-        Formação {formation} — Titulares {selected.length}/11 · Banco {bench.length}/9 · GOL {positionCounts.GK}/1 · DEF {positionCounts.DEF}/{FORMATION_SHAPE[formation].DEF} · MEI {positionCounts.MID}/{FORMATION_SHAPE[formation].MID} · ATA {positionCounts.ATT}/{FORMATION_SHAPE[formation].ATT}
+        Formação {formation} — Titulares {selected.length}/11 · Banco {bench.filter(Boolean).length}/9 · GOL {positionCounts.GK}/1 · DEF {positionCounts.DEF}/{FORMATION_SHAPE[formation].DEF} · MEI {positionCounts.MID}/{FORMATION_SHAPE[formation].MID} · ATA {positionCounts.ATT}/{FORMATION_SHAPE[formation].ATT}
       </Typography>
       {players.length > 0 && (
         <Box sx={{ mb: 2 }}>

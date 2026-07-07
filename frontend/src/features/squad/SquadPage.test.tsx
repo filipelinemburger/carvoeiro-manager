@@ -390,6 +390,29 @@ describe('SquadPage', () => {
     expect(screen.getByRole('button', { name: /salvar escala/i })).toBeDisabled()
   })
 
+  it('keeps bench numbering stable when a substitute is removed', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    // Auto-pick a full 4-3-3, then send three extras (their bands are full) to the bench.
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+    fireEvent.click(pickBtn('goleiro teste'))   // GK band full → Sub 1
+    fireEvent.click(pickBtn('meio quatro'))     // MID band full → Sub 2
+    fireEvent.click(pickBtn('atacante quatro')) // ATT band full → Sub 3
+    expect(pickBtn('goleiro teste')).toHaveTextContent('Sub 1')
+    expect(pickBtn('meio quatro')).toHaveTextContent('Sub 2')
+    expect(pickBtn('atacante quatro')).toHaveTextContent('Sub 3')
+
+    // Remove the first substitute — the others keep their numbers (no renumbering).
+    fireEvent.click(pickBtn('goleiro teste'))
+    expect(pickBtn('goleiro teste')).toHaveTextContent('+')
+    expect(pickBtn('meio quatro')).toHaveTextContent('Sub 2')
+    expect(pickBtn('atacante quatro')).toHaveTextContent('Sub 3')
+
+    // The freed slot (Sub 1) is reused by the next player sent to the bench.
+    fireEvent.click(pickBtn('goleiro teste'))
+    expect(pickBtn('goleiro teste')).toHaveTextContent('Sub 1')
+  })
+
   it('opens a details dialog with the attribute breakdown when a player name is clicked', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Teste'))
