@@ -16,8 +16,10 @@ import { FitnessBar } from './FitnessBar'
 import { MoodChip } from './MoodChip'
 import { teamMorale } from './morale'
 import { SEVERITY_LABEL } from './injurySeverity'
+import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
+import { FORMATION_CODES } from '../pitch/pitchSlots'
 
-const FORMATIONS = ['4-4-2', '4-3-3', '3-5-2', '4-2-3-1', '5-3-2']
+const FORMATIONS = FORMATION_CODES
 
 type OutfieldPosition = 'DEF' | 'MID' | 'ATT'
 
@@ -30,6 +32,17 @@ const FORMATION_SHAPE: Record<string, Record<OutfieldPosition, number>> = {
   '3-5-2': { DEF: 3, MID: 5, ATT: 2 },
   '4-2-3-1': { DEF: 4, MID: 5, ATT: 1 },
   '5-3-2': { DEF: 5, MID: 3, ATT: 2 },
+  '4-5-1': { DEF: 4, MID: 5, ATT: 1 },
+  '4-1-4-1': { DEF: 4, MID: 5, ATT: 1 },
+  '4-3-2-1': { DEF: 4, MID: 5, ATT: 1 },
+  '3-4-3': { DEF: 3, MID: 4, ATT: 3 },
+  '4-4-1-1': { DEF: 4, MID: 4, ATT: 2 },
+  '5-4-1': { DEF: 5, MID: 4, ATT: 1 },
+  '4-2-4': { DEF: 4, MID: 2, ATT: 4 },
+  '3-4-2-1': { DEF: 3, MID: 6, ATT: 1 },
+  '4-1-2-1-2': { DEF: 4, MID: 4, ATT: 2 },
+  '5-2-3': { DEF: 5, MID: 2, ATT: 3 },
+  '4-3-1-2': { DEF: 4, MID: 4, ATT: 2 },
 }
 
 const BAND_LABEL: Record<OutfieldPosition, string> = {
@@ -187,6 +200,17 @@ export function SquadPage() {
 
   // Live per-position tally, used for the formation caps and the progress hint.
   const positionCounts = countByPosition(selected, players)
+
+  // Read-only pitch view-model: the currently-selected XI painted in the club's kit.
+  const pitchTeam: TeamOnPitch | null = data && selected.length > 0 ? {
+    formation,
+    kit: { primary: data.primaryColor, secondary: data.secondaryColor },
+    showNames: true,
+    players: selected
+      .map(id => players.find(p => p.id === id))
+      .filter((p): p is PlayerResponse => Boolean(p))
+      .map((p): PlacedPlayer => ({ id: p.id, surname: p.name, position: p.position, fitness: p.fitness })),
+  } : null
 
   // A position band is full once it holds as many players as the formation allows;
   // further additions to that line are blocked.
@@ -381,6 +405,12 @@ export function SquadPage() {
           </Button>
         </Stack>
         {helperAndAlerts}
+
+        {pitchTeam && (
+          <Box sx={{ mb: 2 }}>
+            <Pitch home={pitchTeam} />
+          </Box>
+        )}
 
         {isMobile ? (
           <Stack spacing={1.5} sx={{ mb: 2 }}>

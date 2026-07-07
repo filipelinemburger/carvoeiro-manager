@@ -99,6 +99,8 @@ const ALL_OUTFIELD = [DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3
 
 const squad: SquadResponse = {
   players: [GK, GK2, ...ALL_OUTFIELD, MID4, ATT4, SUSPENDED, INJURED, LOW_FITNESS],
+  primaryColor: '#f7d417',
+  secondaryColor: '#111111',
 }
 
 function makeQueryClient() {
@@ -136,6 +138,24 @@ describe('SquadPage', () => {
     })
     localStorage.setItem('carvoeiro_manager_token', 'test-token')
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
+  })
+
+  it('renders the formation pitch with the selected XI', async () => {
+    mockGetLineup.mockResolvedValue({
+      lineupId: 'l-1', clubId: 'club-1', formation: '4-4-2',
+      starters: [
+        { playerId: GK.id, role: 'GOALKEEPER' },
+        { playerId: DEF1.id, role: 'FULL_BACK' }, { playerId: DEF2.id, role: 'FULL_BACK' },
+        { playerId: DEF3.id, role: 'FULL_BACK' }, { playerId: DEF4.id, role: 'FULL_BACK' },
+        { playerId: MID1.id, role: 'BOX_TO_BOX' }, { playerId: MID2.id, role: 'BOX_TO_BOX' },
+        { playerId: MID3.id, role: 'BOX_TO_BOX' }, { playerId: MID4.id, role: 'BOX_TO_BOX' },
+        { playerId: ATT1.id, role: 'POACHER' }, { playerId: ATT2.id, role: 'POACHER' },
+      ],
+      bench: [],
+    })
+    renderWithProviders()
+    expect(await screen.findByTestId('pitch')).toBeInTheDocument()
+    expect(screen.getAllByTestId('player-token')).toHaveLength(11)
   })
 
   it('renders player names after loading', async () => {
@@ -389,7 +409,7 @@ describe('SquadPage', () => {
 
   it('marks the Contrato tab with a red dot when the contract is ending', async () => {
     const endingGk = { ...GK, id: 'p-gk-end', name: 'Goleiro Fim', contractYears: 1 }
-    mockGetSquad.mockResolvedValue({ players: [endingGk, ...ALL_OUTFIELD] })
+    mockGetSquad.mockResolvedValue({ players: [endingGk, ...ALL_OUTFIELD], primaryColor: '#f7d417', secondaryColor: '#111111' })
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Fim'))
     fireEvent.click(screen.getByText('Goleiro Fim'))
@@ -426,6 +446,8 @@ describe('SquadPage', () => {
   it('shows a morale mood chip per player and a team dressing-room chip', async () => {
     mockGetSquad.mockResolvedValue({
       players: [{ ...MID1, id: 'p-happy', name: 'Feliz', morale: 2 }],
+      primaryColor: '#f7d417',
+      secondaryColor: '#111111',
     })
     renderWithProviders()
     // Team "dressing room" chip (unique prefix)

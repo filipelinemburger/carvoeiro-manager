@@ -91,6 +91,8 @@ export type LineupStarter = {
 
 export type SquadResponse = {
   players: PlayerResponse[]
+  primaryColor: string
+  secondaryColor: string
 }
 
 export type SetLineupRequest = {
