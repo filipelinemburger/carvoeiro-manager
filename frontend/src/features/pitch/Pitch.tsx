@@ -14,10 +14,13 @@ export type TeamOnPitch = { formation: string; kit: Kit; players: PlacedPlayer[]
 
 const LINES: Line[] = ['GK', 'DEF', 'MID', 'ATT']
 
-type Positioned = { slot: Slot; number: number; player: PlacedPlayer }
+type Positioned = { slot: Slot; number: number; player: PlacedPlayer | null }
 
 // Zip a team's players into their formation slots, line by line, assigning a
 // stable shirt number from the slot's global order (GK=1, then DEF/MID/ATT).
+// Every one of the 11 slots is emitted: a slot with no matching player is kept
+// on the pitch as an empty placeholder (player === null) so the formation shape
+// is always fully drawn.
 function assign(team: TeamOnPitch): Positioned[] {
   const slots = pitchSlots(team.formation)
   const out: Positioned[] = []
@@ -25,8 +28,7 @@ function assign(team: TeamOnPitch): Positioned[] {
     const lineSlots = slots.map((s, i) => ({ s, i })).filter(x => x.s.line === line)
     const linePlayers = team.players.filter(p => p.position === line)
     lineSlots.forEach(({ s, i }, k) => {
-      const player = linePlayers[k]
-      if (player) out.push({ slot: s, number: i + 1, player })
+      out.push({ slot: s, number: i + 1, player: linePlayers[k] ?? null })
     })
   }
   return out
@@ -41,17 +43,21 @@ function TeamLayer({ team, mirror }: { team: TeamOnPitch; mirror: boolean }) {
         const xPct = (mirror ? 1 - slot.x : slot.x) * 100
         return (
           <Box
-            key={player.id}
+            key={player?.id ?? `slot-${number}`}
             sx={{ position: 'absolute', left: `${xPct}%`, top: `${yPct}%`, transform: 'translate(-50%, -50%)' }}
           >
-            <PlayerToken
-              number={number}
-              surname={team.showNames ? player.surname : undefined}
-              fill={colors.fill}
-              text={colors.text}
-              fitness={player.fitness}
-              badges={player.badges}
-            />
+            {player ? (
+              <PlayerToken
+                number={number}
+                surname={team.showNames ? player.surname : undefined}
+                fill={colors.fill}
+                text={colors.text}
+                fitness={player.fitness}
+                badges={player.badges}
+              />
+            ) : (
+              <PlayerToken number={number} empty fill={colors.fill} text={colors.text} fitness={0} />
+            )}
           </Box>
         )
       })}

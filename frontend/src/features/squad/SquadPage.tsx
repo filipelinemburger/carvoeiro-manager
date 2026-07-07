@@ -201,8 +201,9 @@ export function SquadPage() {
   // Live per-position tally, used for the formation caps and the progress hint.
   const positionCounts = countByPosition(selected, players)
 
-  // Read-only pitch view-model: the currently-selected XI painted in the club's kit.
-  const pitchTeam: TeamOnPitch | null = data && selected.length > 0 ? {
+  // Read-only pitch view-model: the current formation is always drawn in full;
+  // slots without a selected player stay on the pitch as nameless placeholders.
+  const pitchTeam: TeamOnPitch | null = data ? {
     formation,
     kit: { primary: data.primaryColor, secondary: data.secondaryColor },
     showNames: true,

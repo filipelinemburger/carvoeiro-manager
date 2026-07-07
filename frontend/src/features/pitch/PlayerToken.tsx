@@ -15,12 +15,14 @@ export function PlayerToken(props: {
   text: string
   fitness: number
   badges?: TokenBadges
+  empty?: boolean
 }) {
-  const { number, surname, fill, text, fitness, badges } = props
+  const { number, surname, fill, text, fitness, badges, empty } = props
   const ring = ringColor(Math.max(0, Math.min(100, fitness)))
   return (
     <Box
       data-testid="player-token"
+      data-empty={empty ? 'true' : undefined}
       sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 46, userSelect: 'none' }}
     >
       <Box sx={{ position: 'relative', width: 30, height: 30 }}>
@@ -28,16 +30,18 @@ export function PlayerToken(props: {
           data-role="disc"
           sx={{
             width: 30, height: 30, borderRadius: '50%', backgroundColor: fill,
-            border: `2px solid ${ring}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.4)',
+            border: empty ? '2px dashed rgba(255,255,255,0.85)' : `2px solid ${ring}`,
+            opacity: empty ? 0.4 : 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: empty ? 'none' : '0 1px 2px rgba(0,0,0,0.4)',
           }}
         >
           <Typography sx={{ color: text, fontSize: 13, fontWeight: 800, lineHeight: 1 }}>{number}</Typography>
         </Box>
-        {badges?.goal && (
+        {!empty && badges?.goal && (
           <Box aria-label="Gol" sx={{ position: 'absolute', top: -6, right: -6, fontSize: 13 }}>⚽</Box>
         )}
-        {badges?.card && (
+        {!empty && badges?.card && (
           <Box
             aria-label={badges.card === 'YELLOW' ? 'Cartão amarelo' : 'Cartão vermelho'}
             sx={{
@@ -46,11 +50,11 @@ export function PlayerToken(props: {
             }}
           />
         )}
-        {badges?.injured && (
+        {!empty && badges?.injured && (
           <Box aria-label="Lesionado" sx={{ position: 'absolute', bottom: -6, right: -6, color: '#d32f2f', fontSize: 13, fontWeight: 900, lineHeight: 1 }}>✚</Box>
         )}
       </Box>
-      {surname && (
+      {!empty && surname && (
         <Typography sx={{ mt: 0.25, fontSize: 9, fontWeight: 600, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.8)', maxWidth: 46, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {surname}
         </Typography>
