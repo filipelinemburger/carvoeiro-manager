@@ -80,4 +80,14 @@ public enum PlayerRole {
             case ATT -> POACHER;
         };
     }
+
+    /** Behaviours available for this role (default first). */
+    public java.util.List<RoleBehaviour> behaviours() {
+        return RoleBehaviour.forRole(this);
+    }
+
+    /** The default behaviour for this role — its effective weights equal the base role. */
+    public RoleBehaviour defaultBehaviour() {
+        return RoleBehaviour.forRole(this).get(0);
+    }
 }
