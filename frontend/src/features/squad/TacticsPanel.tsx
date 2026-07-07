@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { Box, Stack, Button, NativeSelect, FormControl, Typography, Alert } from '@mui/material'
+import { Box, Stack, Button, NativeSelect, FormControl, Typography, Alert, Snackbar } from '@mui/material'
 import { getTactics, setTactics } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import type { Mentality, Pressing, Marking } from '../../api/types'
@@ -136,12 +136,22 @@ export function TacticsPanel({ saveGameId, clubId, starters }: TacticsPanelProps
         {mutation.isPending ? 'Salvando…' : 'Salvar tática'}
       </Button>
 
-      {saved && <Alert severity="success" sx={{ mt: 2 }}>Tática salva!</Alert>}
-      {mutation.isError && (
-        <Alert severity="error" sx={{ mt: 2 }}>
-          Erro ao salvar tática (defina e salve a escalação primeiro).
+      {/* Save outcome shown as a transient toast rather than pinned into the layout. */}
+      <Snackbar
+        open={saved || mutation.isError}
+        autoHideDuration={4000}
+        onClose={() => { setSaved(false); mutation.reset() }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={mutation.isError ? 'error' : 'success'}
+          variant="filled"
+          onClose={() => { setSaved(false); mutation.reset() }}
+          sx={{ width: '100%' }}
+        >
+          {mutation.isError ? 'Erro ao salvar tática (defina e salve a escalação primeiro).' : 'Tática salva!'}
         </Alert>
-      )}
+      </Snackbar>
     </Box>
   )
 }
