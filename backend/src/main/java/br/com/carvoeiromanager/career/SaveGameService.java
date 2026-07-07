@@ -8,6 +8,8 @@ import br.com.carvoeiromanager.competition.CompetitionClub;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.contract.FreeAgentGenerator;
 import br.com.carvoeiromanager.finance.FinanceCalculator;
+import br.com.carvoeiromanager.player.AttributeDeriver;
+import br.com.carvoeiromanager.player.Attributes;
 import br.com.carvoeiromanager.player.OverallCalculator;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
@@ -119,12 +121,12 @@ public class SaveGameService {
                 int overall = overallCalculator.compute(position,
                         seedPlayer.pace(), seedPlayer.finishing(), seedPlayer.passing(),
                         seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina());
+                Attributes attributes = AttributeDeriver.derive(position,
+                        seedPlayer.pace(), seedPlayer.finishing(), seedPlayer.passing(),
+                        seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina(), overall);
                 Player player = Player.create(
                         saveGame.getId(), club.getId(), seedPlayer.name(), position,
-                        seedPlayer.age(), seedPlayer.nationality(),
-                        seedPlayer.pace(), seedPlayer.finishing(), seedPlayer.passing(),
-                        seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina(),
-                        overall);
+                        seedPlayer.age(), seedPlayer.nationality(), attributes, overall);
                 player.setWage(financeCalculator.weeklyWage(overall, seedPlayer.age()));
                 entityManager.persist(player);
                 squad.add(player);
