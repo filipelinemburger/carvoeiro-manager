@@ -72,4 +72,22 @@ describe('TacticsPanel', () => {
       'test-token',
     )
   })
+
+  it('displays friendly labels while keeping enum option values', async () => {
+    renderPanel()
+
+    const mentality = await screen.findByLabelText('Mentalidade') as HTMLSelectElement
+    const mentalityOpts = Array.from(mentality.options).map(o => ({ value: o.value, label: o.text }))
+    expect(mentalityOpts).toEqual([
+      { value: 'DEFENSIVE', label: 'Defensiva' },
+      { value: 'BALANCED', label: 'Equilibrada' },
+      { value: 'ATTACKING', label: 'Ofensiva' },
+    ])
+
+    const pressing = screen.getByLabelText('Pressão') as HTMLSelectElement
+    expect(Array.from(pressing.options).map(o => o.text)).toEqual(['Baixa', 'Média', 'Alta'])
+
+    const marking = screen.getByLabelText('Marcação') as HTMLSelectElement
+    expect(Array.from(marking.options).map(o => o.text)).toEqual(['Por zona', 'Individual'])
+  })
 })

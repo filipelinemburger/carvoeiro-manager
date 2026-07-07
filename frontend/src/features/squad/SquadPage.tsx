@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import {
   Box, Stack, Typography, Button, Chip, Alert, Snackbar, FormControl, NativeSelect, Link,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Paper, Card, CardContent,
+  Tabs, Tab,
 } from '@mui/material'
 import HealingIcon from '@mui/icons-material/Healing'
 import { getSquad, getLineup, setLineup, renewContract } from '../../api/career'
@@ -155,6 +156,7 @@ export function SquadPage() {
   const [roles, setRoles] = useState<Record<string, PlayerRole>>({})
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [detailsPlayer, setDetailsPlayer] = useState<PlayerResponse | null>(null)
+  const [tab, setTab] = useState(0)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['squad', saveGameId, clubId],
@@ -462,7 +464,14 @@ export function SquadPage() {
 
   return (
     <Box>
-      <Collapsible title="Escalação">
+      <Tabs value={tab} onChange={(_, v: number) => setTab(v)} sx={{ mb: 2 }}
+            aria-label="Seções do elenco">
+        <Tab label="Plantel" id="squad-tab-0" aria-controls="squad-tabpanel-0" />
+        <Tab label="Táticas de jogo" id="squad-tab-1" aria-controls="squad-tabpanel-1" />
+      </Tabs>
+
+      {/* Panels stay mounted (hidden) so unsaved lineup AND tactics edits survive tab switches. */}
+      <Box role="tabpanel" hidden={tab !== 0} id="squad-tabpanel-0" aria-labelledby="squad-tab-0">
         {formationSelect}
         <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 2, flexWrap: 'wrap' }}>
           <Button size="small" variant="outlined" color="secondary" onClick={autoPickBestXI}>
@@ -473,12 +482,6 @@ export function SquadPage() {
           </Button>
         </Stack>
         {helperAndAlerts}
-
-        {pitchTeam && (
-          <Box sx={{ mb: 2 }}>
-            <Pitch home={pitchTeam} />
-          </Box>
-        )}
 
         {isMobile ? (
           <Stack spacing={1.5} sx={{ mb: 2 }}>
@@ -547,18 +550,25 @@ export function SquadPage() {
         >
           {mutation.isPending ? 'Salvando…' : 'Salvar escalação'}
         </Button>
-      </Collapsible>
+      </Box>
 
-      <Collapsible title="Tática">
-        <TacticsPanel
-          saveGameId={saveGameId}
-          clubId={clubId}
-          starters={selected.map(id => {
-            const p = players.find(pp => pp.id === id)!
-            return { id, name: p.name }
-          })}
-        />
-      </Collapsible>
+      <Box role="tabpanel" hidden={tab !== 1} id="squad-tabpanel-1" aria-labelledby="squad-tab-1">
+        <Collapsible title="Instruções da equipe">
+          <TacticsPanel
+            saveGameId={saveGameId}
+            clubId={clubId}
+            starters={selected.map(id => {
+              const p = players.find(pp => pp.id === id)!
+              return { id, name: p.name }
+            })}
+          />
+        </Collapsible>
+        {pitchTeam && (
+          <Box sx={{ mb: 2 }}>
+            <Pitch home={pitchTeam} />
+          </Box>
+        )}
+      </Box>
 
       <PlayerDetails
         player={detailsPlayer}

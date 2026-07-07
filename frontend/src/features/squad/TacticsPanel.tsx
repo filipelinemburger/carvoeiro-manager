@@ -4,6 +4,7 @@ import { Box, Stack, Button, NativeSelect, FormControl, Typography, Alert, Snack
 import { getTactics, setTactics } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import type { Mentality, Pressing, Marking } from '../../api/types'
+import { MENTALITY_LABEL, PRESSING_LABEL, MARKING_LABEL } from './tacticsLabels'
 
 interface Starter {
   id: string
@@ -111,13 +112,13 @@ export function TacticsPanel({ saveGameId, clubId, starters }: TacticsPanelProps
         sx={{ flexWrap: 'wrap', mb: 2 }}
       >
         <SelectField label="Mentalidade" value={mentality} onChange={v => { setSaved(false); setMentality(v as Mentality) }}>
-          {MENTALITIES.map(m => <option key={m} value={m}>{m}</option>)}
+          {MENTALITIES.map(m => <option key={m} value={m}>{MENTALITY_LABEL[m]}</option>)}
         </SelectField>
         <SelectField label="Pressão" value={pressing} onChange={v => { setSaved(false); setPressing(v as Pressing) }}>
-          {PRESSINGS.map(p => <option key={p} value={p}>{p}</option>)}
+          {PRESSINGS.map(p => <option key={p} value={p}>{PRESSING_LABEL[p]}</option>)}
         </SelectField>
         <SelectField label="Marcação" value={marking} onChange={v => { setSaved(false); setMarking(v as Marking) }}>
-          {MARKINGS.map(m => <option key={m} value={m}>{m}</option>)}
+          {MARKINGS.map(m => <option key={m} value={m}>{MARKING_LABEL[m]}</option>)}
         </SelectField>
       </Stack>
 

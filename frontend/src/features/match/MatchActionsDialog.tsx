@@ -8,8 +8,10 @@ import PersonIcon from '@mui/icons-material/Person'
 import CloseIcon from '@mui/icons-material/Close'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import AddIcon from '@mui/icons-material/Add'
-import type { LivePlayer, LiveTactics, LiveTacticsRequest } from '../../api/types'
+import type { LivePlayer, LiveTactics, LiveTacticsRequest, Mentality, Pressing, Marking } from '../../api/types'
 import { FitnessBar } from '../squad/FitnessBar'
+import { FORMATION_CODES } from '../pitch/pitchSlots'
+import { MENTALITY_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
 
 // ---------------------------------------------------------------------------
 // Shared constants
@@ -20,24 +22,13 @@ function byPosition(a: LivePlayer, b: LivePlayer): number {
   return (POSITION_ORDER[a.position] ?? 9) - (POSITION_ORDER[b.position] ?? 9) || b.overall - a.overall
 }
 
-const MENTALITIES = [
-  { value: 'DEFENSIVE', label: 'Defensivo' },
-  { value: 'BALANCED', label: 'Equilibrado' },
-  { value: 'ATTACKING', label: 'Ofensivo' },
-]
-
-const PRESSINGS = [
-  { value: 'LOW', label: 'Baixa' },
-  { value: 'MEDIUM', label: 'Média' },
-  { value: 'HIGH', label: 'Alta' },
-]
-
-const MARKINGS = [
-  { value: 'ZONAL', label: 'Zonal' },
-  { value: 'MAN_TIGHT', label: 'Por homem' },
-]
-
-const FORMATIONS = ['4-4-2', '4-3-3', '3-5-2', '4-2-3-1', '5-3-2']
+const MENTALITIES = (Object.keys(MENTALITY_LABEL) as Mentality[])
+  .map(v => ({ value: v, label: MENTALITY_LABEL[v] }))
+const PRESSINGS = (Object.keys(PRESSING_LABEL) as Pressing[])
+  .map(v => ({ value: v, label: PRESSING_LABEL[v] }))
+const MARKINGS = (Object.keys(MARKING_LABEL) as Marking[])
+  .map(v => ({ value: v, label: MARKING_LABEL[v] }))
+const FORMATIONS = FORMATION_CODES
 
 // ---------------------------------------------------------------------------
 // Sub-types

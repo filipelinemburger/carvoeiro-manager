@@ -163,8 +163,47 @@ describe('SquadPage', () => {
       bench: [],
     })
     renderWithProviders()
+    // The pitch lives in the "Táticas de jogo" tab panel, hidden until that tab is active.
+    fireEvent.click(await screen.findByRole('tab', { name: 'Táticas de jogo' }))
     expect(await screen.findByTestId('pitch')).toBeInTheDocument()
     expect(screen.getAllByTestId('player-token')).toHaveLength(11)
+  })
+
+  it('starts on the Plantel tab with the squad table and no visible pitch', async () => {
+    renderWithProviders()
+    const plantelTab = await screen.findByRole('tab', { name: 'Plantel' })
+    expect(plantelTab).toHaveAttribute('aria-selected', 'true')
+    const taticasTab = screen.getByRole('tab', { name: 'Táticas de jogo' })
+    expect(taticasTab).toBeInTheDocument()
+    // The pitch container lives in the hidden tab-2 panel, identified via aria-controls
+    // (querying by accessible name on a `hidden` element is unreliable in jsdom).
+    const panelId = taticasTab.getAttribute('aria-controls')!
+    const tacticsPanel = document.getElementById(panelId)!
+    expect(tacticsPanel).not.toBeVisible()
+  })
+
+  it('shows tactics controls above the pitch in the Táticas de jogo tab', async () => {
+    renderWithProviders()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Táticas de jogo' }))
+    const panel = screen.getByRole('tabpanel', { name: 'Táticas de jogo' })
+    expect(panel).toBeVisible()
+    const instrucoes = within(panel).getByRole('button', { name: /Instruções da equipe/ })
+    expect(instrucoes).toHaveAttribute('aria-expanded', 'true')
+    expect(await within(panel).findByLabelText('Mentalidade')).toBeInTheDocument()
+    // Tactics section renders before (above) the pitch in the DOM.
+    const salvarTatica = within(panel).getByRole('button', { name: /Salvar tática/ })
+    expect(salvarTatica.compareDocumentPosition(within(panel).getByTestId('pitch'))
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('preserves an unsaved lineup selection across tab switches', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(pickBtn('goleiro teste'))
+    fireEvent.click(screen.getByRole('tab', { name: 'Táticas de jogo' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Plantel' }))
+    // Still exactly one starter selected (helper line reflects it).
+    expect(screen.getByText(/Titulares 1\/11/)).toBeInTheDocument()
   })
 
   it('renders player names after loading', async () => {
@@ -512,8 +551,10 @@ describe('SquadPage', () => {
     })
 
     renderWithProviders()
-    // Wait for the saved lineup to hydrate (MID4 on bench).
-    await waitFor(() => screen.getByText('Goleiro Teste'))
+    // Wait for the saved lineup to hydrate (MID4 on bench). Scoped to the selection button
+    // (not `getByText`) because "Goleiro Teste" is also a starter option inside the
+    // Táticas de jogo tab's (mounted-but-hidden) penalty/free-kick/corner-taker selects.
+    await waitFor(() => pickBtn('goleiro teste'))
 
     // Click auto-pick — this will place GK2, DEF1-4, MID1-3, ATT1-3 in the XI.
     // GK2 was not in the bench, but if GK2 had been on the bench it must be evicted.
