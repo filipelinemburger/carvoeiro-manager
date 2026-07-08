@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -80,7 +81,7 @@ class TacticsApiIT {
         assertThatThrownBy(() -> lineupService.setTactics(c.id(), c.clubId(),
                 new SetTacticsRequest("WILD", "HIGH", "ZONAL", null, null, null), c.userId()))
                 .isInstanceOf(ApiException.class)
-                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo("INVALID_TACTICS"));
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.INVALID_TACTICS));
     }
 
     @Test
@@ -89,7 +90,7 @@ class TacticsApiIT {
         assertThatThrownBy(() -> lineupService.setTactics(c.id(), c.clubId(),
                 new SetTacticsRequest("BALANCED", "MEDIUM", "ZONAL", null, null, null), c.userId()))
                 .isInstanceOf(ApiException.class)
-                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo("LINEUP_REQUIRED"));
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.LINEUP_REQUIRED));
     }
 
     @Test
@@ -99,7 +100,7 @@ class TacticsApiIT {
         assertThatThrownBy(() -> lineupService.setTactics(c.id(), c.clubId(),
                 new SetTacticsRequest("BALANCED", "MEDIUM", "ZONAL", UUID.randomUUID(), null, null), c.userId()))
                 .isInstanceOf(ApiException.class)
-                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo("INVALID_TACTICS"));
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.INVALID_TACTICS));
     }
 
     @Test

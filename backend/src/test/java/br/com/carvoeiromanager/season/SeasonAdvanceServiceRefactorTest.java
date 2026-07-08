@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.match.LineupService;
 import br.com.carvoeiromanager.match.LineupStarter;
 import br.com.carvoeiromanager.match.LiveMatchService;
@@ -81,7 +82,7 @@ class SeasonAdvanceServiceRefactorTest {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
-                    assertThat(api.getCode()).isEqualTo("LIVE_MATCH_IN_PROGRESS");
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.LIVE_MATCH_IN_PROGRESS);
                     assertThat(api.getStatus().value()).isEqualTo(409);
                     assertThat(api.getMessage()).containsIgnoringCase("live match");
                 });

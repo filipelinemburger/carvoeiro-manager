@@ -7,6 +7,7 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.career.SaveGameStatus;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
@@ -100,7 +101,7 @@ class SeasonHistoryServiceIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
-                    assertThat(api.getCode()).isEqualTo("SEASON_NOT_FOUND");
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.SEASON_NOT_FOUND);
                     assertThat(api.getStatus().value()).isEqualTo(404);
                 });
     }

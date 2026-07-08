@@ -10,6 +10,7 @@ import br.com.carvoeiromanager.career.SaveGameStatus;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
@@ -182,7 +183,7 @@ class SeasonRolloverServiceIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
-                    assertThat(api.getCode()).isEqualTo("SEASON_NOT_FINISHED");
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.SEASON_NOT_FINISHED);
                     assertThat(api.getStatus().value()).isEqualTo(422);
                 });
     }

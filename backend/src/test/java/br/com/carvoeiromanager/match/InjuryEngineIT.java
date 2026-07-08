@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.season.AdvanceResponse;
@@ -172,7 +173,7 @@ class InjuryEngineIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException apiEx = (ApiException) ex;
-                    assertThat(apiEx.getCode()).isEqualTo("INJURED_PLAYER");
+                    assertThat(apiEx.getCode()).isEqualTo(ErrorCode.INJURED_PLAYER);
                     assertThat(apiEx.getStatus().value()).isEqualTo(422);
                 });
     }

@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
@@ -74,7 +75,7 @@ class ContractServiceRenewIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
-                    assertThat(api.getCode()).isEqualTo("PLAYER_REJECTS_TERMS");
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.PLAYER_REJECTS_TERMS);
                     assertThat(api.getStatus().value()).isEqualTo(422);
                 });
         assertThat(playerRepository.findById(p.getId()).orElseThrow().getContractYears())
@@ -90,7 +91,7 @@ class ContractServiceRenewIT {
         BigDecimal demand = contractValuation.wageDemand(p.getOverall(), p.getAge());
         assertThatThrownBy(() -> contractService.renewContract(c.id(), c.userId(), p.getId(), demand, 6))
                 .isInstanceOf(ApiException.class)
-                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo("INVALID_CONTRACT"));
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.INVALID_CONTRACT));
     }
 
     @Test

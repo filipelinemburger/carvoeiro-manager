@@ -7,6 +7,7 @@ import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
@@ -74,7 +75,7 @@ class ContractServiceSignIT {
         assertThatThrownBy(() -> contractService.signFreeAgent(
                 c.id(), c.userId(), fa.playerId(), fa.wageDemand().subtract(new BigDecimal("1")), 3))
                 .isInstanceOf(ApiException.class)
-                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo("PLAYER_REJECTS_TERMS"));
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.PLAYER_REJECTS_TERMS));
     }
 
     @Test
@@ -88,7 +89,7 @@ class ContractServiceSignIT {
         assertThatThrownBy(() -> contractService.signFreeAgent(
                 c.id(), c.userId(), fa.playerId(), fa.wageDemand(), 3))
                 .isInstanceOf(ApiException.class)
-                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo("TRANSFER_WINDOW_CLOSED"));
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.TRANSFER_WINDOW_CLOSED));
     }
 
     @Test

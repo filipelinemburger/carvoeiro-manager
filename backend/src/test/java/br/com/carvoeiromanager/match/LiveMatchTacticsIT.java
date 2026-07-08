@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
@@ -123,7 +124,7 @@ class LiveMatchTacticsIT {
         assertThatThrownBy(() -> liveMatchService.changeTactics(saveGameId, userId,
                 new LiveTacticsRequest("BOGUS", "HIGH", "ZONAL", "4-3-3")))
                 .isInstanceOf(ApiException.class)
-                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo("INVALID_TACTICS"));
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.INVALID_TACTICS));
     }
 
     @Test
@@ -133,6 +134,6 @@ class LiveMatchTacticsIT {
         assertThatThrownBy(() -> liveMatchService.changeTactics(saveGameId, userId,
                 new LiveTacticsRequest("ATTACKING", "HIGH", "ZONAL", "9-9-9")))
                 .isInstanceOf(ApiException.class)
-                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo("INVALID_TACTICS"));
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.INVALID_TACTICS));
     }
 }

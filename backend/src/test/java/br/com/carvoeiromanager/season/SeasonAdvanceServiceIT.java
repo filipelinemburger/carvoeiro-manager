@@ -10,6 +10,7 @@ import br.com.carvoeiromanager.career.SaveGameStatus;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClubRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
@@ -193,7 +194,7 @@ class SeasonAdvanceServiceIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
-                    assertThat(api.getCode()).isEqualTo("SEASON_FINISHED");
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.SEASON_FINISHED);
                     assertThat(api.getStatus().value()).isEqualTo(409);
                 });
     }

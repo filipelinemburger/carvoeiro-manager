@@ -95,6 +95,6 @@ class TransferTermsIT {
         org.assertj.core.api.Assertions.assertThatThrownBy(
                 () -> transferService.makeOffer(c.id(), c.userId(), t.getId(), fee, wage, 0))
                 .satisfies(ex -> assertThat(((br.com.carvoeiromanager.common.ApiException) ex).getCode())
-                        .isEqualTo("INVALID_CONTRACT"));
+                        .isEqualTo(br.com.carvoeiromanager.common.ErrorCode.INVALID_CONTRACT));
     }
 }

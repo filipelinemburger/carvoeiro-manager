@@ -7,6 +7,7 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.match.LiveMatch;
 import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.player.Player;
@@ -127,7 +128,7 @@ class TransferServiceSellingIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
-                    assertThat(api.getCode()).isEqualTo("SQUAD_TOO_SMALL");
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.SQUAD_TOO_SMALL);
                     assertThat(api.getStatus().value()).isEqualTo(422);
                 });
     }
@@ -142,7 +143,7 @@ class TransferServiceSellingIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
-                    assertThat(api.getCode()).isEqualTo("INVALID_TRANSFER");
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.INVALID_TRANSFER);
                     assertThat(api.getStatus().value()).isEqualTo(422);
                 });
         assertThat(playerRepository.findById(p.getId()).orElseThrow().getClubId()).isEqualTo(c.clubId());
@@ -173,7 +174,7 @@ class TransferServiceSellingIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
-                    assertThat(api.getCode()).isEqualTo("LIVE_MATCH_IN_PROGRESS");
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.LIVE_MATCH_IN_PROGRESS);
                     assertThat(api.getStatus().value()).isEqualTo(409);
                 });
 
@@ -235,7 +236,7 @@ class TransferServiceSellingIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
-                    assertThat(api.getCode()).isEqualTo("SQUAD_TOO_SMALL");
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.SQUAD_TOO_SMALL);
                     assertThat(api.getStatus().value()).isEqualTo(422);
                 });
         assertThat(playerRepository.findById(p.getId()).orElseThrow().getClubId()).isEqualTo(c.clubId());
@@ -264,7 +265,7 @@ class TransferServiceSellingIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
-                    assertThat(api.getCode()).isEqualTo("SQUAD_TOO_SMALL");
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.SQUAD_TOO_SMALL);
                     assertThat(api.getStatus().value()).isEqualTo(422);
                 });
         assertThat(playerRepository.findById(lastSeniorGk.getId()).orElseThrow().getClubId()).isEqualTo(c.clubId());

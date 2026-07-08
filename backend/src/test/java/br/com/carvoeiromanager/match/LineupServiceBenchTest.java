@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Position;
@@ -176,7 +177,7 @@ class LineupServiceBenchTest {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException apiEx = (ApiException) ex;
-                    assertThat(apiEx.getCode()).isEqualTo("SUSPENDED_PLAYER");
+                    assertThat(apiEx.getCode()).isEqualTo(ErrorCode.SUSPENDED_PLAYER);
                     assertThat(apiEx.getStatus().value()).isEqualTo(422);
                 });
     }

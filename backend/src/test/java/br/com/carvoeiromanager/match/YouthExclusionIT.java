@@ -1,6 +1,7 @@
 package br.com.carvoeiromanager.match;
 
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.PlayerRole;
@@ -88,7 +89,7 @@ class YouthExclusionIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException apiEx = (ApiException) ex;
-                    assertThat(apiEx.getCode()).isEqualTo("INVALID_LINEUP");
+                    assertThat(apiEx.getCode()).isEqualTo(ErrorCode.INVALID_LINEUP);
                     assertThat(apiEx.getStatus().value()).isEqualTo(422);
                 });
     }
@@ -126,7 +127,7 @@ class YouthExclusionIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException apiEx = (ApiException) ex;
-                    assertThat(apiEx.getCode()).isEqualTo("INVALID_LINEUP");
+                    assertThat(apiEx.getCode()).isEqualTo(ErrorCode.INVALID_LINEUP);
                     assertThat(apiEx.getStatus().value()).isEqualTo(422);
                 });
     }

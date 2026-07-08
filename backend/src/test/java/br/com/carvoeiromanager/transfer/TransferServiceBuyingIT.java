@@ -9,6 +9,7 @@ import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.contract.ContractValuation;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
@@ -114,7 +115,7 @@ class TransferServiceBuyingIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
-                    assertThat(api.getCode()).isEqualTo("INSUFFICIENT_FUNDS");
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.INSUFFICIENT_FUNDS);
                     assertThat(api.getStatus().value()).isEqualTo(422);
                 });
     }
@@ -132,7 +133,7 @@ class TransferServiceBuyingIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
-                    assertThat(api.getCode()).isEqualTo("TRANSFER_WINDOW_CLOSED");
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.TRANSFER_WINDOW_CLOSED);
                     assertThat(api.getStatus().value()).isEqualTo(422);
                 });
     }

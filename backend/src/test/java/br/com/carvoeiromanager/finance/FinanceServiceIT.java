@@ -9,6 +9,7 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClubRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
@@ -232,7 +233,7 @@ class FinanceServiceIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
-                    assertThat(api.getCode()).isEqualTo("CLUB_NOT_FOUND");
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.CLUB_NOT_FOUND);
                     assertThat(api.getStatus().value()).isEqualTo(404);
                 });
     }
