@@ -6,6 +6,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close'
 import { formatBRL } from '../../lib/money'
 import { moraleMood } from './morale'
+import { LISTED_REASON_LABEL } from './listedReason'
 import type { PlayerResponse, AttributeView } from '../../api/types'
 
 const POSITION_LABEL: Record<PlayerResponse['position'], string> = {
@@ -64,13 +65,15 @@ function AttrRow({ attr }: { attr: AttributeView }) {
  * Goleiro columns), and "Contrato" shows the contract term + wage. A red dot marks the Contrato
  * tab when the deal is running out (<= 1 year).
  *
- * `lineupControl` (the role selector) and `contractAction` (Renovar) render when provided.
+ * `lineupControl` (the role selector), `contractAction` (Renovar), and `listingAction`
+ * (list/unlist toggle) render when provided.
  */
-export function PlayerDetails({ player, onClose, lineupControl, contractAction }: {
+export function PlayerDetails({ player, onClose, lineupControl, contractAction, listingAction }: {
   player: PlayerResponse | null
   onClose: () => void
   lineupControl?: ReactNode
   contractAction?: ReactNode
+  listingAction?: ReactNode
 }) {
   const [tab, setTab] = useState(0)
   const contractEnding = (player?.contractYears ?? 99) <= 1
@@ -100,6 +103,17 @@ export function PlayerDetails({ player, onClose, lineupControl, contractAction }
               )}
               {player.injuryMatches > 0 && (
                 <Chip size="small" color="error" variant="outlined" label={`Lesionado ${player.injuryMatches}`} />
+              )}
+              {player.transferListed && (
+                <Chip
+                  size="small"
+                  color="warning"
+                  label={
+                    player.listedReason && player.listedReason !== 'OWNER'
+                      ? `Listado — ${LISTED_REASON_LABEL[player.listedReason]}`
+                      : 'Listado'
+                  }
+                />
               )}
             </Stack>
 
@@ -164,6 +178,14 @@ export function PlayerDetails({ player, onClose, lineupControl, contractAction }
                   <Stat label="Salário pedido" value={formatBRL(player.wageDemand)} />
                   {contractAction}
                 </Stack>
+                {listingAction && (
+                  <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      {player.transferListed ? 'Este jogador está listado para transferência.' : 'Jogador não está listado para transferência.'}
+                    </Typography>
+                    {listingAction}
+                  </Stack>
+                )}
               </Stack>
             )}
           </DialogContent>

@@ -142,6 +142,9 @@ export function ClubViewPage() {
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       {playerNameButton(player)}
+                      {player.transferListed && (
+                        <Chip size="small" color="warning" label="Listado" sx={{ ml: 0.75, height: 20 }} />
+                      )}
                       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                         {player.age} anos · Valor {formatBRL(player.value)}
                       </Typography>
@@ -175,7 +178,12 @@ export function ClubViewPage() {
               <TableBody>
                 {players.map(player => (
                   <TableRow key={player.id} hover>
-                    <TableCell>{playerNameButton(player)}</TableCell>
+                    <TableCell>
+                      {playerNameButton(player)}
+                      {player.transferListed && (
+                        <Chip size="small" color="warning" label="Listado" sx={{ ml: 0.75, height: 20 }} />
+                      )}
+                    </TableCell>
                     <TableCell align="center">{positionLabel(player.position)}</TableCell>
                     <TableCell align="center">{player.age}</TableCell>
                     <TableCell align="center">{player.overall}</TableCell>

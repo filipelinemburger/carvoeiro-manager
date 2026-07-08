@@ -242,7 +242,7 @@ public class SeasonAdvanceService {
 
     private AdvanceResponse processTransfer(SaveGame save, SeasonEvent event) {
         int before = activeIncomingBids(save.getId());
-        transferService.generateIncomingOffers(save.getId(), event.getEventDate());
+        transferService.processMarketDay(save.getId(), event.getEventDate());
         int bidsReceived = Math.max(0, activeIncomingBids(save.getId()) - before);
         return new AdvanceResponse("TRANSFER", event.getEventDate().toString(), null, null,
                 List.of(), List.of(), List.of(), List.of(), null, bidsReceived, false, List.of());

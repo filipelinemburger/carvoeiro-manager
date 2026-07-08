@@ -2,9 +2,11 @@ package br.com.carvoeiromanager.transfer;
 
 import br.com.carvoeiromanager.common.security.CurrentUser;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -60,5 +62,17 @@ public class TransferController {
             @RequestBody RespondOfferRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(transferService.respondToIncoming(
                 saveGameId, userId, offerId, request.action(), request.counterAmount()));
+    }
+
+    @PutMapping("/listings/{playerId}")
+    public ResponseEntity<TransferListingResponse> listPlayer(
+            @PathVariable UUID saveGameId, @PathVariable UUID playerId, @CurrentUser UUID userId) {
+        return ResponseEntity.ok(transferService.listPlayer(saveGameId, userId, playerId));
+    }
+
+    @DeleteMapping("/listings/{playerId}")
+    public ResponseEntity<TransferListingResponse> unlistPlayer(
+            @PathVariable UUID saveGameId, @PathVariable UUID playerId, @CurrentUser UUID userId) {
+        return ResponseEntity.ok(transferService.unlistPlayer(saveGameId, userId, playerId));
     }
 }

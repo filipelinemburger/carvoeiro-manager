@@ -2,6 +2,8 @@ package br.com.carvoeiromanager.transfer;
 
 import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
+import br.com.carvoeiromanager.career.SaveGame;
+import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
@@ -37,6 +39,7 @@ class TransferServiceSellingIT {
     @Autowired TransferService transferService;
     @Autowired TransferValuation transferValuation;
     @Autowired SaveGameService saveGameService;
+    @Autowired SaveGameRepository saveGameRepository;
     @Autowired UserRepository userRepository;
     @Autowired ClubRepository clubRepository;
     @Autowired PlayerRepository playerRepository;
@@ -188,12 +191,17 @@ class TransferServiceSellingIT {
         transferService.generateIncomingOffers(c.id(), LocalDate.of(2026, 1, 15)); // pre-season window OPEN
         long inWindow = transferOfferRepository.findBySaveGameIdAndStatusIn(
                 c.id(), List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED)).size();
-        assertThat(inWindow).isGreaterThanOrEqualTo(0); // bounded; may be 0..2 deterministically
+        assertThat(inWindow).isGreaterThanOrEqualTo(0); // bounded; may be 0..3 deterministically
 
+        // createCareer already runs a day-one market pass (window open on creation day), so a
+        // fresh career may already carry some incoming bids before this call; compare deltas.
         Career c2 = createCareer();
+        long before = transferOfferRepository.findBySaveGameIdAndStatusIn(
+                c2.id(), List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED)).size();
         transferService.generateIncomingOffers(c2.id(), LocalDate.of(2026, 5, 1)); // window CLOSED
         assertThat(transferOfferRepository.findBySaveGameIdAndStatusIn(
-                c2.id(), List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED))).isEmpty();
+                c2.id(), List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED)))
+                .hasSize((int) before);
     }
 
     @Test
@@ -294,5 +302,104 @@ class TransferServiceSellingIT {
         assertThat(incoming).isNotEmpty();
         // ...but the prospect was never a candidate.
         assertThat(incoming).noneMatch(o -> o.getPlayerId().equals(prospect.getId()));
+    }
+
+    // ---- Managed list/unlist ----
+
+    @Test
+    void listingAnOwnedNonYouthPlayerSucceedsWithOwnerReason() {
+        Career c = createCareer();
+        Player p = aManagedOutfielder(c);
+
+        TransferListingResponse r = transferService.listPlayer(c.id(), c.userId(), p.getId());
+
+        assertThat(r.transferListed()).isTrue();
+        assertThat(r.listedReason()).isEqualTo("OWNER");
+        Player reloaded = playerRepository.findById(p.getId()).orElseThrow();
+        assertThat(reloaded.isTransferListed()).isTrue();
+        assertThat(reloaded.getListedReason().name()).isEqualTo("OWNER");
+    }
+
+    @Test
+    void unlistingClearsTheListing() {
+        Career c = createCareer();
+        Player p = aManagedOutfielder(c);
+        transferService.listPlayer(c.id(), c.userId(), p.getId());
+
+        TransferListingResponse r = transferService.unlistPlayer(c.id(), c.userId(), p.getId());
+
+        assertThat(r.transferListed()).isFalse();
+        assertThat(r.listedReason()).isNull();
+        Player reloaded = playerRepository.findById(p.getId()).orElseThrow();
+        assertThat(reloaded.isTransferListed()).isFalse();
+        assertThat(reloaded.getListedReason()).isNull();
+    }
+
+    @Test
+    void listingIsAllowedEvenWhenTheTransferWindowIsClosed() {
+        Career c = createCareer();
+        SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();
+        save.setCurrentDate(LocalDate.of(2026, 5, 1)); // outside any window
+        saveGameRepository.save(save);
+        Player p = aManagedOutfielder(c);
+
+        TransferListingResponse r = transferService.listPlayer(c.id(), c.userId(), p.getId());
+
+        assertThat(r.transferListed()).isTrue();
+    }
+
+    @Test
+    void aYouthProspectCannotBeListed() {
+        Career c = createCareer();
+        Player prospect = Player.create(c.id(), c.clubId(), "Joia da Base", Position.MID, 16, "Brasil",
+                55, 55, 55, 45, 10, 55, 55);
+        prospect.markAsProspect(85);
+        playerRepository.save(prospect);
+
+        assertThatThrownBy(() -> transferService.listPlayer(c.id(), c.userId(), prospect.getId()))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException api = (ApiException) ex;
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.INVALID_TRANSFER);
+                    assertThat(api.getStatus().value()).isEqualTo(422);
+                });
+    }
+
+    @Test
+    void aPlayerFromAnotherClubCannotBeListedByTheManagedUser() {
+        Career c = createCareer();
+        Player aiPlayer = playerRepository.findByClubId(anAiClub(c)).get(0);
+
+        assertThatThrownBy(() -> transferService.listPlayer(c.id(), c.userId(), aiPlayer.getId()))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException api = (ApiException) ex;
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.INVALID_TRANSFER);
+                    assertThat(api.getStatus().value()).isEqualTo(422);
+                });
+    }
+
+    @Test
+    void listedManagedPlayersDrawBoostedBids() {
+        Career c = createCareer();
+        Player target = aManagedOutfielder(c);
+        transferService.listPlayer(c.id(), c.userId(), target.getId());
+        BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
+        BigDecimal expectedListedBid = value.multiply(new BigDecimal("0.95")).setScale(2, RoundingMode.HALF_UP);
+
+        // Sweep the pre-season window (LISTED_BID_CHANCE = 0.45) so a bid reliably lands.
+        LocalDate seasonStart = LocalDate.of(2026, 1, 15);
+        for (int d = 0; d < TransferWindow.PRE_SEASON_DAYS; d++) {
+            transferService.generateIncomingOffers(c.id(), seasonStart.plusDays(d));
+        }
+
+        List<TransferOffer> bidsOnTarget = transferOfferRepository.findBySaveGameIdAndStatusIn(
+                        c.id(), List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED)).stream()
+                .filter(o -> o.getDirection() == TransferDirection.INCOMING)
+                .filter(o -> o.getPlayerId().equals(target.getId()))
+                .toList();
+
+        assertThat(bidsOnTarget).isNotEmpty(); // non-vacuous: the sweep actually landed a bid
+        assertThat(bidsOnTarget).allMatch(o -> o.getAmount().compareTo(expectedListedBid) == 0);
     }
 }

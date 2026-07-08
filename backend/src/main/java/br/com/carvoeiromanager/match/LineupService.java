@@ -461,7 +461,9 @@ public class LineupService {
                 contractValuation.wageDemand(p.getOverall(), p.getAge()),
                 fitness,
                 p.getInjurySeverity().name(),
-                attributes);
+                attributes,
+                p.isTransferListed(),
+                p.getListedReason() != null ? p.getListedReason().name() : null);
     }
 
     @Transactional

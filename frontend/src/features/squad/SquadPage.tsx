@@ -7,7 +7,7 @@ import {
   Tabs, Tab,
 } from '@mui/material'
 import HealingIcon from '@mui/icons-material/Healing'
-import { getSquad, getLineup, setLineup, renewContract } from '../../api/career'
+import { getSquad, getLineup, setLineup, renewContract, listPlayer, unlistPlayer } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import type { PlayerResponse, PlayerRole, LineupStarter } from '../../api/types'
@@ -221,6 +221,21 @@ export function SquadPage() {
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] }) },
   })
 
+  const listMut = useMutation({
+    mutationFn: (playerId: string) => listPlayer(saveGameId, playerId, token ?? ''),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] })
+      void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
+    },
+  })
+  const unlistMut = useMutation({
+    mutationFn: (playerId: string) => unlistPlayer(saveGameId, playerId, token ?? ''),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] })
+      void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
+    },
+  })
+
   const validationError = players.length > 0 ? validate(selected, players, formation) : null
   const canSave = validationError === null
 
@@ -375,6 +390,12 @@ export function SquadPage() {
     return null
   }
 
+  // A small "Listado" badge for a player currently up for transfer.
+  function listedBadge(player: PlayerResponse) {
+    if (!player.transferListed) return null
+    return <Chip size="small" color="warning" label="Listado" sx={{ ml: 0.75, height: 20 }} />
+  }
+
   // The squad-selection button: a starter is Criciúma yellow with their slot label
   // (GK/DC/MC/AT); a substitute is grey ("Sub N"); an unpicked player is white with a "+".
   function statusButton(player: PlayerResponse) {
@@ -430,6 +451,19 @@ export function SquadPage() {
         onClick={() => renewMut.mutate({ playerId: player.id, wage: player.wageDemand, contractYears: 3 })}
       >
         Renovar
+      </Button>
+    )
+  }
+
+  function listingButton(player: PlayerResponse) {
+    const busy = listMut.isPending || unlistMut.isPending
+    return player.transferListed ? (
+      <Button size="small" color="inherit" variant="outlined" disabled={busy} onClick={() => unlistMut.mutate(player.id)}>
+        Retirar da lista
+      </Button>
+    ) : (
+      <Button size="small" color="warning" variant="outlined" disabled={busy} onClick={() => listMut.mutate(player.id)}>
+        Listar para transferência
       </Button>
     )
   }
@@ -494,6 +528,7 @@ export function SquadPage() {
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         {playerNameButton(player)}
                         {availabilityBadge(player)}
+                        {listedBadge(player)}
                       </Box>
                       <Chip size="small" label={positionLabel(player.position)} />
                       <Chip size="small" color="primary" label={`OVR ${player.overall}`} />
@@ -528,6 +563,7 @@ export function SquadPage() {
                       <TableCell>
                         {playerNameButton(player)}
                         {availabilityBadge(player)}
+                        {listedBadge(player)}
                       </TableCell>
                       <TableCell align="center">{positionLabel(player.position)}</TableCell>
                       <TableCell align="center">{player.overall}</TableCell>
@@ -577,6 +613,7 @@ export function SquadPage() {
           ? roleSelect(detailsPlayer)
           : undefined}
         contractAction={detailsPlayer ? renewButton(detailsPlayer) : undefined}
+        listingAction={detailsPlayer ? listingButton(detailsPlayer) : undefined}
       />
 
       {/* Save outcome shown as a transient toast rather than pinned into the layout. */}

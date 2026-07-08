@@ -88,17 +88,19 @@ class AdvancePreviewIT {
     }
 
     @Test
-    void previewExposesNextEventDefaultCompetitionAndNoPendingTransfers() {
-        // Given a fresh career with no saved lineup and no offers
+    void previewExposesNextEventDefaultCompetitionAndBoundedPendingTransfers() {
+        // Given a fresh career with no saved lineup (createCareer's own day-one market pass may
+        // already have drawn a small, bounded number of incoming bids on the managed squad)
         Career c = createCareer();
 
         // When previewing the next advance
         AdvancePreviewResponse p = advancePreviewService.preview(c.id(), c.userId());
 
-        // Then the next event type is real, a default competition exists, and nothing is pending
+        // Then the next event type is real, a default competition exists, and pending transfers
+        // are within the day-one market's bound (MAX_BIDS_PER_ROUND)
         assertThat(p.nextEventType()).isIn("MATCH", "TRANSFER");
         assertThat(p.defaultStandingsCompetitionId()).isNotNull();
-        assertThat(p.pendingTransfers()).isZero();
+        assertThat(p.pendingTransfers()).isBetween(0, 3);
         assertThat(p.ineligibleStarters()).isEmpty();
     }
 

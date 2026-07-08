@@ -23,6 +23,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -151,9 +152,35 @@ class TransferServiceBuyingIT {
     void marketListsOnlyOtherClubsPlayersWithAValue() {
         Career c = createCareer();
         var market = transferService.getMarket(c.id(), c.userId());
+        // createCareer's day-one market pass already lists some AI players (SURPLUS floor etc.).
         assertThat(market).isNotEmpty();
         assertThat(market).noneMatch(m -> m.clubId().equals(c.clubId()));
         assertThat(market).allMatch(m -> m.value().signum() > 0);
+    }
+
+    @Test
+    void marketOnlyIncludesTransferListedPlayers() {
+        Career c = createCareer();
+        var market = transferService.getMarket(c.id(), c.userId());
+        List<UUID> marketPlayerIds = market.stream().map(MarketPlayerResponse::playerId).toList();
+
+        List<Player> allOtherClubsPlayers = playerRepository.findBySaveGameId(c.id()).stream()
+                .filter(p -> p.getClubId() != null && !p.getClubId().equals(c.clubId()))
+                .toList();
+        List<UUID> actuallyListedIds = allOtherClubsPlayers.stream()
+                .filter(Player::isTransferListed)
+                .map(Player::getId)
+                .toList();
+        List<UUID> notListedIds = allOtherClubsPlayers.stream()
+                .filter(p -> !p.isTransferListed())
+                .map(Player::getId)
+                .toList();
+
+        assertThat(actuallyListedIds).isNotEmpty(); // non-vacuous: something was actually listed
+        assertThat(notListedIds).isNotEmpty(); // non-vacuous: something was actually excluded
+        assertThat(marketPlayerIds).containsExactlyInAnyOrderElementsOf(actuallyListedIds);
+        assertThat(marketPlayerIds).doesNotContainAnyElementsOf(notListedIds);
+        assertThat(market).allMatch(m -> m.listedReason() != null);
     }
 
     @Test

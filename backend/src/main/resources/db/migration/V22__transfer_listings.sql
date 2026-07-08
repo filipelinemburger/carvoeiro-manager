@@ -1,0 +1,3 @@
+ALTER TABLE players ADD COLUMN transfer_listed BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE players ADD COLUMN listed_reason VARCHAR(16);
+ALTER TABLE players ADD COLUMN season_appearances INT NOT NULL DEFAULT 0;

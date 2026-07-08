@@ -23,6 +23,7 @@ import br.com.carvoeiromanager.seed.SeedLoader;
 import br.com.carvoeiromanager.seed.SeedPlayer;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +51,11 @@ public class SaveGameService {
     private final FinanceCalculator financeCalculator;
     private final FreeAgentGenerator freeAgentGenerator;
     private final br.com.carvoeiromanager.transfer.TransferWindow transferWindow;
+    // TransferService depends back on SaveGameService (ownership checks on the user-facing
+    // endpoints), so this side of the cycle is broken with @Lazy: the day-one market run is the
+    // only thing SaveGameService needs from it, and that only happens after this bean (and the
+    // whole context) is already up.
+    private final br.com.carvoeiromanager.transfer.TransferService transferService;
 
     // New-entity inserts go through the EntityManager (persist), not repository.save():
     // with assigned UUID ids, save() routes through merge() and fires a SELECT before
@@ -66,7 +72,8 @@ public class SaveGameService {
                            OverallCalculator overallCalculator,
                            FinanceCalculator financeCalculator,
                            FreeAgentGenerator freeAgentGenerator,
-                           br.com.carvoeiromanager.transfer.TransferWindow transferWindow) {
+                           br.com.carvoeiromanager.transfer.TransferWindow transferWindow,
+                           @Lazy br.com.carvoeiromanager.transfer.TransferService transferService) {
         this.seedLoader = seedLoader;
         this.saveGameRepository = saveGameRepository;
         this.clubRepository = clubRepository;
@@ -77,6 +84,7 @@ public class SaveGameService {
         this.financeCalculator = financeCalculator;
         this.freeAgentGenerator = freeAgentGenerator;
         this.transferWindow = transferWindow;
+        this.transferService = transferService;
     }
 
     /**
@@ -195,6 +203,10 @@ public class SaveGameService {
         saveGame.setManagedClubId(managedClubId);
         saveGame.setCurrentDate(seasonStart);
         saveGameRepository.save(saveGame);
+
+        // 6. Day-one market: AI clubs may already have players worth listing, and those (plus
+        //    everyone else) can already draw an unsolicited bid on the managed squad.
+        transferService.processMarketDay(saveGame.getId(), seasonStart);
 
         // Build response with summary of all competitions
         Competition primaryCompetition = competitions.get(0);

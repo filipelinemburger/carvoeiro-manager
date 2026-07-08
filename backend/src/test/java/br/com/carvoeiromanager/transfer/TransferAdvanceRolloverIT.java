@@ -75,8 +75,9 @@ class TransferAdvanceRolloverIT {
         assertThat(offers).allMatch(o -> o.getDirection() == TransferDirection.INCOMING);
         assertThat(offers).allMatch(o -> o.getStatus() == TransferOfferStatus.PENDING);
         assertThat(offers).allMatch(o -> o.getToClubId().equals(c.clubId()));
-        // Up to 2 bids per processed TRANSFER event; a handful of windows at most this early.
-        assertThat(offers.size()).isLessThanOrEqualTo(8);
+        // Up to MAX_BIDS_PER_ROUND (3) bids per processed market day; createCareer's day-one run
+        // plus up to 6 more advance() calls this early is at most 7 market days.
+        assertThat(offers.size()).isLessThanOrEqualTo(21);
     }
 
     @Test

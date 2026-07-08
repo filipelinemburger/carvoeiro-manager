@@ -86,7 +86,13 @@ export type PlayerResponse = {
   injurySeverity: 'NONE' | 'KNOCK' | 'MINOR' | 'MAJOR'
   /** Full 28-attribute board, in canonical order (always sent by the API). */
   attributes?: AttributeView[]
+  /** Always sent by the API; optional here only to keep older test fixtures compiling. */
+  transferListed?: boolean
+  listedReason?: ListedReason | null
 }
+
+/** Why a player is currently transfer-listed — AI triggers, or OWNER for a manual listing. */
+export type ListedReason = 'PLAYER_REQUEST' | 'UNUSED' | 'FINANCIAL' | 'SURPLUS' | 'OWNER'
 
 /** One attribute as sent by the API: enum key, pt-BR label, group key, value. */
 export type AttributeView = {
@@ -328,6 +334,15 @@ export type MarketPlayer = {
   value: number
   wage: number
   wageDemand: number
+  /** Always sent by the API (the market only ever returns listed players); optional here only
+   * to keep older test fixtures compiling. */
+  listedReason?: ListedReason | null
+}
+
+export type TransferListing = {
+  playerId: string
+  transferListed: boolean
+  listedReason: ListedReason | null
 }
 
 export type TransferOffer = {

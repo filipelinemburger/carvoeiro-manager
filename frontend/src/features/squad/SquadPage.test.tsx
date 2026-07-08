@@ -13,14 +13,18 @@ vi.mock('../../api/career', () => ({
   getTactics: vi.fn(),
   setTactics: vi.fn(),
   renewContract: vi.fn(),
+  listPlayer: vi.fn(),
+  unlistPlayer: vi.fn(),
 }))
 
-import { getSquad, getLineup, setLineup, getTactics, renewContract } from '../../api/career'
+import { getSquad, getLineup, setLineup, getTactics, renewContract, listPlayer, unlistPlayer } from '../../api/career'
 
 const mockGetSquad = vi.mocked(getSquad)
 const mockGetLineup = vi.mocked(getLineup)
 const mockSetLineup = vi.mocked(setLineup)
 const mockRenewContract = vi.mocked(renewContract)
+const mockListPlayer = vi.mocked(listPlayer)
+const mockUnlistPlayer = vi.mocked(unlistPlayer)
 
 // `as const` narrows injurySeverity to the literal 'NONE' so it satisfies
 // PlayerResponse's union type (not widened to string) when spread into fixtures.
@@ -100,10 +104,14 @@ INJURED.injurySeverity = 'MINOR'
 const LOW_FITNESS = makeOutfield('p-lf', 'Baixo Fôlego', 'MID')
 LOW_FITNESS.fitness = 45
 
+const LISTED = makeOutfield('p-listed', 'Listado Um', 'MID')
+LISTED.transferListed = true
+LISTED.listedReason = 'UNUSED'
+
 const ALL_OUTFIELD = [DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
 
 const squad: SquadResponse = {
-  players: [GK, GK2, ...ALL_OUTFIELD, MID4, ATT4, SUSPENDED, INJURED, LOW_FITNESS],
+  players: [GK, GK2, ...ALL_OUTFIELD, MID4, ATT4, SUSPENDED, INJURED, LOW_FITNESS, LISTED],
   primaryColor: '#f7d417',
   secondaryColor: '#111111',
 }
@@ -340,6 +348,30 @@ describe('SquadPage', () => {
     expect(within(dialog).getByText(/2 ano\(s\)/)).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: /renovar/i }))
     await waitFor(() => expect(mockRenewContract).toHaveBeenCalled())
+  })
+
+  it('shows a "Listado" badge for a listed player and lets the user unlist them', async () => {
+    mockUnlistPlayer.mockResolvedValue({ playerId: LISTED.id, transferListed: false, listedReason: null })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Listado Um'))
+    expect(screen.getAllByText('Listado').length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getByText('Listado Um'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /retirar da lista/i }))
+    await waitFor(() => expect(mockUnlistPlayer).toHaveBeenCalledWith('sg-1', LISTED.id, 'test-token'))
+  })
+
+  it('lets the user list a not-yet-listed player for transfer', async () => {
+    mockListPlayer.mockResolvedValue({ playerId: GK.id, transferListed: true, listedReason: 'OWNER' })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByText('Goleiro Teste'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /listar para transferência/i }))
+    await waitFor(() => expect(mockListPlayer).toHaveBeenCalledWith('sg-1', GK.id, 'test-token'))
   })
 
   it('shows a role selector for a selected outfield player', async () => {

@@ -88,6 +88,16 @@ public class Player {
     @Column(name = "contract_years", nullable = false)
     private int contractYears;
 
+    @Column(name = "transfer_listed", nullable = false)
+    private boolean transferListed;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "listed_reason", length = 16)
+    private ListedReason listedReason;
+
+    @Column(name = "season_appearances", nullable = false)
+    private int seasonAppearances;
+
     protected Player() {
         // for JPA
     }
@@ -207,6 +217,7 @@ public class Player {
         Objects.requireNonNull(matchDate, "matchDate must not be null");
         this.fitness = Math.max(0, Math.min(100, newBaseFitness));
         this.lastMatchDate = matchDate;
+        this.seasonAppearances++;
     }
 
     /** Stamps an injury: severity tier + layoff length in matches. */
@@ -240,6 +251,9 @@ public class Player {
         this.injurySeverity = InjurySeverity.NONE;
         this.fitness = 100;
         this.lastMatchDate = null;
+        this.transferListed = false;
+        this.listedReason = null;
+        this.seasonAppearances = 0;
     }
 
     public BigDecimal getWage() { return wage; }
@@ -249,4 +263,21 @@ public class Player {
     public void setContractYears(int contractYears) { this.contractYears = contractYears; }
 
     public boolean isFreeAgent() { return clubId == null; }
+
+    public boolean isTransferListed() { return transferListed; }
+    public ListedReason getListedReason() { return listedReason; }
+    public int getSeasonAppearances() { return seasonAppearances; }
+
+    /** Puts the player up for transfer with the given reason; overwrites any prior reason. */
+    public void listForTransfer(ListedReason reason) {
+        Objects.requireNonNull(reason, "reason must not be null");
+        this.transferListed = true;
+        this.listedReason = reason;
+    }
+
+    /** Pulls the player off the transfer list. */
+    public void unlist() {
+        this.transferListed = false;
+        this.listedReason = null;
+    }
 }

@@ -48,7 +48,8 @@ describe('TransferMarketPage', () => {
     vi.mocked(getOffers).mockResolvedValue([])
     vi.mocked(getMarket).mockResolvedValue([
       { playerId: 'p1', name: 'Alvo Um', position: 'ATT', age: 24, overall: 80,
-        clubId: 'club-9', clubName: 'Rival FC', value: 3000000, wage: 50000, wageDemand: 60000 },
+        clubId: 'club-9', clubName: 'Rival FC', value: 3000000, wage: 50000, wageDemand: 60000,
+        listedReason: 'FINANCIAL' },
     ])
     vi.mocked(getFreeAgents).mockResolvedValue([])
     vi.mocked(getSquad).mockResolvedValue({ players: [] } as never)
@@ -78,6 +79,13 @@ describe('TransferMarketPage', () => {
     expect(makeOffer).toHaveBeenCalledWith('sg-1', expect.objectContaining({ playerId: 'p1', amount: 2400000 }), 'test-token')
   })
 
+  it('shows the pt-BR listing reason chip on a market card', async () => {
+    renderPage()
+    openMarketTab()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    expect(screen.getByText('problemas financeiros')).toBeInTheDocument()
+  })
+
   it('shows a closed-window banner and disables proposing when the window is closed', async () => {
     vi.mocked(getSaveGame).mockResolvedValue({ ...SAVE_OPEN, transferWindowOpen: false })
     renderPage()
@@ -89,7 +97,8 @@ describe('TransferMarketPage', () => {
   it('sends wage and length with the fee', async () => {
     vi.mocked(getMarket).mockResolvedValue([
       { playerId: 'p1', name: 'Alvo Um', position: 'ATT', age: 24, overall: 80,
-        clubId: 'club-9', clubName: 'Rival FC', value: 3000000, wage: 50000, wageDemand: 60000 },
+        clubId: 'club-9', clubName: 'Rival FC', value: 3000000, wage: 50000, wageDemand: 60000,
+        listedReason: 'FINANCIAL' },
     ])
     vi.mocked(makeOffer).mockResolvedValue({
       id: 'o1', playerId: 'p1', playerName: 'Alvo Um', fromClubId: 'club-1', fromClubName: 'Criciúma',

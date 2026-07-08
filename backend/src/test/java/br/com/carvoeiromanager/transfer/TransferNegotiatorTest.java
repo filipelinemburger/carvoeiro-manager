@@ -39,7 +39,12 @@ class TransferNegotiatorTest {
     }
 
     @Test
-    void unsolicitedBidIsNinetyPercentOfValue() {
-        assertThat(negotiator.bidAmount(value)).isEqualByComparingTo("900000.00");
+    void unsolicitedBidIsNinetyPercentOfValueWhenNotListed() {
+        assertThat(negotiator.bidAmount(value, false)).isEqualByComparingTo("900000.00");
+    }
+
+    @Test
+    void unsolicitedBidIsNinetyFivePercentOfValueWhenListed() {
+        assertThat(negotiator.bidAmount(value, true)).isEqualByComparingTo("950000.00");
     }
 }

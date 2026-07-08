@@ -76,6 +76,16 @@ describe('ClubViewPage', () => {
     expect(getSquad).toHaveBeenCalledWith('sg-1', OTHER_CLUB_ID, 'test-token')
   })
 
+  it('shows a "Listado" chip for a transfer-listed player', async () => {
+    vi.mocked(getSquad).mockResolvedValue({
+      players: [player({ transferListed: true, listedReason: 'FINANCIAL' })],
+      primaryColor: '#aa0000', secondaryColor: '#ffffff',
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    expect(screen.getByText('Listado')).toBeInTheDocument()
+  })
+
   it('opens player details when the name is clicked', async () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())

@@ -9,6 +9,7 @@ import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.contract.ContractValuation;
 import br.com.carvoeiromanager.match.LiveMatchRepository;
+import br.com.carvoeiromanager.player.ListedReason;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
@@ -37,7 +38,8 @@ public class TransferService {
     static final int MAX_SQUAD_SIZE = 30;
 
     private static final double BID_CHANCE = 0.15;
-    private static final int MAX_BIDS_PER_ROUND = 2;
+    private static final double LISTED_BID_CHANCE = 0.45;
+    private static final int MAX_BIDS_PER_ROUND = 3;
 
     private final SaveGameService saveGameService;
     private final SaveGameRepository saveGameRepository;
@@ -50,6 +52,7 @@ public class TransferService {
     private final TransferExecutor transferExecutor;
     private final ContractValuation contractValuation;
     private final LiveMatchRepository liveMatchRepository;
+    private final AiListingEngine aiListingEngine;
 
     public TransferService(SaveGameService saveGameService,
                            SaveGameRepository saveGameRepository,
@@ -61,7 +64,8 @@ public class TransferService {
                            TransferNegotiator transferNegotiator,
                            TransferExecutor transferExecutor,
                            ContractValuation contractValuation,
-                           LiveMatchRepository liveMatchRepository) {
+                           LiveMatchRepository liveMatchRepository,
+                           AiListingEngine aiListingEngine) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.playerRepository = playerRepository;
@@ -73,6 +77,7 @@ public class TransferService {
         this.transferExecutor = transferExecutor;
         this.contractValuation = contractValuation;
         this.liveMatchRepository = liveMatchRepository;
+        this.aiListingEngine = aiListingEngine;
     }
 
     public List<MarketPlayerResponse> getMarket(UUID saveGameId, UUID userId) {
@@ -81,13 +86,38 @@ public class TransferService {
         Map<UUID, String> clubNames = clubNames(saveGameId);
         return playerRepository.findBySaveGameId(saveGameId).stream()
                 .filter(p -> p.getClubId() != null && !p.getClubId().equals(managedClubId))
+                .filter(Player::isTransferListed)
                 .map(p -> new MarketPlayerResponse(p.getId(), p.getName(), p.getPosition().name(),
                         p.getAge(), p.getOverall(), p.getClubId(),
                         clubNames.getOrDefault(p.getClubId(), ""),
                         transferValuation.marketValue(p.getOverall(), p.getAge()), p.getWage(),
-                        contractValuation.wageDemand(p.getOverall(), p.getAge())))
+                        contractValuation.wageDemand(p.getOverall(), p.getAge()),
+                        p.getListedReason() != null ? p.getListedReason().name() : null))
                 .sorted(Comparator.comparing(MarketPlayerResponse::value).reversed())
                 .toList();
+    }
+
+    /**
+     * Manually lists one of the managed club's own (non-youth) players for transfer. Allowed
+     * even with the window closed — listing is a squad-management decision, not a negotiation.
+     */
+    @Transactional
+    public TransferListingResponse listPlayer(UUID saveGameId, UUID userId, UUID playerId) {
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        Player player = requireManagedNonYouthPlayer(saveGameId, save.getManagedClubId(), playerId);
+        player.listForTransfer(ListedReason.OWNER);
+        playerRepository.save(player);
+        return toListingResponse(player);
+    }
+
+    /** Pulls one of the managed club's own players off the transfer list. */
+    @Transactional
+    public TransferListingResponse unlistPlayer(UUID saveGameId, UUID userId, UUID playerId) {
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        Player player = requireManagedNonYouthPlayer(saveGameId, save.getManagedClubId(), playerId);
+        player.unlist();
+        playerRepository.save(player);
+        return toListingResponse(player);
     }
 
     @Transactional
@@ -209,6 +239,22 @@ public class TransferService {
                 .toList();
     }
 
+    /**
+     * Full market-day orchestration for a save: refreshes AI listings, then rolls unsolicited
+     * bids for the managed club. Window-gated — a closed window does neither. Called from
+     * {@code SeasonAdvanceService} on each TRANSFER calendar event and once, day one, from
+     * {@code SaveGameService.createCareer}.
+     */
+    @Transactional
+    public void processMarketDay(UUID saveGameId, LocalDate eventDate) {
+        SaveGame save = saveGameRepository.findById(saveGameId).orElseThrow();
+        if (!transferWindow.isOpen(eventDate)) {
+            return;
+        }
+        aiListingEngine.refreshListings(saveGameId, save.getManagedClubId(), save.getCurrentRound());
+        generateIncomingOffers(saveGameId, eventDate);
+    }
+
     /** Unsolicited AI bids for managed players during an open window (deterministic, seeded). */
     @Transactional
     public void generateIncomingOffers(UUID saveGameId, LocalDate eventDate) {
@@ -229,8 +275,11 @@ public class TransferService {
                 .map(TransferOffer::getPlayerId)
                 .collect(Collectors.toSet());
 
+        // Listed players come first: they're more likely to draw a (better) bid.
         List<Player> managedPlayers = playerRepository.findByClubIdAndYouthProspectFalse(managedClubId).stream()
-                .sorted(Comparator.comparing(Player::getId)).toList();
+                .sorted(Comparator.comparing((Player p) -> !p.isTransferListed())
+                        .thenComparing(Player::getId))
+                .toList();
         Random rng = new Random(saveGameId.getMostSignificantBits() ^ eventDate.toEpochDay());
         int created = 0;
         for (Player player : managedPlayers) {
@@ -240,10 +289,12 @@ public class TransferService {
             if (alreadyBidOn.contains(player.getId())) {
                 continue;
             }
-            if (rng.nextDouble() < BID_CHANCE) {
+            boolean listed = player.isTransferListed();
+            double chance = listed ? LISTED_BID_CHANCE : BID_CHANCE;
+            if (rng.nextDouble() < chance) {
                 Club bidder = aiClubs.get(rng.nextInt(aiClubs.size()));
                 BigDecimal bid = transferNegotiator.bidAmount(
-                        transferValuation.marketValue(player.getOverall(), player.getAge()));
+                        transferValuation.marketValue(player.getOverall(), player.getAge()), listed);
                 transferOfferRepository.save(TransferOffer.create(saveGameId, player.getId(),
                         bidder.getId(), managedClubId, TransferDirection.INCOMING, bid,
                         save.getCurrentRound(), null, null));
@@ -267,6 +318,24 @@ public class TransferService {
             throw new ApiException(ErrorCode.INVALID_CONTRACT,
                     "Contract length must be 1-5 years and wage must be positive");
         }
+    }
+
+    private Player requireManagedNonYouthPlayer(UUID saveGameId, UUID managedClubId, UUID playerId) {
+        Player player = playerRepository.findById(playerId)
+                .filter(p -> p.getSaveGameId().equals(saveGameId))
+                .orElseThrow(() -> invalid("Player not found"));
+        if (!managedClubId.equals(player.getClubId())) {
+            throw invalid("Only your own players can be listed for transfer");
+        }
+        if (player.isYouthProspect()) {
+            throw invalid("Youth prospects cannot be listed for transfer");
+        }
+        return player;
+    }
+
+    private TransferListingResponse toListingResponse(Player player) {
+        return new TransferListingResponse(player.getId(), player.isTransferListed(),
+                player.getListedReason() != null ? player.getListedReason().name() : null);
     }
 
     private void requireSellAllowed(UUID managedClubId, Player player) {

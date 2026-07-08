@@ -18,6 +18,7 @@ public class TransferNegotiator {
     private static final BigDecimal COUNTER_FACTOR = new BigDecimal("1.10");
     private static final BigDecimal SELL_COUNTER_MAX = new BigDecimal("1.15");
     private static final BigDecimal BID_FACTOR = new BigDecimal("0.90");
+    private static final BigDecimal LISTED_BID_FACTOR = new BigDecimal("0.95");
 
     public NegotiationResult respondToBuy(BigDecimal value, BigDecimal offer) {
         if (offer.compareTo(scaled(value, ACCEPT_THRESHOLD)) >= 0) {
@@ -33,8 +34,9 @@ public class TransferNegotiator {
         return managedCounter.compareTo(scaled(value, SELL_COUNTER_MAX)) <= 0;
     }
 
-    public BigDecimal bidAmount(BigDecimal value) {
-        return scaled(value, BID_FACTOR);
+    /** Unsolicited AI bid: 95% of value for a player the seller has listed, 90% otherwise. */
+    public BigDecimal bidAmount(BigDecimal value, boolean listed) {
+        return scaled(value, listed ? LISTED_BID_FACTOR : BID_FACTOR);
     }
 
     private BigDecimal scaled(BigDecimal value, BigDecimal factor) {

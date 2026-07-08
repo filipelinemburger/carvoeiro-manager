@@ -13,6 +13,7 @@ import { useIsMobile } from '../../lib/useIsMobile'
 import { FreeAgentsPanel } from '../contract/FreeAgentsPage'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { MoneyField } from '../../components/MoneyField'
+import { LISTED_REASON_LABEL } from '../squad/listedReason'
 import type { PlayerResponse, TransferOffer } from '../../api/types'
 import { formatBRL, parseMoneyInput } from '../../lib/money'
 import CheckIcon from '@mui/icons-material/Check'
@@ -379,6 +380,9 @@ export function TransferMarketPage() {
                     <Typography variant="h6" sx={{ fontWeight: 700 }}>{p.name}</Typography>
                     <Chip size="small" label={p.position} sx={{ bgcolor: '#222', color: '#fff', fontWeight: 700 }} />
                     <Chip size="small" color="primary" label={`OVR ${p.overall}`} sx={{ fontWeight: 800 }} />
+                    {p.listedReason && (
+                      <Chip size="small" color="warning" variant="outlined" label={LISTED_REASON_LABEL[p.listedReason]} />
+                    )}
                   </Stack>
                   <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
                     <Box component="span">{p.clubName}</Box> · {p.age} anos

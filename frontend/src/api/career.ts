@@ -18,6 +18,7 @@ import type {
   FinancesResponse,
   MarketPlayer,
   TransferOffer,
+  TransferListing,
   MakeOfferRequest,
   RespondOfferRequest,
   FreeAgent,
@@ -180,6 +181,14 @@ export function respondToOffer(
   token: string,
 ): Promise<TransferOffer> {
   return apiPost<TransferOffer>(`/save-games/${saveGameId}/transfers/offers/${offerId}/respond`, req, token)
+}
+
+export function listPlayer(saveGameId: string, playerId: string, token: string): Promise<TransferListing> {
+  return apiPut<TransferListing>(`/save-games/${saveGameId}/transfers/listings/${playerId}`, {}, token)
+}
+
+export function unlistPlayer(saveGameId: string, playerId: string, token: string): Promise<TransferListing> {
+  return apiDelete<TransferListing>(`/save-games/${saveGameId}/transfers/listings/${playerId}`, token)
 }
 
 export function getFreeAgents(saveGameId: string, token: string): Promise<FreeAgent[]> {

@@ -28,6 +28,8 @@ public record PlayerResponse(
         BigDecimal wageDemand,
         int fitness,
         String injurySeverity,
-        List<AttributeView> attributes
+        List<AttributeView> attributes,
+        boolean transferListed,
+        String listedReason
 ) {
 }
