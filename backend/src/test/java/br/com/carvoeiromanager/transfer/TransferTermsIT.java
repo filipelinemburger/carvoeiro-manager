@@ -51,10 +51,31 @@ class TransferTermsIT {
         return playerRepository.findByClubId(other).get(0);
     }
 
+    /**
+     * A buy target with a context-neutral ask factor (1.00), matching the old flat-ratio
+     * negotiation: not listed, not a top-11 "key player", has cover, club is HEALTHY. See the
+     * matching helper in TransferServiceBuyingIT for the full rationale.
+     */
+    private Player aNeutralAiPlayer(Career c) {
+        UUID otherClubId = clubRepository.findBySaveGameId(c.id()).stream()
+                .map(Club::getId).filter(id -> !id.equals(c.clubId())).findFirst().orElseThrow();
+        Club otherClub = clubRepository.findById(otherClubId).orElseThrow();
+        otherClub.setBalance(new BigDecimal("999999999.00")); // HEALTHY
+        clubRepository.save(otherClub);
+
+        Player target = Player.create(c.id(), otherClubId, "Neutral Target",
+                br.com.carvoeiromanager.player.Position.MID, 25, "Brasil", 60, 60, 60, 60, 10, 60, 20);
+        Player cover = Player.create(c.id(), otherClubId, "Neutral Cover",
+                br.com.carvoeiromanager.player.Position.MID, 25, "Brasil", 60, 60, 60, 60, 10, 60, 20);
+        playerRepository.save(cover);
+        playerRepository.save(target);
+        return target;
+    }
+
     @Test
     void acceptableTermsSetTheBoughtPlayersContract() {
         Career c = createCareer();
-        Player t = anAiPlayer(c);
+        Player t = aNeutralAiPlayer(c);
         BigDecimal fee = transferValuation.marketValue(t.getOverall(), t.getAge());
         BigDecimal wage = contractValuation.wageDemand(t.getOverall(), t.getAge());
 
@@ -70,7 +91,7 @@ class TransferTermsIT {
     @Test
     void aLowballWageMakesTheDealFallThrough() {
         Career c = createCareer();
-        Player t = anAiPlayer(c);
+        Player t = aNeutralAiPlayer(c);
         BigDecimal fee = transferValuation.marketValue(t.getOverall(), t.getAge());
         BigDecimal demand = contractValuation.wageDemand(t.getOverall(), t.getAge());
         BigDecimal lowWage = demand.subtract(new BigDecimal("1"));

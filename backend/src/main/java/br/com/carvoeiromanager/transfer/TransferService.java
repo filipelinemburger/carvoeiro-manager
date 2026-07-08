@@ -53,6 +53,7 @@ public class TransferService {
     private final ContractValuation contractValuation;
     private final LiveMatchRepository liveMatchRepository;
     private final AiListingEngine aiListingEngine;
+    private final SellerContextFactory sellerContextFactory;
 
     public TransferService(SaveGameService saveGameService,
                            SaveGameRepository saveGameRepository,
@@ -65,7 +66,8 @@ public class TransferService {
                            TransferExecutor transferExecutor,
                            ContractValuation contractValuation,
                            LiveMatchRepository liveMatchRepository,
-                           AiListingEngine aiListingEngine) {
+                           AiListingEngine aiListingEngine,
+                           SellerContextFactory sellerContextFactory) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.playerRepository = playerRepository;
@@ -78,6 +80,7 @@ public class TransferService {
         this.contractValuation = contractValuation;
         this.liveMatchRepository = liveMatchRepository;
         this.aiListingEngine = aiListingEngine;
+        this.sellerContextFactory = sellerContextFactory;
     }
 
     public List<MarketPlayerResponse> getMarket(UUID saveGameId, UUID userId) {
@@ -145,7 +148,9 @@ public class TransferService {
                 TransferDirection.OUTGOING, amount, save.getCurrentRound(), wage, contractYears);
         transferOfferRepository.save(offer);
 
-        NegotiationResult result = transferNegotiator.respondToBuy(value, amount);
+        Club sellerClub = clubRepository.findById(player.getClubId()).orElseThrow();
+        SellerContext sellerContext = sellerContextFactory.build(player, sellerClub);
+        NegotiationResult result = transferNegotiator.respondToBuy(value, amount, sellerContext);
         switch (result.decision()) {
             case ACCEPT -> completeBuy(save, offer, player, amount);
             case COUNTER -> offer.markCountered(result.counterAmount());

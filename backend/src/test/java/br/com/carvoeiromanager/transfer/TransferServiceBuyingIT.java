@@ -60,6 +60,30 @@ class TransferServiceBuyingIT {
         return playerRepository.findByClubId(other).get(0);
     }
 
+    /**
+     * A buy target with a context-neutral ask factor (1.00 x 1.00 = 1.00), matching the old
+     * flat-ratio negotiation: not listed, not a top-11 "key player" in their squad (overall 20 is
+     * below any generated player), has a same-position squadmate as cover, and their club is
+     * explicitly HEALTHY. Tests asserting the plain 0.95/0.70/1.10 thresholds use this instead of
+     * {@link #anAiPlayer} so they don't depend on the squad's generated (non-deterministic)
+     * overalls, positions, or club balance.
+     */
+    private Player aNeutralAiPlayer(Career c) {
+        UUID otherClubId = clubRepository.findBySaveGameId(c.id()).stream()
+                .map(Club::getId).filter(id -> !id.equals(c.clubId())).findFirst().orElseThrow();
+        Club otherClub = clubRepository.findById(otherClubId).orElseThrow();
+        otherClub.setBalance(new BigDecimal("999999999.00")); // HEALTHY
+        clubRepository.save(otherClub);
+
+        Player target = Player.create(c.id(), otherClubId, "Neutral Target",
+                br.com.carvoeiromanager.player.Position.MID, 25, "Brasil", 60, 60, 60, 60, 10, 60, 20);
+        Player cover = Player.create(c.id(), otherClubId, "Neutral Cover",
+                br.com.carvoeiromanager.player.Position.MID, 25, "Brasil", 60, 60, 60, 60, 10, 60, 20);
+        playerRepository.save(cover);
+        playerRepository.save(target);
+        return target;
+    }
+
     private BigDecimal pct(BigDecimal value, String factor) {
         return value.multiply(new BigDecimal(factor)).setScale(2, RoundingMode.HALF_UP);
     }
@@ -71,7 +95,7 @@ class TransferServiceBuyingIT {
     @Test
     void offeringFullValueExecutesTheTransfer() {
         Career c = createCareer();
-        Player target = anAiPlayer(c);
+        Player target = aNeutralAiPlayer(c);
         BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
 
         TransferOfferResponse r = transferService.makeOffer(c.id(), c.userId(), target.getId(), value, okWage(target), 3);
@@ -102,7 +126,7 @@ class TransferServiceBuyingIT {
     @Test
     void aLowOfferIsCounteredAndCanBeAccepted() {
         Career c = createCareer();
-        Player target = anAiPlayer(c);
+        Player target = aNeutralAiPlayer(c);
         BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
 
         TransferOfferResponse countered = transferService.makeOffer(
@@ -118,7 +142,7 @@ class TransferServiceBuyingIT {
     @Test
     void aDerisoryOfferIsRejected() {
         Career c = createCareer();
-        Player target = anAiPlayer(c);
+        Player target = aNeutralAiPlayer(c);
         BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
         TransferOfferResponse r = transferService.makeOffer(
                 c.id(), c.userId(), target.getId(), pct(value, "0.50"), okWage(target), 3);
@@ -216,10 +240,83 @@ class TransferServiceBuyingIT {
         }
         assertThat(playerRepository.findByClubId(c.clubId()).size()).isGreaterThanOrEqualTo(30);
 
-        Player target = anAiPlayer(c);
+        Player target = aNeutralAiPlayer(c);
         BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
         TransferOfferResponse r = transferService.makeOffer(
                 c.id(), c.userId(), target.getId(), value, okWage(target), 3);
+
+        assertThat(r.status()).isEqualTo("ACCEPTED");
+        assertThat(playerRepository.findById(target.getId()).orElseThrow().getClubId())
+                .isEqualTo(c.clubId());
+    }
+
+    // ---- Phase C: context-aware negotiation ----
+
+    @Test
+    void aListedPlayerAcceptsALowballOfferBecauseTheSellerIsKeenToMove() {
+        Career c = createCareer();
+        Player target = aNeutralAiPlayer(c);
+        target.listForTransfer(br.com.carvoeiromanager.player.ListedReason.SURPLUS);
+        playerRepository.save(target);
+        BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
+        // askFactor = 0.85 (listed) x 1.00 (healthy) = 0.85; a lowball 85% of value clears the
+        // 0.95 x effective (0.8075 x value) accept bar even though it's well under full value.
+        BigDecimal lowball = pct(value, "0.85");
+
+        TransferOfferResponse r = transferService.makeOffer(
+                c.id(), c.userId(), target.getId(), lowball, okWage(target), 3);
+
+        assertThat(r.status()).isEqualTo("ACCEPTED");
+        assertThat(playerRepository.findById(target.getId()).orElseThrow().getClubId())
+                .isEqualTo(c.clubId());
+    }
+
+    /** Wipes the club's current (non-youth) squad and replaces it with exactly these players. */
+    private void replaceSquad(Club club, List<Player> players) {
+        playerRepository.deleteAll(playerRepository.findByClubId(club.getId()));
+        playerRepository.saveAll(players);
+    }
+
+    @Test
+    void anUnlistedKeyPlayerWithoutCoverIsCounteredWellAboveValue() {
+        Career c = createCareer();
+        UUID otherClubId = clubRepository.findBySaveGameId(c.id()).stream()
+                .map(Club::getId).filter(id -> !id.equals(c.clubId())).findFirst().orElseThrow();
+        Club otherClub = clubRepository.findById(otherClubId).orElseThrow();
+        otherClub.setBalance(new BigDecimal("999999999.00")); // HEALTHY
+        clubRepository.save(otherClub);
+        // A lone DEF: sole player at the club means top rank (key player) and no cover at all.
+        Player target = Player.create(c.id(), otherClubId, "Star Defender",
+                br.com.carvoeiromanager.player.Position.DEF, 25, "Brasil", 60, 60, 60, 80, 10, 60, 75);
+        replaceSquad(otherClub, List.of(target));
+        BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
+        // askFactor = (1.00 + 0.20 keyPlayer + 0.15 noCover) x 1.00 healthy = 1.35.
+        BigDecimal effective = pct(value, "1.35");
+
+        TransferOfferResponse r = transferService.makeOffer(
+                c.id(), c.userId(), target.getId(), value, okWage(target), 3);
+
+        assertThat(r.status()).isEqualTo("COUNTERED");
+        assertThat(r.counterAmount()).isEqualByComparingTo(pct(effective, "1.10"));
+        assertThat(playerRepository.findById(target.getId()).orElseThrow().getClubId())
+                .isEqualTo(otherClubId); // still with the seller: only countered, not accepted
+    }
+
+    @Test
+    void aDesperateSellerAcceptsALowballOfferForAnOtherwiseOrdinaryPlayer() {
+        Career c = createCareer();
+        Player target = aNeutralAiPlayer(c);
+        Club sellerClub = clubRepository.findById(target.getClubId()).orElseThrow();
+        sellerClub.setBalance(BigDecimal.ZERO); // DESPERATE (below one month's wage bill)
+        clubRepository.save(sellerClub);
+        BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
+        // askFactor = 1.00 (neutral) x 0.75 (desperate) = 0.75; accept >= 0.95 x 0.75 x value.
+        BigDecimal effective = pct(value, "0.75");
+        BigDecimal lowball = pct(effective, "0.95");
+        assertThat(lowball).isLessThan(value); // genuinely a lowball relative to plain value
+
+        TransferOfferResponse r = transferService.makeOffer(
+                c.id(), c.userId(), target.getId(), lowball, okWage(target), 3);
 
         assertThat(r.status()).isEqualTo("ACCEPTED");
         assertThat(playerRepository.findById(target.getId()).orElseThrow().getClubId())
