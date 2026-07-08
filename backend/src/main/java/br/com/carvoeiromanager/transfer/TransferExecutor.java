@@ -57,6 +57,10 @@ public class TransferExecutor {
         buyer.adjustBalance(fee.negate());
         seller.adjustBalance(fee);
         player.setClubId(buyerId);
+        // A completed transfer resolves the listing: the buyer isn't selling their new signing,
+        // so the flag/reason must not travel with the player (keeps the market listed-only
+        // invariant honest and avoids a stale "Listado" badge on bought players).
+        player.unlist();
         // Outgoing buy carries personal terms; a managed sale (incoming) leaves wage null.
         if (offer.getWage() != null) {
             player.setWage(offer.getWage());

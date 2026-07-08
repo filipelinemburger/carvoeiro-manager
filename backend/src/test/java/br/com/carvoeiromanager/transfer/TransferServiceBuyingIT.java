@@ -81,6 +81,25 @@ class TransferServiceBuyingIT {
     }
 
     @Test
+    void aCompletedBuyClearsTheBoughtPlayersListing() {
+        Career c = createCareer();
+        Player target = anAiPlayer(c);
+        // Given the target is transfer-listed by their AI club (as every market player is)
+        target.listForTransfer(br.com.carvoeiromanager.player.ListedReason.SURPLUS);
+        playerRepository.save(target);
+        BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
+
+        TransferOfferResponse r = transferService.makeOffer(c.id(), c.userId(), target.getId(), value, okWage(target), 3);
+
+        assertThat(r.status()).isEqualTo("ACCEPTED");
+        Player bought = playerRepository.findById(target.getId()).orElseThrow();
+        assertThat(bought.getClubId()).isEqualTo(c.clubId());
+        // The listing must not travel with the player to their new club.
+        assertThat(bought.isTransferListed()).isFalse();
+        assertThat(bought.getListedReason()).isNull();
+    }
+
+    @Test
     void aLowOfferIsCounteredAndCanBeAccepted() {
         Career c = createCareer();
         Player target = anAiPlayer(c);

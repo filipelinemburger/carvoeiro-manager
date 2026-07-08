@@ -380,6 +380,24 @@ class TransferServiceSellingIT {
     }
 
     @Test
+    void sellingAnOwnerListedPlayerClearsTheListing() {
+        Career c = createCareer();
+        Player p = aManagedOutfielder(c);
+        transferService.listPlayer(c.id(), c.userId(), p.getId()); // OWNER listing
+        TransferOffer bid = incomingBidFor(c, p, new BigDecimal("900000.00"));
+
+        TransferOfferResponse r = transferService.respondToIncoming(c.id(), c.userId(), bid.getId(), "ACCEPT", null);
+
+        assertThat(r.status()).isEqualTo("ACCEPTED");
+        Player sold = playerRepository.findById(p.getId()).orElseThrow();
+        assertThat(sold.getClubId()).isNotEqualTo(c.clubId());
+        // The OWNER listing must not follow the player to the AI buyer (it would otherwise
+        // leak back into the market with a stale OWNER chip).
+        assertThat(sold.isTransferListed()).isFalse();
+        assertThat(sold.getListedReason()).isNull();
+    }
+
+    @Test
     void listedManagedPlayersDrawBoostedBids() {
         Career c = createCareer();
         Player target = aManagedOutfielder(c);
