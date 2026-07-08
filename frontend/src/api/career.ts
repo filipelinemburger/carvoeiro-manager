@@ -3,6 +3,7 @@ import type {
   SaveGameResponse,
   SaveGameSummary,
   SquadResponse,
+  ClubSummary,
   SetLineupRequest,
   LineupResponse,
   AdvanceResponse,
@@ -44,6 +45,11 @@ export function deleteCareer(id: string, token: string): Promise<void> {
 
 export function getSquad(saveGameId: string, clubId: string, token: string): Promise<SquadResponse> {
   return apiGet<SquadResponse>(`/save-games/${saveGameId}/clubs/${clubId}/players`, token)
+}
+
+// Every club of the save game, sorted by reputation (highest first) — powers "Clubes".
+export function getClubs(saveGameId: string, token: string): Promise<ClubSummary[]> {
+  return apiGet<ClubSummary[]>(`/save-games/${saveGameId}/clubs`, token)
 }
 
 export function setLineup(

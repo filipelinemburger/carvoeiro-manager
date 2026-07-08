@@ -5,6 +5,8 @@ import { DashboardPage } from './features/career/DashboardPage'
 import { SquadPage } from './features/squad/SquadPage'
 import { BasePage } from './features/base/BasePage'
 import { TablePage } from './features/competition/TablePage'
+import { ClubsPage } from './features/club/ClubsPage'
+import { ClubViewPage } from './features/club/ClubViewPage'
 import { SeasonSummaryPage } from './features/season/SeasonSummaryPage'
 import { SeasonHistoryPage } from './features/season/SeasonHistoryPage'
 import { FinancesPage } from './features/finance/FinancesPage'
@@ -56,6 +58,22 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <TablePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/clubs"
+        element={
+          <ProtectedRoute>
+            <ClubsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/club"
+        element={
+          <ProtectedRoute>
+            <ClubViewPage />
           </ProtectedRoute>
         }
       />

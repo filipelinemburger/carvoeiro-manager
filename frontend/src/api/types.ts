@@ -79,6 +79,8 @@ export type PlayerResponse = {
   eligible: boolean
   role: PlayerRole | null
   contractYears: number
+  /** Market value (fee guidance) computed by the backend from overall + age. */
+  value: number
   wageDemand: number
   fitness: number
   injurySeverity: 'NONE' | 'KNOCK' | 'MINOR' | 'MAJOR'
@@ -103,6 +105,18 @@ export type SquadResponse = {
   players: PlayerResponse[]
   primaryColor: string
   secondaryColor: string
+}
+
+/** One club in the club-browsing list, sorted by reputation (highest first). */
+export type ClubSummary = {
+  id: string
+  name: string
+  commonName: string | null
+  shortName: string
+  primaryColor: string | null
+  secondaryColor: string | null
+  reputation: number
+  squadSize: number
 }
 
 export type SetLineupRequest = {

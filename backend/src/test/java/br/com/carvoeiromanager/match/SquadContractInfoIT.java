@@ -41,6 +41,8 @@ class SquadContractInfoIT {
         assertThat(squad.players()).isNotEmpty();
         assertThat(squad.players()).allMatch(p -> p.contractYears() >= 1 && p.contractYears() <= 4);
         assertThat(squad.players()).allMatch(p -> p.wageDemand().signum() > 0);
+        // Any squad view can show fee guidance: value = TransferValuation.marketValue(overall, age).
+        assertThat(squad.players()).allMatch(p -> p.value() != null && p.value().signum() > 0);
     }
 
     @Test

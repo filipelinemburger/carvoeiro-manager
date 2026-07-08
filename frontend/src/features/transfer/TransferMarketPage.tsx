@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Alert, Box, Button, Card, CardContent, Chip, Divider, FormControl, InputAdornment, Link,
+  Alert, Box, Button, Card, CardContent, Chip, Divider, FormControl, Link,
   NativeSelect, Stack, Tab, Tabs, TextField, Typography,
 } from '@mui/material'
 import {
@@ -12,46 +12,13 @@ import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { FreeAgentsPanel } from '../contract/FreeAgentsPage'
 import { PlayerDetails } from '../squad/PlayerDetails'
+import { MoneyField } from '../../components/MoneyField'
 import type { PlayerResponse, TransferOffer } from '../../api/types'
-import { formatBRL, formatThousandsBR, parseMoneyInput } from '../../lib/money'
+import { formatBRL, parseMoneyInput } from '../../lib/money'
 import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
 import BalanceIcon from '@mui/icons-material/Balance'
 import SendIcon from '@mui/icons-material/Send'
-
-/**
- * A labeled MUI money field: an "R$" start adornment, pt-BR thousands grouping while typing,
- * and a helper line that previews the typed value (or the suggested amount when empty).
- * Parsing goes through parseMoneyInput so a stray separator can never produce NaN. The
- * `ariaLabel` stays the input's accessible name so existing queries/tests keep working.
- */
-function MoneyField(props: {
-  label: string
-  ariaLabel: string
-  value: string
-  suggested: number
-  onChange: (v: string) => void
-}) {
-  const n = parseMoneyInput(props.value)
-  const helper = !Number.isNaN(n) && n > 0 ? formatBRL(n) : undefined
-  return (
-    <TextField
-      label={props.label}
-      size="small"
-      value={props.value}
-      onChange={e => {
-        const parsed = parseMoneyInput(e.target.value)
-        props.onChange(Number.isNaN(parsed) ? '' : formatThousandsBR(parsed))
-      }}
-      helperText={helper}
-      sx={{ width: 170 }}
-      slotProps={{
-        input: { startAdornment: <InputAdornment position="start">R$</InputAdornment> },
-        htmlInput: { 'aria-label': props.ariaLabel, inputMode: 'numeric', style: { textAlign: 'right' } },
-      }}
-    />
-  )
-}
 
 /** A small "LABEL / value" stat used in the player identity zone. */
 function Stat({ label, value }: { label: string; value: ReactNode }) {

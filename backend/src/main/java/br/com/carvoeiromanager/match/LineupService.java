@@ -14,6 +14,7 @@ import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.Pressing;
+import br.com.carvoeiromanager.transfer.TransferValuation;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +37,7 @@ public class LineupService {
     private final LineupRepository lineupRepository;
     private final LineupPlayerRepository lineupPlayerRepository;
     private final ContractValuation contractValuation;
+    private final TransferValuation transferValuation;
     private final FitnessCalculator fitnessCalculator;
 
     public LineupService(SaveGameService saveGameService,
@@ -44,6 +46,7 @@ public class LineupService {
                          LineupRepository lineupRepository,
                          LineupPlayerRepository lineupPlayerRepository,
                          ContractValuation contractValuation,
+                         TransferValuation transferValuation,
                          FitnessCalculator fitnessCalculator) {
         this.saveGameService = saveGameService;
         this.playerRepository = playerRepository;
@@ -51,6 +54,7 @@ public class LineupService {
         this.lineupRepository = lineupRepository;
         this.lineupPlayerRepository = lineupPlayerRepository;
         this.contractValuation = contractValuation;
+        this.transferValuation = transferValuation;
         this.fitnessCalculator = fitnessCalculator;
     }
 
@@ -453,6 +457,7 @@ public class LineupService {
                 p.isEligible(),
                 role != null ? role.name() : null,
                 p.getContractYears(),
+                transferValuation.marketValue(p.getOverall(), p.getAge()),
                 contractValuation.wageDemand(p.getOverall(), p.getAge()),
                 fitness,
                 p.getInjurySeverity().name(),

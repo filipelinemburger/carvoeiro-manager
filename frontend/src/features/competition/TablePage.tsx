@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { Link as RouterLink, useSearchParams } from 'react-router-dom'
 import {
-  Box, Collapse, IconButton, NativeSelect, Paper, Stack, Table, TableBody,
+  Box, Collapse, IconButton, Link, NativeSelect, Paper, Stack, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Typography,
 } from '@mui/material'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
@@ -43,6 +43,22 @@ const STAT_LEGEND: ReadonlyArray<readonly [string, string]> = [
   ['SG', 'Saldo de gols'],
   ['PTS', 'Pontos'],
 ]
+
+/** The club name as a link to its read-only roster at /club (stops the row's own click). */
+function ClubNameLink({ row, saveGameId }: { row: StandingRow; saveGameId: string }) {
+  return (
+    <Link
+      component={RouterLink}
+      to={`/club?saveGameId=${saveGameId}&clubId=${row.clubId}`}
+      underline="hover"
+      color="inherit"
+      onClick={e => e.stopPropagation()}
+      sx={{ fontWeight: 'inherit' }}
+    >
+      {row.commonName ?? row.clubName}
+    </Link>
+  )
+}
 
 /** A caption legend explaining the abbreviations used in the table and the detail rows. */
 function StatLegend() {
@@ -139,6 +155,7 @@ export function TablePage() {
                     row={row}
                     position={index + 1}
                     managed={row.clubId === managedClubId}
+                    saveGameId={saveGameId}
                   />
                 ))}
               </TableBody>
@@ -174,7 +191,7 @@ export function TablePage() {
                       }}
                     >
                       <TableCell align="center">{index + 1}</TableCell>
-                      <TableCell>{row.commonName ?? row.clubName}</TableCell>
+                      <TableCell><ClubNameLink row={row} saveGameId={saveGameId} /></TableCell>
                       <TableCell align="center">{row.played}</TableCell>
                       <TableCell align="center">{row.won}</TableCell>
                       <TableCell align="center">{row.drawn}</TableCell>
@@ -202,7 +219,9 @@ export function TablePage() {
  * expand a detail panel with the full stats (played, W/D/L, goals). Renders as a
  * main row plus a collapsible detail row spanning the table width.
  */
-function MobileStandingRow({ row, position, managed }: { row: StandingRow; position: number; managed: boolean }) {
+function MobileStandingRow({ row, position, managed, saveGameId }: {
+  row: StandingRow; position: number; managed: boolean; saveGameId: string
+}) {
   const [open, setOpen] = useState(false)
   return (
     <>
@@ -227,7 +246,9 @@ function MobileStandingRow({ row, position, managed }: { row: StandingRow; posit
         <TableCell align="center" sx={{ px: 1, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
           {position}
         </TableCell>
-        <TableCell align="center" sx={{ fontWeight: managed ? 800 : 600 }}>{row.commonName ?? row.clubName}</TableCell>
+        <TableCell align="center" sx={{ fontWeight: managed ? 800 : 600 }}>
+          <ClubNameLink row={row} saveGameId={saveGameId} />
+        </TableCell>
         <TableCell align="center" sx={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{row.points}</TableCell>
       </TableRow>
       <TableRow sx={{ backgroundColor: managed ? MANAGED_BG : undefined }}>

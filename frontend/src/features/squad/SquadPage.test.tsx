@@ -24,7 +24,7 @@ const mockRenewContract = vi.mocked(renewContract)
 
 // `as const` narrows injurySeverity to the literal 'NONE' so it satisfies
 // PlayerResponse's union type (not widened to string) when spread into fixtures.
-const STATE = { form: 0, morale: 0, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0, injurySeverity: 'NONE' as const, eligible: true, role: null, contractYears: 2, wageDemand: 90000, fitness: 100, attributes: [
+const STATE = { form: 0, morale: 0, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0, injurySeverity: 'NONE' as const, eligible: true, role: null, contractYears: 2, value: 1500000, wageDemand: 90000, fitness: 100, attributes: [
   { key: 'FINALIZACAO', label: 'Finalização', group: 'TECNICO' as const, value: 55 },
   { key: 'VISAO', label: 'Visão de jogo', group: 'MENTAL' as const, value: 50 },
   { key: 'VELOCIDADE', label: 'Velocidade', group: 'FISICO' as const, value: 60 },

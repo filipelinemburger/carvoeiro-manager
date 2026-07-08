@@ -195,6 +195,7 @@ export function Layout({ children }: LayoutProps) {
         { to: `/squad?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Escalação' },
         { to: `/base?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Base' },
         { to: `/table?saveGameId=${sgId}&competitionId=${standingsCompetitionId}&managedClubId=${managedClubId}`, label: 'Classificação' },
+        { to: `/clubs?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Clubes' },
         { to: `/finances?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Finanças' },
         { to: `/transfers?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Mercado' },
         { to: `/history?saveGameId=${sgId}`, label: 'Histórico' },
