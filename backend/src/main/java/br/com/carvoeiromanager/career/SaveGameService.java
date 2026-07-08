@@ -106,6 +106,10 @@ public class SaveGameService {
             club.setNickname(seedClub.nickname());
             club.setPrimaryColor(seedClub.primaryColor());
             club.setSecondaryColor(seedClub.secondaryColor());
+            club.setDefaultFormation(seedClub.formation());
+            club.setDefaultMentality(seedClub.mentality());
+            club.setDefaultPressing(seedClub.pressing());
+            club.setDefaultMarking(seedClub.marking());
             entityManager.persist(club);
 
             clubIdByShortName.put(seedClub.shortName(), club.getId());

@@ -7,6 +7,9 @@ import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
+import br.com.carvoeiromanager.seed.SeedCareer;
+import br.com.carvoeiromanager.seed.SeedClub;
+import br.com.carvoeiromanager.seed.SeedLoader;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -14,6 +17,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -178,5 +182,39 @@ class SaveGameServiceIT {
         assertThat(clubPlayers)
                 .isNotEmpty()
                 .allSatisfy(p -> assertThat(p.getWage()).isGreaterThan(java.math.BigDecimal.ZERO));
+    }
+
+    @Test
+    void clubsCarryTheirSeedTacticalIdentity() {
+        User user = User.create("tacid_" + UUID.randomUUID(), "hash");
+        userRepository.save(user);
+
+        SaveGameResponse response = saveGameService.createCareer(user.getId());
+
+        var clubs = clubRepository.findBySaveGameId(response.id());
+        assertThat(clubs).allSatisfy(club -> {
+            assertThat(club.getDefaultFormation()).as("%s formation", club.getShortName()).isNotBlank();
+            assertThat(club.getDefaultMentality()).as("%s mentality", club.getShortName()).isNotBlank();
+            assertThat(club.getDefaultPressing()).as("%s pressing", club.getShortName()).isNotBlank();
+            assertThat(club.getDefaultMarking()).as("%s marking", club.getShortName()).isNotBlank();
+        });
+
+        // Spot-check one Série B club and one Catarinense-only club against the
+        // exact seed values they were loaded from.
+        SeedCareer seed = new SeedLoader().loadCareer();
+        var seedByShortName = seed.clubPool().stream()
+                .collect(Collectors.toMap(SeedClub::shortName, sc -> sc));
+
+        var nau = clubs.stream().filter(c -> c.getShortName().equals("NAU")).findFirst().orElseThrow();
+        SeedClub seedNau = seedByShortName.get("NAU");
+        assertThat(nau.getDefaultFormation()).isEqualTo(seedNau.formation());
+        assertThat(nau.getDefaultMentality()).isEqualTo(seedNau.mentality());
+        assertThat(nau.getDefaultPressing()).isEqualTo(seedNau.pressing());
+        assertThat(nau.getDefaultMarking()).isEqualTo(seedNau.marking());
+
+        var bar = clubs.stream().filter(c -> c.getShortName().equals("BAR")).findFirst().orElseThrow();
+        SeedClub seedBar = seedByShortName.get("BAR");
+        assertThat(bar.getDefaultFormation()).isEqualTo(seedBar.formation());
+        assertThat(bar.getDefaultMentality()).isEqualTo(seedBar.mentality());
     }
 }
