@@ -4,6 +4,8 @@ import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.club.Club;
+import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
@@ -33,6 +35,7 @@ class TacticsServiceIT {
     @Autowired PlayerRepository playerRepository;
     @Autowired LineupRepository lineupRepository;
     @Autowired LineupPlayerRepository lineupPlayerRepository;
+    @Autowired ClubRepository clubRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {}
 
@@ -93,5 +96,41 @@ class TacticsServiceIT {
         assertThat(profile.roles()).containsKey(other.getId());
         assertThat(profile.roles().get(other.getId()))
                 .isEqualTo(PlayerRole.defaultFor(other.getPosition()));
+    }
+
+    @Test
+    void aiClubsUseTheirOwnSeedTacticalIdentityNotAGlobalDefault() {
+        Career career = createCareer();
+        UUID save = career.save().id();
+        UUID managedClub = career.save().managedClubId();
+
+        var aiClubs = clubRepository.findBySaveGameId(save).stream()
+                .filter(c -> !c.getId().equals(managedClub))
+                .toList();
+
+        // Find two AI clubs whose seed identities actually differ, so the
+        // assertion is a real signal, not two clubs that happen to match.
+        Club clubA = aiClubs.get(0);
+        Club clubB = aiClubs.stream()
+                .filter(c -> !c.getDefaultFormation().equals(clubA.getDefaultFormation())
+                        || !c.getDefaultMentality().equals(clubA.getDefaultMentality())
+                        || !c.getDefaultPressing().equals(clubA.getDefaultPressing())
+                        || !c.getDefaultMarking().equals(clubA.getDefaultMarking()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("expected at least two AI clubs with distinct identities"));
+
+        List<Player> xiA = playerRepository.findByClubId(clubA.getId());
+        List<Player> xiB = playerRepository.findByClubId(clubB.getId());
+
+        TacticalProfile profileA = tacticsService.profileFor(save, clubA.getId(), xiA);
+        TacticalProfile profileB = tacticsService.profileFor(save, clubB.getId(), xiB);
+
+        assertThat(profileA.formation()).isEqualTo(clubA.getDefaultFormation());
+        assertThat(profileA.mentality().name()).isEqualTo(clubA.getDefaultMentality());
+        assertThat(profileA.pressing().name()).isEqualTo(clubA.getDefaultPressing());
+        assertThat(profileA.marking().name()).isEqualTo(clubA.getDefaultMarking());
+
+        assertThat(profileB.formation()).isEqualTo(clubB.getDefaultFormation());
+        assertThat(profileA).isNotEqualTo(profileB);
     }
 }
