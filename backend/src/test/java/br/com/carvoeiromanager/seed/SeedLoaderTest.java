@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.seed;
 
+import br.com.carvoeiromanager.player.Formation;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
@@ -133,5 +134,24 @@ class SeedLoaderTest {
         assertThat(otero.attributes().bolaParada()).isEqualTo(88);
         assertThat(otero.attributes().chuteLonge()).isEqualTo(82);
         assertThat(otero.attributes().visao()).isEqualTo(80);
+    }
+
+    @Test
+    void everyClubHasAValidTacticalIdentity() {
+        SeedCareer data = new SeedLoader().loadCareer();
+
+        java.util.Set<String> validFormations = java.util.Arrays.stream(Formation.values())
+                .map(Formation::code)
+                .collect(Collectors.toSet());
+
+        assertThat(data.clubPool()).allSatisfy(club -> {
+            assertThat(validFormations).as("%s formation", club.shortName()).contains(club.formation());
+            assertThat(club.mentality()).as("%s mentality", club.shortName())
+                    .isIn("DEFENSIVE", "BALANCED", "ATTACKING");
+            assertThat(club.pressing()).as("%s pressing", club.shortName())
+                    .isIn("LOW", "MEDIUM", "HIGH");
+            assertThat(club.marking()).as("%s marking", club.shortName())
+                    .isIn("ZONAL", "MAN_TIGHT");
+        });
     }
 }

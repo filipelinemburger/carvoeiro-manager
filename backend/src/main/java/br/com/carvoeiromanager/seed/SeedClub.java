@@ -9,5 +9,9 @@ public record SeedClub(
         String nickname,
         String primaryColor,
         String secondaryColor,
+        String formation,
+        String mentality,
+        String pressing,
+        String marking,
         List<SeedPlayer> players
 ) {}
