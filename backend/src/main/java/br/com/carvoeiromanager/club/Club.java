@@ -41,6 +41,18 @@ public class Club {
     @Column(name = "secondary_color", length = 9)
     private String secondaryColor;
 
+    @Column(name = "default_formation", length = 10)
+    private String defaultFormation;
+
+    @Column(name = "default_mentality", length = 12)
+    private String defaultMentality;
+
+    @Column(name = "default_pressing", length = 8)
+    private String defaultPressing;
+
+    @Column(name = "default_marking", length = 10)
+    private String defaultMarking;
+
     @Column(name = "balance", nullable = false)
     private BigDecimal balance = BigDecimal.ZERO;
 
@@ -83,11 +95,19 @@ public class Club {
     public String getNickname() { return nickname; }
     public String getPrimaryColor() { return primaryColor; }
     public String getSecondaryColor() { return secondaryColor; }
+    public String getDefaultFormation() { return defaultFormation; }
+    public String getDefaultMentality() { return defaultMentality; }
+    public String getDefaultPressing() { return defaultPressing; }
+    public String getDefaultMarking() { return defaultMarking; }
 
     public void setCommonName(String commonName) { this.commonName = commonName; }
     public void setNickname(String nickname) { this.nickname = nickname; }
     public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
     public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
+    public void setDefaultFormation(String defaultFormation) { this.defaultFormation = defaultFormation; }
+    public void setDefaultMentality(String defaultMentality) { this.defaultMentality = defaultMentality; }
+    public void setDefaultPressing(String defaultPressing) { this.defaultPressing = defaultPressing; }
+    public void setDefaultMarking(String defaultMarking) { this.defaultMarking = defaultMarking; }
 
     public BigDecimal getBalance() { return balance; }
     public int getReputation() { return reputation; }
