@@ -154,4 +154,22 @@ class SeedLoaderTest {
                     .isIn("ZONAL", "MAN_TIGHT");
         });
     }
+
+    @Test
+    void tacticalIdentitiesShowRealVarietyAcrossThePool() {
+        SeedCareer data = new SeedLoader().loadCareer();
+
+        java.util.Set<String> formations = data.clubPool().stream()
+                .map(SeedClub::formation).collect(Collectors.toSet());
+        java.util.Set<String> mentalities = data.clubPool().stream()
+                .map(SeedClub::mentality).collect(Collectors.toSet());
+        java.util.Set<String> pressings = data.clubPool().stream()
+                .map(SeedClub::pressing).collect(Collectors.toSet());
+
+        assertThat(formations).as("formation variety across the pool").hasSizeGreaterThanOrEqualTo(5);
+        assertThat(mentalities).as("mentality variety across the pool")
+                .containsExactlyInAnyOrder("DEFENSIVE", "BALANCED", "ATTACKING");
+        assertThat(pressings).as("pressing variety across the pool")
+                .containsExactlyInAnyOrder("LOW", "MEDIUM", "HIGH");
+    }
 }
