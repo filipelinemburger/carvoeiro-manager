@@ -6,6 +6,7 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClubRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
@@ -15,7 +16,6 @@ import br.com.carvoeiromanager.competition.StandingRow;
 import br.com.carvoeiromanager.competition.StandingsCalculator;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -266,7 +266,7 @@ public class FinanceService {
         saveGameService.requireOwned(saveGameId, userId);
         Club club = clubRepository.findById(clubId)
                 .filter(c -> c.getSaveGameId().equals(saveGameId))
-                .orElseThrow(() -> new ApiException("CLUB_NOT_FOUND", "Club not found", HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new ApiException(ErrorCode.CLUB_NOT_FOUND, "Club not found"));
 
         List<FinanceTransactionResponse> transactions = financeTransactionRepository
                 .findBySaveGameIdAndClubIdOrderByRoundDescCreatedAtDesc(saveGameId, clubId).stream()

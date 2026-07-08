@@ -15,7 +15,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiError> handleApi(ApiException ex) {
-        ApiError body = new ApiError(ex.getCode(), ex.getMessage(), ex.getStatus().value());
+        ApiError body = new ApiError(ex.getCode().name(), ex.getMessage(), ex.getStatus().value());
         return ResponseEntity.status(ex.getStatus()).body(body);
     }
 
@@ -31,7 +31,7 @@ public class GlobalExceptionHandler {
         if (message.isBlank()) {
             message = "Request validation failed";
         }
-        ApiError body = new ApiError("VALIDATION_ERROR", message, HttpStatus.BAD_REQUEST.value());
+        ApiError body = new ApiError(ErrorCode.VALIDATION_ERROR.name(), message, HttpStatus.BAD_REQUEST.value());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
@@ -40,7 +40,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleMalformed(HttpMessageNotReadableException ex) {
-        ApiError body = new ApiError("MALFORMED_REQUEST", "Malformed request body",
+        ApiError body = new ApiError(ErrorCode.MALFORMED_REQUEST.name(), "Malformed request body",
                 HttpStatus.BAD_REQUEST.value());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }

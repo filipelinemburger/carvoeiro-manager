@@ -6,12 +6,12 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.contract.ContractValuation;
 import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -264,22 +264,19 @@ public class TransferService {
 
     private void requireValidTerms(BigDecimal wage, int contractYears) {
         if (!contractValuation.isValidLength(contractYears) || wage == null || wage.signum() <= 0) {
-            throw new ApiException("INVALID_CONTRACT",
-                    "Contract length must be 1-5 years and wage must be positive",
-                    HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INVALID_CONTRACT,
+                    "Contract length must be 1-5 years and wage must be positive");
         }
     }
 
     private void requireSellAllowed(UUID managedClubId, Player player) {
         List<Player> squad = playerRepository.findByClubIdAndYouthProspectFalse(managedClubId);
         if (squad.size() <= MIN_SQUAD_SIZE) {
-            throw new ApiException("SQUAD_TOO_SMALL",
-                    "Squad would be too small", HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.SQUAD_TOO_SMALL, "Squad would be too small");
         }
         if (player.getPosition() == Position.GK
                 && squad.stream().filter(p -> p.getPosition() == Position.GK).count() <= 1) {
-            throw new ApiException("SQUAD_TOO_SMALL",
-                    "Cannot sell your last goalkeeper", HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.SQUAD_TOO_SMALL, "Cannot sell your last goalkeeper");
         }
     }
 
@@ -287,42 +284,38 @@ public class TransferService {
 
     void requireWindowOpen(SaveGame save) {
         if (!transferWindow.isOpen(save.getCurrentDate())) {
-            throw new ApiException("TRANSFER_WINDOW_CLOSED",
-                    "The transfer window is closed", HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.TRANSFER_WINDOW_CLOSED, "The transfer window is closed");
         }
     }
 
     private void requireNoLiveMatch(UUID saveGameId) {
         if (liveMatchRepository.findBySaveGameId(saveGameId).isPresent()) {
-            throw new ApiException("LIVE_MATCH_IN_PROGRESS",
-                    "Finish the live match before completing transfers", HttpStatus.CONFLICT);
+            throw new ApiException(ErrorCode.LIVE_MATCH_IN_PROGRESS,
+                    "Finish the live match before completing transfers");
         }
     }
 
     TransferOffer requireOffer(UUID saveGameId, UUID offerId) {
         return transferOfferRepository.findById(offerId)
                 .filter(o -> o.getSaveGameId().equals(saveGameId))
-                .orElseThrow(() -> new ApiException("TRANSFER_OFFER_NOT_FOUND",
-                        "Transfer offer not found", HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new ApiException(ErrorCode.TRANSFER_OFFER_NOT_FOUND, "Transfer offer not found"));
     }
 
     void requireFunds(UUID clubId, BigDecimal amount) {
         Club club = clubRepository.findById(clubId).orElseThrow();
         if (club.getBalance().compareTo(amount) < 0) {
-            throw new ApiException("INSUFFICIENT_FUNDS",
-                    "Not enough funds for this transfer", HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INSUFFICIENT_FUNDS, "Not enough funds for this transfer");
         }
     }
 
     void requireSquadRoom(UUID managedClubId) {
         if (playerRepository.findByClubIdAndYouthProspectFalse(managedClubId).size() >= MAX_SQUAD_SIZE) {
-            throw new ApiException("SQUAD_FULL",
-                    "Squad is full", HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.SQUAD_FULL, "Squad is full");
         }
     }
 
     ApiException invalid(String message) {
-        return new ApiException("INVALID_TRANSFER", message, HttpStatus.UNPROCESSABLE_CONTENT);
+        return new ApiException(ErrorCode.INVALID_TRANSFER, message);
     }
 
     Map<UUID, String> clubNames(UUID saveGameId) {

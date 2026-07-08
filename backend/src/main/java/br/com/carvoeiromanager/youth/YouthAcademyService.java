@@ -2,11 +2,11 @@ package br.com.carvoeiromanager.youth;
 
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.finance.FinanceCalculator;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.YouthDevelopmentService;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,10 +61,9 @@ public class YouthAcademyService {
 
     private Player requireProspect(UUID saveGameId, UUID prospectId) {
         Player p = playerRepository.findById(prospectId)
-                .orElseThrow(() -> new ApiException("PROSPECT_NOT_FOUND",
-                        "Youth prospect not found", HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new ApiException(ErrorCode.PROSPECT_NOT_FOUND, "Youth prospect not found"));
         if (!p.getSaveGameId().equals(saveGameId) || !p.isYouthProspect()) {
-            throw new ApiException("PROSPECT_NOT_FOUND", "Youth prospect not found", HttpStatus.NOT_FOUND);
+            throw new ApiException(ErrorCode.PROSPECT_NOT_FOUND, "Youth prospect not found");
         }
         return p;
     }

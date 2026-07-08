@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
@@ -19,7 +20,6 @@ import br.com.carvoeiromanager.season.SeasonAdvanceService;
 import br.com.carvoeiromanager.season.SeasonEvent;
 import br.com.carvoeiromanager.season.SeasonEventRepository;
 import br.com.carvoeiromanager.season.SeasonEventType;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
@@ -98,7 +98,7 @@ public class LiveMatchService {
         SeasonEvent next = seasonEventRepository
                 .findFirstBySaveGameIdAndProcessedFalseOrderByEventDateAscSequenceAsc(saveGameId);
         if (next == null || next.getType() != SeasonEventType.MATCH) {
-            throw new ApiException("NO_MATCH_TO_PLAY", "The next event is not a match", HttpStatus.CONFLICT);
+            throw new ApiException(ErrorCode.NO_MATCH_TO_PLAY, "The next event is not a match");
         }
         UUID managedClubId = save.getManagedClubId();
         List<Fixture> fixtures = fixtureRepository.findBySaveGameIdAndCompetitionIdAndRound(
@@ -106,8 +106,8 @@ public class LiveMatchService {
         Fixture fixture = fixtures.stream()
                 .filter(f -> managedClubId.equals(f.getHomeClubId()) || managedClubId.equals(f.getAwayClubId()))
                 .findFirst()
-                .orElseThrow(() -> new ApiException("MANAGED_CLUB_NOT_PLAYING",
-                        "The managed club does not play in the next round", HttpStatus.CONFLICT));
+                .orElseThrow(() -> new ApiException(ErrorCode.MANAGED_CLUB_NOT_PLAYING,
+                        "The managed club does not play in the next round"));
 
         boolean managedIsHome = managedClubId.equals(fixture.getHomeClubId());
         UUID homeClubId = fixture.getHomeClubId();
@@ -143,7 +143,7 @@ public class LiveMatchService {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         LiveMatch lm = requireLive(saveGameId);
         if (lm.getCommittedMinute() >= MINUTES) {
-            throw new ApiException("MATCH_OVER", "The match has ended", HttpStatus.CONFLICT);
+            throw new ApiException(ErrorCode.MATCH_OVER, "The match has ended");
         }
 
         LiveMatchConfig cfg = configFor(lm);
@@ -154,16 +154,15 @@ public class LiveMatchService {
 
         int used = (int) cfg.subSchedule().stream().filter(s -> s.home() == lm.isManagedIsHome()).count();
         if (used >= MAX_SUBS) {
-            throw new ApiException("NO_SUBS_REMAINING", "No substitutions remaining", HttpStatus.CONFLICT);
+            throw new ApiException(ErrorCode.NO_SUBS_REMAINING, "No substitutions remaining");
         }
         if (!managed.onPitch().contains(req.outPlayerId())) {
-            throw new ApiException("INVALID_SUBSTITUTION",
-                    "The outgoing player is not on the pitch", HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INVALID_SUBSTITUTION, "The outgoing player is not on the pitch");
         }
         boolean onBench = managedBench.stream().anyMatch(p -> p.getId().equals(req.inPlayerId()));
         if (!onBench || managed.usedIn().contains(req.inPlayerId())) {
-            throw new ApiException("INVALID_SUBSTITUTION",
-                    "The incoming player is not an available bench player", HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INVALID_SUBSTITUTION,
+                    "The incoming player is not an available bench player");
         }
 
         int minute = Math.min(MINUTES, lm.getCommittedMinute() + 1);
@@ -179,7 +178,7 @@ public class LiveMatchService {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         LiveMatch lm = requireLive(saveGameId);
         if (lm.getCommittedMinute() >= MINUTES) {
-            throw new ApiException("MATCH_OVER", "The match has ended", HttpStatus.CONFLICT);
+            throw new ApiException(ErrorCode.MATCH_OVER, "The match has ended");
         }
 
         Mentality mentality = parseMentality(req.mentality());
@@ -198,21 +197,21 @@ public class LiveMatchService {
     private Mentality parseMentality(String value) {
         try { return Mentality.valueOf(value); }
         catch (IllegalArgumentException e) {
-            throw new ApiException("INVALID_TACTICS", "Unknown mentality: " + value, HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INVALID_TACTICS, "Unknown mentality: " + value);
         }
     }
 
     private Pressing parsePressing(String value) {
         try { return Pressing.valueOf(value); }
         catch (IllegalArgumentException e) {
-            throw new ApiException("INVALID_TACTICS", "Unknown pressing: " + value, HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INVALID_TACTICS, "Unknown pressing: " + value);
         }
     }
 
     private Marking parseMarking(String value) {
         try { return Marking.valueOf(value); }
         catch (IllegalArgumentException e) {
-            throw new ApiException("INVALID_TACTICS", "Unknown marking: " + value, HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INVALID_TACTICS, "Unknown marking: " + value);
         }
     }
 
@@ -220,7 +219,7 @@ public class LiveMatchService {
         for (Formation f : Formation.values()) {
             if (f.code().equals(code)) return code;
         }
-        throw new ApiException("INVALID_TACTICS", "Unknown formation: " + code, HttpStatus.UNPROCESSABLE_CONTENT);
+        throw new ApiException(ErrorCode.INVALID_TACTICS, "Unknown formation: " + code);
     }
 
     @Transactional
@@ -244,8 +243,7 @@ public class LiveMatchService {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         LiveMatch lm = requireLive(saveGameId);
         if (lm.getCommittedMinute() < MINUTES) {
-            throw new ApiException("MATCH_NOT_FINISHED",
-                    "The match has not reached full time", HttpStatus.CONFLICT);
+            throw new ApiException(ErrorCode.MATCH_NOT_FINISHED, "The match has not reached full time");
         }
 
         LiveMatchConfig cfg = configFor(lm);
@@ -328,8 +326,7 @@ public class LiveMatchService {
 
     LiveMatch requireLive(UUID saveGameId) {
         return liveMatchRepository.findBySaveGameId(saveGameId)
-                .orElseThrow(() -> new ApiException("NO_LIVE_MATCH",
-                        "There is no live match in progress", HttpStatus.CONFLICT));
+                .orElseThrow(() -> new ApiException(ErrorCode.NO_LIVE_MATCH, "There is no live match in progress"));
     }
 
     // ---- shared building blocks (reused by advance/substitute/finish) ----
@@ -554,7 +551,7 @@ public class LiveMatchService {
         return ids.stream().map(id -> {
             Player p = byId.get(id);
             if (p == null) {
-                throw new ApiException("PLAYER_NOT_FOUND", "Player " + id + " not found", HttpStatus.NOT_FOUND);
+                throw new ApiException(ErrorCode.PLAYER_NOT_FOUND, "Player " + id + " not found");
             }
             return p;
         }).toList();

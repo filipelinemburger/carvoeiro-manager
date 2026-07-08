@@ -3,6 +3,7 @@ package br.com.carvoeiromanager.career;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClub;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
@@ -22,7 +23,6 @@ import br.com.carvoeiromanager.seed.SeedLoader;
 import br.com.carvoeiromanager.seed.SeedPlayer;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -234,7 +234,7 @@ public class SaveGameService {
     }
 
     private ApiException saveGameNotFound() {
-        return new ApiException("SAVE_GAME_NOT_FOUND", "Save game not found", HttpStatus.NOT_FOUND);
+        return new ApiException(ErrorCode.SAVE_GAME_NOT_FOUND, "Save game not found");
     }
 
     /** All of a user's careers, newest first, as lightweight summaries for the load dialog. */

@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.career.SaveGameStatus;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.FixtureRepository;
@@ -21,7 +22,6 @@ import br.com.carvoeiromanager.transfer.TransferOfferRepository;
 import br.com.carvoeiromanager.transfer.TransferOfferStatus;
 import br.com.carvoeiromanager.transfer.TransferService;
 import tools.jackson.databind.ObjectMapper;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -99,11 +99,10 @@ public class SeasonAdvanceService {
     public AdvanceResponse advance(UUID saveGameId, UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         if (save.getStatus() == SaveGameStatus.FINISHED) {
-            throw new ApiException("SEASON_FINISHED", "The season has already finished", HttpStatus.CONFLICT);
+            throw new ApiException(ErrorCode.SEASON_FINISHED, "The season has already finished");
         }
         if (liveMatchRepository.findBySaveGameId(saveGameId).isPresent()) {
-            throw new ApiException("LIVE_MATCH_IN_PROGRESS",
-                    "Finish the live match before advancing", HttpStatus.CONFLICT);
+            throw new ApiException(ErrorCode.LIVE_MATCH_IN_PROGRESS, "Finish the live match before advancing");
         }
 
         SeasonEvent event = seasonEventRepository

@@ -3,15 +3,13 @@ package br.com.carvoeiromanager.common;
 import org.springframework.http.HttpStatus;
 
 public class ApiException extends RuntimeException {
-    private final String code;
-    private final HttpStatus status;
+    private final ErrorCode code;
 
-    public ApiException(String code, String message, HttpStatus status) {
+    public ApiException(ErrorCode code, String message) {
         super(message);
         this.code = code;
-        this.status = status;
     }
 
-    public String getCode() { return code; }
-    public HttpStatus getStatus() { return status; }
+    public ErrorCode getCode() { return code; }
+    public HttpStatus getStatus() { return code.status(); }
 }

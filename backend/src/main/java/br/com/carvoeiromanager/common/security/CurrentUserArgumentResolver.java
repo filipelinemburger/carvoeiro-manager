@@ -1,8 +1,8 @@
 package br.com.carvoeiromanager.common.security;
 
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import org.springframework.core.MethodParameter;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -33,7 +33,7 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
                                   WebDataBinderFactory binderFactory) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof UUID userId)) {
-            throw new ApiException("UNAUTHENTICATED", "No authenticated user in context", HttpStatus.UNAUTHORIZED);
+            throw new ApiException(ErrorCode.UNAUTHENTICATED, "No authenticated user in context");
         }
         return userId;
     }

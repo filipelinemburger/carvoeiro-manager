@@ -4,7 +4,7 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
-import org.springframework.http.HttpStatus;
+import br.com.carvoeiromanager.common.ErrorCode;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -43,10 +43,7 @@ public class StandingsService {
         // (avoids leaking competitions from other save games).
         Competition competition = competitionRepository.findById(competitionId)
                 .filter(c -> c.getSaveGameId().equals(saveGameId))
-                .orElseThrow(() -> new ApiException(
-                        "COMPETITION_NOT_FOUND",
-                        "Competition not found",
-                        HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new ApiException(ErrorCode.COMPETITION_NOT_FOUND, "Competition not found"));
 
         // Only include clubs that are members of this specific competition.
         Set<UUID> memberIds = competitionClubRepository.findByCompetitionId(competition.getId()).stream()

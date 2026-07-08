@@ -3,10 +3,10 @@ package br.com.carvoeiromanager.contract;
 import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.transfer.TransferWindow;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -69,8 +69,7 @@ public class ContractService {
         Player player = playerRepository.findById(playerId)
                 .filter(p -> p.getSaveGameId().equals(saveGameId))
                 .filter(Player::isFreeAgent)
-                .orElseThrow(() -> new ApiException("PLAYER_NOT_FOUND",
-                        "Free agent not found", HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new ApiException(ErrorCode.PLAYER_NOT_FOUND, "Free agent not found"));
 
         applyTerms(player, wage, contractYears);   // validates length/wage + acceptance
         player.setClubId(save.getManagedClubId()); // joins the squad; no fee, no ledger
@@ -80,14 +79,13 @@ public class ContractService {
 
     private void requireWindowOpen(SaveGame save) {
         if (!transferWindow.isOpen(save.getCurrentDate())) {
-            throw new ApiException("TRANSFER_WINDOW_CLOSED",
-                    "The transfer window is closed", HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.TRANSFER_WINDOW_CLOSED, "The transfer window is closed");
         }
     }
 
     private void requireSquadRoom(UUID managedClubId) {
         if (playerRepository.findByClubIdAndYouthProspectFalse(managedClubId).size() >= MAX_SQUAD_SIZE) {
-            throw new ApiException("SQUAD_FULL", "Squad is full", HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.SQUAD_FULL, "Squad is full");
         }
     }
 
@@ -95,15 +93,13 @@ public class ContractService {
 
     void applyTerms(Player player, BigDecimal wage, int contractYears) {
         if (!contractValuation.isValidLength(contractYears) || wage == null || wage.signum() <= 0) {
-            throw new ApiException("INVALID_CONTRACT",
-                    "Contract length must be 1-5 years and wage must be positive",
-                    HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INVALID_CONTRACT,
+                    "Contract length must be 1-5 years and wage must be positive");
         }
         if (!contractValuation.acceptsWage(player.getOverall(), player.getAge(), wage)) {
             BigDecimal demand = contractValuation.wageDemand(player.getOverall(), player.getAge());
-            throw new ApiException("PLAYER_REJECTS_TERMS",
-                    "Player rejects these terms; demands at least " + demand,
-                    HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.PLAYER_REJECTS_TERMS,
+                    "Player rejects these terms; demands at least " + demand);
         }
         player.setWage(wage);
         player.setContractYears(contractYears);
@@ -113,8 +109,7 @@ public class ContractService {
         return playerRepository.findById(playerId)
                 .filter(p -> p.getSaveGameId().equals(saveGameId))
                 .filter(p -> managedClubId.equals(p.getClubId()))
-                .orElseThrow(() -> new ApiException("PLAYER_NOT_FOUND",
-                        "Player not found at your club", HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new ApiException(ErrorCode.PLAYER_NOT_FOUND, "Player not found at your club"));
     }
 
     PlayerContractResponse toResponse(Player p) {

@@ -1,13 +1,13 @@
 package br.com.carvoeiromanager.common.security;
 
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -77,7 +77,7 @@ public class JwtService {
                     .parseSignedClaims(token)
                     .getPayload();
         } catch (JwtException | IllegalArgumentException ex) {
-            throw new ApiException("INVALID_TOKEN", "Invalid or expired token", HttpStatus.UNAUTHORIZED);
+            throw new ApiException(ErrorCode.INVALID_TOKEN, "Invalid or expired token");
         }
     }
 }

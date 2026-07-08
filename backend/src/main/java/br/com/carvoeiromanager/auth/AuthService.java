@@ -2,9 +2,9 @@ package br.com.carvoeiromanager.auth;
 
 import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.common.security.JwtService;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,16 +58,14 @@ public class AuthService {
     }
 
     private ApiException usernameTaken(String username) {
-        return new ApiException("USERNAME_TAKEN",
-                "Username '" + username + "' is already taken", HttpStatus.CONFLICT);
+        return new ApiException(ErrorCode.USERNAME_TAKEN, "Username '" + username + "' is already taken");
     }
 
     @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByUsername(request.username())
                 .filter(candidate -> passwordEncoder.matches(request.password(), candidate.getPasswordHash()))
-                .orElseThrow(() -> new ApiException("INVALID_CREDENTIALS",
-                        "Invalid username or password", HttpStatus.UNAUTHORIZED));
+                .orElseThrow(() -> new ApiException(ErrorCode.INVALID_CREDENTIALS, "Invalid username or password"));
         return toResponse(user);
     }
 

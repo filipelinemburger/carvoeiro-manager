@@ -7,6 +7,7 @@ import br.com.carvoeiromanager.career.SaveGameStatus;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
@@ -27,7 +28,6 @@ import br.com.carvoeiromanager.player.PlayerAgingService;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.YouthDevelopmentService;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -134,8 +134,7 @@ public class SeasonRolloverService {
     public RolloverResponse rollover(UUID saveGameId, UUID userId) {
         SaveGame saveGame = saveGameService.requireOwned(saveGameId, userId);
         if (saveGame.getStatus() != SaveGameStatus.FINISHED) {
-            throw new ApiException("SEASON_NOT_FINISHED",
-                    "The current season is not finished yet", HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.SEASON_NOT_FINISHED, "The current season is not finished yet");
         }
 
         final int finishingYear = saveGame.getSeasonYear();

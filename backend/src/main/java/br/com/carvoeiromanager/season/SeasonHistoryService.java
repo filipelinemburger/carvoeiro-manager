@@ -2,8 +2,8 @@ package br.com.carvoeiromanager.season;
 
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.TopScorerResponse;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -39,8 +39,7 @@ public class SeasonHistoryService {
         List<Season> seasons = seasonRepository.findBySaveGameIdAndSeasonYearOrderByCompetitionName(
                 saveGameId, seasonYear);
         Season season = seasons.stream().findFirst()
-                .orElseThrow(() -> new ApiException(
-                        "SEASON_NOT_FOUND", "Season not found", HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new ApiException(ErrorCode.SEASON_NOT_FOUND, "Season not found"));
 
         List<SeasonStandingResponse> table = seasonStandingRepository
                 .findBySeasonIdOrderByPosition(season.getId()).stream()

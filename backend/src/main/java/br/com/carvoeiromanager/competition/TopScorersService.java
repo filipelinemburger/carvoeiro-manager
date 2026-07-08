@@ -4,11 +4,11 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.match.MatchEvent;
 import br.com.carvoeiromanager.match.MatchEventRepository;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -50,8 +50,7 @@ public class TopScorersService {
         saveGameService.requireOwned(saveGameId, userId);
         Competition competition = competitionRepository.findById(competitionId)
                 .filter(c -> c.getSaveGameId().equals(saveGameId))
-                .orElseThrow(() -> new ApiException(
-                        "COMPETITION_NOT_FOUND", "Competition not found", HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new ApiException(ErrorCode.COMPETITION_NOT_FOUND, "Competition not found"));
 
         List<UUID> fixtureIds = fixtureRepository
                 .findBySaveGameIdAndCompetitionId(saveGameId, competition.getId()).stream()

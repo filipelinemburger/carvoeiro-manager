@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.contract.ContractValuation;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
@@ -13,7 +14,6 @@ import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.Pressing;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -167,9 +167,7 @@ public class LineupService {
                     List<Player> eligibleXi = playerIds.stream()
                             .map(playerId -> playerRepository.findById(playerId)
                                     .orElseThrow(() -> new ApiException(
-                                            "PLAYER_NOT_FOUND",
-                                            "Player " + playerId + " not found",
-                                            HttpStatus.NOT_FOUND)))
+                                            ErrorCode.PLAYER_NOT_FOUND, "Player " + playerId + " not found")))
                             .filter(Player::isEligible)
                             .collect(java.util.stream.Collectors.toList());
                     // If suspensions/injuries left the saved XI short, fall back to bestXi so the
@@ -260,9 +258,7 @@ public class LineupService {
                         .filter(p -> p.getPosition() == Position.GK)
                         .max(byRating)
                         .orElseThrow(() -> new ApiException(
-                                "NO_GK_FOUND",
-                                "Club " + clubId + " has no goalkeeper at all",
-                                HttpStatus.UNPROCESSABLE_CONTENT)));
+                                ErrorCode.NO_GK_FOUND, "Club " + clubId + " has no goalkeeper at all")));
 
         // Fill 10 outfield slots: prefer eligible, then fill from ineligible if needed.
         List<Player> eligibleOutfield = eligible.stream()
@@ -320,16 +316,15 @@ public class LineupService {
     }
 
     private ApiException clubNotFound() {
-        return new ApiException("CLUB_NOT_FOUND", "Club not found", HttpStatus.NOT_FOUND);
+        return new ApiException(ErrorCode.CLUB_NOT_FOUND, "Club not found");
     }
 
     private void validatePlayerCount(List<UUID> startingIds) {
         if (startingIds == null || startingIds.size() != 11) {
             throw new ApiException(
-                    "INVALID_LINEUP",
+                    ErrorCode.INVALID_LINEUP,
                     "A lineup must have exactly 11 starting players, but got " +
-                            (startingIds == null ? 0 : startingIds.size()),
-                    HttpStatus.UNPROCESSABLE_CONTENT);
+                            (startingIds == null ? 0 : startingIds.size()));
         }
     }
 
@@ -344,9 +339,8 @@ public class LineupService {
 
         if (!foreignIds.isEmpty()) {
             throw new ApiException(
-                    "INVALID_LINEUP",
-                    "The following player IDs do not belong to this club: " + foreignIds,
-                    HttpStatus.UNPROCESSABLE_CONTENT);
+                    ErrorCode.INVALID_LINEUP,
+                    "The following player IDs do not belong to this club: " + foreignIds);
         }
     }
 
@@ -360,9 +354,8 @@ public class LineupService {
 
         if (gkCount != 1) {
             throw new ApiException(
-                    "INVALID_LINEUP",
-                    "A lineup must have exactly 1 goalkeeper, but found " + gkCount,
-                    HttpStatus.UNPROCESSABLE_CONTENT);
+                    ErrorCode.INVALID_LINEUP,
+                    "A lineup must have exactly 1 goalkeeper, but found " + gkCount);
         }
     }
 
@@ -374,9 +367,8 @@ public class LineupService {
                 .map(Player::getId)
                 .toList();
         if (!suspended.isEmpty()) {
-            throw new ApiException("SUSPENDED_PLAYER",
-                    "These players are suspended and cannot be selected: " + suspended,
-                    HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.SUSPENDED_PLAYER,
+                    "These players are suspended and cannot be selected: " + suspended);
         }
         List<UUID> injured = clubPlayers.stream()
                 .filter(p -> startingSet.contains(p.getId()))
@@ -384,28 +376,24 @@ public class LineupService {
                 .map(Player::getId)
                 .toList();
         if (!injured.isEmpty()) {
-            throw new ApiException("INJURED_PLAYER",
-                    "These players are injured and cannot be selected: " + injured,
-                    HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INJURED_PLAYER,
+                    "These players are injured and cannot be selected: " + injured);
         }
     }
 
     private void validateBench(List<UUID> startingIds, List<UUID> benchIds) {
         if (benchIds.size() > 9) {
-            throw new ApiException("INVALID_LINEUP",
-                    "The bench may hold at most 9 players, but got " + benchIds.size(),
-                    HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INVALID_LINEUP,
+                    "The bench may hold at most 9 players, but got " + benchIds.size());
         }
         if (Set.copyOf(benchIds).size() != benchIds.size()) {
-            throw new ApiException("INVALID_LINEUP",
-                    "The bench contains duplicate players", HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INVALID_LINEUP, "The bench contains duplicate players");
         }
         Set<UUID> starting = Set.copyOf(startingIds);
         List<UUID> overlap = benchIds.stream().filter(starting::contains).toList();
         if (!overlap.isEmpty()) {
-            throw new ApiException("INVALID_LINEUP",
-                    "These players are both starting and on the bench: " + overlap,
-                    HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INVALID_LINEUP,
+                    "These players are both starting and on the bench: " + overlap);
         }
     }
 
@@ -417,17 +405,15 @@ public class LineupService {
             try {
                 role = PlayerRole.valueOf(starter.role());
             } catch (IllegalArgumentException ex) {
-                throw new ApiException("INVALID_ROLE",
-                        "Unknown role: " + starter.role(), HttpStatus.UNPROCESSABLE_CONTENT);
+                throw new ApiException(ErrorCode.INVALID_ROLE, "Unknown role: " + starter.role());
             }
             // player is guaranteed non-null in practice: validatePlayersOwnedByClub
             // runs before this and rejects any starter not in clubPlayers. The guard
             // is defensive only.
             Player player = byId.get(starter.playerId());
             if (player != null && !role.isValidFor(player.getPosition())) {
-                throw new ApiException("INVALID_ROLE",
-                        "Role " + role + " is not valid for position " + player.getPosition(),
-                        HttpStatus.UNPROCESSABLE_CONTENT);
+                throw new ApiException(ErrorCode.INVALID_ROLE,
+                        "Role " + role + " is not valid for position " + player.getPosition());
             }
             resolved.put(starter.playerId(), role);
         }
@@ -482,8 +468,8 @@ public class LineupService {
         Marking marking = parseMarking(req.marking());
 
         Lineup lineup = lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
-                .orElseThrow(() -> new ApiException("LINEUP_REQUIRED",
-                        "Set a lineup before configuring tactics", HttpStatus.UNPROCESSABLE_CONTENT));
+                .orElseThrow(() -> new ApiException(ErrorCode.LINEUP_REQUIRED,
+                        "Set a lineup before configuring tactics"));
 
         Set<UUID> xiIds = lineupPlayerRepository.findByLineupId(lineup.getId()).stream()
                 .filter(LineupPlayer::isStarting)
@@ -521,30 +507,29 @@ public class LineupService {
 
     private void requireTakerInXi(UUID takerId, Set<UUID> xiIds) {
         if (takerId != null && !xiIds.contains(takerId)) {
-            throw new ApiException("INVALID_TACTICS",
-                    "Set-piece taker " + takerId + " is not in the starting XI",
-                    HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INVALID_TACTICS,
+                    "Set-piece taker " + takerId + " is not in the starting XI");
         }
     }
 
     private Mentality parseMentality(String v) {
         try { return Mentality.valueOf(v); }
         catch (IllegalArgumentException e) {
-            throw new ApiException("INVALID_TACTICS", "Unknown mentality: " + v, HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INVALID_TACTICS, "Unknown mentality: " + v);
         }
     }
 
     private Pressing parsePressing(String v) {
         try { return Pressing.valueOf(v); }
         catch (IllegalArgumentException e) {
-            throw new ApiException("INVALID_TACTICS", "Unknown pressing: " + v, HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INVALID_TACTICS, "Unknown pressing: " + v);
         }
     }
 
     private Marking parseMarking(String v) {
         try { return Marking.valueOf(v); }
         catch (IllegalArgumentException e) {
-            throw new ApiException("INVALID_TACTICS", "Unknown marking: " + v, HttpStatus.UNPROCESSABLE_CONTENT);
+            throw new ApiException(ErrorCode.INVALID_TACTICS, "Unknown marking: " + v);
         }
     }
 }
