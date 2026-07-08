@@ -17,6 +17,7 @@ import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.match.MatchOutcomeApplier;
 import br.com.carvoeiromanager.match.PlayerRating;
 import br.com.carvoeiromanager.match.RoundOutcome;
+import br.com.carvoeiromanager.transfer.CompletedTransferResponse;
 import br.com.carvoeiromanager.transfer.TransferDirection;
 import br.com.carvoeiromanager.transfer.TransferOfferRepository;
 import br.com.carvoeiromanager.transfer.TransferOfferStatus;
@@ -112,7 +113,7 @@ public class SeasonAdvanceService {
             save.setStatus(SaveGameStatus.FINISHED);
             saveGameRepository.save(save);
             return new AdvanceResponse("FINISHED", null, null, null,
-                    List.of(), List.of(), List.of(), List.of(), null, 0, true, List.of());
+                    List.of(), List.of(), List.of(), List.of(), null, 0, true, List.of(), List.of());
         }
 
         LocalDate eventDate = event.getEventDate();
@@ -191,7 +192,7 @@ public class SeasonAdvanceService {
         return new AdvanceResponse("MATCH", eventDate.toString(), competitionName, round,
                 List.copyOf(outcome.results()), List.copyOf(outcome.bookings()),
                 List.copyOf(outcome.newSuspensions()), List.copyOf(outcome.newInjuries()),
-                finance, 0, seasonFinished, List.copyOf(playerRatings));
+                finance, 0, seasonFinished, List.copyOf(playerRatings), List.of());
     }
 
     /**
@@ -242,10 +243,10 @@ public class SeasonAdvanceService {
 
     private AdvanceResponse processTransfer(SaveGame save, SeasonEvent event) {
         int before = activeIncomingBids(save.getId());
-        transferService.processMarketDay(save.getId(), event.getEventDate());
+        List<CompletedTransferResponse> transfers = transferService.processMarketDay(save.getId(), event.getEventDate());
         int bidsReceived = Math.max(0, activeIncomingBids(save.getId()) - before);
         return new AdvanceResponse("TRANSFER", event.getEventDate().toString(), null, null,
-                List.of(), List.of(), List.of(), List.of(), null, bidsReceived, false, List.of());
+                List.of(), List.of(), List.of(), List.of(), null, bidsReceived, false, List.of(), transfers);
     }
 
     private int activeIncomingBids(UUID saveGameId) {

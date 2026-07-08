@@ -196,6 +196,34 @@ describe('AdvanceEventCard', () => {
       renderCard(TRANSFER_RESULT)
       expect(screen.getByRole('button', { name: /ver propostas/i })).toBeInTheDocument()
     })
+
+    it('does not render the Transferências section when transfers is absent (old news payloads)', () => {
+      renderCard(TRANSFER_RESULT)
+      expect(screen.queryByText('Transferências')).not.toBeInTheDocument()
+    })
+
+    it('does not render the Transferências section when transfers is null', () => {
+      renderCard({ ...TRANSFER_RESULT, transfers: null })
+      expect(screen.queryByText('Transferências')).not.toBeInTheDocument()
+    })
+
+    it('does not render the Transferências section when transfers is empty', () => {
+      renderCard({ ...TRANSFER_RESULT, transfers: [] })
+      expect(screen.queryByText('Transferências')).not.toBeInTheDocument()
+    })
+
+    it('renders each AI-to-AI trade when transfers are present', () => {
+      renderCard({
+        ...TRANSFER_RESULT,
+        transfers: [
+          { playerName: 'Zagueirão', fromClubName: 'Criciúma', toClubName: 'Figueirense', fee: 1_500_000 },
+          { playerName: 'Ponta Veloz', fromClubName: 'Avaí', toClubName: 'Joinville', fee: 800_000 },
+        ],
+      })
+      expect(screen.getByText('Transferências')).toBeInTheDocument()
+      expect(screen.getByText(/Zagueirão: Criciúma → Figueirense/)).toBeInTheDocument()
+      expect(screen.getByText(/Ponta Veloz: Avaí → Joinville/)).toBeInTheDocument()
+    })
   })
 
   describe('FINISHED type', () => {

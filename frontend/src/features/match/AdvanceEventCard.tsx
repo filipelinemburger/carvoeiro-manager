@@ -263,6 +263,21 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
             </TimelineNode>
           )}
 
+          {/* Old news payloads persisted before this field existed deserialize transfers as
+              null (not []) — always null-guard before reading it. */}
+          {result.type === 'TRANSFER' && result.transfers && result.transfers.length > 0 && (
+            <TimelineNode dot="💱">
+              <Typography component="strong" sx={{ fontWeight: 700 }}>Transferências</Typography>
+              <List dense disablePadding sx={{ mt: 0.5 }}>
+                {result.transfers.map((t, i) => (
+                  <ListItem key={`${t.playerName}-${i}`} disablePadding>
+                    {t.playerName}: {t.fromClubName} → {t.toClubName} ({formatBRL(t.fee)})
+                  </ListItem>
+                ))}
+              </List>
+            </TimelineNode>
+          )}
+
           {result.type === 'FINISHED' && (
             <TimelineNode dot="🏆">
               <Typography component="strong" sx={{ fontWeight: 700, color: 'var(--cec-green)' }}>

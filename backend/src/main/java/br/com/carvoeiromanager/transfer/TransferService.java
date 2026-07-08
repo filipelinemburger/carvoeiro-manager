@@ -53,6 +53,7 @@ public class TransferService {
     private final ContractValuation contractValuation;
     private final LiveMatchRepository liveMatchRepository;
     private final AiListingEngine aiListingEngine;
+    private final AiTransferEngine aiTransferEngine;
     private final SellerContextFactory sellerContextFactory;
 
     public TransferService(SaveGameService saveGameService,
@@ -67,6 +68,7 @@ public class TransferService {
                            ContractValuation contractValuation,
                            LiveMatchRepository liveMatchRepository,
                            AiListingEngine aiListingEngine,
+                           AiTransferEngine aiTransferEngine,
                            SellerContextFactory sellerContextFactory) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
@@ -80,6 +82,7 @@ public class TransferService {
         this.contractValuation = contractValuation;
         this.liveMatchRepository = liveMatchRepository;
         this.aiListingEngine = aiListingEngine;
+        this.aiTransferEngine = aiTransferEngine;
         this.sellerContextFactory = sellerContextFactory;
     }
 
@@ -236,6 +239,11 @@ public class TransferService {
         return toResponse(offer);
     }
 
+    /**
+     * The user's own active negotiations only. AI-to-AI trades (direction AI) are always
+     * persisted ACCEPTED — never PENDING/COUNTERED — so the status filter alone keeps them out
+     * of this inbox without needing an explicit direction check.
+     */
     public List<TransferOfferResponse> getOffers(UUID saveGameId, UUID userId) {
         saveGameService.requireOwned(saveGameId, userId);
         return transferOfferRepository.findBySaveGameIdAndStatusIn(saveGameId,
@@ -245,19 +253,22 @@ public class TransferService {
     }
 
     /**
-     * Full market-day orchestration for a save: refreshes AI listings, then rolls unsolicited
-     * bids for the managed club. Window-gated — a closed window does neither. Called from
+     * Full market-day orchestration for a save: refreshes AI listings, lets AI clubs trade
+     * amongst themselves (the "living market"), then rolls unsolicited bids for the managed
+     * club. Window-gated — a closed window does none of it. Called from
      * {@code SeasonAdvanceService} on each TRANSFER calendar event and once, day one, from
      * {@code SaveGameService.createCareer}.
      */
     @Transactional
-    public void processMarketDay(UUID saveGameId, LocalDate eventDate) {
+    public List<CompletedTransferResponse> processMarketDay(UUID saveGameId, LocalDate eventDate) {
         SaveGame save = saveGameRepository.findById(saveGameId).orElseThrow();
         if (!transferWindow.isOpen(eventDate)) {
-            return;
+            return List.of();
         }
         aiListingEngine.refreshListings(saveGameId, save.getManagedClubId(), save.getCurrentRound());
+        List<CompletedTransferResponse> transfers = aiTransferEngine.run(save, eventDate);
         generateIncomingOffers(saveGameId, eventDate);
+        return transfers;
     }
 
     /** Unsolicited AI bids for managed players during an open window (deterministic, seeded). */

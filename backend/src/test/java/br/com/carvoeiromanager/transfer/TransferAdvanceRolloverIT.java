@@ -11,6 +11,8 @@ import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.season.AdvanceResponse;
+import br.com.carvoeiromanager.season.NewsItem;
+import br.com.carvoeiromanager.season.NewsItemRepository;
 import br.com.carvoeiromanager.season.SeasonAdvanceService;
 import br.com.carvoeiromanager.season.SeasonRolloverService;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
@@ -39,6 +41,8 @@ class TransferAdvanceRolloverIT {
     @Autowired ClubRepository clubRepository;
     @Autowired PlayerRepository playerRepository;
     @Autowired TransferOfferRepository transferOfferRepository;
+    @Autowired NewsItemRepository newsItemRepository;
+    @Autowired tools.jackson.databind.ObjectMapper objectMapper;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -70,14 +74,71 @@ class TransferAdvanceRolloverIT {
             }
         }
 
-        // Then any generated offers are INCOMING, PENDING, for the managed club, and bounded
-        List<TransferOffer> offers = transferOfferRepository.findBySaveGameIdAndStatusIn(c.id(), ALL);
+        // Then any generated offers ON the managed club are INCOMING, PENDING, for the managed
+        // club, and bounded. AI-to-AI trades (direction AI, always ACCEPTED, never involving the
+        // managed club) are a separate, unrelated part of the same market day and are excluded
+        // from this assertion by construction.
+        List<TransferOffer> offers = transferOfferRepository.findBySaveGameIdAndStatusIn(c.id(), ALL).stream()
+                .filter(o -> o.getDirection() != TransferDirection.AI)
+                .toList();
         assertThat(offers).allMatch(o -> o.getDirection() == TransferDirection.INCOMING);
         assertThat(offers).allMatch(o -> o.getStatus() == TransferOfferStatus.PENDING);
         assertThat(offers).allMatch(o -> o.getToClubId().equals(c.clubId()));
         // Up to MAX_BIDS_PER_ROUND (3) bids per processed market day; createCareer's day-one run
         // plus up to 6 more advance() calls this early is at most 7 market days.
         assertThat(offers.size()).isLessThanOrEqualTo(21);
+    }
+
+    /**
+     * End-to-end: whenever a TRANSFER advance's market day completes an AI-AI trade, it surfaces
+     * identically in the live {@link AdvanceResponse#transfers()} and, round-tripped through
+     * JSON, in the persisted news payload. Uses a stock (uncustomised) career and career squads
+     * routinely produce at least one organic AI-AI trade within a handful of market days — this
+     * exercises the real {@code AiListingEngine -> AiTransferEngine -> news} pipeline end to end
+     * rather than a hand-scripted pair (which {@link AiTransferEngineIT} already covers in
+     * isolation, without the match-simulation and listing-engine interplay a full advance carries).
+     */
+    @Test
+    void aTransferAdvanceThatCompletesAnAiTradeSurfacesItInTheResponseAndTheNewsPayload() {
+        Career c = createCareer();
+
+        boolean verified = false;
+        for (int i = 0; i < 20 && !verified; i++) {
+            AdvanceResponse r = seasonAdvanceService.advance(c.id(), c.userId());
+            // transfers() must never be null on a freshly produced response (only OLD, persisted
+            // payloads from before this field existed deserialize it as null).
+            assertThat(r.transfers()).isNotNull();
+
+            // Whatever this advance produced (including transfers()) round-trips through the
+            // news payload that was just persisted for it.
+            NewsItem justPersisted = newsItemRepository.findBySaveGameIdOrderBySeqDesc(c.id()).get(0);
+            AdvanceResponse decoded = deserialize(justPersisted.getPayload());
+            assertThat(decoded.transfers()).isEqualTo(r.transfers());
+
+            if (!r.transfers().isEmpty()) {
+                verified = true;
+                for (CompletedTransferResponse trade : r.transfers()) {
+                    assertThat(trade.playerName()).isNotBlank();
+                    assertThat(trade.fromClubName()).isNotBlank();
+                    assertThat(trade.toClubName()).isNotBlank();
+                    assertThat(trade.fromClubName()).isNotEqualTo(trade.toClubName());
+                    assertThat(trade.fee().signum()).isPositive();
+                }
+            }
+        }
+
+        // Non-vacuous: at least one of the swept market days actually completed a trade (career
+        // squads routinely produce one within a handful of days), so the transfers()-populated
+        // branch above genuinely ran at least once.
+        assertThat(verified).isTrue();
+    }
+
+    private AdvanceResponse deserialize(String payload) {
+        try {
+            return objectMapper.readValue(payload, AdvanceResponse.class);
+        } catch (Exception e) {
+            throw new AssertionError("Stored news payload is not valid AdvanceResponse JSON: " + payload, e);
+        }
     }
 
     @Test

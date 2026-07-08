@@ -205,6 +205,13 @@ export type Injury = {
   severity: 'KNOCK' | 'MINOR' | 'MAJOR'
 }
 
+export type CompletedTransferResponse = {
+  playerName: string
+  fromClubName: string
+  toClubName: string
+  fee: number
+}
+
 export type AdvanceResponse = {
   type: 'MATCH' | 'TRANSFER' | 'FINISHED'
   date: string | null
@@ -219,6 +226,9 @@ export type AdvanceResponse = {
   seasonFinished: boolean
   /** Managed club's 0–10 grades for the user's own live-played match; absent for AI rounds and old items. */
   playerRatings?: PlayerRating[] | null
+  /** AI-to-AI trades completed during a TRANSFER event; null (not just empty) on news payloads
+   * persisted before this field existed — always null-guard before reading it. */
+  transfers?: CompletedTransferResponse[] | null
 }
 
 export type TopScorerResponse = {
@@ -353,7 +363,8 @@ export type TransferOffer = {
   fromClubName: string
   toClubId: string
   toClubName: string
-  direction: 'OUTGOING' | 'INCOMING'
+  /** AI is an AI-to-AI trade — completed, never returned by /offers, only surfaced via news transfers. */
+  direction: 'OUTGOING' | 'INCOMING' | 'AI'
   amount: number
   counterAmount: number | null
   status: 'PENDING' | 'COUNTERED' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN'

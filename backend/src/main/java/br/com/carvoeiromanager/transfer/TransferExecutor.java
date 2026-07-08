@@ -44,12 +44,23 @@ public class TransferExecutor {
     }
 
     public void execute(SaveGame saveGame, TransferOffer offer, BigDecimal fee) {
+        execute(saveGame, offer.getPlayerId(), offer.getFromClubId(), offer.getToClubId(), fee,
+                offer.getWage(), offer.getContractYears());
+    }
+
+    /**
+     * Core overload: moves {@code playerId} from {@code sellerId} to {@code buyerId} for
+     * {@code fee}, independent of any {@link TransferOffer}. Used directly by
+     * {@link AiTransferEngine} for AI-to-AI trades (wage/contractYears null — AI clubs don't
+     * renegotiate personal terms on a signing) and indirectly, via the offer-based overload
+     * above, by every managed-club transfer path.
+     */
+    public void execute(SaveGame saveGame, UUID playerId, UUID buyerId, UUID sellerId, BigDecimal fee,
+                        BigDecimal wage, Integer contractYears) {
         final UUID saveGameId = saveGame.getId();
         final UUID managedClubId = saveGame.getManagedClubId();
-        final UUID buyerId = offer.getFromClubId();
-        final UUID sellerId = offer.getToClubId();
 
-        Player player = playerRepository.findById(offer.getPlayerId()).orElseThrow();
+        Player player = playerRepository.findById(playerId).orElseThrow();
         Club buyer = clubRepository.findById(buyerId).orElseThrow();
         Club seller = clubRepository.findById(sellerId).orElseThrow();
 
@@ -61,11 +72,12 @@ public class TransferExecutor {
         // so the flag/reason must not travel with the player (keeps the market listed-only
         // invariant honest and avoids a stale "Listado" badge on bought players).
         player.unlist();
-        // Outgoing buy carries personal terms; a managed sale (incoming) leaves wage null.
-        if (offer.getWage() != null) {
-            player.setWage(offer.getWage());
-            if (offer.getContractYears() != null) {
-                player.setContractYears(offer.getContractYears());
+        // Outgoing buy carries personal terms; a managed sale (incoming) or an AI-AI trade
+        // leaves wage null.
+        if (wage != null) {
+            player.setWage(wage);
+            if (contractYears != null) {
+                player.setContractYears(contractYears);
             }
         }
         clubRepository.save(buyer);

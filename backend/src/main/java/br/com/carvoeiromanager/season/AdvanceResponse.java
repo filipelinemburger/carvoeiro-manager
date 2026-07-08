@@ -6,6 +6,7 @@ import br.com.carvoeiromanager.match.FixtureResultResponse;
 import br.com.carvoeiromanager.match.InjuryResponse;
 import br.com.carvoeiromanager.match.PlayerRating;
 import br.com.carvoeiromanager.match.SuspensionResponse;
+import br.com.carvoeiromanager.transfer.CompletedTransferResponse;
 
 import java.util.List;
 
@@ -25,6 +26,9 @@ import java.util.List;
  * {@code playerRatings} holds the managed club's 0–10 performance grades and is populated only for
  * the user's own (live-played) match; it is empty for AI-simulated rounds, transfers and older
  * news items persisted before the feature existed.
+ * {@code transfers} holds AI-to-AI trades completed during a TRANSFER event (empty for
+ * MATCH/FINISHED, and deserialized as {@code null} — not empty — from news payloads persisted
+ * before this field existed, so callers must null-guard it).
  */
 public record AdvanceResponse(
         String type,
@@ -38,5 +42,6 @@ public record AdvanceResponse(
         FinanceRoundResponse finance,
         int bidsReceived,
         boolean seasonFinished,
-        List<PlayerRating> playerRatings) {
+        List<PlayerRating> playerRatings,
+        List<CompletedTransferResponse> transfers) {
 }
