@@ -4,8 +4,11 @@ import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.competition.Fixture;
+import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +45,9 @@ class LiveMatchServiceKickoffIT {
 
     @Autowired
     br.com.carvoeiromanager.player.PlayerRepository playerRepository;
+
+    @Autowired
+    FixtureRepository fixtureRepository;
 
     private UUID saveGameId;
     private UUID userId;
@@ -93,5 +99,32 @@ class LiveMatchServiceKickoffIT {
         // Save-scoped: the unique constraint on save_game_id means presence after two kickoffs
         // proves no duplicate was created for this save game (avoids cross-IT flake from shared container).
         assertThat(liveMatchRepository.findBySaveGameId(saveGameId)).isPresent();
+    }
+
+    @Test
+    void kickoffGivesTheAiSideABench() {
+        // After kickoff: the NON-managed side's persisted bench ids are non-empty (<= 7),
+        // resolve to players of the AI club, and include a GK when the AI squad has a spare.
+        // The managed side's bench behavior is unchanged.
+        liveMatchService.kickoff(saveGameId, userId);
+
+        LiveMatch lm = liveMatchService.requireLive(saveGameId);
+        LiveMatchConfig cfg = liveMatchService.configFor(lm);
+        Fixture fixture = fixtureRepository.findById(lm.getFixtureId()).orElseThrow();
+        UUID aiClubId = lm.isManagedIsHome() ? fixture.getAwayClubId() : fixture.getHomeClubId();
+
+        List<Player> aiBench = lm.isManagedIsHome() ? cfg.awayBench() : cfg.homeBench();
+        List<Player> managedBench = lm.isManagedIsHome() ? cfg.homeBench() : cfg.awayBench();
+
+        // The AI side now gets a real bench.
+        assertThat(aiBench).isNotEmpty();
+        assertThat(aiBench.size()).isLessThanOrEqualTo(7);
+        assertThat(aiBench).allMatch(p -> p.getClubId().equals(aiClubId));
+        // Every seeded club has at least one spare GK beyond its starting XI.
+        assertThat(aiBench.stream().anyMatch(p -> p.getPosition() == Position.GK)).isTrue();
+
+        // The managed side's bench behavior is unchanged: exactly the 3 saved bench players.
+        assertThat(managedBench).hasSize(3);
+        assertThat(managedBench).allMatch(p -> p.getClubId().equals(managedClubId));
     }
 }

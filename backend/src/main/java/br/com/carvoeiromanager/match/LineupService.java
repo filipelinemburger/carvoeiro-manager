@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -292,6 +293,35 @@ public class LineupService {
                 java.util.stream.Stream.concat(java.util.stream.Stream.of(bestGk), topOutfield.stream())
                         .toList()
         );
+    }
+
+    private static final int BENCH_SIZE = 7;
+
+    /**
+     * Best available bench for a club without a saved lineup (AI clubs): the best remaining
+     * eligible GK first (injury cover for the keeper), then the best other eligible non-youth
+     * players by overall, up to {@value #BENCH_SIZE} total. Players already in the XI are
+     * excluded. Unlike {@link #bestXi}, there is no ineligible fallback — a short (even empty)
+     * bench is fine.
+     */
+    public List<Player> bestBench(UUID clubId, List<Player> xi) {
+        Set<UUID> xiIds = xi.stream().map(Player::getId).collect(Collectors.toSet());
+        List<Player> candidates = playerRepository.findByClubIdAndYouthProspectFalse(clubId).stream()
+                .filter(Player::isEligible)
+                .filter(p -> !xiIds.contains(p.getId()))
+                .toList();
+
+        List<Player> bench = new ArrayList<>();
+        candidates.stream()
+                .filter(p -> p.getPosition() == Position.GK)
+                .max(Comparator.comparingInt(Player::getOverall))
+                .ifPresent(bench::add);
+        candidates.stream()
+                .filter(p -> bench.stream().noneMatch(b -> b.getId().equals(p.getId())))
+                .sorted(Comparator.comparingInt(Player::getOverall).reversed())
+                .limit(BENCH_SIZE - bench.size())
+                .forEach(bench::add);
+        return bench;
     }
 
     /** Fitness-adjusted rating used to rank candidates; raw overall when no date is supplied. */

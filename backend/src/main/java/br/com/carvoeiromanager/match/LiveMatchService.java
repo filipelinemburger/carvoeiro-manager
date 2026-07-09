@@ -118,8 +118,10 @@ public class LiveMatchService {
                 : lineupService.bestXi(homeClubId, matchDate);
         List<Player> awayXi = managedIsHome ? lineupService.bestXi(awayClubId, matchDate)
                 : lineupService.startingXi(saveGameId, awayClubId);
-        List<Player> homeBench = managedIsHome ? lineupService.benchPlayers(saveGameId, homeClubId) : List.of();
-        List<Player> awayBench = managedIsHome ? List.of() : lineupService.benchPlayers(saveGameId, awayClubId);
+        List<Player> homeBench = managedIsHome ? lineupService.benchPlayers(saveGameId, homeClubId)
+                : lineupService.bestBench(homeClubId, homeXi);
+        List<Player> awayBench = managedIsHome ? lineupService.bestBench(awayClubId, awayXi)
+                : lineupService.benchPlayers(saveGameId, awayClubId);
 
         long seed = saveGameId.getMostSignificantBits()
                 ^ fixture.getId().getMostSignificantBits()

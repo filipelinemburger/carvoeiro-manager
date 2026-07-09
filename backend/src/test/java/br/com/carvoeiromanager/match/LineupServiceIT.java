@@ -18,6 +18,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -428,6 +429,123 @@ class LineupServiceIT {
         // Criciúma's seeded kit is yellow/black.
         assertThat(squad.primaryColor()).isEqualTo("#f7d417");
         assertThat(squad.secondaryColor()).isEqualTo("#111111");
+    }
+
+    // --- (m) bestBench picks the best remaining eligible GK first, then best remaining outfield ---
+
+    @Test
+    void bestBenchPicksTheBestRemainingPlayersWithAKeeperFirst() {
+        // Given an AI club's XI (lineupService.startingXi for a club with no saved lineup),
+        // bestBench(clubId, xi): size <= 7; contains NO player from the XI; contains exactly
+        // one GK when the squad has a spare eligible GK, and that GK is the best remaining one;
+        // the non-GK slots are the highest-overall remaining eligible non-youth players.
+        Career career = createCareer();
+        UUID saveGameId = career.id();
+        UUID clubId = career.managedClubId();
+
+        List<Player> allPlayers = playerRepository.findByClubId(clubId);
+        List<Player> gks = allPlayers.stream()
+                .filter(p -> p.getPosition() == Position.GK)
+                .collect(Collectors.toList());
+        List<Player> outfield = allPlayers.stream()
+                .filter(p -> p.getPosition() != Position.GK)
+                .collect(Collectors.toList());
+        assertThat(gks.size()).isGreaterThanOrEqualTo(3);
+        assertThat(outfield.size()).isGreaterThanOrEqualTo(16);
+
+        // GK ranking: best (ends up in the XI), second-best (expected bench GK), the rest clearly out.
+        Player bestGk = gks.get(0);
+        bestGk.setOverall(95);
+        playerRepository.save(bestGk);
+        Player secondGk = gks.get(1);
+        secondGk.setOverall(60);
+        playerRepository.save(secondGk);
+        for (int i = 2; i < gks.size(); i++) {
+            gks.get(i).setOverall(20);
+            playerRepository.save(gks.get(i));
+        }
+
+        // Top 10 outfield players fill the XI.
+        for (int i = 0; i < 10; i++) {
+            outfield.get(i).setOverall(90);
+            playerRepository.save(outfield.get(i));
+        }
+        // Next 6 outfield players are the expected bench (clear, descending overalls).
+        int[] benchOveralls = {79, 78, 77, 76, 75, 74};
+        for (int i = 0; i < 6; i++) {
+            outfield.get(10 + i).setOverall(benchOveralls[i]);
+            playerRepository.save(outfield.get(10 + i));
+        }
+        // Everyone else is clearly out.
+        for (int i = 16; i < outfield.size(); i++) {
+            outfield.get(i).setOverall(30);
+            playerRepository.save(outfield.get(i));
+        }
+
+        UUID expectedBenchGkId = secondGk.getId();
+        List<UUID> expectedBenchNonGkIds = outfield.subList(10, 16).stream().map(Player::getId).toList();
+
+        // When: an AI club with no saved lineup -> startingXi falls back to bestXi(clubId).
+        List<Player> xi = lineupService.startingXi(saveGameId, clubId);
+        List<Player> bench = lineupService.bestBench(clubId, xi);
+
+        // Then
+        assertThat(bench.size()).isLessThanOrEqualTo(7);
+        assertThat(bench).hasSize(7);
+        Set<UUID> xiIds = xi.stream().map(Player::getId).collect(Collectors.toSet());
+        assertThat(bench).noneMatch(p -> xiIds.contains(p.getId()));
+
+        long gkCount = bench.stream().filter(p -> p.getPosition() == Position.GK).count();
+        assertThat(gkCount).isEqualTo(1);
+        assertThat(bench.get(0).getPosition()).isEqualTo(Position.GK);
+        assertThat(bench.get(0).getId()).isEqualTo(expectedBenchGkId);
+
+        List<UUID> benchNonGkIds = bench.stream()
+                .filter(p -> p.getPosition() != Position.GK)
+                .map(Player::getId)
+                .toList();
+        assertThat(benchNonGkIds).containsExactlyInAnyOrderElementsOf(expectedBenchNonGkIds);
+    }
+
+    // --- (n) bestBench excludes youth prospects and ineligible players, and can be short ---
+
+    @Test
+    void bestBenchExcludesYouthAndIneligiblePlayersAndCanBeShort() {
+        // Squad manipulated so only 2 eligible non-youth non-XI candidates exist ->
+        // bench has exactly those 2. Youth prospects and ineligible players never appear.
+        Career career = createCareer();
+        UUID saveGameId = career.id();
+        UUID clubId = career.managedClubId();
+
+        List<Player> xi = lineupService.startingXi(saveGameId, clubId);
+        Set<UUID> xiIds = xi.stream().map(Player::getId).collect(Collectors.toSet());
+
+        List<Player> nonXi = playerRepository.findByClubId(clubId).stream()
+                .filter(p -> !xiIds.contains(p.getId()))
+                .collect(Collectors.toList());
+        assertThat(nonXi.size()).isGreaterThanOrEqualTo(3);
+
+        Player keep1 = nonXi.get(0);
+        Player keep2 = nonXi.get(1);
+
+        // Every other non-XI player is excluded: rotate between youth prospect, suspended, injured.
+        for (int i = 2; i < nonXi.size(); i++) {
+            Player p = nonXi.get(i);
+            switch (i % 3) {
+                case 0 -> p.markAsProspect(70);
+                case 1 -> p.addSuspension(1);
+                default -> p.addInjury(1);
+            }
+            playerRepository.save(p);
+        }
+
+        List<Player> bench = lineupService.bestBench(clubId, xi);
+
+        assertThat(bench).hasSize(2);
+        assertThat(bench.stream().map(Player::getId).toList())
+                .containsExactlyInAnyOrder(keep1.getId(), keep2.getId());
+        assertThat(bench).noneMatch(Player::isYouthProspect);
+        assertThat(bench).allMatch(Player::isEligible);
     }
 
     // --- Private helpers ---
