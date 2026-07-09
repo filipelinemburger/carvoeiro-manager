@@ -282,10 +282,17 @@ class AiListingEngineIT {
     void reRunningWithNoStateChangeProducesNoFurtherChanges() {
         Career c = createCareer();
         Club club = aDeepAiClub(c);
-        // createCareer already ran a day-one refreshListings; capture that state as the baseline.
+        // createCareer's day-one market pass is seed-dependent (it can even sell off the club's
+        // only listing), so it isn't a valid "no state change" baseline. Establish a controlled
+        // baseline instead: force the club healthy, clear every listing, then run the engine once
+        // and capture that result as `before`.
+        makeHealthy(club);
+        clearListings(club);
+        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0);
         List<UUID> before = squad(club).stream().filter(Player::isTransferListed)
                 .map(Player::getId).sorted().toList();
 
+        // Re-run with nothing mutated in between: the true idempotency claim.
         aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0);
 
         List<UUID> after = squad(club).stream().filter(Player::isTransferListed)

@@ -400,6 +400,11 @@ class TransferServiceSellingIT {
     @Test
     void listedManagedPlayersDrawBoostedBids() {
         Career c = createCareer();
+        // createCareer's day-one market pass can roll an UNLISTED bid (0.90x value) on the target
+        // before it's listed, which would put it in the already-bid-on set for the whole
+        // subsequent sweep and mask the boosted 0.95x listed bid this test asserts on. Clear that
+        // day-one noise before listing the target.
+        transferOfferRepository.deleteBySaveGameId(c.id());
         Player target = aManagedOutfielder(c);
         transferService.listPlayer(c.id(), c.userId(), target.getId());
         BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
