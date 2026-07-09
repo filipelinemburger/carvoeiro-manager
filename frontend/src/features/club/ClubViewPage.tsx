@@ -6,6 +6,7 @@ import {
   TableCell, TableContainer, TableHead, TableRow, Typography,
 } from '@mui/material'
 import { getClubs, getSaveGame, getSquad, makeOffer } from '../../api/career'
+import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { formatBRL } from '../../lib/money'
@@ -128,7 +129,7 @@ export function ClubViewPage() {
             : 'Proposta recusada.'}
         </Alert>
       )}
-      {offerMut.isError && <Alert severity="error" sx={{ mt: 2 }}>Erro ao enviar proposta.</Alert>}
+      {offerMut.isError && <Alert severity="error" sx={{ mt: 2 }}>{errorMessage(offerMut.error, 'Erro ao enviar proposta.')}</Alert>}
 
       {isLoading && <Typography sx={{ mt: 2 }}>Carregando elenco…</Typography>}
       {error && <Typography sx={{ mt: 2 }} color="error">Erro ao carregar elenco.</Typography>}

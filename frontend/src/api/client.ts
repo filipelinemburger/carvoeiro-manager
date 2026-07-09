@@ -1,9 +1,22 @@
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8088/api/v1'
 
+/** An HTTP failure, preserving the backend's error code so callers can react to it precisely. */
+export class ApiError extends Error {
+  readonly code: string | null
+  readonly status: number
+
+  constructor(message: string, code: string | null, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.code = code
+    this.status = status
+  }
+}
+
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: res.statusText }))
-    throw new Error((err as { message?: string }).message ?? 'Request failed')
+    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+    throw new ApiError(body.message ?? res.statusText ?? 'Request failed', body.error ?? null, res.status)
   }
   return res.status === 204 ? (undefined as T) : (res.json() as Promise<T>)
 }

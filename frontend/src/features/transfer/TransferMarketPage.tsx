@@ -8,6 +8,7 @@ import {
 import {
   getSaveGame, getMarket, getClubs, getOffers, getSquad, makeOffer, acceptCounter, withdrawOffer, respondToOffer,
 } from '../../api/career'
+import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { FreeAgentsPanel } from '../contract/FreeAgentsPage'
@@ -309,7 +310,7 @@ export function TransferMarketPage() {
             : 'Proposta recusada.'}
         </Alert>
       )}
-      {offerMut.isError && <Alert severity="error" sx={{ mb: 2 }}>Erro ao enviar proposta.</Alert>}
+      {offerMut.isError && <Alert severity="error" sx={{ mb: 2 }}>{errorMessage(offerMut.error, 'Erro ao enviar proposta.')}</Alert>}
 
       {isMobile ? (
         <FormControl size="small" fullWidth sx={{ mb: 2 }}>
@@ -354,6 +355,11 @@ export function TransferMarketPage() {
 
       {tab === 0 && (
         <>
+          {(acceptMut.isError || withdrawMut.isError || respondMut.isError) && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {errorMessage(acceptMut.error ?? withdrawMut.error ?? respondMut.error, 'Erro ao processar a proposta.')}
+            </Alert>
+          )}
           {incoming.length === 0 && outgoing.length === 0 && (
             <Typography sx={{ color: 'text.secondary' }}>Nenhuma proposta recebida no momento.</Typography>
           )}

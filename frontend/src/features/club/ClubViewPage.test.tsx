@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { ClubViewPage } from './ClubViewPage'
 import { AuthProvider } from '../../auth/AuthContext'
+import { ApiError } from '../../api/client'
 import type { ClubSummary, PlayerResponse } from '../../api/types'
 
 vi.mock('../../api/career', () => ({
@@ -137,6 +138,22 @@ describe('ClubViewPage', () => {
       { playerId: 'p1', amount: 2688000, wage: 60000, contractYears: 3 },
       'test-token',
     ))
+  })
+
+  it('shows the specific pt-BR reason when the offer is rejected with a known ApiError code', async () => {
+    vi.mocked(makeOffer).mockRejectedValue(
+      new ApiError('The transfer window is closed', 'TRANSFER_WINDOW_CLOSED', 422),
+    )
+
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /fazer proposta/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /fazer proposta/i }))
+
+    expect(await screen.findByText('Janela de transferências fechada.')).toBeInTheDocument()
+    expect(screen.queryByText('Erro ao enviar proposta.')).not.toBeInTheDocument()
   })
 
   it('hides "Fazer proposta" when viewing the managed club', async () => {

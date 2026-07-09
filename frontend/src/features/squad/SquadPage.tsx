@@ -8,6 +8,7 @@ import {
 } from '@mui/material'
 import HealingIcon from '@mui/icons-material/Healing'
 import { getSquad, getLineup, setLineup, renewContract, listPlayer, unlistPlayer } from '../../api/career'
+import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import type { PlayerResponse, PlayerRole, LineupStarter } from '../../api/types'
@@ -630,6 +631,23 @@ export function SquadPage() {
           sx={{ width: '100%' }}
         >
           {mutation.isError ? 'Erro ao salvar escalação.' : 'Escalação salva com sucesso!'}
+        </Alert>
+      </Snackbar>
+
+      {/* Listing/unlisting outcome, shown the same way as the lineup save toast above. */}
+      <Snackbar
+        open={listMut.isError || unlistMut.isError}
+        autoHideDuration={4000}
+        onClose={() => { listMut.reset(); unlistMut.reset() }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="error"
+          variant="filled"
+          onClose={() => { listMut.reset(); unlistMut.reset() }}
+          sx={{ width: '100%' }}
+        >
+          {errorMessage(listMut.error ?? unlistMut.error, 'Erro ao atualizar a lista de transferências.')}
         </Alert>
       </Snackbar>
     </Box>

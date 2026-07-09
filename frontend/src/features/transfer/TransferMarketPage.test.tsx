@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { TransferMarketPage } from './TransferMarketPage'
 import { AuthProvider } from '../../auth/AuthContext'
+import { ApiError } from '../../api/client'
 import type { ClubSummary, MarketPlayer, PageResponse } from '../../api/types'
 
 vi.mock('../../api/career', () => ({
@@ -95,6 +96,22 @@ describe('TransferMarketPage', () => {
 
     await waitFor(() => expect(screen.getByText(/Contraproposta/i)).toBeInTheDocument())
     expect(makeOffer).toHaveBeenCalledWith('sg-1', expect.objectContaining({ playerId: 'p1', amount: 2400000 }), 'test-token')
+  })
+
+  it('shows the specific pt-BR reason when an offer is rejected with a known ApiError code', async () => {
+    vi.mocked(makeOffer).mockRejectedValue(new ApiError('Insufficient funds', 'INSUFFICIENT_FUNDS', 422))
+
+    renderPage()
+    openMarketTab()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /fazer proposta/i }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/Valor para Alvo Um/i), { target: { value: '2400000' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: /fazer proposta/i }))
+
+    expect(await screen.findByText('Saldo insuficiente para esta proposta.')).toBeInTheDocument()
+    expect(screen.queryByText('Erro ao enviar proposta.')).not.toBeInTheDocument()
   })
 
   it('shows the pt-BR listing reason chip on a market card', async () => {
