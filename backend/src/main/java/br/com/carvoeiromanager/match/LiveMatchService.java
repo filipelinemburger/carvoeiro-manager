@@ -354,7 +354,7 @@ public class LiveMatchService {
         List<TimedTactics> tacticsSchedule = deserializeTactics(lm.getTacticsSchedule());
 
         return new LiveMatchConfig(lm.getSeed(), homeXi, awayXi, homeBench, awayBench,
-                homeProfile, awayProfile, fitness, subs, tacticsSchedule);
+                homeProfile, awayProfile, fitness, subs, tacticsSchedule, !lm.isManagedIsHome());
     }
 
     LiveMatchState toState(LiveMatch lm, SaveGame save) {
@@ -380,7 +380,7 @@ public class LiveMatchService {
                 e.playerInId() == null ? null : nameOf(byId, e.playerInId()),
                 e.severity(),
                 LiveCommentary.of(e.type(), nameOf(byId, e.playerId()),
-                        e.playerInId() == null ? null : nameOf(byId, e.playerInId()), e.minute()))).toList();
+                        e.playerInId() == null ? null : nameOf(byId, e.playerInId()), e.minute(), e.detail()))).toList();
 
         String status = statusAt(lm, timeline, minute);
         int subsUsed = (int) cfg.subSchedule().stream().filter(s -> s.home() == lm.isManagedIsHome()).count();

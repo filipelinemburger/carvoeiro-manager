@@ -17,8 +17,8 @@ public final class LiveCommentary {
     private static final String[] RED = {"Cartão vermelho! %s está expulso!", "%s recebe o vermelho e deixa o time com um a menos."};
     private static final String[] INJURY = {"%s cai lesionado no gramado.", "Preocupação: %s sente e precisa de atendimento."};
 
-    /** {@code inName} is only used for substitutions. */
-    public static String of(EventType type, String playerName, String inName, int minute) {
+    /** {@code inName} is only used for substitutions; {@code detail} only for TACTICS_CHANGE. */
+    public static String of(EventType type, String playerName, String inName, int minute, String detail) {
         return switch (type) {
             case GOAL -> pick(GOAL, playerName, minute, type);
             case SET_PIECE_GOAL -> pick(SET_PIECE, playerName, minute, type);
@@ -27,8 +27,20 @@ public final class LiveCommentary {
             case RED_CARD -> pick(RED, playerName, minute, type);
             case INJURY -> pick(INJURY, playerName, minute, type);
             case SUBSTITUTION -> "Substituição: entra %s, sai %s.".formatted(inName, playerName);
-            case TACTICS_CHANGE -> "Mudança tática do treinador.";
+            case TACTICS_CHANGE -> tacticsChange(detail);
             case HALF_TIME -> "Intervalo — fim do primeiro tempo.";
+        };
+    }
+
+    /** Null detail = the user's own change (generic text); otherwise an AI posture name. */
+    private static String tacticsChange(String detail) {
+        if (detail == null) return "Mudança tática do treinador.";
+        return switch (AiManagerBrain.Posture.valueOf(detail)) {
+            case PUSH -> "O adversário se lança ao ataque.";
+            case ALL_OUT -> "Tudo ou nada do adversário: 4-2-4 ofensivo!";
+            case PROTECT -> "O adversário recua para segurar o resultado.";
+            case PARK_THE_BUS -> "Adversário fecha-se na defesa: 5-4-1.";
+            case NORMAL -> "O adversário reorganiza a equipe.";
         };
     }
 

@@ -12,6 +12,8 @@ import java.util.UUID;
  * ordered list of substitutions applied so far; the timeline is a pure function of these inputs.
  * {@code tacticsSchedule} is the ordered list of in-match tactics changes; an empty list means the
  * starting tactical profiles are held constant for the full 90 minutes (backward-compatible default).
+ * {@code aiHome} names the side under AI-manager control ({@code true} = home) so the engine can
+ * produce score-reactive tactics changes for it; {@code null} disables AI reactions entirely.
  */
 public record LiveMatchConfig(
         long seed,
@@ -23,5 +25,6 @@ public record LiveMatchConfig(
         TacticalProfile awayProfile,
         Map<UUID, Integer> fitness,
         List<LiveSub> subSchedule,
-        List<TimedTactics> tacticsSchedule) {
+        List<TimedTactics> tacticsSchedule,
+        Boolean aiHome) {
 }

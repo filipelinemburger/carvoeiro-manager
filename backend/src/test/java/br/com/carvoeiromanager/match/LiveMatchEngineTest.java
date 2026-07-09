@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.match.AiManagerBrain.Posture;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
@@ -57,6 +58,10 @@ class LiveMatchEngineTest {
     }
 
     private LiveMatchConfig config(long seed, List<LiveSub> subs, List<TimedTactics> tactics) {
+        return config(seed, subs, tactics, null);
+    }
+
+    private LiveMatchConfig config(long seed, List<LiveSub> subs, List<TimedTactics> tactics, Boolean aiHome) {
         // fitness map: every player (both XIs + home bench) at 100
         Map<UUID, Integer> fitness = new HashMap<>();
         homeXi.forEach(pl -> fitness.put(pl.getId(), 100));
@@ -67,7 +72,7 @@ class LiveMatchEngineTest {
         TacticalProfile awayProfile = defaultProfile(awayXi);
 
         return new LiveMatchConfig(seed, homeXi, awayXi, homeBench, List.of(),
-                homeProfile, awayProfile, fitness, subs, tactics);
+                homeProfile, awayProfile, fitness, subs, tactics, aiHome);
     }
 
     @Test
@@ -199,5 +204,124 @@ class LiveMatchEngineTest {
         // Determinism: same tactics schedule → identical timelines.
         LiveTimeline withTacticsAgain = engine.simulate(config(seed, List.of(), List.of(change)));
         assertThat(withTacticsAgain.events()).isEqualTo(withTactics.events());
+    }
+
+    // ---- AI manager reactions ----
+
+    @Test
+    void nullAiHomeProducesNoAiReactions() {
+        for (long seed : new long[]{1L, 7L, 42L, 99L, 1234L}) {
+            LiveTimeline t = engine.simulate(config(seed, List.of(), List.of(), null));
+            assertThat(t.events()).noneMatch(e -> e.detail() != null);
+        }
+    }
+
+    @Test
+    void aiReactionsMatchTheBrainAppliedToTheRunningScore() {
+        // Oracle test: reconstruct the expected reaction sequence from the timeline itself using
+        // the production brain, and compare it to the AI-side TACTICS_CHANGE events. Verifies the
+        // engine's score counting, per-minute evaluation, change-only emission, and detail values.
+        for (long seed = 1; seed <= 20; seed++) {
+            LiveMatchConfig cfg = config(seed, List.of(), List.of(), false); // away side is the AI
+            LiveTimeline t = engine.simulate(cfg);
+
+            List<LiveTimelineEvent> actual = t.events().stream()
+                    .filter(e -> e.type() == EventType.TACTICS_CHANGE && !e.home())
+                    .toList();
+            List<LiveTimelineEvent> expected = expectedAwayReactions(t, cfg.awayProfile());
+
+            assertThat(actual).as("seed %d", seed)
+                    .extracting(LiveTimelineEvent::minute, LiveTimelineEvent::detail)
+                    .isEqualTo(expected.stream()
+                            .map(e -> org.assertj.core.groups.Tuple.tuple(e.minute(), e.detail()))
+                            .toList());
+        }
+    }
+
+    /**
+     * Walks minutes 46..90 replaying what the engine's AI hook must have seen: the score and
+     * red-card state from events strictly BEFORE the minute under evaluation (the hook runs
+     * before that minute's goals/cards are drawn). Emits an expected event whenever the brain's
+     * posture changes.
+     */
+    private List<LiveTimelineEvent> expectedAwayReactions(LiveTimeline t,
+                                                          TacticalProfile awayIdentity) {
+        List<LiveTimelineEvent> expected = new ArrayList<>();
+        Posture posture = Posture.NORMAL;
+        for (int minute = 46; minute <= 90; minute++) {
+            final int m = minute;
+            int homeGoals = (int) t.events().stream().filter(e -> e.home() && e.minute() < m
+                    && (e.type() == EventType.GOAL || e.type() == EventType.SET_PIECE_GOAL)).count();
+            int awayGoals = (int) t.events().stream().filter(e -> !e.home() && e.minute() < m
+                    && (e.type() == EventType.GOAL || e.type() == EventType.SET_PIECE_GOAL)).count();
+            boolean downAMan = t.events().stream()
+                    .anyMatch(e -> !e.home() && e.minute() < m && e.type() == EventType.RED_CARD);
+            Posture next = AiManagerBrain.decide(awayIdentity.mentality(),
+                    awayGoals - homeGoals, m, downAMan);
+            if (next != posture) {
+                posture = next;
+                expected.add(new LiveTimelineEvent(m, EventType.TACTICS_CHANGE, false,
+                        null, null, null, next.name()));
+            }
+        }
+        return expected;
+    }
+
+    @Test
+    void anAttackingAiAlwaysReactsByMinuteEightyFive() {
+        // With an ATTACKING identity, minute 85 is non-NORMAL for EVERY score line:
+        // losing -> PUSH/ALL_OUT (thresholds <= 70), drawing -> PUSH (75),
+        // winning by 1 -> PROTECT (80), winning by 2+ -> PROTECT (85). So a reaction event must
+        // exist for every seed.
+        Map<UUID, PlayerRole> roles = new HashMap<>();
+        awayXi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
+        TacticalProfile attackingAway = new TacticalProfile(Mentality.ATTACKING, "4-3-3",
+                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
+
+        for (long seed = 1; seed <= 20; seed++) {
+            Map<UUID, Integer> fitness = new HashMap<>();
+            homeXi.forEach(pl -> fitness.put(pl.getId(), 100));
+            awayXi.forEach(pl -> fitness.put(pl.getId(), 100));
+            LiveMatchConfig cfg = new LiveMatchConfig(seed, homeXi, awayXi, List.of(), List.of(),
+                    defaultProfile(homeXi), attackingAway, fitness, List.of(), List.of(), false);
+            LiveTimeline t = engine.simulate(cfg);
+            assertThat(t.events()).as("seed %d", seed)
+                    .anyMatch(e -> e.type() == EventType.TACTICS_CHANGE && !e.home()
+                            && e.detail() != null);
+        }
+    }
+
+    @Test
+    void aiReactionsDoNotChangeThePastAndAreDeterministic() {
+        long seed = 42L;
+        LiveTimeline base = engine.simulate(config(seed, List.of(), List.of(), null));
+        LiveTimeline withAi = engine.simulate(config(seed, List.of(), List.of(), false));
+
+        int firstReaction = withAi.events().stream()
+                .filter(e -> e.detail() != null)
+                .mapToInt(LiveTimelineEvent::minute).min().orElse(91);
+        assertThat(withAi.eventsThrough(firstReaction - 1))
+                .isEqualTo(base.eventsThrough(firstReaction - 1));
+
+        LiveTimeline again = engine.simulate(config(seed, List.of(), List.of(), false));
+        assertThat(again.events()).isEqualTo(withAi.events());
+        assertThat(again.homeGoals()).isEqualTo(withAi.homeGoals());
+    }
+
+    @Test
+    void userTacticsAndAiReactionsCoexist() {
+        // Managed home side schedules a change at 60; away side is the AI. The user's event keeps
+        // a null detail; any AI event carries a posture detail; the managed side never gets one.
+        TimedTactics change = new TimedTactics(60, true, Mentality.ATTACKING, Pressing.HIGH,
+                Marking.ZONAL, "4-3-3");
+        boolean sawUserChange = false;
+        for (long seed = 1; seed <= 20; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of(), List.of(change), false));
+            sawUserChange |= t.events().stream().anyMatch(e ->
+                    e.type() == EventType.TACTICS_CHANGE && e.home() && e.minute() == 60
+                            && e.detail() == null);
+            assertThat(t.events()).noneMatch(e -> e.home() && e.detail() != null);
+        }
+        assertThat(sawUserChange).isTrue();
     }
 }

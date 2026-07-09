@@ -51,6 +51,8 @@ public class LiveMatchEngine {
         final Map<UUID, Boolean> hobbled = new HashMap<>();
         boolean dirty = true;
         TacticalProfile currentProfile;                    // updated by tactics changes mid-match
+        boolean redCarded = false;                         // true once this side loses a player
+        AiManagerBrain.Posture posture = AiManagerBrain.Posture.NORMAL; // AI-manager state (AI side only)
 
         Side(boolean home) { this.home = home; }
     }
@@ -67,6 +69,11 @@ public class LiveMatchEngine {
         home.currentProfile = cfg.homeProfile();
         away.currentProfile = cfg.awayProfile();
 
+        // AI-manager reactions: which side (if any) re-evaluates its posture each second-half minute.
+        Side aiSide = cfg.aiHome() == null ? null : (cfg.aiHome() ? home : away);
+        TacticalProfile aiIdentity = cfg.aiHome() == null ? null
+                : (cfg.aiHome() ? cfg.homeProfile() : cfg.awayProfile());
+
         List<LiveTimelineEvent> events = new ArrayList<>();
         List<TimedInjury> injuries = new ArrayList<>();
 
@@ -75,11 +82,18 @@ public class LiveMatchEngine {
         TeamMatchInput awayInput = strength(away, away.currentProfile, cfg);
         away.dirty = false;
 
+        int homeGoals = 0;
+        int awayGoals = 0;
+
         for (int minute = 1; minute <= MINUTES; minute++) {
             applyTacticChanges(cfg, minute, home, events);
             applyTacticChanges(cfg, minute, away, events);
             applySubs(cfg, minute, home, events);
             applySubs(cfg, minute, away, events);
+            if (aiSide != null) {
+                int scoreDiff = aiSide.home ? homeGoals - awayGoals : awayGoals - homeGoals;
+                reactAiManager(minute, aiSide, aiIdentity, scoreDiff, events);
+            }
             if (home.dirty) { homeInput = strength(home, home.currentProfile, cfg); home.dirty = false; }
             if (away.dirty) { awayInput = strength(away, away.currentProfile, cfg); away.dirty = false; }
 
@@ -95,21 +109,23 @@ public class LiveMatchEngine {
             if (rng.nextDouble() < homeChance) {
                 EventType t = rng.nextDouble() < setPiece(homeInput) ? EventType.SET_PIECE_GOAL : EventType.GOAL;
                 events.add(goal(minute, home, home.currentProfile, t, attrRng));
+                homeGoals++;
             }
             if (rng.nextDouble() < awayChance) {
                 EventType t = rng.nextDouble() < setPiece(awayInput) ? EventType.SET_PIECE_GOAL : EventType.GOAL;
                 events.add(goal(minute, away, away.currentProfile, t, attrRng));
+                awayGoals++;
             }
             maybeCard(minute, home, homeInput, rng, attrRng, events);
             maybeCard(minute, away, awayInput, rng, attrRng, events);
 
             if (rng.nextDouble() < CHANCE_RATE && !home.onPitch.isEmpty()) {
                 events.add(new LiveTimelineEvent(minute, EventType.CHANCE, true,
-                        pickByWeight(home, LiveMatchEngine::goalWeight, attrRng), null, null));
+                        pickByWeight(home, LiveMatchEngine::goalWeight, attrRng), null, null, null));
             }
             if (rng.nextDouble() < CHANCE_RATE && !away.onPitch.isEmpty()) {
                 events.add(new LiveTimelineEvent(minute, EventType.CHANCE, false,
-                        pickByWeight(away, LiveMatchEngine::goalWeight, attrRng), null, null));
+                        pickByWeight(away, LiveMatchEngine::goalWeight, attrRng), null, null, null));
             }
 
             maybeInjury(minute, home, cfg, injuryRng, events, injuries);
@@ -120,7 +136,7 @@ public class LiveMatchEngine {
             // stable-sorted by minute, ensuring determinism is byte-identical to before.
             if (minute == 45) {
                 UUID carrier = home.onPitch.isEmpty() ? null : home.onPitch.get(0);
-                events.add(new LiveTimelineEvent(45, EventType.HALF_TIME, true, carrier, null, null));
+                events.add(new LiveTimelineEvent(45, EventType.HALF_TIME, true, carrier, null, null, null));
             }
         }
 
@@ -184,8 +200,29 @@ public class LiveMatchEngine {
             side.dirty = true;
             // Use the first on-pitch player as a sentinel playerId — never NPE, never displayed.
             UUID carrier = side.onPitch.isEmpty() ? null : side.onPitch.get(0);
-            events.add(new LiveTimelineEvent(minute, EventType.TACTICS_CHANGE, side.home, carrier, null, null));
+            events.add(new LiveTimelineEvent(minute, EventType.TACTICS_CHANGE, side.home, carrier, null, null, null));
         }
+    }
+
+    /**
+     * Score-reactive AI-manager evaluation, run every second-half minute for the AI side. The
+     * brain is memoryless and RNG-free, so this preserves the timeline's determinism and consumes
+     * zero RNG; a change only fires when the decided posture differs from the current one — i.e.
+     * at threshold minutes and right after goals/red cards. {@code scoreDiff} reflects events
+     * strictly before this minute (this hook runs before the minute's goals/cards are drawn).
+     * Same carrier-playerId convention as {@link #applyTacticChanges}.
+     */
+    private void reactAiManager(int minute, Side ai, TacticalProfile identity, int scoreDiff,
+                                List<LiveTimelineEvent> events) {
+        AiManagerBrain.Posture next =
+                AiManagerBrain.decide(identity.mentality(), scoreDiff, minute, ai.redCarded);
+        if (next == ai.posture) return;
+        ai.posture = next;
+        ai.currentProfile = AiManagerBrain.profileFor(next, identity);
+        ai.dirty = true;
+        UUID carrier = ai.onPitch.isEmpty() ? null : ai.onPitch.get(0);
+        events.add(new LiveTimelineEvent(minute, EventType.TACTICS_CHANGE, ai.home, carrier,
+                null, null, next.name()));
     }
 
     // ---- substitutions ----
@@ -200,7 +237,7 @@ public class LiveMatchEngine {
             side.entryMinute.put(sub.inId(), minute);
             side.dirty = true;
             events.add(new LiveTimelineEvent(minute, EventType.SUBSTITUTION, side.home,
-                    sub.outId(), sub.inId(), null));
+                    sub.outId(), sub.inId(), null, null));
         }
     }
 
@@ -226,10 +263,11 @@ public class LiveMatchEngine {
             EventType t = rng.nextDouble() < RED_SHARE ? EventType.RED_CARD : EventType.YELLOW_CARD;
             // Fouls skew toward aggressive tacklers; the +1 keeps everyone eligible (unchanged formula).
             UUID booked = pickByWeight(side, p -> p.getTackling() + 1, attrRng);
-            events.add(new LiveTimelineEvent(minute, t, side.home, booked, null, null));
+            events.add(new LiveTimelineEvent(minute, t, side.home, booked, null, null, null));
             if (t == EventType.RED_CARD) {
                 side.onPitch.remove(booked);
                 side.exitMinute.put(booked, minute);
+                side.redCarded = true;
                 side.dirty = true;
             }
         }
@@ -238,7 +276,7 @@ public class LiveMatchEngine {
     private LiveTimelineEvent goal(int minute, Side side, TacticalProfile profile, EventType type, Random attrRng) {
         UUID scorer = type == EventType.SET_PIECE_GOAL ? setPieceTaker(side, profile, attrRng)
                 : pickByWeight(side, LiveMatchEngine::goalWeight, attrRng);
-        return new LiveTimelineEvent(minute, type, side.home, scorer, null, null);
+        return new LiveTimelineEvent(minute, type, side.home, scorer, null, null, null);
     }
 
     private void maybeInjury(int minute, Side side, LiveMatchConfig cfg, Random injuryRng,
@@ -261,7 +299,7 @@ public class LiveMatchEngine {
         side.hobbled.put(victim, true);
         side.dirty = true;
         injuries.add(new TimedInjury(victim, side.home, minute, severity, layoff));
-        events.add(new LiveTimelineEvent(minute, EventType.INJURY, side.home, victim, null, severity.name()));
+        events.add(new LiveTimelineEvent(minute, EventType.INJURY, side.home, victim, null, severity.name(), null));
     }
 
     private UUID pickInjured(Side side, LiveMatchConfig cfg, Random rng) {
