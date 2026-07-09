@@ -17,6 +17,8 @@ import type {
   SeasonDetail,
   FinancesResponse,
   MarketPlayer,
+  MarketFilters,
+  PageResponse,
   TransferOffer,
   TransferListing,
   MakeOfferRequest,
@@ -150,8 +152,25 @@ export function getFinances(
   return apiGet<FinancesResponse>(`/save-games/${saveGameId}/clubs/${clubId}/finances`, token)
 }
 
-export function getMarket(saveGameId: string, token: string): Promise<MarketPlayer[]> {
-  return apiGet<MarketPlayer[]>(`/save-games/${saveGameId}/transfers/market`, token)
+// Paginated, filterable market listing — page is 1-based; filter fields are omitted from the
+// query string when unset so the backend applies no constraint for them.
+export function getMarket(
+  saveGameId: string,
+  filters: MarketFilters,
+  page: number,
+  size: number,
+  token: string,
+): Promise<PageResponse<MarketPlayer>> {
+  const params = new URLSearchParams({ page: String(page), size: String(size) })
+  if (filters.clubId) params.set('clubId', filters.clubId)
+  if (filters.position) params.set('position', filters.position)
+  if (filters.ageMin != null) params.set('ageMin', String(filters.ageMin))
+  if (filters.ageMax != null) params.set('ageMax', String(filters.ageMax))
+  if (filters.overallMin != null) params.set('overallMin', String(filters.overallMin))
+  if (filters.overallMax != null) params.set('overallMax', String(filters.overallMax))
+  if (filters.valueMin != null) params.set('valueMin', String(filters.valueMin))
+  if (filters.valueMax != null) params.set('valueMax', String(filters.valueMax))
+  return apiGet<PageResponse<MarketPlayer>>(`/save-games/${saveGameId}/transfers/market?${params.toString()}`, token)
 }
 
 export function getOffers(saveGameId: string, token: string): Promise<TransferOffer[]> {

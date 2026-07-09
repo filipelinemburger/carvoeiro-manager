@@ -3,23 +3,67 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
   Alert, Box, Button, Card, CardContent, Chip, Divider, FormControl, Link,
-  NativeSelect, Stack, Tab, Tabs, TextField, Typography,
+  NativeSelect, Pagination, Stack, Tab, Tabs, TextField, Typography,
 } from '@mui/material'
 import {
-  getSaveGame, getMarket, getOffers, getSquad, makeOffer, acceptCounter, withdrawOffer, respondToOffer,
+  getSaveGame, getMarket, getClubs, getOffers, getSquad, makeOffer, acceptCounter, withdrawOffer, respondToOffer,
 } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { FreeAgentsPanel } from '../contract/FreeAgentsPage'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { MoneyField } from '../../components/MoneyField'
+import { MakeOfferDialog, type OfferTarget } from './MakeOfferDialog'
 import { LISTED_REASON_LABEL } from '../squad/listedReason'
-import type { PlayerResponse, TransferOffer } from '../../api/types'
+import type { MarketFilters, PlayerResponse, TransferOffer } from '../../api/types'
 import { formatBRL, parseMoneyInput } from '../../lib/money'
 import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
 import BalanceIcon from '@mui/icons-material/Balance'
 import SendIcon from '@mui/icons-material/Send'
+
+const MARKET_PAGE_SIZE = 20
+
+/** The market filter bar's raw form fields — all strings so empty inputs are unambiguous. */
+type MarketFilterForm = {
+  clubId: string
+  position: string
+  ageMin: string
+  ageMax: string
+  overallMin: string
+  overallMax: string
+  valueMin: string
+  valueMax: string
+}
+
+const EMPTY_FILTER_FORM: MarketFilterForm = {
+  clubId: '', position: '', ageMin: '', ageMax: '', overallMin: '', overallMax: '', valueMin: '', valueMax: '',
+}
+
+function parseIntFilter(raw: string): number | undefined {
+  if (raw.trim() === '') return undefined
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : undefined
+}
+
+function parseMoneyFilter(raw: string): number | undefined {
+  const n = parseMoneyInput(raw)
+  return Number.isNaN(n) ? undefined : n
+}
+
+/** Turns the filter bar's raw form into the query params sent to the API. */
+function toMarketFilters(form: MarketFilterForm): MarketFilters {
+  return {
+    clubId: form.clubId || undefined,
+    position: form.position || undefined,
+    ageMin: parseIntFilter(form.ageMin),
+    ageMax: parseIntFilter(form.ageMax),
+    overallMin: parseIntFilter(form.overallMin),
+    overallMax: parseIntFilter(form.overallMax),
+    valueMin: parseMoneyFilter(form.valueMin),
+    valueMax: parseMoneyFilter(form.valueMax),
+  }
+}
 
 /** A small "LABEL / value" stat used in the player identity zone. */
 function Stat({ label, value }: { label: string; value: ReactNode }) {
@@ -173,16 +217,30 @@ export function TransferMarketPage() {
   const isMobile = useIsMobile()
   const saveGameId = searchParams.get('saveGameId') ?? ''
   const [tab, setTab] = useState(0)
-  const [amounts, setAmounts] = useState<Record<string, string>>({})
-  const [wages, setWages] = useState<Record<string, string>>({})
-  const [years, setYears] = useState<Record<string, string>>({})
   const [detailsPlayer, setDetailsPlayer] = useState<PlayerResponse | null>(null)
+  // The market player a transfer offer is being drafted for (opens MakeOfferDialog).
+  const [offerTarget, setOfferTarget] = useState<OfferTarget | null>(null)
   // The incoming offer whose inline counter-proposal form is open (one at a time).
   const [counteringId, setCounteringId] = useState<string | null>(null)
 
+  // Market filter bar: draft form values vs. the applied filters actually sent to the API —
+  // "Filtrar" copies the draft over and resets to page 1.
+  const [filterForm, setFilterForm] = useState<MarketFilterForm>(EMPTY_FILTER_FORM)
+  const [appliedFilters, setAppliedFilters] = useState<MarketFilters>({})
+  const [page, setPage] = useState(1)
+  const applyFilters = () => {
+    setAppliedFilters(toMarketFilters(filterForm))
+    setPage(1)
+  }
+
   const enabled = Boolean(saveGameId && token)
   const save = useQuery({ queryKey: ['saveGame', saveGameId], queryFn: () => getSaveGame(saveGameId, token ?? ''), enabled })
-  const market = useQuery({ queryKey: ['market', saveGameId], queryFn: () => getMarket(saveGameId, token ?? ''), enabled })
+  const clubsQuery = useQuery({ queryKey: ['clubs', saveGameId], queryFn: () => getClubs(saveGameId, token ?? ''), enabled })
+  const market = useQuery({
+    queryKey: ['market', saveGameId, appliedFilters, page],
+    queryFn: () => getMarket(saveGameId, appliedFilters, page, MARKET_PAGE_SIZE, token ?? ''),
+    enabled,
+  })
   const offers = useQuery({ queryKey: ['offers', saveGameId], queryFn: () => getOffers(saveGameId, token ?? ''), enabled })
 
   // My squad — used to open full player details for a player another club is bidding on.
@@ -212,7 +270,10 @@ export function TransferMarketPage() {
   const offerMut = useMutation({
     mutationFn: (v: { playerId: string; amount: number; wage: number; contractYears: number }) =>
       makeOffer(saveGameId, v, token ?? ''),
-    onSuccess: showResult,
+    onSuccess: (offer) => {
+      showResult(offer)
+      setOfferTarget(null)
+    },
   })
   const acceptMut = useMutation({ mutationFn: (id: string) => acceptCounter(saveGameId, id, token ?? ''), onSuccess: showResult })
   const withdrawMut = useMutation({ mutationFn: (id: string) => withdrawOffer(saveGameId, id, token ?? ''), onSuccess: invalidate })
@@ -360,90 +421,167 @@ export function TransferMarketPage() {
       )}
 
       {tab === 1 && (
-        market.isLoading ? (
-          <Typography>Carregando mercado…</Typography>
-        ) : market.error ? (
-          <Typography color="error">Erro ao carregar o mercado.</Typography>
-        ) : (
-        <Stack spacing={1.5}>
-          {(market.data ?? []).map(p => (
-          <Card key={p.playerId} variant="outlined" sx={{ '&:hover': { borderColor: 'primary.main' } }}>
-            <CardContent>
-              {/* Identity + market value */}
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={1}
-                sx={{ justifyContent: 'space-between', alignItems: { sm: 'flex-start' } }}
+        <>
+          {/* Filter bar */}
+          <Stack direction="row" spacing={1.5} useFlexGap sx={{ alignItems: 'flex-end', flexWrap: 'wrap', mb: 2 }}>
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <NativeSelect
+                value={filterForm.clubId}
+                onChange={e => setFilterForm(f => ({ ...f, clubId: e.target.value }))}
+                inputProps={{ 'aria-label': 'Clube' }}
               >
-                <Box sx={{ minWidth: 0 }}>
-                  <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>{p.name}</Typography>
-                    <Chip size="small" label={p.position} sx={{ bgcolor: '#222', color: '#fff', fontWeight: 700 }} />
-                    <Chip size="small" color="primary" label={`OVR ${p.overall}`} sx={{ fontWeight: 800 }} />
-                    {p.listedReason && (
-                      <Chip size="small" color="warning" variant="outlined" label={LISTED_REASON_LABEL[p.listedReason]} />
-                    )}
-                  </Stack>
-                  <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
-                    <Box component="span">{p.clubName}</Box> · {p.age} anos
-                  </Typography>
-                </Box>
-                <Stack direction="row" spacing={3} sx={{ flexShrink: 0 }}>
-                  <Stat label="Valor" value={formatBRL(p.value)} />
-                  <Stat label="Salário pedido" value={formatBRL(p.wageDemand)} />
+                <option value="">Todos os clubes</option>
+                {(clubsQuery.data ?? []).filter(c => c.id !== managedClubId).map(c => (
+                  <option key={c.id} value={c.id}>{c.commonName ?? c.name}</option>
+                ))}
+              </NativeSelect>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <NativeSelect
+                value={filterForm.position}
+                onChange={e => setFilterForm(f => ({ ...f, position: e.target.value }))}
+                inputProps={{ 'aria-label': 'Posição' }}
+              >
+                <option value="">Todas as posições</option>
+                <option value="GK">Goleiro</option>
+                <option value="DEF">Defensor</option>
+                <option value="MID">Meio-campo</option>
+                <option value="ATT">Atacante</option>
+              </NativeSelect>
+            </FormControl>
+            <TextField
+              label="Idade mín"
+              type="number"
+              size="small"
+              value={filterForm.ageMin}
+              onChange={e => setFilterForm(f => ({ ...f, ageMin: e.target.value }))}
+              sx={{ width: 100 }}
+              slotProps={{ htmlInput: { 'aria-label': 'Idade mínima', min: 0 } }}
+            />
+            <TextField
+              label="Idade máx"
+              type="number"
+              size="small"
+              value={filterForm.ageMax}
+              onChange={e => setFilterForm(f => ({ ...f, ageMax: e.target.value }))}
+              sx={{ width: 100 }}
+              slotProps={{ htmlInput: { 'aria-label': 'Idade máxima', min: 0 } }}
+            />
+            <TextField
+              label="OVR mín"
+              type="number"
+              size="small"
+              value={filterForm.overallMin}
+              onChange={e => setFilterForm(f => ({ ...f, overallMin: e.target.value }))}
+              sx={{ width: 100 }}
+              slotProps={{ htmlInput: { 'aria-label': 'Overall mínimo', min: 0, max: 99 } }}
+            />
+            <TextField
+              label="OVR máx"
+              type="number"
+              size="small"
+              value={filterForm.overallMax}
+              onChange={e => setFilterForm(f => ({ ...f, overallMax: e.target.value }))}
+              sx={{ width: 100 }}
+              slotProps={{ htmlInput: { 'aria-label': 'Overall máximo', min: 0, max: 99 } }}
+            />
+            <MoneyField
+              label="Valor mín"
+              ariaLabel="Valor mínimo"
+              value={filterForm.valueMin}
+              suggested={0}
+              onChange={v => setFilterForm(f => ({ ...f, valueMin: v }))}
+            />
+            <MoneyField
+              label="Valor máx"
+              ariaLabel="Valor máximo"
+              value={filterForm.valueMax}
+              suggested={0}
+              onChange={v => setFilterForm(f => ({ ...f, valueMax: v }))}
+            />
+            <Button variant="contained" onClick={applyFilters} sx={{ height: 40 }}>Filtrar</Button>
+          </Stack>
+
+          {market.isLoading ? (
+            <Typography>Carregando mercado…</Typography>
+          ) : market.error ? (
+            <Typography color="error">Erro ao carregar o mercado.</Typography>
+          ) : (market.data?.content ?? []).length === 0 ? (
+            <Typography sx={{ color: 'text.secondary' }}>Nenhum jogador listado com esses filtros.</Typography>
+          ) : (
+            <>
+              <Stack spacing={1.5}>
+                {(market.data?.content ?? []).map(p => (
+                <Card key={p.playerId} variant="outlined" sx={{ '&:hover': { borderColor: 'primary.main' } }}>
+                  <CardContent>
+                    {/* Identity + market value */}
+                    <Stack
+                      direction={{ xs: 'column', sm: 'row' }}
+                      spacing={1}
+                      sx={{ justifyContent: 'space-between', alignItems: { sm: 'flex-start' } }}
+                    >
+                      <Box sx={{ minWidth: 0 }}>
+                        <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                          <Typography variant="h6" sx={{ fontWeight: 700 }}>{p.name}</Typography>
+                          <Chip size="small" label={p.position} sx={{ bgcolor: '#222', color: '#fff', fontWeight: 700 }} />
+                          <Chip size="small" color="primary" label={`OVR ${p.overall}`} sx={{ fontWeight: 800 }} />
+                          {p.listedReason && (
+                            <Chip size="small" color="warning" variant="outlined" label={LISTED_REASON_LABEL[p.listedReason]} />
+                          )}
+                        </Stack>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
+                          <Box component="span">{p.clubName}</Box> · {p.age} anos
+                        </Typography>
+                      </Box>
+                      <Stack direction="row" spacing={3} sx={{ flexShrink: 0 }}>
+                        <Stat label="Valor" value={formatBRL(p.value)} />
+                        <Stat label="Salário pedido" value={formatBRL(p.wageDemand)} />
+                      </Stack>
+                    </Stack>
+
+                    <Divider sx={{ my: 1.5 }} />
+
+                    <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+                      <Button
+                        variant="outlined"
+                        disabled={!windowOpen}
+                        onClick={() => setOfferTarget({
+                          playerId: p.playerId, name: p.name, value: p.value, wageDemand: p.wageDemand,
+                        })}
+                      >
+                        Fazer proposta
+                      </Button>
+                    </Stack>
+                  </CardContent>
+                </Card>
+                ))}
+              </Stack>
+
+              {market.data && market.data.totalPages > 1 && (
+                <Stack direction="row" sx={{ justifyContent: 'center', mt: 3 }}>
+                  <Pagination
+                    count={market.data.totalPages}
+                    page={page}
+                    onChange={(_, p) => setPage(p)}
+                  />
                 </Stack>
-              </Stack>
-
-              <Divider sx={{ my: 1.5 }} />
-
-              {/* Proposal form */}
-              <Stack direction="row" spacing={1.5} useFlexGap sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                <MoneyField
-                  label="Valor da proposta"
-                  ariaLabel={`Valor para ${p.name}`}
-                  value={amounts[p.playerId] ?? ''}
-                  suggested={p.value}
-                  onChange={v => setAmounts(a => ({ ...a, [p.playerId]: v }))}
-                />
-                <MoneyField
-                  label="Salário semanal"
-                  ariaLabel={`Salário para ${p.name}`}
-                  value={wages[p.playerId] ?? ''}
-                  suggested={p.wageDemand}
-                  onChange={v => setWages(w => ({ ...w, [p.playerId]: v }))}
-                />
-                <TextField
-                  label="Anos"
-                  type="number"
-                  size="small"
-                  value={years[p.playerId] ?? '3'}
-                  onChange={e => setYears(y => ({ ...y, [p.playerId]: e.target.value }))}
-                  sx={{ width: 84 }}
-                  slotProps={{ htmlInput: { 'aria-label': `Anos para ${p.name}`, min: 1, max: 5 } }}
-                />
-                <Button
-                  sx={{ mt: 0.5, ml: { sm: 'auto' } }}
-                  disabled={!windowOpen || offerMut.isPending}
-                  onClick={() => offerMut.mutate({
-                    playerId: p.playerId,
-                    amount: parsedOr(amounts[p.playerId], p.value),
-                    wage: parsedOr(wages[p.playerId], p.wageDemand),
-                    contractYears: Number(years[p.playerId] ?? 3),
-                  })}
-                >
-                  Fazer proposta
-                </Button>
-              </Stack>
-            </CardContent>
-          </Card>
-          ))}
-        </Stack>
-        )
+              )}
+            </>
+          )}
+        </>
       )}
 
       {tab === 2 && <FreeAgentsPanel />}
 
       <PlayerDetails player={detailsPlayer} onClose={() => setDetailsPlayer(null)} />
+
+      <MakeOfferDialog
+        target={offerTarget}
+        windowOpen={windowOpen}
+        busy={offerMut.isPending}
+        onClose={() => setOfferTarget(null)}
+        onSubmit={v => offerMut.mutate(v)}
+      />
     </Box>
   )
 }

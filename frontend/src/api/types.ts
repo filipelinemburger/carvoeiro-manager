@@ -14,6 +14,15 @@ export interface RegisterRequest {
   password: string
 }
 
+/** A 1-based page of results, mirroring the backend's PageResponse<T>. */
+export type PageResponse<T> = {
+  content: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
 // Career / Save game
 
 export type CompetitionSummary = {
@@ -347,6 +356,18 @@ export type MarketPlayer = {
   /** Always sent by the API (the market only ever returns listed players); optional here only
    * to keep older test fixtures compiling. */
   listedReason?: ListedReason | null
+}
+
+/** Optional narrowing criteria for the market list — every field absent means "no constraint". */
+export type MarketFilters = {
+  clubId?: string
+  position?: string
+  ageMin?: number
+  ageMax?: number
+  overallMin?: number
+  overallMax?: number
+  valueMin?: number
+  valueMax?: number
 }
 
 export type TransferListing = {

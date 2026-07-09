@@ -1,6 +1,8 @@
 package br.com.carvoeiromanager.transfer;
 
+import br.com.carvoeiromanager.common.PageResponse;
 import br.com.carvoeiromanager.common.security.CurrentUser;
+import br.com.carvoeiromanager.player.Position;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -9,8 +11,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,9 +29,21 @@ public class TransferController {
     }
 
     @GetMapping("/market")
-    public ResponseEntity<List<MarketPlayerResponse>> market(
-            @PathVariable UUID saveGameId, @CurrentUser UUID userId) {
-        return ResponseEntity.ok(transferService.getMarket(saveGameId, userId));
+    public ResponseEntity<PageResponse<MarketPlayerResponse>> market(
+            @PathVariable UUID saveGameId, @CurrentUser UUID userId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) UUID clubId,
+            @RequestParam(required = false) Position position,
+            @RequestParam(required = false) Integer ageMin,
+            @RequestParam(required = false) Integer ageMax,
+            @RequestParam(required = false) Integer overallMin,
+            @RequestParam(required = false) Integer overallMax,
+            @RequestParam(required = false) BigDecimal valueMin,
+            @RequestParam(required = false) BigDecimal valueMax) {
+        MarketFilter filter = new MarketFilter(clubId, position, ageMin, ageMax,
+                overallMin, overallMax, valueMin, valueMax);
+        return ResponseEntity.ok(transferService.getMarket(saveGameId, userId, filter, page, size));
     }
 
     @GetMapping("/offers")

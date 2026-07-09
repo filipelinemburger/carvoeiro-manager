@@ -7,6 +7,7 @@ import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.common.PageResponse;
 import br.com.carvoeiromanager.contract.ContractValuation;
 import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.player.ListedReason;
@@ -86,7 +87,24 @@ public class TransferService {
         this.sellerContextFactory = sellerContextFactory;
     }
 
+    /** Convenience overload for callers that don't need filtering/paging (e.g. internal checks). */
     public List<MarketPlayerResponse> getMarket(UUID saveGameId, UUID userId) {
+        return unpagedMarket(saveGameId, userId, MarketFilter.empty());
+    }
+
+    /**
+     * The transfer market, filtered and paged. Filtering/sorting/paging all happen in memory —
+     * a save has at most a few hundred players, so there's no need for SQL-level pagination, and
+     * {@code value} is derived (via {@link TransferValuation}), not a stored column to query on.
+     * Sorted by value descending with a playerId tiebreak so paging stays stable across requests.
+     */
+    public PageResponse<MarketPlayerResponse> getMarket(UUID saveGameId, UUID userId, MarketFilter filter,
+                                                         int page, int size) {
+        List<MarketPlayerResponse> all = unpagedMarket(saveGameId, userId, filter);
+        return PageResponse.of(all, page, size);
+    }
+
+    private List<MarketPlayerResponse> unpagedMarket(UUID saveGameId, UUID userId, MarketFilter filter) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         UUID managedClubId = save.getManagedClubId();
         Map<UUID, String> clubNames = clubNames(saveGameId);
@@ -99,7 +117,9 @@ public class TransferService {
                         transferValuation.marketValue(p.getOverall(), p.getAge()), p.getWage(),
                         contractValuation.wageDemand(p.getOverall(), p.getAge()),
                         p.getListedReason() != null ? p.getListedReason().name() : null))
-                .sorted(Comparator.comparing(MarketPlayerResponse::value).reversed())
+                .filter(filter::matches)
+                .sorted(Comparator.comparing(MarketPlayerResponse::value).reversed()
+                        .thenComparing(MarketPlayerResponse::playerId))
                 .toList();
     }
 
