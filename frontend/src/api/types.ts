@@ -484,3 +484,4 @@ export type LiveMatchState = {
 }
 
 export type SubstituteRequest = { outPlayerId: string; inPlayerId: string }
+export type SubstituteBatchRequest = { subs: SubstituteRequest[] }

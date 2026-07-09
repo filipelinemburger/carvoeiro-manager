@@ -63,19 +63,19 @@ export function LiveMatchPage() {
     },
   })
 
-  // Combined apply handler: submits queued substitutions sequentially then applies any
-  // tactics change. Both are raw awaits so they don't show the global loading overlay
-  // (consistent with subs-only behaviour before this refactor).
+  // Combined apply handler: submits all queued substitutions as a single batched request,
+  // then applies any tactics change. Both are raw awaits so they don't show the global
+  // loading overlay (consistent with subs-only behaviour before this refactor).
   async function handleApply({ subs, tactics }: { subs: SubPair[]; tactics: LiveTacticsRequest | null }) {
     if (applyPending) return
     setApplyPending(true)
     setSubError(null)
     let latest: LiveMatchState | null = null
     try {
-      for (const pair of subs) {
+      if (subs.length > 0) {
         latest = await substituteLiveMatch(
           saveGameId,
-          { outPlayerId: pair.out.playerId, inPlayerId: pair.in.playerId },
+          { subs: subs.map(pair => ({ outPlayerId: pair.out.playerId, inPlayerId: pair.in.playerId })) },
           token ?? '',
         )
       }

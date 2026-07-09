@@ -176,7 +176,56 @@ describe('LiveMatchPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: /continuar/i }))
 
     await waitFor(() =>
-      expect(substituteLiveMatch).toHaveBeenCalledWith('sg-1', { outPlayerId: 'p1', inPlayerId: 'b1' }, 'test-token'))
+      expect(substituteLiveMatch).toHaveBeenCalledWith(
+        'sg-1',
+        { subs: [{ outPlayerId: 'p1', inPlayerId: 'b1' }] },
+        'test-token',
+      ))
+    expect(substituteLiveMatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('queues TWO substitutions and applies them in a single batched substituteLiveMatch call', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS',
+      onPitch: [
+        { playerId: 'p1', name: 'Titular', position: 'MID', overall: 75, fitness: 40, hobbled: false, onPitch: true, used: false, eligible: true },
+        { playerId: 'p2', name: 'Titular Dois', position: 'DEF', overall: 72, fitness: 60, hobbled: false, onPitch: true, used: false, eligible: true },
+      ],
+      bench: [
+        { playerId: 'b1', name: 'Reserva', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true },
+        { playerId: 'b2', name: 'Reserva Dois', position: 'DEF', overall: 68, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true },
+      ],
+      subsRemaining: 5,
+    } as never)
+    vi.mocked(substituteLiveMatch).mockResolvedValue({ ...STATE, subsRemaining: 3 } as never)
+
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: /substituir/i }))
+    const dialog = await screen.findByRole('dialog')
+
+    // Queue the first pair
+    let outSection = (await screen.findByText(/selecionar quem sai do campo/i)).closest('div') as HTMLElement
+    fireEvent.click(within(outSection).getByText(/Titular$/))
+    let inSection = screen.getByText(/selecionar quem entra no jogo/i).closest('div') as HTMLElement
+    fireEvent.click(within(inSection).getByText('Reserva'))
+
+    // Queue the second pair
+    outSection = (await screen.findByText(/selecionar quem sai do campo/i)).closest('div') as HTMLElement
+    fireEvent.click(within(outSection).getByText(/Titular Dois/))
+    inSection = screen.getByText(/selecionar quem entra no jogo/i).closest('div') as HTMLElement
+    fireEvent.click(within(inSection).getByText('Reserva Dois'))
+
+    // Click Continuar once — both pairs must go out in a single batched request
+    fireEvent.click(within(dialog).getByRole('button', { name: /continuar/i }))
+
+    await waitFor(() =>
+      expect(substituteLiveMatch).toHaveBeenCalledWith(
+        'sg-1',
+        { subs: [{ outPlayerId: 'p1', inPlayerId: 'b1' }, { outPlayerId: 'p2', inPlayerId: 'b2' }] },
+        'test-token',
+      ))
+    expect(substituteLiveMatch).toHaveBeenCalledTimes(1)
   })
 
   it('auto-resumes play after a substitution made during an injury pause', async () => {
@@ -253,8 +302,13 @@ describe('LiveMatchPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: /continuar/i }))
 
     await waitFor(() =>
-      expect(substituteLiveMatch).toHaveBeenCalledWith('sg-1', { outPlayerId: 'p1', inPlayerId: 'b1' }, 'test-token')
+      expect(substituteLiveMatch).toHaveBeenCalledWith(
+        'sg-1',
+        { subs: [{ outPlayerId: 'p1', inPlayerId: 'b1' }] },
+        'test-token',
+      )
     )
+    expect(substituteLiveMatch).toHaveBeenCalledTimes(1)
     await waitFor(() =>
       expect(changeTactics).toHaveBeenCalledWith(
         'sg-1',

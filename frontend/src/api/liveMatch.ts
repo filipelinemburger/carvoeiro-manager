@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from './client'
-import type { LiveMatchState, SubstituteRequest, AdvanceResponse, LiveTacticsRequest } from './types'
+import type { LiveMatchState, SubstituteBatchRequest, AdvanceResponse, LiveTacticsRequest } from './types'
 
 export function kickoffLiveMatch(saveGameId: string, token: string): Promise<LiveMatchState> {
   return apiPost<LiveMatchState>(`/save-games/${saveGameId}/live-match/kickoff`, {}, token)
@@ -15,9 +15,9 @@ export function advanceLiveMatch(saveGameId: string, token: string): Promise<Liv
 }
 
 export function substituteLiveMatch(
-  saveGameId: string, req: SubstituteRequest, token: string,
+  saveGameId: string, req: SubstituteBatchRequest, token: string,
 ): Promise<LiveMatchState> {
-  return apiPost<LiveMatchState>(`/save-games/${saveGameId}/live-match/substitute`, req, token)
+  return apiPost<LiveMatchState>(`/save-games/${saveGameId}/live-match/substitutions`, req, token)
 }
 
 export function finishLiveMatch(saveGameId: string, token: string): Promise<AdvanceResponse> {
