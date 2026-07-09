@@ -37,6 +37,20 @@ class RolloverContractsIT {
         UUID clubId() { return save.managedClubId(); }
     }
 
+    /**
+     * The probe player the test tracks across the rollover must survive it: rollover ages
+     * everyone +1 and then rolls retirement (possible from age 35, certain at 38) — a retired
+     * player is DELETED, so findById would throw and the test would flake on whichever player
+     * happened to sit first in DB order. Age &lt;= 33 (34 after the tick) has zero retirement
+     * probability. Youth prospects follow a separate develop/depart path, so skip them too.
+     */
+    private static Player probePlayer(List<Player> squad) {
+        return squad.stream()
+                .filter(p -> !p.isYouthProspect())
+                .filter(p -> p.getAge() <= 33)
+                .findFirst().orElseThrow();
+    }
+
     private Career playToSeasonEnd() {
         User user = User.create("roll_" + UUID.randomUUID(), "hash");
         userRepository.save(user);
@@ -55,7 +69,7 @@ class RolloverContractsIT {
         // Force one managed player's contract to expire this rollover; keep the rest safe.
         List<Player> squad = playerRepository.findByClubId(c.clubId());
         squad.forEach(p -> p.setContractYears(5));
-        Player expiring = squad.get(0);
+        Player expiring = probePlayer(squad);
         expiring.setContractYears(1); // -> 0 after tick -> lapses
         playerRepository.saveAll(squad);
 
@@ -76,7 +90,7 @@ class RolloverContractsIT {
                 .findFirst().orElseThrow();
         List<Player> aiSquad = playerRepository.findByClubId(aiClub);
         aiSquad.forEach(p -> p.setContractYears(5));
-        Player expiring = aiSquad.get(0);
+        Player expiring = probePlayer(aiSquad);
         expiring.setContractYears(1);
         playerRepository.saveAll(aiSquad);
 
