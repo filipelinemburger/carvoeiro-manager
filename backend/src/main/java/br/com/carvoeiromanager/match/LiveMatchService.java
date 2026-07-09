@@ -139,7 +139,7 @@ public class LiveMatchService {
     }
 
     @Transactional
-    public LiveMatchState substitute(UUID saveGameId, UUID userId, SubstituteRequest req) {
+    public LiveMatchState substitute(UUID saveGameId, UUID userId, SubstituteBatchRequest req) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         LiveMatch lm = requireLive(saveGameId);
         if (lm.getCommittedMinute() >= MINUTES) {
@@ -153,21 +153,33 @@ public class LiveMatchService {
         OnPitch managed = onPitchManaged(lm, timeline, lm.getCommittedMinute(), managedXi);
 
         int used = (int) cfg.subSchedule().stream().filter(s -> s.home() == lm.isManagedIsHome()).count();
-        if (used >= MAX_SUBS) {
+        if (used + req.subs().size() > MAX_SUBS) {
             throw new ApiException(ErrorCode.NO_SUBS_REMAINING, "No substitutions remaining");
         }
-        if (!managed.onPitch().contains(req.outPlayerId())) {
-            throw new ApiException(ErrorCode.INVALID_SUBSTITUTION, "The outgoing player is not on the pitch");
-        }
-        boolean onBench = managedBench.stream().anyMatch(p -> p.getId().equals(req.inPlayerId()));
-        if (!onBench || managed.usedIn().contains(req.inPlayerId())) {
-            throw new ApiException(ErrorCode.INVALID_SUBSTITUTION,
-                    "The incoming player is not an available bench player");
+
+        // Validate the WHOLE batch against the evolving pitch state before persisting anything —
+        // any failure rejects the batch atomically (zero subs applied).
+        List<UUID> onPitch = new ArrayList<>(managed.onPitch());
+        Set<UUID> usedIn = new LinkedHashSet<>(managed.usedIn());
+        Set<UUID> benchIds = managedBench.stream().map(Player::getId).collect(Collectors.toSet());
+        for (SubstituteRequest sub : req.subs()) {
+            if (!onPitch.contains(sub.outPlayerId())) {
+                throw new ApiException(ErrorCode.INVALID_SUBSTITUTION, "The outgoing player is not on the pitch");
+            }
+            if (!benchIds.contains(sub.inPlayerId()) || usedIn.contains(sub.inPlayerId())) {
+                throw new ApiException(ErrorCode.INVALID_SUBSTITUTION,
+                        "The incoming player is not an available bench player");
+            }
+            onPitch.remove(sub.outPlayerId());
+            onPitch.add(sub.inPlayerId());
+            usedIn.add(sub.inPlayerId());
         }
 
         int minute = Math.min(MINUTES, lm.getCommittedMinute() + 1);
         List<LiveSub> subs = new ArrayList<>(cfg.subSchedule());
-        subs.add(new LiveSub(minute, lm.isManagedIsHome(), req.outPlayerId(), req.inPlayerId()));
+        for (SubstituteRequest sub : req.subs()) {
+            subs.add(new LiveSub(minute, lm.isManagedIsHome(), sub.outPlayerId(), sub.inPlayerId()));
+        }
         lm.setSubSchedule(serialize(subs));
         liveMatchRepository.save(lm);
         return toState(lm, save);

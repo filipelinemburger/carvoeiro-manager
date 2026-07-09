@@ -46,10 +46,10 @@ public class LiveMatchController {
         return ResponseEntity.ok(liveMatchService.advance(saveGameId, userId));
     }
 
-    @PostMapping("/substitute")
+    @PostMapping("/substitutions")
     public ResponseEntity<LiveMatchState> substitute(
             @PathVariable UUID saveGameId,
-            @Valid @RequestBody SubstituteRequest request,
+            @Valid @RequestBody SubstituteBatchRequest request,
             @CurrentUser UUID userId) {
         return ResponseEntity.ok(liveMatchService.substitute(saveGameId, userId, request));
     }
