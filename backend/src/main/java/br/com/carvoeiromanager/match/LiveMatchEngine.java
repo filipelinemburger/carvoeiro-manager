@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.InjurySeverity;
 import br.com.carvoeiromanager.player.Player;
 import org.springframework.stereotype.Service;
@@ -27,7 +28,6 @@ public class LiveMatchEngine {
     private static final double HOME_ADVANTAGE = 5.0;
     private static final double BASE = 50.0;
     private static final double FITNESS_FLOOR = 0.75;
-    private static final double SET_PIECE_SHARE = 0.18;
     private static final double BASE_CARD_RATE = 0.02;
     private static final double RED_SHARE = 0.06;
     private static final double CHANCE_RATE = 0.12;   // flavor near-miss/save rate per side per minute
@@ -107,14 +107,10 @@ public class LiveMatchEngine {
                     homeInput.defense() * homeFf + HOME_ADVANTAGE) * tempo;
 
             if (rng.nextDouble() < homeChance) {
-                EventType t = rng.nextDouble() < setPiece(homeInput) ? EventType.SET_PIECE_GOAL : EventType.GOAL;
-                events.add(goal(minute, home, home.currentProfile, t, attrRng));
-                homeGoals++;
+                if (resolveScoringEvent(minute, home, homeInput, rng, attrRng, events)) homeGoals++;
             }
             if (rng.nextDouble() < awayChance) {
-                EventType t = rng.nextDouble() < setPiece(awayInput) ? EventType.SET_PIECE_GOAL : EventType.GOAL;
-                events.add(goal(minute, away, away.currentProfile, t, attrRng));
-                awayGoals++;
+                if (resolveScoringEvent(minute, away, awayInput, rng, attrRng, events)) awayGoals++;
             }
             maybeCard(minute, home, homeInput, rng, attrRng, events);
             maybeCard(minute, away, awayInput, rng, attrRng, events);
@@ -273,10 +269,47 @@ public class LiveMatchEngine {
         }
     }
 
-    private LiveTimelineEvent goal(int minute, Side side, TacticalProfile profile, EventType type, Random attrRng) {
-        UUID scorer = type == EventType.SET_PIECE_GOAL ? setPieceTaker(side, profile, attrRng)
-                : pickByWeight(side, LiveMatchEngine::goalWeight, attrRng);
-        return new LiveTimelineEvent(minute, type, side.home, scorer, null, null, null);
+    /**
+     * Resolves one scoring chance: open play or a distinct set piece. Returns true when a goal
+     * was actually scored — a missed penalty emits PENALTY_MISSED and returns false. RNG use:
+     * the set-piece?/subtype/conversion rolls draw from the match stream; scorer picks draw from
+     * the attribution stream, mirroring the pre-split draw discipline. For CORNER_GOAL the
+     * corner taker rides in {@code playerInId} so commentary can name taker and scorer.
+     */
+    private boolean resolveScoringEvent(int minute, Side side, TeamMatchInput input, Random rng,
+                                        Random attrRng, List<LiveTimelineEvent> events) {
+        if (rng.nextDouble() >= SetPieces.share(input.cornerThreat(), input.freeKickThreat())) {
+            UUID scorer = pickByWeight(side, LiveMatchEngine::goalWeight, attrRng);
+            events.add(new LiveTimelineEvent(minute, EventType.GOAL, side.home, scorer, null, null, null));
+            return true;
+        }
+        List<Player> onPitch = side.onPitch.stream().map(side.all::get).toList();
+        TacticalProfile profile = side.currentProfile;
+        return switch (SetPieces.roll(input.cornerThreat(), input.freeKickThreat(), rng)) {
+            case PENALTY -> {
+                Player taker = SetPieces.takerOrFallback(onPitch, profile.penaltyTakerId(), Player::getFinishing);
+                boolean converted = rng.nextDouble() < input.penaltyConversion();
+                events.add(new LiveTimelineEvent(minute,
+                        converted ? EventType.PENALTY_GOAL : EventType.PENALTY_MISSED,
+                        side.home, taker.getId(), null, null, null));
+                yield converted;
+            }
+            case FREE_KICK -> {
+                Player taker = SetPieces.takerOrFallback(onPitch, profile.freekickTakerId(),
+                        p -> p.attribute(Attribute.BOLA_PARADA));
+                events.add(new LiveTimelineEvent(minute, EventType.FREE_KICK_GOAL, side.home,
+                        taker.getId(), null, null, null));
+                yield true;
+            }
+            case CORNER -> {
+                UUID scorer = pickByWeight(side, SetPieces::headerWeight, attrRng);
+                Player taker = SetPieces.takerOrFallback(onPitch, profile.cornerTakerId(),
+                        p -> p.attribute(Attribute.CRUZAMENTO));
+                events.add(new LiveTimelineEvent(minute, EventType.CORNER_GOAL, side.home,
+                        scorer, taker.getId(), null, null));
+                yield true;
+            }
+        };
     }
 
     private void maybeInjury(int minute, Side side, LiveMatchConfig cfg, Random injuryRng,
@@ -314,12 +347,6 @@ public class LiveMatchEngine {
             if (pick < acc) return id;
         }
         return side.onPitch.get(side.onPitch.size() - 1);
-    }
-
-    private UUID setPieceTaker(Side side, TacticalProfile profile, Random rng) {
-        UUID takerId = profile.penaltyTakerId() != null ? profile.penaltyTakerId() : profile.freekickTakerId();
-        if (takerId != null && side.onPitch.contains(takerId)) return takerId;
-        return pickByWeight(side, LiveMatchEngine::goalWeight, rng);
     }
 
     /** Weighted random pick over the on-pitch players. A player with weight 0 is never chosen. */
@@ -364,10 +391,6 @@ public class LiveMatchEngine {
     private double fitnessFactor(double decay, int minute) {
         double frac = minute / (double) MINUTES;
         return Math.max(FITNESS_FLOOR, 1.0 - decay * frac * frac);
-    }
-
-    private double setPiece(TeamMatchInput team) {
-        return Math.max(0.0, Math.min(0.6, SET_PIECE_SHARE * (0.5 + team.setPieceThreat())));
     }
 
     private double perMinuteScoreChance(double attack, double defense) {

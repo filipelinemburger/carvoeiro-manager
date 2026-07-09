@@ -195,13 +195,12 @@ public class FixtureSimulator {
 
             Player player = switch (event.type()) {
                 case GOAL -> pickByWeight(xi, FixtureSimulator::goalWeight, rng);
-                case SET_PIECE_GOAL -> setPieceTaker(xi, profile, rng);   // legacy emission until Task 3
                 case PENALTY_GOAL -> SetPieces.takerOrFallback(xi, profile.penaltyTakerId(), Player::getFinishing);
                 case FREE_KICK_GOAL -> SetPieces.takerOrFallback(xi, profile.freekickTakerId(),
                         p -> p.attribute(Attribute.BOLA_PARADA));
                 case CORNER_GOAL -> pickByWeight(xi, SetPieces::headerWeight, rng);
                 case YELLOW_CARD, RED_CARD -> pickWeighted(xi, Player::getTackling, rng);
-                case CHANCE, INJURY, SUBSTITUTION, TACTICS_CHANGE, HALF_TIME, PENALTY_MISSED ->
+                case CHANCE, INJURY, SUBSTITUTION, TACTICS_CHANGE, HALF_TIME, PENALTY_MISSED, SET_PIECE_GOAL ->
                         throw new IllegalStateException("Instant simulation does not emit " + event.type());
             };
             matchEventRepository.save(
@@ -210,18 +209,6 @@ public class FixtureSimulator {
             attributed.add(new AttributedEvent(player.getId(), event.type(), event.home()));
         }
         return attributed;
-    }
-
-    private Player setPieceTaker(List<Player> xi, TacticalProfile profile, Random rng) {
-        UUID takerId = profile.penaltyTakerId() != null ? profile.penaltyTakerId() : profile.freekickTakerId();
-        if (takerId != null) {
-            for (Player p : xi) {
-                if (p.getId().equals(takerId)) {
-                    return p;
-                }
-            }
-        }
-        return pickByWeight(xi, FixtureSimulator::goalWeight, rng);
     }
 
     private Player pickWeighted(List<Player> xi, ToIntFunction<Player> attribute, Random rng) {

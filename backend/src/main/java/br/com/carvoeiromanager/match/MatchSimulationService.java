@@ -10,12 +10,14 @@ import java.util.Random;
  * Deterministic, seeded match engine. Pure function: simulate(home, away, seed).
  *
  * Per-minute RNG draw order (fixed for reproducibility):
- *   home-goal, home-goal-type, away-goal, away-goal-type,
- *   home-card, home-card-type, away-card, away-card-type.
+ *   home-goal, [home-set-piece?, home-subtype, home-conversion?], away-goal, [...],
+ *   home-card, home-card-type, away-card, away-card-type — bracketed draws occur only when the
+ *   preceding roll hits.
  *
  * Effective strength declines over the match via fitnessDecay; combined tempo
  * scales the total number of chances; aggression drives the card rate; a share
- * of goals are set-piece goals (typed for downstream scorer attribution).
+ * of goals are set-piece goals, split into corner/free-kick/penalty subtypes (typed for
+ * downstream scorer attribution).
  */
 @Service
 public class MatchSimulationService {
@@ -24,15 +26,14 @@ public class MatchSimulationService {
     private static final double HOME_ADVANTAGE = 5.0;
     private static final double BASE = 50.0;
     private static final double FITNESS_FLOOR = 0.75;
-    private static final double SET_PIECE_SHARE = 0.18;
     private static final double BASE_CARD_RATE = 0.02;
     private static final double RED_SHARE = 0.06;
 
     public SimulatedMatch simulate(TeamMatchInput home, TeamMatchInput away, long seed) {
         Random rng = new Random(seed);
         double tempoFactor = (home.tempo() + away.tempo()) / 2.0;
-        double homeSetPiece = setPieceProbability(home);
-        double awaySetPiece = setPieceProbability(away);
+        double homeSetPiece = SetPieces.share(home.cornerThreat(), home.freeKickThreat());
+        double awaySetPiece = SetPieces.share(away.cornerThreat(), away.freeKickThreat());
         double homeCardChance = BASE_CARD_RATE * home.aggression();
         double awayCardChance = BASE_CARD_RATE * away.aggression();
 
@@ -50,14 +51,46 @@ public class MatchSimulationService {
                     home.defense() * homeFf + HOME_ADVANTAGE) * tempoFactor;
 
             if (rng.nextDouble() < homeChance) {
-                homeGoals++;
-                EventType type = rng.nextDouble() < homeSetPiece ? EventType.SET_PIECE_GOAL : EventType.GOAL;
-                events.add(new SimulatedEvent(minute, type, true));
+                if (rng.nextDouble() < homeSetPiece) {
+                    SetPieces.Kind kind = SetPieces.roll(home.cornerThreat(), home.freeKickThreat(), rng);
+                    if (kind == SetPieces.Kind.PENALTY) {
+                        if (rng.nextDouble() < home.penaltyConversion()) {
+                            homeGoals++;
+                            events.add(new SimulatedEvent(minute, EventType.PENALTY_GOAL, true));
+                        }
+                        // A missed penalty leaves no trace in the instant path: the goal simply
+                        // doesn't happen (misses are surfaced only in the live match feed).
+                    } else {
+                        homeGoals++;
+                        events.add(new SimulatedEvent(minute,
+                                kind == SetPieces.Kind.CORNER ? EventType.CORNER_GOAL : EventType.FREE_KICK_GOAL,
+                                true));
+                    }
+                } else {
+                    homeGoals++;
+                    events.add(new SimulatedEvent(minute, EventType.GOAL, true));
+                }
             }
             if (rng.nextDouble() < awayChance) {
-                awayGoals++;
-                EventType type = rng.nextDouble() < awaySetPiece ? EventType.SET_PIECE_GOAL : EventType.GOAL;
-                events.add(new SimulatedEvent(minute, type, false));
+                if (rng.nextDouble() < awaySetPiece) {
+                    SetPieces.Kind kind = SetPieces.roll(away.cornerThreat(), away.freeKickThreat(), rng);
+                    if (kind == SetPieces.Kind.PENALTY) {
+                        if (rng.nextDouble() < away.penaltyConversion()) {
+                            awayGoals++;
+                            events.add(new SimulatedEvent(minute, EventType.PENALTY_GOAL, false));
+                        }
+                        // A missed penalty leaves no trace in the instant path: the goal simply
+                        // doesn't happen (misses are surfaced only in the live match feed).
+                    } else {
+                        awayGoals++;
+                        events.add(new SimulatedEvent(minute,
+                                kind == SetPieces.Kind.CORNER ? EventType.CORNER_GOAL : EventType.FREE_KICK_GOAL,
+                                false));
+                    }
+                } else {
+                    awayGoals++;
+                    events.add(new SimulatedEvent(minute, EventType.GOAL, false));
+                }
             }
             if (rng.nextDouble() < homeCardChance) {
                 EventType type = rng.nextDouble() < RED_SHARE ? EventType.RED_CARD : EventType.YELLOW_CARD;
@@ -74,10 +107,6 @@ public class MatchSimulationService {
     private double fitnessFactor(double decay, int minute) {
         double frac = minute / (double) MINUTES;
         return Math.max(FITNESS_FLOOR, 1.0 - decay * frac * frac);
-    }
-
-    private double setPieceProbability(TeamMatchInput team) {
-        return Math.max(0.0, Math.min(0.6, SET_PIECE_SHARE * (0.5 + team.setPieceThreat())));
     }
 
     private double perMinuteScoreChance(double attack, double defense) {

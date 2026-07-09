@@ -1,6 +1,8 @@
 package br.com.carvoeiromanager.match;
 
 import br.com.carvoeiromanager.match.AiManagerBrain.Posture;
+import br.com.carvoeiromanager.player.Attribute;
+import br.com.carvoeiromanager.player.Attributes;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
@@ -12,9 +14,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -43,6 +47,49 @@ class LiveMatchEngineTest {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
         return new TacticalProfile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
+    }
+
+    /** A full-profile player with BOLA_PARADA 0 (so penaltyConversion is exactly 0.70) but
+     *  otherwise decent all-round attributes, per the set-piece attribution test recipe. */
+    private static Player fullProfilePlayer(Position pos) {
+        Attributes attributes = Attributes.builder()
+                .set(Attribute.VELOCIDADE, 70)
+                .set(Attribute.FINALIZACAO, 70)
+                .set(Attribute.PASSE, 70)
+                .set(Attribute.DESARME, 70)
+                .set(Attribute.REFLEXOS, pos == Position.GK ? 70 : 10)
+                .set(Attribute.FOLEGO, 70)
+                .set(Attribute.BOLA_PARADA, 0)
+                .set(Attribute.CRUZAMENTO, 50)
+                .set(Attribute.CABECEIO, 50)
+                .build();
+        return Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", pos, 25, "BRA", attributes, 70);
+    }
+
+    /** 1 GK + 4 DEF + 4 MID + 2 ATT, all built via the full-profile factory above. */
+    private static List<Player> fullProfileXi() {
+        return new ArrayList<>(List.of(
+                fullProfilePlayer(Position.GK),
+                fullProfilePlayer(Position.DEF), fullProfilePlayer(Position.DEF),
+                fullProfilePlayer(Position.DEF), fullProfilePlayer(Position.DEF),
+                fullProfilePlayer(Position.MID), fullProfilePlayer(Position.MID),
+                fullProfilePlayer(Position.MID), fullProfilePlayer(Position.MID),
+                fullProfilePlayer(Position.ATT), fullProfilePlayer(Position.ATT)));
+    }
+
+    private static TacticalProfile profileWithTakers(List<Player> xi, UUID penaltyTakerId,
+                                                      UUID freekickTakerId, UUID cornerTakerId) {
+        Map<UUID, PlayerRole> roles = new HashMap<>();
+        xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
+        return new TacticalProfile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles,
+                penaltyTakerId, freekickTakerId, cornerTakerId);
+    }
+
+    private static Map<UUID, Integer> fullFitness(List<Player> homeXi, List<Player> awayXi) {
+        Map<UUID, Integer> fitness = new HashMap<>();
+        homeXi.forEach(pl -> fitness.put(pl.getId(), 100));
+        awayXi.forEach(pl -> fitness.put(pl.getId(), 100));
+        return fitness;
     }
 
     // Fixed XI and bench so test assertions are stable across invocations
@@ -168,7 +215,7 @@ class LiveMatchEngineTest {
         for (long seed = 0; seed < 200; seed++) {
             LiveTimeline t = engine.simulate(config(seed, List.of()));
             for (LiveTimelineEvent e : t.events()) {
-                if (e.type() == EventType.GOAL || e.type() == EventType.SET_PIECE_GOAL) {
+                if (e.type().isGoal()) {
                     Position pos = byId.get(e.playerId()).getPosition();
                     goalsByPosition.merge(pos, 1, Integer::sum);
                 }
@@ -251,9 +298,9 @@ class LiveMatchEngineTest {
         for (int minute = 46; minute <= 90; minute++) {
             final int m = minute;
             int homeGoals = (int) t.events().stream().filter(e -> e.home() && e.minute() < m
-                    && (e.type() == EventType.GOAL || e.type() == EventType.SET_PIECE_GOAL)).count();
+                    && e.type().isGoal()).count();
             int awayGoals = (int) t.events().stream().filter(e -> !e.home() && e.minute() < m
-                    && (e.type() == EventType.GOAL || e.type() == EventType.SET_PIECE_GOAL)).count();
+                    && e.type().isGoal()).count();
             boolean downAMan = t.events().stream()
                     .anyMatch(e -> !e.home() && e.minute() < m && e.type() == EventType.RED_CARD);
             Posture next = AiManagerBrain.decide(awayIdentity.mentality(),
@@ -323,5 +370,95 @@ class LiveMatchEngineTest {
             assertThat(t.events()).noneMatch(e -> e.home() && e.detail() != null);
         }
         assertThat(sawUserChange).isTrue();
+    }
+
+    // ---- distinct set pieces ----
+
+    @Test
+    void distinctSetPieceTypesOccurAndLegacyNever() {
+        Set<EventType> seen = EnumSet.noneOf(EventType.class);
+        for (long seed = 0; seed < 300; seed++) {
+            engine.simulate(config(seed, List.of())).events().forEach(e -> seen.add(e.type()));
+        }
+        assertThat(seen).contains(EventType.PENALTY_GOAL, EventType.FREE_KICK_GOAL, EventType.CORNER_GOAL);
+        assertThat(seen).doesNotContain(EventType.SET_PIECE_GOAL);
+    }
+
+    @Test
+    void scoreboardCountsMatchGoalEventsExactly() {
+        for (long seed = 0; seed < 50; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            long homeGoalEvents = t.events().stream().filter(e -> e.home() && e.type().isGoal()).count();
+            long awayGoalEvents = t.events().stream().filter(e -> !e.home() && e.type().isGoal()).count();
+            assertThat(t.homeGoals()).isEqualTo((int) homeGoalEvents);
+            assertThat(t.awayGoals()).isEqualTo((int) awayGoalEvents);
+        }
+    }
+
+    @Test
+    void penaltiesCanBeMissedAndTheTakerIsTheActor() {
+        // BOLA_PARADA 0 everywhere -> penaltyConversion() is exactly SetPieces.conversionChance(0)
+        // == 0.70, so ~30% of penalties miss; over 300 seeds a miss is certain (P(none) < 1e-4).
+        List<Player> penHomeXi = fullProfileXi();
+        List<Player> penAwayXi = fullProfileXi();
+        Player penaltyTaker = penHomeXi.get(5); // a MID in the XI
+        TacticalProfile homeProfile = profileWithTakers(penHomeXi, penaltyTaker.getId(), null, null);
+        TacticalProfile awayProfile = profileWithTakers(penAwayXi, null, null, null);
+        Map<UUID, Integer> fitness = fullFitness(penHomeXi, penAwayXi);
+
+        boolean sawGoal = false;
+        boolean sawMiss = false;
+        for (long seed = 0; seed < 300; seed++) {
+            LiveMatchConfig cfg = new LiveMatchConfig(seed, penHomeXi, penAwayXi, List.of(), List.of(),
+                    homeProfile, awayProfile, fitness, List.of(), List.of(), null);
+            LiveTimeline t = engine.simulate(cfg);
+            for (LiveTimelineEvent e : t.events()) {
+                if (!e.home()) continue;
+                if (e.type() == EventType.PENALTY_GOAL) {
+                    sawGoal = true;
+                    assertThat(e.playerId()).isEqualTo(penaltyTaker.getId());
+                } else if (e.type() == EventType.PENALTY_MISSED) {
+                    sawMiss = true;
+                    assertThat(e.playerId()).isEqualTo(penaltyTaker.getId());
+                }
+            }
+        }
+        assertThat(sawGoal).as("at least one penalty must be scored across 300 seeds").isTrue();
+        assertThat(sawMiss).as("at least one penalty must be missed across 300 seeds").isTrue();
+    }
+
+    @Test
+    void takersAreAttributedByType() {
+        // Three DISTINCT designated takers, all in the XI.
+        List<Player> attHomeXi = fullProfileXi();
+        List<Player> attAwayXi = fullProfileXi();
+        Player penaltyTaker = attHomeXi.get(5);
+        Player freekickTaker = attHomeXi.get(6);
+        Player cornerTaker = attHomeXi.get(7);
+        TacticalProfile homeProfile = profileWithTakers(attHomeXi,
+                penaltyTaker.getId(), freekickTaker.getId(), cornerTaker.getId());
+        TacticalProfile awayProfile = profileWithTakers(attAwayXi, null, null, null);
+        Map<UUID, Integer> fitness = fullFitness(attHomeXi, attAwayXi);
+
+        Map<UUID, Player> byId = new HashMap<>();
+        attHomeXi.forEach(pl -> byId.put(pl.getId(), pl));
+
+        for (long seed = 0; seed < 300; seed++) {
+            LiveMatchConfig cfg = new LiveMatchConfig(seed, attHomeXi, attAwayXi, List.of(), List.of(),
+                    homeProfile, awayProfile, fitness, List.of(), List.of(), null);
+            LiveTimeline t = engine.simulate(cfg);
+            for (LiveTimelineEvent e : t.events()) {
+                if (!e.home()) continue;
+                switch (e.type()) {
+                    case FREE_KICK_GOAL -> assertThat(e.playerId()).isEqualTo(freekickTaker.getId());
+                    case CORNER_GOAL -> {
+                        assertThat(e.playerInId()).isEqualTo(cornerTaker.getId());
+                        assertThat(byId.get(e.playerId()).getPosition()).isNotEqualTo(Position.GK);
+                    }
+                    case PENALTY_GOAL, PENALTY_MISSED -> assertThat(e.playerId()).isEqualTo(penaltyTaker.getId());
+                    default -> { }
+                }
+            }
+        }
     }
 }

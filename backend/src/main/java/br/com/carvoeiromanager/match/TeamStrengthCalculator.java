@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Formation;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRole;
@@ -63,9 +64,14 @@ public class TeamStrengthCalculator {
         double staminaAvg = staminaSum / xi.size();
         double fitnessDecay = DECAY_BASE * profile.pressing().decayMult() * clamp(70.0 / staminaAvg, 0.7, 1.4);
 
-        double setPieceThreat = setPieceThreat(xi, profile);
+        double cornerThreat = takerThreat(xi, profile.cornerTakerId(), Attribute.CRUZAMENTO);
+        double freeKickThreat = takerThreat(xi, profile.freekickTakerId(), Attribute.BOLA_PARADA);
+        double penaltyConversion = SetPieces.conversionChance(
+                SetPieces.takerOrFallback(xi, profile.penaltyTakerId(), Player::getFinishing)
+                        .attribute(Attribute.BOLA_PARADA));
 
-        return new TeamMatchInput(attack, defense, tempo, aggression, setPieceThreat, fitnessDecay);
+        return new TeamMatchInput(attack, defense, tempo, aggression,
+                cornerThreat, freeKickThreat, penaltyConversion, fitnessDecay);
     }
 
     private PlayerRole resolveRole(TacticalProfile profile, Player p) {
@@ -76,16 +82,16 @@ public class TeamStrengthCalculator {
         return role;
     }
 
-    private double setPieceThreat(List<Player> xi, TacticalProfile profile) {
-        UUID takerId = profile.penaltyTakerId();
-        Player taker = null;
+    /** The designated taker's attribute when in the XI, else the best in the XI — scaled to ~[0,1]. */
+    private double takerThreat(List<Player> xi, UUID takerId, Attribute attribute) {
         if (takerId != null) {
-            taker = xi.stream().filter(p -> p.getId().equals(takerId)).findFirst().orElse(null);
+            for (Player p : xi) {
+                if (p.getId().equals(takerId)) {
+                    return p.attribute(attribute) / 99.0;
+                }
+            }
         }
-        int finishing = taker != null
-                ? taker.getFinishing()
-                : xi.stream().mapToInt(Player::getFinishing).max().orElse(0);
-        return finishing / 99.0;
+        return xi.stream().mapToInt(p -> p.attribute(attribute)).max().orElse(0) / 99.0;
     }
 
     private double clamp(double v, double min, double max) {

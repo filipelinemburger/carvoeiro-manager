@@ -1,5 +1,7 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.Attribute;
+import br.com.carvoeiromanager.player.Attributes;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
@@ -8,6 +10,7 @@ import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.Pressing;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +18,7 @@ import java.util.UUID;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 class TeamStrengthCalculatorTest {
 
@@ -23,6 +27,25 @@ class TeamStrengthCalculatorTest {
     private Player p(Position pos, int rating) {
         return Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", pos, 25, "BRA",
                 rating, rating, rating, rating, pos == Position.GK ? rating : 10, 70, rating);
+    }
+
+    /** A player whose full attribute profile has exactly the given values set (rest default 0). */
+    private static Player fullProfilePlayer(Position pos, Map<Attribute, Integer> attrs) {
+        Attributes.Builder builder = Attributes.builder();
+        attrs.forEach(builder::set);
+        return Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", pos, 25, "BRA", builder.build(), 70);
+    }
+
+    private static Player fullProfilePlayer(Position pos, Attribute attr, int value) {
+        return fullProfilePlayer(pos, Map.of(attr, value));
+    }
+
+    private static TacticalProfile profileWithTakers(List<Player> xi, UUID penaltyTakerId,
+                                                      UUID freekickTakerId, UUID cornerTakerId) {
+        Map<UUID, PlayerRole> roles = new HashMap<>();
+        xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
+        return new TacticalProfile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles,
+                penaltyTakerId, freekickTakerId, cornerTakerId);
     }
 
     /** 1 GK + 4 DEF + 4 MID + 2 ATT, all rated 70. */
@@ -92,35 +115,64 @@ class TeamStrengthCalculatorTest {
     }
 
     @Test
-    void setPieceThreatTracksDesignatedTaker() {
-        // Squad whose only elite finisher is the ace (99); everyone else is 70.
+    void cornerThreatComesFromTheCornerTakersCrossing() {
+        // The designated corner taker has CRUZAMENTO 80; someone else in the XI has 99. The
+        // taker governs cornerThreat, not the squad's best crosser.
         List<Player> xi = standardXi();
-        Player ace = p(Position.ATT, 99);
-        List<Player> squad = new java.util.ArrayList<>(xi);
-        squad.set(10, ace);
-        Map<UUID, PlayerRole> roles = new HashMap<>();
-        squad.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
+        Player taker = fullProfilePlayer(Position.MID, Attribute.CRUZAMENTO, 80);
+        Player betterCrosser = fullProfilePlayer(Position.ATT, Attribute.CRUZAMENTO, 99);
+        List<Player> squad = new ArrayList<>(xi);
+        squad.set(5, taker);
+        squad.set(9, betterCrosser);
+        TacticalProfile profile = profileWithTakers(squad, null, null, taker.getId());
 
-        Player weakTaker = squad.get(5); // a midfielder rated 70 — below the ace
+        TeamMatchInput input = calc.compute(squad, profile);
 
-        TacticalProfile aceTaker = new TacticalProfile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL,
-                roles, ace.getId(), ace.getId(), ace.getId());
-        TacticalProfile weakTakerProfile = new TacticalProfile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL,
-                roles, weakTaker.getId(), weakTaker.getId(), weakTaker.getId());
-        TacticalProfile noTaker = new TacticalProfile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL,
-                roles, null, null, null);
+        assertThat(input.cornerThreat()).isEqualTo(80 / 99.0, within(1e-9));
+    }
 
-        double aceThreat = calc.compute(squad, aceTaker).setPieceThreat();
-        double weakThreat = calc.compute(squad, weakTakerProfile).setPieceThreat();
-        double fallbackThreat = calc.compute(squad, noTaker).setPieceThreat();
+    @Test
+    void threatsFallBackToTheBestInTheXiWhenNoTakerIsSet() {
+        List<Player> xi = standardXi();
+        Player bestCrosser = fullProfilePlayer(Position.ATT, Attribute.CRUZAMENTO, 90);
+        Player bestFreeKicker = fullProfilePlayer(Position.MID, Attribute.BOLA_PARADA, 85);
+        List<Player> squad = new ArrayList<>(xi);
+        squad.set(9, bestCrosser);
+        squad.set(5, bestFreeKicker);
+        TacticalProfile profile = profileWithTakers(squad, null, null, null);
 
-        // No taker -> falls back to the squad's best finisher (the ace).
-        assertThat(fallbackThreat).isEqualTo(ace.getFinishing() / 99.0);
-        // Designating the ace matches that fallback...
-        assertThat(aceThreat).isEqualTo(fallbackThreat);
-        // ...but designating a weaker taker is actually consulted: threat drops below the squad max.
-        assertThat(weakThreat).isLessThan(fallbackThreat);
-        assertThat(weakThreat).isBetween(0.0, 1.0);
+        TeamMatchInput input = calc.compute(squad, profile);
+
+        assertThat(input.cornerThreat()).isEqualTo(90 / 99.0, within(1e-9));
+        assertThat(input.freeKickThreat()).isEqualTo(85 / 99.0, within(1e-9));
+    }
+
+    @Test
+    void penaltyConversionComesFromThePenaltyTakersSetPieceSkill() {
+        List<Player> xi = standardXi();
+
+        // Designated taker with BOLA_PARADA 99 -> conversion is the top of the [0.70, 0.95] range.
+        Player elite = fullProfilePlayer(Position.MID, Attribute.BOLA_PARADA, 99);
+        List<Player> withTakerSquad = new ArrayList<>(xi);
+        withTakerSquad.set(5, elite);
+        TacticalProfile withTaker = profileWithTakers(withTakerSquad, elite.getId(), null, null);
+        assertThat(calc.compute(withTakerSquad, withTaker).penaltyConversion())
+                .isEqualTo(0.95, within(1e-9));
+
+        // No taker set -> the best FINISHER's (non-GK) BOLA_PARADA feeds the formula — not the
+        // squad's best BOLA_PARADA outright. bestFinisher has the top FINALIZACAO but a modest
+        // BOLA_PARADA; bestFreeKicker has the top BOLA_PARADA but is not the best finisher.
+        Player bestFinisher = fullProfilePlayer(Position.ATT,
+                Map.of(Attribute.FINALIZACAO, 90, Attribute.BOLA_PARADA, 20));
+        Player bestFreeKicker = fullProfilePlayer(Position.MID,
+                Map.of(Attribute.FINALIZACAO, 50, Attribute.BOLA_PARADA, 99));
+        List<Player> noTakerSquad = new ArrayList<>(xi);
+        noTakerSquad.set(9, bestFinisher);
+        noTakerSquad.set(5, bestFreeKicker);
+        TacticalProfile noTaker = profileWithTakers(noTakerSquad, null, null, null);
+
+        assertThat(calc.compute(noTakerSquad, noTaker).penaltyConversion())
+                .isEqualTo(SetPieces.conversionChance(20), within(1e-9));
     }
 
     @Test
