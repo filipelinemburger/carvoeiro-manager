@@ -21,6 +21,13 @@ determinism parity.
 **User decisions:** approach A (typed subtypes with taker-skill-driven shares — not full
 corner-by-corner event modeling); penalties get a conversion roll and can be missed.
 
+**Fallback rule (applies to every taker fallback below):** the designated taker when present
+in the pool; otherwise the FIRST player in pool order with the maximal fallback attribute,
+**skipping goalkeepers** (a keeper is used only if the pool is all keepers — keeps "keepers
+never score" true for penalties/free kicks too). A user-designated GK taker id is honored.
+Penalty conversion is precomputed per strength recompute and carried on `TeamMatchInput` as a
+third field, `penaltyConversion` (the instant engine has no player access mid-loop).
+
 ## 1. Event model
 
 `EventType` gains four values: `PENALTY_GOAL`, `FREE_KICK_GOAL`, `CORNER_GOAL`,
