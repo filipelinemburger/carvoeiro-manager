@@ -9,17 +9,21 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.ToIntFunction;
 
 /**
  * Deterministic, substitution-aware live-match engine. A pure function of
- * {@link LiveMatchConfig}: identical {@code (seed, subSchedule)} yields an identical timeline.
- * Kept fully separate from {@link MatchSimulationService} so the instant engine (used for all
- * AI/other-club fixtures) stays byte-for-byte unchanged.
+ * {@link LiveMatchConfig}: identical {@code (seed, subSchedule)} yields an identical timeline —
+ * including AI-manager tactics reactions and AI bench substitutions, both derived purely from
+ * the config with zero RNG. Kept fully separate from {@link MatchSimulationService} so the
+ * instant engine (used for all AI/other-club fixtures) stays byte-for-byte unchanged.
  */
 @Service
 public class LiveMatchEngine {
@@ -53,6 +57,9 @@ public class LiveMatchEngine {
         TacticalProfile currentProfile;                    // updated by tactics changes mid-match
         boolean redCarded = false;                         // true once this side loses a player
         AiManagerBrain.Posture posture = AiManagerBrain.Posture.NORMAL; // AI-manager state (AI side only)
+        int aiSubsMade = 0;                                // engine-made AI subs this match
+        int aiFatigueSubsMade = 0;
+        boolean aiPostureSubMade = false;
 
         Side(boolean home) { this.home = home; }
     }
@@ -93,6 +100,7 @@ public class LiveMatchEngine {
             if (aiSide != null) {
                 int scoreDiff = aiSide.home ? homeGoals - awayGoals : awayGoals - homeGoals;
                 reactAiManager(minute, aiSide, aiIdentity, scoreDiff, events);
+                maybeAiSubstitution(minute, aiSide, cfg, events);
             }
             if (home.dirty) { homeInput = strength(home, home.currentProfile, cfg); home.dirty = false; }
             if (away.dirty) { awayInput = strength(away, away.currentProfile, cfg); away.dirty = false; }
@@ -235,6 +243,47 @@ public class LiveMatchEngine {
             events.add(new LiveTimelineEvent(minute, EventType.SUBSTITUTION, side.home,
                     sub.outId(), sub.inId(), null, null));
         }
+    }
+
+    /**
+     * AI bench decision, evaluated once per minute right after the posture evaluation (so a
+     * posture escalation and its personnel change land in the same minute). Deterministic and
+     * RNG-free: reads only pitch/bench/fitness state, so re-simulations replay identical subs.
+     * Applies at most one substitution per minute with the same bookkeeping as
+     * {@link #applySubs}; an empty bench (pre-feature saves) means no decisions, ever.
+     */
+    private void maybeAiSubstitution(int minute, Side ai, LiveMatchConfig cfg,
+                                     List<LiveTimelineEvent> events) {
+        List<Player> benchAvailable = (ai.home ? cfg.homeBench() : cfg.awayBench()).stream()
+                .filter(p -> !ai.entryMinute.containsKey(p.getId()))
+                .toList();
+        if (benchAvailable.isEmpty()) return;
+
+        List<Player> onPitch = ai.onPitch.stream().map(ai.all::get).toList();
+        Set<UUID> hobbledIds = new LinkedHashSet<>();
+        for (UUID id : ai.onPitch) {
+            if (Boolean.TRUE.equals(ai.hobbled.get(id))) hobbledIds.add(id);
+        }
+
+        Optional<AiSubstitutionBrain.SubDecision> decision = AiSubstitutionBrain.decide(
+                minute, ai.posture, ai.aiPostureSubMade, ai.aiFatigueSubsMade, ai.aiSubsMade,
+                onPitch, hobbledIds, benchAvailable, cfg.fitness());
+        if (decision.isEmpty()) return;
+
+        AiSubstitutionBrain.SubDecision d = decision.get();
+        int idx = ai.onPitch.indexOf(d.outId());
+        ai.onPitch.set(idx, d.inId());
+        ai.exitMinute.put(d.outId(), minute);
+        ai.entryMinute.put(d.inId(), minute);
+        ai.dirty = true;
+        ai.aiSubsMade++;
+        switch (d.kind()) {
+            case POSTURE -> ai.aiPostureSubMade = true;
+            case FATIGUE -> ai.aiFatigueSubsMade++;
+            case INJURY -> { }
+        }
+        events.add(new LiveTimelineEvent(minute, EventType.SUBSTITUTION, ai.home,
+                d.outId(), d.inId(), null, null));
     }
 
     // ---- strength (recomputed on change), hobble x0.5, red-card = fewer players ----

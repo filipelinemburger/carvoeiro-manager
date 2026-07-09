@@ -13,9 +13,11 @@ import br.com.carvoeiromanager.match.TimedTactics;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -459,6 +461,166 @@ class LiveMatchEngineTest {
                     default -> { }
                 }
             }
+        }
+    }
+
+    // ---- AI substitutions ----
+
+    /** 1 GK + 2 DEF + 2 MID + 2 ATT, all rated 65 — cover for every on-pitch position. */
+    private static List<Player> awayBenchWithCover() {
+        return new ArrayList<>(List.of(
+                p(Position.GK, 65),
+                p(Position.DEF, 65), p(Position.DEF, 65),
+                p(Position.MID, 65), p(Position.MID, 65),
+                p(Position.ATT, 65), p(Position.ATT, 65)));
+    }
+
+    private LiveMatchConfig configWithAwayBench(long seed, List<Player> awayBench, List<LiveSub> subs,
+                                                Boolean aiHome) {
+        Map<UUID, Integer> fitness = new HashMap<>();
+        homeXi.forEach(pl -> fitness.put(pl.getId(), 100));
+        awayXi.forEach(pl -> fitness.put(pl.getId(), 100));
+        homeBench.forEach(pl -> fitness.put(pl.getId(), 100));
+        awayBench.forEach(pl -> fitness.put(pl.getId(), 100));
+
+        TacticalProfile homeProfile = defaultProfile(homeXi);
+        TacticalProfile awayProfile = defaultProfile(awayXi);
+
+        return new LiveMatchConfig(seed, homeXi, awayXi, homeBench, awayBench,
+                homeProfile, awayProfile, fitness, subs, List.of(), aiHome);
+    }
+
+    @Test
+    void aHobbledAiPlayerWithCoverIsSubstituted() {
+        // Away side is the AI (aiHome = false) with a bench containing cover for every position.
+        // For every away INJURY event (to an original-XI player, so minutesPlayed is simply the
+        // sub minute) at minute m where the away side still had subs left and bench cover for
+        // the victim's position at that instant, assert the victim is eventually subbed off.
+        List<Player> awayBench = awayBenchWithCover();
+        Map<Position, List<UUID>> benchByPosition = new EnumMap<>(Position.class);
+        awayBench.forEach(pl -> benchByPosition
+                .computeIfAbsent(pl.getPosition(), k -> new ArrayList<>()).add(pl.getId()));
+        Set<UUID> awayXiIds = new HashSet<>();
+        awayXi.forEach(pl -> awayXiIds.add(pl.getId()));
+        Map<UUID, Player> byId = new HashMap<>();
+        awayXi.forEach(pl -> byId.put(pl.getId(), pl));
+
+        for (long seed = 0; seed < 300; seed++) {
+            LiveMatchConfig cfg = configWithAwayBench(seed, awayBench, List.of(), false);
+            LiveTimeline t = engine.simulate(cfg);
+
+            List<LiveTimelineEvent> awaySubs = t.events().stream()
+                    .filter(e -> e.type() == EventType.SUBSTITUTION && !e.home())
+                    .sorted(Comparator.comparingInt(LiveTimelineEvent::minute))
+                    .toList();
+            // Minute 90 is the match's last minute: there is no later minute for the AI to react
+            // in, so an injury there can never be structurally followed by a substitution.
+            List<LiveTimelineEvent> awayInjuries = t.events().stream()
+                    .filter(e -> e.type() == EventType.INJURY && !e.home() && e.minute() < 90
+                            && awayXiIds.contains(e.playerId()))
+                    .sorted(Comparator.comparingInt(LiveTimelineEvent::minute))
+                    .toList();
+
+            Set<UUID> usedBench = new HashSet<>();
+            int subsUsedSoFar = 0;
+            int subIdx = 0;
+
+            for (LiveTimelineEvent inj : awayInjuries) {
+                int m = inj.minute();
+                while (subIdx < awaySubs.size() && awaySubs.get(subIdx).minute() <= m) {
+                    usedBench.add(awaySubs.get(subIdx).playerInId());
+                    subsUsedSoFar++;
+                    subIdx++;
+                }
+                if (subsUsedSoFar >= AiSubstitutionBrain.MAX_SUBS) continue;
+
+                Position pos = byId.get(inj.playerId()).getPosition();
+                boolean coverAvailable = benchByPosition.getOrDefault(pos, List.of()).stream()
+                        .anyMatch(id -> !usedBench.contains(id));
+                if (!coverAvailable) continue;
+
+                LiveTimelineEvent subEvent = awaySubs.stream()
+                        .filter(s -> s.minute() > m && inj.playerId().equals(s.playerId()))
+                        .findFirst().orElse(null);
+                assertThat(subEvent)
+                        .as("seed %d: injured victim at minute %d should eventually be subbed", seed, m)
+                        .isNotNull();
+                assertThat(t.minutesPlayed().get(inj.playerId()))
+                        .as("seed %d: victim's minutes should end at the sub minute", seed)
+                        .isEqualTo(subEvent.minute());
+            }
+        }
+    }
+
+    @Test
+    void aiSubsNeverExceedTheCapAndOnlyBenchPlayersComeOn() {
+        List<Player> awayBench = awayBenchWithCover();
+        Set<UUID> benchIds = new HashSet<>();
+        awayBench.forEach(pl -> benchIds.add(pl.getId()));
+
+        for (long seed = 0; seed < 300; seed++) {
+            LiveMatchConfig cfg = configWithAwayBench(seed, awayBench, List.of(), false);
+            LiveTimeline t = engine.simulate(cfg);
+
+            List<LiveTimelineEvent> awaySubs = t.events().stream()
+                    .filter(e -> e.type() == EventType.SUBSTITUTION && !e.home())
+                    .toList();
+            assertThat(awaySubs.size()).as("seed %d", seed).isLessThanOrEqualTo(5);
+
+            Set<UUID> seenIn = new HashSet<>();
+            for (LiveTimelineEvent e : awaySubs) {
+                assertThat(benchIds).as("seed %d: incoming player must be a bench player", seed)
+                        .contains(e.playerInId());
+                assertThat(seenIn.add(e.playerInId()))
+                        .as("seed %d: a bench player must not come on twice", seed)
+                        .isTrue();
+            }
+        }
+    }
+
+    @Test
+    void anEmptyAiBenchMeansNoAiSubstitutions() {
+        // aiHome = false, away bench = List.of() (the old-save shape, produced by the shared
+        // config() factory): sweep seeds and assert zero away-side SUBSTITUTION events.
+        for (long seed = 0; seed < 50; seed++) {
+            LiveMatchConfig cfg = config(seed, List.of(), List.of(), false);
+            LiveTimeline t = engine.simulate(cfg);
+            assertThat(t.events()).as("seed %d", seed)
+                    .noneMatch(e -> e.type() == EventType.SUBSTITUTION && !e.home());
+        }
+    }
+
+    @Test
+    void aiSubstitutionsAreDeterministic() {
+        LiveMatchConfig cfg = configWithAwayBench(17L, awayBenchWithCover(), List.of(), false);
+        LiveTimeline a = engine.simulate(cfg);
+        LiveTimeline b = engine.simulate(cfg);
+        assertThat(a.events()).isEqualTo(b.events());
+        assertThat(a.minutesPlayed()).isEqualTo(b.minutesPlayed());
+    }
+
+    @Test
+    void managedScheduleSubsAndAiSubsCoexist() {
+        // Home (managed) has a scheduled LiveSub at minute 60; away is the AI with a bench.
+        // The home SUBSTITUTION appears exactly as scheduled and the home side never gets a
+        // brain-produced sub — any additional SUBSTITUTION events are away-side by construction
+        // (each event carries a single home flag), verified structurally in the sibling tests.
+        UUID homeOut = homeXi.get(5).getId();
+        UUID homeIn = homeBench.get(0).getId();
+        List<LiveSub> homeSchedule = List.of(new LiveSub(60, true, homeOut, homeIn));
+        List<Player> awayBench = awayBenchWithCover();
+
+        for (long seed = 0; seed < 20; seed++) {
+            LiveMatchConfig cfg = configWithAwayBench(seed, awayBench, homeSchedule, false);
+            LiveTimeline t = engine.simulate(cfg);
+
+            List<LiveTimelineEvent> homeSubs = t.events().stream()
+                    .filter(e -> e.type() == EventType.SUBSTITUTION && e.home())
+                    .toList();
+            assertThat(homeSubs).as("seed %d: home has exactly its one scheduled sub", seed).hasSize(1);
+            assertThat(homeSubs.get(0).minute()).isEqualTo(60);
+            assertThat(homeSubs.get(0).playerId()).isEqualTo(homeOut);
+            assertThat(homeSubs.get(0).playerInId()).isEqualTo(homeIn);
         }
     }
 }
