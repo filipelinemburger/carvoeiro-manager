@@ -13,7 +13,7 @@ public record LiveTimeline(
         List<TimedInjury> injuries) {
 
     private static boolean isGoal(EventType t) {
-        return t == EventType.GOAL || t == EventType.SET_PIECE_GOAL;
+        return t.isGoal();
     }
 
     public List<LiveTimelineEvent> eventsThrough(int throughMinute) {

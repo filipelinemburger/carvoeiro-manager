@@ -32,4 +32,30 @@ class LiveCommentaryTest {
         assertThat(LiveCommentary.of(EventType.SUBSTITUTION, "Sai", "Entra", 70, null))
                 .isEqualTo("Substituição: entra Entra, sai Sai.");
     }
+
+    @Test
+    void penaltyGoalMissAndFreeKickLines() {
+        // Variant index = minute + type.ordinal() mod array length; assert membership, not index math.
+        assertThat(LiveCommentary.of(EventType.PENALTY_GOAL, "Otero", null, 60, null)).isIn(
+                "Pênalti! Otero converte com categoria!", "GOL DE PÊNALTI! Otero não desperdiça!");
+        assertThat(LiveCommentary.of(EventType.PENALTY_MISSED, "Otero", null, 60, null)).isIn(
+                "Pênalti perdido! Otero desperdiça — defesa do goleiro!",
+                "Otero cobra o pênalti... e o goleiro defende!");
+        assertThat(LiveCommentary.of(EventType.FREE_KICK_GOAL, "Otero", null, 60, null)).isIn(
+                "GOL DE FALTA! Otero acerta o ângulo!", "Falta cobrada por Otero... GOL!");
+    }
+
+    @Test
+    void cornerGoalNamesTakerAndScorer() {
+        assertThat(LiveCommentary.of(EventType.CORNER_GOAL, "Zagueiro", "Batedor", 70, null))
+                .isEqualTo("Escanteio de Batedor, Zagueiro sobe e cabeceia: GOL!");
+    }
+
+    @Test
+    void cornerGoalFallsBackToOneNameWhenTakerMissingOrScoredHimself() {
+        assertThat(LiveCommentary.of(EventType.CORNER_GOAL, "Zagueiro", null, 70, null))
+                .isEqualTo("GOL de escanteio! Zagueiro aparece na área e marca!");
+        assertThat(LiveCommentary.of(EventType.CORNER_GOAL, "Batedor", "Batedor", 70, null))
+                .isEqualTo("GOL de escanteio! Batedor aparece na área e marca!");
+    }
 }

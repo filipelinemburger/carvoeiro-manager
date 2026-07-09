@@ -12,6 +12,7 @@ import { PlayerRatingsList } from './PlayerRatingsList'
 const EVENT_ICON: Record<LiveEvent['type'], string> = {
   GOAL: '⚽', SET_PIECE_GOAL: '⚽', YELLOW_CARD: '🟨', RED_CARD: '🟥',
   CHANCE: '🎯', INJURY: '🚑', SUBSTITUTION: '🔁', TACTICS_CHANGE: '📋', HALF_TIME: '⏸️',
+  PENALTY_GOAL: '⚽', FREE_KICK_GOAL: '⚽', CORNER_GOAL: '⚽', PENALTY_MISSED: '🧤',
 }
 
 const ADVANCE_MS = 1500   // event-to-event pacing (client-owned clock)

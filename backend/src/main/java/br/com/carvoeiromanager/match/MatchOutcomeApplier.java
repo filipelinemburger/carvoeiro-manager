@@ -47,10 +47,14 @@ public class MatchOutcomeApplier {
         Map<UUID, Integer> yellows = new HashMap<>();
         Set<UUID> reds = new HashSet<>();
         for (AttributedEvent e : events) {
+            if (e.type().isGoal()) {
+                goals.merge(e.playerId(), 1, Integer::sum);
+                continue;
+            }
             switch (e.type()) {
-                case GOAL, SET_PIECE_GOAL -> goals.merge(e.playerId(), 1, Integer::sum);
                 case YELLOW_CARD -> yellows.merge(e.playerId(), 1, Integer::sum);
                 case RED_CARD -> reds.add(e.playerId());
+                default -> { }
             }
         }
         applyTeam(home, goals, yellows, reds, acc);

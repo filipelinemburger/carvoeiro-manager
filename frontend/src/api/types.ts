@@ -430,7 +430,7 @@ export type LiveTacticsRequest = {
 
 export type LiveEvent = {
   minute: number
-  type: 'GOAL' | 'SET_PIECE_GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'CHANCE' | 'INJURY' | 'SUBSTITUTION' | 'TACTICS_CHANGE' | 'HALF_TIME'
+  type: 'GOAL' | 'SET_PIECE_GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'CHANCE' | 'INJURY' | 'SUBSTITUTION' | 'TACTICS_CHANGE' | 'HALF_TIME' | 'PENALTY_GOAL' | 'FREE_KICK_GOAL' | 'CORNER_GOAL' | 'PENALTY_MISSED'
   home: boolean
   playerId: string
   playerName: string

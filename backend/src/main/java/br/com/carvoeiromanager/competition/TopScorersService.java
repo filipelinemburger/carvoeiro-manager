@@ -61,7 +61,7 @@ public class TopScorersService {
         }
 
         List<MatchEvent> goals = matchEventRepository.findByFixtureIdInAndTypeIn(
-                fixtureIds, List.of("GOAL", "SET_PIECE_GOAL"));
+                fixtureIds, br.com.carvoeiromanager.match.EventType.goalTypeNames());
         if (goals.isEmpty()) {
             return List.of();
         }

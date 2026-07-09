@@ -157,6 +157,26 @@ class MatchOutcomeApplierTest {
     }
 
     @Test
+    void penaltyGoalCountsAsGoalForFormAndMoraleButMissedPenaltyDoesNot() {
+        Player penaltyScorer = player(Position.ATT);
+        Player penaltyMisser = player(Position.ATT);
+        List<AttributedEvent> events = List.of(
+                new AttributedEvent(penaltyScorer.getId(), EventType.PENALTY_GOAL, true),
+                new AttributedEvent(penaltyMisser.getId(), EventType.PENALTY_MISSED, true));
+        MatchOutcomeApplier.Summary acc = new MatchOutcomeApplier.Summary();
+
+        applier.applyFixture(events,
+                new MatchOutcomeApplier.TeamOutcome(List.of(penaltyScorer, penaltyMisser), 3, 0, true),
+                new MatchOutcomeApplier.TeamOutcome(List.of(), 0, 3, false), acc);
+
+        // +1 goal, +1 win = +2 for the scorer; the misser only gets the +1 win (no goal credit)
+        assertThat(penaltyScorer.getForm()).isEqualTo(2);
+        assertThat(penaltyMisser.getForm()).isEqualTo(1);
+        assertThat(penaltyScorer.getMorale()).isEqualTo(2);   // win +1, scored +1
+        assertThat(penaltyMisser.getMorale()).isEqualTo(1);   // win +1 only
+    }
+
+    @Test
     void unusedReservesDriftTowardMildDiscontent() {
         Player fresh = player(Position.MID);        // morale 0 -> -1
         Player low = player(Position.MID);

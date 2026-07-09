@@ -43,6 +43,7 @@ public class PlayerRatingCalculator {
     private static final double DEF_CONCEDED = -0.15;
     private static final double YELLOW_PENALTY = -0.4;
     private static final double RED_PENALTY = -1.5;
+    private static final double PENALTY_MISS_PENALTY = -0.5;
     private static final int CAMEO_MINUTES = 30;
     private static final double FLOOR = 3.0;
     private static final double CEILING = 10.0;
@@ -60,11 +61,16 @@ public class PlayerRatingCalculator {
     public List<PlayerRating> rate(List<Player> played, List<AttributedEvent> sideEvents,
                                    Map<UUID, Integer> minutesPlayed, int scored, int conceded) {
         Map<UUID, Integer> goals = new HashMap<>();
+        Map<UUID, Integer> missedPenalties = new HashMap<>();
         Map<UUID, Integer> yellows = new HashMap<>();
         Set<UUID> reds = new HashSet<>();
         for (AttributedEvent e : sideEvents) {
+            if (e.type().isGoal()) {
+                goals.merge(e.playerId(), 1, Integer::sum);
+                continue;
+            }
             switch (e.type()) {
-                case GOAL, SET_PIECE_GOAL -> goals.merge(e.playerId(), 1, Integer::sum);
+                case PENALTY_MISSED -> missedPenalties.merge(e.playerId(), 1, Integer::sum);
                 case YELLOW_CARD -> yellows.merge(e.playerId(), 1, Integer::sum);
                 case RED_CARD -> reds.add(e.playerId());
                 default -> { }
@@ -92,7 +98,11 @@ public class PlayerRatingCalculator {
                 nonGoal *= (double) minutes / CAMEO_MINUTES;
             }
 
-            double raw = BASE + GOAL_BONUS * scoredGoals + nonGoal;
+            // The missed-penalty malus applies in full regardless of minutes played (like a goal),
+            // unlike the other non-goal contributions which are muted for short cameos above.
+            double raw = BASE + GOAL_BONUS * scoredGoals
+                    + PENALTY_MISS_PENALTY * missedPenalties.getOrDefault(p.getId(), 0)
+                    + nonGoal;
             double rating = round1(clamp(raw));
             ratings.add(new PlayerRating(p.getId().toString(), p.getName(),
                     p.getPosition().name(), minutes, scoredGoals, rating));

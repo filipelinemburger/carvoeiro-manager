@@ -16,8 +16,15 @@ public final class LiveCommentary {
     private static final String[] YELLOW = {"Cartão amarelo para %s.", "%s entra forte e é advertido."};
     private static final String[] RED = {"Cartão vermelho! %s está expulso!", "%s recebe o vermelho e deixa o time com um a menos."};
     private static final String[] INJURY = {"%s cai lesionado no gramado.", "Preocupação: %s sente e precisa de atendimento."};
+    private static final String[] PENALTY_GOAL_LINES = {
+            "Pênalti! %s converte com categoria!", "GOL DE PÊNALTI! %s não desperdiça!"};
+    private static final String[] PENALTY_MISS_LINES = {
+            "Pênalti perdido! %s desperdiça — defesa do goleiro!",
+            "%s cobra o pênalti... e o goleiro defende!"};
+    private static final String[] FREE_KICK_LINES = {
+            "GOL DE FALTA! %s acerta o ângulo!", "Falta cobrada por %s... GOL!"};
 
-    /** {@code inName} is only used for substitutions; {@code detail} only for TACTICS_CHANGE. */
+    /** {@code inName} is only used for substitutions and corner goals (the corner taker). {@code detail} only for TACTICS_CHANGE. */
     public static String of(EventType type, String playerName, String inName, int minute, String detail) {
         return switch (type) {
             case GOAL -> pick(GOAL, playerName, minute, type);
@@ -29,7 +36,19 @@ public final class LiveCommentary {
             case SUBSTITUTION -> "Substituição: entra %s, sai %s.".formatted(inName, playerName);
             case TACTICS_CHANGE -> tacticsChange(detail);
             case HALF_TIME -> "Intervalo — fim do primeiro tempo.";
+            case PENALTY_GOAL -> pick(PENALTY_GOAL_LINES, playerName, minute, type);
+            case PENALTY_MISSED -> pick(PENALTY_MISS_LINES, playerName, minute, type);
+            case FREE_KICK_GOAL -> pick(FREE_KICK_LINES, playerName, minute, type);
+            case CORNER_GOAL -> corner(playerName, inName);
         };
+    }
+
+    /** Two-name line when the taker is known and distinct; single-name fallback otherwise. */
+    private static String corner(String scorerName, String takerName) {
+        if (takerName != null && !takerName.equals(scorerName)) {
+            return "Escanteio de %s, %s sobe e cabeceia: GOL!".formatted(takerName, scorerName);
+        }
+        return "GOL de escanteio! %s aparece na área e marca!".formatted(scorerName);
     }
 
     /** Null detail = the user's own change (generic text); otherwise an AI posture name. */

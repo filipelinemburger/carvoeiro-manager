@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import org.springframework.stereotype.Service;
@@ -194,9 +195,13 @@ public class FixtureSimulator {
 
             Player player = switch (event.type()) {
                 case GOAL -> pickByWeight(xi, FixtureSimulator::goalWeight, rng);
-                case SET_PIECE_GOAL -> setPieceTaker(xi, profile, rng);
+                case SET_PIECE_GOAL -> setPieceTaker(xi, profile, rng);   // legacy emission until Task 3
+                case PENALTY_GOAL -> SetPieces.takerOrFallback(xi, profile.penaltyTakerId(), Player::getFinishing);
+                case FREE_KICK_GOAL -> SetPieces.takerOrFallback(xi, profile.freekickTakerId(),
+                        p -> p.attribute(Attribute.BOLA_PARADA));
+                case CORNER_GOAL -> pickByWeight(xi, SetPieces::headerWeight, rng);
                 case YELLOW_CARD, RED_CARD -> pickWeighted(xi, Player::getTackling, rng);
-                case CHANCE, INJURY, SUBSTITUTION, TACTICS_CHANGE, HALF_TIME ->
+                case CHANCE, INJURY, SUBSTITUTION, TACTICS_CHANGE, HALF_TIME, PENALTY_MISSED ->
                         throw new IllegalStateException("Instant simulation does not emit " + event.type());
             };
             matchEventRepository.save(

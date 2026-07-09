@@ -309,8 +309,7 @@ public class LiveMatchService {
     }
 
     private boolean isCardOrGoal(EventType t) {
-        return t == EventType.GOAL || t == EventType.SET_PIECE_GOAL
-                || t == EventType.YELLOW_CARD || t == EventType.RED_CARD;
+        return t.isGoal() || t == EventType.YELLOW_CARD || t == EventType.RED_CARD;
     }
 
     /** Starters (who all played) plus any bench player who actually came on (minutes > 0). */
@@ -429,8 +428,11 @@ public class LiveMatchService {
         List<Player> everyone = new ArrayList<>(managedXi);
         everyone.addAll(managedBench);   // rate() self-filters to players with minutes > 0
 
+        // A missed penalty must reach the rating calculator (it is NOT persisted; the finish()
+        // persist loop and match-event repository still key off plain isCardOrGoal).
         List<AttributedEvent> sideEvents = timeline.eventsThrough(minute).stream()
-                .filter(e -> e.home() == managedIsHome && isCardOrGoal(e.type()))
+                .filter(e -> e.home() == managedIsHome
+                        && (isCardOrGoal(e.type()) || e.type() == EventType.PENALTY_MISSED))
                 .map(e -> new AttributedEvent(e.playerId(), e.type(), e.home()))
                 .toList();
 

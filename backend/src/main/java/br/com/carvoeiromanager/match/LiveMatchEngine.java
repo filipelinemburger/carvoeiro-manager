@@ -358,7 +358,7 @@ public class LiveMatchEngine {
     // ---- math mirrored from MatchSimulationService ----
 
     private static boolean isGoal(EventType t) {
-        return t == EventType.GOAL || t == EventType.SET_PIECE_GOAL;
+        return t.isGoal();
     }
 
     private double fitnessFactor(double decay, int minute) {

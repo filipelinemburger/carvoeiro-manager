@@ -131,6 +131,46 @@ class PlayerRatingCalculatorTest {
     }
 
     @Test
+    void newGoalTypesCreditGoalsLikePlainGoals() {
+        // Given two identical strikers in a 3-0 win, one credited via the new set-piece goal types,
+        // one via three plain GOAL events, both scoring three times
+        Player viaNewTypes = player(Position.ATT);
+        Player viaPlainGoals = player(Position.ATT);
+        List<AttributedEvent> newTypeEvents = List.of(
+                new AttributedEvent(viaNewTypes.getId(), EventType.PENALTY_GOAL, true),
+                new AttributedEvent(viaNewTypes.getId(), EventType.FREE_KICK_GOAL, true),
+                new AttributedEvent(viaNewTypes.getId(), EventType.CORNER_GOAL, true));
+        List<AttributedEvent> plainGoalEvents = List.of(
+                new AttributedEvent(viaPlainGoals.getId(), EventType.GOAL, true),
+                new AttributedEvent(viaPlainGoals.getId(), EventType.GOAL, true),
+                new AttributedEvent(viaPlainGoals.getId(), EventType.GOAL, true));
+
+        // When rated
+        PlayerRating withNewTypes = rateOne(viaNewTypes, newTypeEvents, 90, 3, 0);
+        PlayerRating withPlainGoals = rateOne(viaPlainGoals, plainGoalEvents, 90, 3, 0);
+
+        // Then the rating and goal tally match a plain hat-trick exactly
+        assertThat(withNewTypes.rating()).isEqualTo(withPlainGoals.rating());
+        assertThat(withNewTypes.goals()).isEqualTo(3);
+    }
+
+    @Test
+    void aMissedPenaltyCostsHalfAPoint() {
+        // Given two identical full-minutes midfielders in a 1-1 draw, one with a missed penalty
+        Player withMiss = player(Position.MID);
+        Player withoutMiss = player(Position.MID);
+        List<AttributedEvent> missEvents = List.of(
+                new AttributedEvent(withMiss.getId(), EventType.PENALTY_MISSED, true));
+
+        // When rated
+        PlayerRating rWithMiss = rateOne(withMiss, missEvents, 90, 1, 1);
+        PlayerRating rWithoutMiss = rateOne(withoutMiss, List.of(), 90, 1, 1);
+
+        // Then the missed penalty costs exactly 0.5, applied in full despite being a full 90' player
+        assertThat(rWithoutMiss.rating() - rWithMiss.rating()).isEqualTo(0.5);
+    }
+
+    @Test
     void gradesAreDeterministic() {
         // Given identical inputs
         Player mid = player(Position.MID);
