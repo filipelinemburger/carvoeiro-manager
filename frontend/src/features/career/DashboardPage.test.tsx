@@ -84,6 +84,31 @@ describe('DashboardPage', () => {
     expect(getSaveGame).toHaveBeenCalledWith('save-2', 'test-token')
   })
 
+  it('hides the Técnico row for a save created before manager identity existed', async () => {
+    seedAuth('U4')
+    localStorage.setItem('carvoeiro_manager_save_game_id_U4', 'save-4')
+    ;(getSaveGame as Mock).mockResolvedValue({
+      id: 'save-4',
+      seasonYear: 2026,
+      competitionId: 'comp-1',
+      competitionName: 'Campeonato Catarinense',
+      managedClubId: 'club-1',
+      managedClubName: 'Criciúma Esporte Clube',
+      currentRound: 5,
+      totalRounds: 18,
+      managerName: '',
+      managerNationality: '',
+    })
+    ;(getFinances as Mock).mockResolvedValue({ balance: 12500000, transactions: [] })
+
+    renderDashboard()
+
+    await waitFor(() => {
+      expect(screen.getByText(/Criciúma Esporte Clube/)).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/Técnico:/)).not.toBeInTheDocument()
+  })
+
   it('keeps save games separate per user (does not load another user\'s id)', () => {
     // Given user U3 logs in but only U_OTHER has a stored save id
     seedAuth('U3')

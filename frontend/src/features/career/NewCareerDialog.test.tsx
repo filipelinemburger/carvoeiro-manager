@@ -16,13 +16,13 @@ vi.mock('../../api/career', () => ({
   createCareer: vi.fn(),
 }))
 
-function renderDialog() {
+function renderDialog(onClose: () => void = () => {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
         <AuthProvider>
-          <NewCareerDialog open onClose={() => {}} />
+          <NewCareerDialog open onClose={onClose} />
         </AuthProvider>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -65,5 +65,19 @@ describe('NewCareerDialog', () => {
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/squad?saveGameId=save-9&clubId=club-1')
     })
+  })
+
+  it('clears the fields on Cancel, so a still-mounted dialog never pre-fills stale text', () => {
+    // NewCareerDialog is rendered unconditionally in Layout (only the MUI Dialog's own
+    // visibility toggles), so its local state would otherwise survive across opens/closes.
+    const onClose = vi.fn()
+    renderDialog(onClose)
+
+    fireEvent.change(screen.getByLabelText(/nome do técnico/i), { target: { value: 'Filipe Silva' } })
+    fireEvent.click(screen.getByRole('button', { name: /cancelar/i }))
+
+    expect(onClose).toHaveBeenCalled()
+    expect(screen.getByLabelText(/nome do técnico/i)).toHaveValue('')
+    expect(screen.getByRole('button', { name: /iniciar carreira/i })).toBeDisabled()
   })
 })
