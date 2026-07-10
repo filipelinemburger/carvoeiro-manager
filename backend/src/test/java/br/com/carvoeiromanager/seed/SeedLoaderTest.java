@@ -25,8 +25,10 @@ class SeedLoaderTest {
         assertThat(data.clubPool()).isNotEmpty();
         assertThat(data.clubPool().size() % 2).isZero();
         assertThat(data.clubPool()).anyMatch(c -> c.shortName().equals("CRI"));
+        // Every club — Série B and Catarinense-only alike — now carries a full authored
+        // squad (>= 18 players); no club is left at the old thin 14-15 placeholder size.
         assertThat(data.clubPool()).allSatisfy(c ->
-                assertThat(c.players()).hasSizeGreaterThanOrEqualTo(14));
+                assertThat(c.players()).hasSizeGreaterThanOrEqualTo(18));
     }
 
     @Test
@@ -48,8 +50,6 @@ class SeedLoaderTest {
         Set<String> members = data.competitions().stream()
                 .flatMap(c -> c.memberShortNames().stream())
                 .collect(Collectors.toSet());
-        // No orphans: every pool club belongs to at least one competition,
-        // and every membership entry resolves to a pool club.
         assertThat(data.clubPool()).allSatisfy(c ->
                 assertThat(members).as("club %s has no competition", c.shortName())
                         .contains(c.shortName()));
@@ -86,40 +86,30 @@ class SeedLoaderTest {
     }
 
     @Test
-    void everySerieBPlayerCarriesAuthoredAttributes() {
+    void everyPoolPlayerCarriesAuthoredAttributes() {
         SeedCareer data = new SeedLoader().loadCareer();
 
-        assertThat(data.clubPool()).filteredOn(c -> SERIE_B_2026.contains(c.shortName()))
-                .allSatisfy(club -> assertThat(club.players())
-                        .allSatisfy(p -> assertThat(p.attributes())
-                                .as("%s %s should be authored", club.shortName(), p.name())
-                                .isNotNull()));
+        // After the Catarinense data-realism pass, every one of the 28 pool clubs has a
+        // hand-authored roster — there are no more derived-attribute players in the seed.
+        assertThat(data.clubPool()).allSatisfy(club -> assertThat(club.players())
+                .allSatisfy(p -> assertThat(p.attributes())
+                        .as("%s %s should be authored", club.shortName(), p.name())
+                        .isNotNull()));
     }
 
     @Test
-    void catarinenseOnlyClubsKeepDerivedAttributes() {
+    void everySquadHasRealisticSizeAndGoalkeeperCover() {
         SeedCareer data = new SeedLoader().loadCareer();
 
-        assertThat(data.clubPool()).filteredOn(c -> !SERIE_B_2026.contains(c.shortName()))
-                .allSatisfy(club -> assertThat(club.players())
-                        .allSatisfy(p -> assertThat(p.attributes())
-                                .as("%s %s should be derived", club.shortName(), p.name())
-                                .isNull()));
-    }
-
-    @Test
-    void serieBSquadsHaveRealisticSizeAndGoalkeeperCover() {
-        SeedCareer data = new SeedLoader().loadCareer();
-
-        assertThat(data.clubPool()).filteredOn(c -> SERIE_B_2026.contains(c.shortName()))
-                .allSatisfy(club -> {
-                    // CRI keeps its pre-existing 27-player authored squad; others are 18-23.
-                    int max = club.shortName().equals("CRI") ? 27 : 23;
-                    assertThat(club.players()).hasSizeBetween(18, max);
-                    long gks = club.players().stream()
-                            .filter(p -> "GK".equals(p.position())).count();
-                    assertThat(gks).as("%s GK count", club.shortName()).isBetween(2L, 3L);
-                });
+        assertThat(data.clubPool()).allSatisfy(club -> {
+            // CRI keeps its pre-existing 27-player authored squad; every other club
+            // (Série B and Catarinense-only alike) targets 18-23.
+            int max = club.shortName().equals("CRI") ? 27 : 23;
+            assertThat(club.players()).as("%s squad size", club.shortName()).hasSizeBetween(18, max);
+            long gks = club.players().stream()
+                    .filter(p -> "GK".equals(p.position())).count();
+            assertThat(gks).as("%s GK count", club.shortName()).isBetween(2L, 3L);
+        });
     }
 
     @Test
@@ -137,10 +127,23 @@ class SeedLoaderTest {
     }
 
     @Test
+    void criciumaPlayerNamesNoLongerIncludeTheBarePlaceholderDiego() {
+        SeedCareer data = new SeedLoader().loadCareer();
+
+        // The user's own example of the known-as naming bug: Criciúma's roster had a
+        // player named simply "Diego" who is publicly known by a fuller real name.
+        // The known-as correction pass must have fixed this specific, named case.
+        Set<String> criciumaNames = data.clubPool().stream()
+                .filter(c -> c.shortName().equals("CRI")).findFirst().orElseThrow()
+                .players().stream().map(SeedPlayer::name).collect(Collectors.toSet());
+        assertThat(criciumaNames).doesNotContain("Diego");
+    }
+
+    @Test
     void everyClubHasAValidTacticalIdentity() {
         SeedCareer data = new SeedLoader().loadCareer();
 
-        java.util.Set<String> validFormations = java.util.Arrays.stream(Formation.values())
+        Set<String> validFormations = java.util.Arrays.stream(Formation.values())
                 .map(Formation::code)
                 .collect(Collectors.toSet());
 
@@ -159,11 +162,11 @@ class SeedLoaderTest {
     void tacticalIdentitiesShowRealVarietyAcrossThePool() {
         SeedCareer data = new SeedLoader().loadCareer();
 
-        java.util.Set<String> formations = data.clubPool().stream()
+        Set<String> formations = data.clubPool().stream()
                 .map(SeedClub::formation).collect(Collectors.toSet());
-        java.util.Set<String> mentalities = data.clubPool().stream()
+        Set<String> mentalities = data.clubPool().stream()
                 .map(SeedClub::mentality).collect(Collectors.toSet());
-        java.util.Set<String> pressings = data.clubPool().stream()
+        Set<String> pressings = data.clubPool().stream()
                 .map(SeedClub::pressing).collect(Collectors.toSet());
 
         assertThat(formations).as("formation variety across the pool").hasSizeGreaterThanOrEqualTo(5);

@@ -156,6 +156,27 @@ class SaveGameServiceIT {
     }
 
     @Test
+    void catarinenseOnlyClubPlayersGetAFullAuthoredSquadThroughCareerCreation() {
+        // Given a persisted user
+        User user = User.create("tigre_fig", "hash");
+        userRepository.save(user);
+
+        // When a career is created
+        SaveGameResponse response = saveGameService.createCareer(user.getId());
+        UUID saveGameId = response.id();
+
+        // Then the Catarinense-only club Figueirense (FIG) has a full-sized authored
+        // squad (18-23 players), not the old thin 14-15 player placeholder roster.
+        var fig = clubRepository.findBySaveGameId(saveGameId).stream()
+                .filter(c -> c.getShortName().equals("FIG"))
+                .findFirst().orElseThrow();
+        var squad = playerRepository.findByClubId(fig.getId());
+        assertThat(squad.size()).isBetween(18, 23);
+        assertThat(squad).allSatisfy(p ->
+                assertThat(p.attributes()).as("%s attributes", p.getName()).isNotNull());
+    }
+
+    @Test
     void creatingCareerSeedsClubFinancialProfilesAndPlayerWages() {
         // Given a persisted user
         User user = User.create("tigre_finance", "hash");
