@@ -75,6 +75,7 @@ export function DashboardPage() {
         <Card variant="outlined" sx={{ mt: 3, maxWidth: 480 }}>
           <CardContent>
             <Stack spacing={1.25}>
+              <StatRow label="Técnico:" value={`${saveGame.managerName} (${saveGame.managerNationality})`} />
               <StatRow label="Temporada:" value={saveGame.seasonYear} />
               <StatRow label="Competição:" value={saveGame.competitionName} />
               <StatRow label="Clube:" value={saveGame.managedClubName} />

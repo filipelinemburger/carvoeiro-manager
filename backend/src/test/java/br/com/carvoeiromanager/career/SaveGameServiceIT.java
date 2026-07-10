@@ -217,4 +217,27 @@ class SaveGameServiceIT {
         assertThat(bar.getDefaultFormation()).isEqualTo(seedBar.formation());
         assertThat(bar.getDefaultMentality()).isEqualTo(seedBar.mentality());
     }
+
+    @Test
+    void createCareerPersistsTheManagerIdentity() {
+        User user = User.create("tigre_manager", "hash");
+        userRepository.save(user);
+
+        SaveGameResponse response = saveGameService.createCareer(user.getId(),
+                new CreateSaveGameRequest("Filipe Silva", "Brasil"));
+
+        assertThat(response.managerName()).isEqualTo("Filipe Silva");
+        assertThat(response.managerNationality()).isEqualTo("Brasil");
+    }
+
+    @Test
+    void theOneArgOverloadStillWorksForCallersThatDontCareAboutManagerIdentity() {
+        User user = User.create("tigre_default", "hash");
+        userRepository.save(user);
+
+        SaveGameResponse response = saveGameService.createCareer(user.getId());
+
+        assertThat(response.managerName()).isNotBlank();
+        assertThat(response.managerNationality()).isNotBlank();
+    }
 }

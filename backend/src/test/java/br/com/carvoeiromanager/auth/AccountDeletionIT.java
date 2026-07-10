@@ -138,7 +138,9 @@ class AccountDeletionIT {
 
     private JsonNode createCareer(String token) throws Exception {
         String response = mockMvc.perform(post("/api/v1/save-games")
-                        .header("Authorization", bearer(token)))
+                        .header("Authorization", bearer(token))
+                        .contentType("application/json")
+                        .content("{\"managerName\":\"Técnico\",\"managerNationality\":\"Brasil\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(response);

@@ -46,6 +46,13 @@ export type SaveGameResponse = {
   competitions?: CompetitionSummary[]
   status?: 'IN_PROGRESS' | 'FINISHED'
   transferWindowOpen?: boolean
+  managerName?: string
+  managerNationality?: string
+}
+
+export type CreateSaveGameRequest = {
+  managerName: string
+  managerNationality: string
 }
 
 // Lightweight career summary for the "Carregar jogo salvo" list.

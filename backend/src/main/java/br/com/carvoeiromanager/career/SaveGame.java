@@ -53,12 +53,19 @@ public class SaveGame {
     @Column(name = "last_finance_month", nullable = false)
     private int lastFinanceMonth = 0;
 
+    @Column(name = "manager_name", nullable = false, length = 80)
+    private String managerName;
+
+    @Column(name = "manager_nationality", nullable = false, length = 40)
+    private String managerNationality;
+
     protected SaveGame() {
         // for JPA
     }
 
     private SaveGame(UUID id, UUID userId, UUID managedClubId, int seasonYear,
-                     int currentRound, SaveGameStatus status, Instant createdAt) {
+                     int currentRound, SaveGameStatus status, Instant createdAt,
+                     String managerName, String managerNationality) {
         this.id = id;
         this.userId = userId;
         this.managedClubId = managedClubId;
@@ -66,10 +73,18 @@ public class SaveGame {
         this.currentRound = currentRound;
         this.status = status;
         this.createdAt = createdAt;
+        this.managerName = managerName;
+        this.managerNationality = managerNationality;
     }
 
+    public static SaveGame create(UUID userId, int seasonYear, String managerName, String managerNationality) {
+        return new SaveGame(UUID.randomUUID(), userId, null, seasonYear, 0, SaveGameStatus.IN_PROGRESS,
+                Instant.now(), managerName, managerNationality);
+    }
+
+    /** Convenience overload for entity-level tests that don't care about the manager identity. */
     public static SaveGame create(UUID userId, int seasonYear) {
-        return new SaveGame(UUID.randomUUID(), userId, null, seasonYear, 0, SaveGameStatus.IN_PROGRESS, Instant.now());
+        return create(userId, seasonYear, "Técnico", "Brasil");
     }
 
     public UUID getId() { return id; }
@@ -79,6 +94,8 @@ public class SaveGame {
     public int getCurrentRound() { return currentRound; }
     public SaveGameStatus getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }
+    public String getManagerName() { return managerName; }
+    public String getManagerNationality() { return managerNationality; }
 
     public void setManagedClubId(UUID managedClubId) { this.managedClubId = managedClubId; }
     public void setCurrentRound(int currentRound) { this.currentRound = currentRound; }

@@ -50,7 +50,9 @@ class LiveMatchControllerIT {
 
         // Create a career (save game) for this user
         String careerResponse = mockMvc.perform(post("/api/v1/save-games")
-                        .header("Authorization", bearer))
+                        .header("Authorization", bearer)
+                        .contentType("application/json")
+                        .content("{\"managerName\":\"Técnico\",\"managerNationality\":\"Brasil\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         JsonNode career = objectMapper.readTree(careerResponse);

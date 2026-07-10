@@ -100,6 +100,19 @@ class SaveGameOwnershipIT {
                 .andExpect(jsonPath("$.status").value(400));
     }
 
+    @Test
+    void blankManagerNameIsRejectedWithAUniformValidationError() throws Exception {
+        String token = register("validation_" + UUID.randomUUID());
+
+        mockMvc.perform(post("/api/v1/save-games")
+                        .header("Authorization", bearer(token))
+                        .contentType("application/json")
+                        .content("{\"managerName\":\"\",\"managerNationality\":\"Brasil\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
     // --- Helpers ---
 
     private String register(String username) throws Exception {
@@ -115,7 +128,9 @@ class SaveGameOwnershipIT {
 
     private JsonNode createCareer(String token) throws Exception {
         String response = mockMvc.perform(post("/api/v1/save-games")
-                        .header("Authorization", bearer(token)))
+                        .header("Authorization", bearer(token))
+                        .contentType("application/json")
+                        .content("{\"managerName\":\"Técnico\",\"managerNationality\":\"Brasil\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(response);

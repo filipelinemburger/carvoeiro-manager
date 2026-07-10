@@ -2,6 +2,7 @@ import { apiGet, apiPost, apiPut, apiDelete } from './client'
 import type {
   SaveGameResponse,
   SaveGameSummary,
+  CreateSaveGameRequest,
   SquadResponse,
   ClubSummary,
   SetLineupRequest,
@@ -29,8 +30,8 @@ import type {
   PlayerContract,
 } from './types'
 
-export function createCareer(token: string): Promise<SaveGameResponse> {
-  return apiPost<SaveGameResponse>('/save-games', {}, token)
+export function createCareer(req: CreateSaveGameRequest, token: string): Promise<SaveGameResponse> {
+  return apiPost<SaveGameResponse>('/save-games', req, token)
 }
 
 export function getSaveGame(id: string, token: string): Promise<SaveGameResponse> {

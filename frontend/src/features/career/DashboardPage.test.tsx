@@ -67,6 +67,8 @@ describe('DashboardPage', () => {
       managedClubName: 'Criciúma Esporte Clube',
       currentRound: 5,
       totalRounds: 18,
+      managerName: 'Filipe Silva',
+      managerNationality: 'Brasil',
     })
     ;(getFinances as Mock).mockResolvedValue({ balance: 12500000, transactions: [] })
 
@@ -76,6 +78,9 @@ describe('DashboardPage', () => {
       expect(screen.getByText(/Criciúma Esporte Clube/)).toBeInTheDocument()
     })
     await waitFor(() => expect(screen.getByText(/Saldo:/)).toBeInTheDocument())
+    await waitFor(() => {
+      expect(screen.getByText(/Filipe Silva \(Brasil\)/)).toBeInTheDocument()
+    })
     expect(getSaveGame).toHaveBeenCalledWith('save-2', 'test-token')
   })
 

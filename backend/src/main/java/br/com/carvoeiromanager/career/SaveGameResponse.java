@@ -15,5 +15,7 @@ public record SaveGameResponse(
         String currentDate,
         List<CompetitionSummary> competitions,
         String status,
-        boolean transferWindowOpen
+        boolean transferWindowOpen,
+        String managerName,
+        String managerNationality
 ) {}

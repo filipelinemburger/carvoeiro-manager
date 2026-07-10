@@ -87,18 +87,24 @@ public class SaveGameService {
         this.transferService = transferService;
     }
 
+    /** Convenience overload for internal/test callers that don't need a specific manager identity. */
+    @Transactional
+    public SaveGameResponse createCareer(UUID userId) {
+        return createCareer(userId, new CreateSaveGameRequest("Técnico", "Brasil"));
+    }
+
     /**
      * Creates a new single-player career by copying the immutable seed into per-SaveGame rows:
      * clubs, players, competitions with membership rows, and the full dated calendar generated
      * by SeasonCalendarGenerator.
      */
     @Transactional
-    public SaveGameResponse createCareer(UUID userId) {
+    public SaveGameResponse createCareer(UUID userId, CreateSaveGameRequest req) {
         SeedCareer seed = seedLoader.loadCareer();
 
         // 1. Create SaveGame (managed club set after clubs exist)
         int seasonYear = seed.competitions().get(0).seasonYear();
-        SaveGame saveGame = SaveGame.create(userId, seasonYear);
+        SaveGame saveGame = SaveGame.create(userId, seasonYear, req.managerName(), req.managerNationality());
         entityManager.persist(saveGame);
 
         // 2. Create clubs and players; capture shortName -> clubId for membership wiring
@@ -226,7 +232,9 @@ public class SaveGameService {
                 seasonStart.toString(),
                 competitionSummaries,
                 saveGame.getStatus().name(),
-                transferWindow.isOpen(seasonStart));
+                transferWindow.isOpen(seasonStart),
+                saveGame.getManagerName(),
+                saveGame.getManagerNationality());
     }
 
     /**
@@ -315,7 +323,9 @@ public class SaveGameService {
                 currentDate,
                 competitionSummaries,
                 saveGame.getStatus().name(),
-                saveGame.getCurrentDate() != null && transferWindow.isOpen(saveGame.getCurrentDate()));
+                saveGame.getCurrentDate() != null && transferWindow.isOpen(saveGame.getCurrentDate()),
+                saveGame.getManagerName(),
+                saveGame.getManagerNationality());
     }
 
 }

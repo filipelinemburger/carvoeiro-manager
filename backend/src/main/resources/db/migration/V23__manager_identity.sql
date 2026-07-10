@@ -1,0 +1,2 @@
+ALTER TABLE save_games ADD COLUMN manager_name VARCHAR(80) NOT NULL DEFAULT '';
+ALTER TABLE save_games ADD COLUMN manager_nationality VARCHAR(40) NOT NULL DEFAULT '';

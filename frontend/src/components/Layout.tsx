@@ -10,11 +10,12 @@ import SettingsIcon from '@mui/icons-material/Settings'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { useAuth } from '../auth/AuthContext'
-import { advanceRound, createCareer, getAdvancePreview, getLineup, getSaveGame } from '../api/career'
+import { advanceRound, getAdvancePreview, getLineup, getSaveGame } from '../api/career'
 import { deleteAccount } from '../api/account'
 import { getLiveMatch, kickoffLiveMatch } from '../api/liveMatch'
 import { saveGameKeyFor } from '../features/career/saveGameKey'
 import { LoadCareerDialog } from '../features/career/LoadCareerDialog'
+import { NewCareerDialog } from '../features/career/NewCareerDialog'
 import type { AdvancePreviewResponse, AdvanceResponse, LiveMatchState, SaveGameResponse } from '../api/types'
 
 interface LayoutProps {
@@ -77,6 +78,7 @@ export function Layout({ children }: LayoutProps) {
   const gearOpen = Boolean(gearAnchor)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [loadCareerOpen, setLoadCareerOpen] = useState(false)
+  const [newCareerOpen, setNewCareerOpen] = useState(false)
 
   const advanceMutation = useMutation<AdvanceResponse>({
     mutationFn: () => advanceRound(saveGameId!, token ?? ''),
@@ -124,22 +126,13 @@ export function Layout({ children }: LayoutProps) {
 
   // "Nova Carreira" lives in the gear menu: start a fresh career at any time. The current
   // save isn't deleted, but the active pointer moves to the new one — confirm to avoid slips.
-  const newCareerMutation = useMutation<SaveGameResponse>({
-    mutationFn: () => createCareer(token ?? ''),
-    onSuccess: (data) => {
-      localStorage.setItem(saveGameKeyFor(user?.userId), data.id)
-      void queryClient.invalidateQueries()
-      void navigate(`/squad?saveGameId=${data.id}&clubId=${data.managedClubId}`)
-    },
-  })
-
   const handleNewCareer = () => {
     setGearAnchor(null)
     const hasActive = Boolean(saveGameId)
     if (hasActive && !window.confirm('Começar uma nova carreira? A carreira atual continuará salva, mas você voltará ao início.')) {
       return
     }
-    newCareerMutation.mutate()
+    setNewCareerOpen(true)
   }
 
   // Permanently deletes the account and every save game/piece of data it owns.
@@ -285,9 +278,7 @@ export function Layout({ children }: LayoutProps) {
           </IconButton>
 
           <Menu anchorEl={gearAnchor} open={gearOpen} onClose={() => setGearAnchor(null)}>
-            <MenuItem onClick={handleNewCareer} disabled={newCareerMutation.isPending}>
-              {newCareerMutation.isPending ? 'Criando…' : 'Nova Carreira'}
-            </MenuItem>
+            <MenuItem onClick={handleNewCareer}>Nova Carreira</MenuItem>
             <MenuItem onClick={() => { setLoadCareerOpen(true); setGearAnchor(null) }}>
               Carregar jogo salvo
             </MenuItem>
@@ -305,6 +296,7 @@ export function Layout({ children }: LayoutProps) {
       </AppBar>
 
       <LoadCareerDialog open={loadCareerOpen} onClose={() => setLoadCareerOpen(false)} />
+      <NewCareerDialog open={newCareerOpen} onClose={() => setNewCareerOpen(false)} />
 
       {/* Mobile navigation drawer */}
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
