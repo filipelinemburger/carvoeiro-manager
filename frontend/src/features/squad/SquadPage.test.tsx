@@ -1,9 +1,10 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { SquadPage } from './SquadPage'
 import { AuthProvider } from '../../auth/AuthContext'
+import { useIsMobile } from '../../lib/useIsMobile'
 import type { PlayerResponse, SquadResponse } from '../../api/types'
 
 vi.mock('../../api/career', () => ({
@@ -16,6 +17,8 @@ vi.mock('../../api/career', () => ({
   listPlayer: vi.fn(),
   unlistPlayer: vi.fn(),
 }))
+
+vi.mock('../../lib/useIsMobile', () => ({ useIsMobile: vi.fn(() => false) }))
 
 import { getSquad, getLineup, setLineup, getTactics, renewContract, listPlayer, unlistPlayer } from '../../api/career'
 
@@ -155,6 +158,23 @@ describe('SquadPage', () => {
     })
     localStorage.setItem('carvoeiro_manager_token', 'test-token')
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
+  })
+
+  afterEach(() => {
+    vi.mocked(useIsMobile).mockReturnValue(false)
+  })
+
+  it('mobile: shows only the player name until expanded, then reveals position/OVR/fitness', async () => {
+    vi.mocked(useIsMobile).mockReturnValue(true)
+    renderWithProviders()
+
+    await screen.findByText('Goleiro Teste')
+    expect(screen.queryByText('OVR 72')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /ver detalhes de goleiro teste/i }))
+
+    expect(await screen.findByText('OVR 72')).toBeInTheDocument()
+    expect(screen.getByText('GK')).toBeInTheDocument()
   })
 
   it('renders the formation pitch with the selected XI', async () => {

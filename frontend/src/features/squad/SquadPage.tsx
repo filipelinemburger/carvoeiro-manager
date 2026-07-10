@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
   Box, Stack, Typography, Button, Chip, Alert, Snackbar, FormControl, NativeSelect, Link,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Paper, Card, CardContent,
-  Tabs, Tab,
+  Tabs, Tab, Collapse, IconButton,
 } from '@mui/material'
 import HealingIcon from '@mui/icons-material/Healing'
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import { getSquad, getLineup, setLineup, renewContract, listPlayer, unlistPlayer } from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
@@ -520,25 +522,16 @@ export function SquadPage() {
 
         {isMobile ? (
           <Stack spacing={1.5} sx={{ mb: 2 }}>
-            {displayPlayers.map(player => {
-              return (
-                <Card key={player.id} variant="outlined">
-                  <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                      {statusButton(player)}
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        {playerNameButton(player)}
-                        {availabilityBadge(player)}
-                        {listedBadge(player)}
-                      </Box>
-                      <Chip size="small" label={positionLabel(player.position)} />
-                      <Chip size="small" color="primary" label={`OVR ${player.overall}`} />
-                      <Box sx={{ width: 84 }}><FitnessBar fitness={player.fitness} /></Box>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              )
-            })}
+            {displayPlayers.map(player => (
+              <MobileSquadRow
+                key={player.id}
+                player={player}
+                statusButton={statusButton}
+                playerNameButton={playerNameButton}
+                availabilityBadge={availabilityBadge}
+                listedBadge={listedBadge}
+              />
+            ))}
           </Stack>
         ) : (
           <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
@@ -651,5 +644,58 @@ export function SquadPage() {
         </Alert>
       </Snackbar>
     </Box>
+  )
+}
+
+/**
+ * Mobile row: name-only summary line (never overflows) + a tap-to-expand detail line with
+ * position/OVR/fitness/badges — avoids the name spilling over the fixed-width chips on narrow
+ * screens. Defined at module scope (like `TablePage.tsx`'s `MobileStandingRow`) rather than
+ * nested inside `SquadPage`, so its identity — and therefore each row's own `open` state — stays
+ * stable across `SquadPage` re-renders; the per-player render helpers it needs are passed in as
+ * props since they close over `SquadPage`'s local state.
+ */
+function MobileSquadRow({ player, statusButton, playerNameButton, availabilityBadge, listedBadge }: {
+  player: PlayerResponse
+  statusButton: (player: PlayerResponse) => ReactNode
+  playerNameButton: (player: PlayerResponse) => ReactNode
+  availabilityBadge: (player: PlayerResponse) => ReactNode
+  listedBadge: (player: PlayerResponse) => ReactNode
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Card variant="outlined">
+      <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          {statusButton(player)}
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+              <Typography
+                component="div"
+                sx={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+              >
+                {playerNameButton(player)}
+              </Typography>
+            </Box>
+          </Box>
+          <IconButton
+            size="small"
+            onClick={() => setOpen(o => !o)}
+            aria-label={`${open ? 'Ocultar' : 'Ver'} detalhes de ${player.name}`}
+          >
+            {open ? <KeyboardArrowUpIcon fontSize="small" /> : <KeyboardArrowDownIcon fontSize="small" />}
+          </IconButton>
+        </Stack>
+        <Collapse in={open} timeout="auto" unmountOnExit>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 1, flexWrap: 'wrap' }}>
+            {availabilityBadge(player)}
+            {listedBadge(player)}
+            <Chip size="small" label={positionLabel(player.position)} />
+            <Chip size="small" color="primary" label={`OVR ${player.overall}`} />
+            <Box sx={{ width: 84 }}><FitnessBar fitness={player.fitness} /></Box>
+          </Stack>
+        </Collapse>
+      </CardContent>
+    </Card>
   )
 }
