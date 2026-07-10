@@ -90,9 +90,9 @@ function MatchTimeline({ result, saveGameId, competitionId, managedClubId }: {
                 }}
                 style={mine ? { fontWeight: 700 } : undefined}
               >
-                {r.homeClubName} <strong>{r.homeGoals}</strong>
+                {r.homeClubShortName ?? r.homeClubName} <strong>{r.homeGoals}</strong>
                 {' — '}
-                <strong>{r.awayGoals}</strong> {r.awayClubName}
+                <strong>{r.awayGoals}</strong> {r.awayClubShortName ?? r.awayClubName}
               </Typography>
             </TimelineNode>
           )

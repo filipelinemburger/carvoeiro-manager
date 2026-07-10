@@ -127,4 +127,11 @@ class LiveMatchServiceKickoffIT {
         assertThat(managedBench).hasSize(3);
         assertThat(managedBench).allMatch(p -> p.getClubId().equals(managedClubId));
     }
+
+    @Test
+    void kickoffPopulatesShortClubNames() {
+        LiveMatchState state = liveMatchService.kickoff(saveGameId, userId);
+        assertThat(state.homeClubShortName()).isNotBlank();
+        assertThat(state.awayClubShortName()).isNotBlank();
+    }
 }

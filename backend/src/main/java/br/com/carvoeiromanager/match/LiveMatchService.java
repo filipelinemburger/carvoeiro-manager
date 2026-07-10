@@ -311,8 +311,8 @@ public class LiveMatchService {
                 .collect(Collectors.toMap(Club::getId, c -> c));
         FixtureResultResponse userResult = new FixtureResultResponse(
                 fixture.getId(),
-                homeClubId, clubs.get(homeClubId).getName(), timeline.homeGoals(),
-                awayClubId, clubs.get(awayClubId).getName(), timeline.awayGoals());
+                homeClubId, clubs.get(homeClubId).getName(), shortName(clubs.get(homeClubId)), timeline.homeGoals(),
+                awayClubId, clubs.get(awayClubId).getName(), shortName(clubs.get(awayClubId)), timeline.awayGoals());
         Set<UUID> userPlayedIds = allPlayed.stream().map(Player::getId).collect(Collectors.toSet());
 
         List<PlayerRating> playerRatings = managedRatings(lm, cfg, timeline, MINUTES);
@@ -324,6 +324,10 @@ public class LiveMatchService {
 
     private boolean isCardOrGoal(EventType t) {
         return t.isGoal() || t == EventType.YELLOW_CARD || t == EventType.RED_CARD;
+    }
+
+    private String shortName(Club club) {
+        return club.getCommonName() != null ? club.getCommonName() : club.getName();
     }
 
     /** Starters (who all played) plus any bench player who actually came on (minutes > 0). */
@@ -422,7 +426,8 @@ public class LiveMatchService {
 
         return new LiveMatchState(
                 lm.getFixtureId().toString(), competitionName, lm.getRound(), lm.getMatchDate().toString(),
-                clubs.get(fixture.getHomeClubId()).getName(), clubs.get(fixture.getAwayClubId()).getName(),
+                clubs.get(fixture.getHomeClubId()).getName(), shortName(clubs.get(fixture.getHomeClubId())),
+                clubs.get(fixture.getAwayClubId()).getName(), shortName(clubs.get(fixture.getAwayClubId())),
                 lm.isManagedIsHome(), minute, timeline.homeGoalsAt(minute), timeline.awayGoalsAt(minute),
                 status, events, onPitch, bench, MAX_SUBS - subsUsed, currentTactics, playerRatings);
     }

@@ -126,4 +126,21 @@ class LiveMatchFinishIT {
         // The persisted news summary carries the same set of final grades.
         assertThat(resp.playerRatings()).hasSameSizeAs(s.playerRatings());
     }
+
+    @Test
+    void finishPopulatesShortClubNamesOnTheResult() {
+        liveMatchService.kickoff(saveGameId, userId);
+        LiveMatchState s = null;
+        for (int i = 0; i < 200 && (s == null || !"FULL_TIME".equals(s.status())); i++) {
+            s = liveMatchService.advance(saveGameId, userId);
+        }
+
+        AdvanceResponse resp = liveMatchService.finish(saveGameId, userId);
+
+        FixtureResultResponse userResult = resp.results().stream()
+                .filter(r -> r.homeClubId().equals(managedClubId) || r.awayClubId().equals(managedClubId))
+                .findFirst().orElseThrow();
+        assertThat(userResult.homeClubShortName()).isNotBlank();
+        assertThat(userResult.awayClubShortName()).isNotBlank();
+    }
 }

@@ -150,7 +150,7 @@ export function LiveMatchPage() {
         <Chip color="error" label="AO VIVO" size="small" />
         <Typography sx={{ fontWeight: 700 }}>{state.minute}'</Typography>
         <Typography sx={{ flex: 1, textAlign: 'center', fontFamily: 'monospace', fontSize: '1.1rem' }}>
-          {state.homeClubName} <strong>{state.homeGoals}</strong> — <strong>{state.awayGoals}</strong> {state.awayClubName}
+          {state.homeClubShortName} <strong>{state.homeGoals}</strong> — <strong>{state.awayGoals}</strong> {state.awayClubShortName}
         </Typography>
       </Stack>
       <Typography variant="caption" sx={{ color: 'text.secondary' }}>

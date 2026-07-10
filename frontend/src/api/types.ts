@@ -190,9 +190,11 @@ export type FixtureResultResponse = {
   fixtureId: string
   homeClubId: string
   homeClubName: string
+  homeClubShortName?: string
   homeGoals: number
   awayClubId: string
   awayClubName: string
+  awayClubShortName?: string
   awayGoals: number
 }
 
@@ -468,7 +470,9 @@ export type LiveMatchState = {
   round: number | null
   matchDate: string | null
   homeClubName: string
+  homeClubShortName: string
   awayClubName: string
+  awayClubShortName: string
   managedIsHome: boolean
   minute: number
   homeGoals: number

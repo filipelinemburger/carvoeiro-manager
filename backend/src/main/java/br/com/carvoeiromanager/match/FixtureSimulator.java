@@ -174,12 +174,17 @@ public class FixtureSimulator {
         Club awayClub = clubById.get(awayClubId);
         FixtureResultResponse response = new FixtureResultResponse(
                 fixture.getId(),
-                homeClubId, homeClub != null ? homeClub.getName() : "",
+                homeClubId, homeClub != null ? homeClub.getName() : "", shortName(homeClub),
                 match.homeGoals(),
-                awayClubId, awayClub != null ? awayClub.getName() : "",
+                awayClubId, awayClub != null ? awayClub.getName() : "", shortName(awayClub),
                 match.awayGoals());
         return new FixtureSim(response, homeXi, awayXi, match.homeGoals(), match.awayGoals(), attributed,
                 homeFitness, awayFitness);
+    }
+
+    private static String shortName(Club club) {
+        if (club == null) return "";
+        return club.getCommonName() != null ? club.getCommonName() : club.getName();
     }
 
     private List<AttributedEvent> saveEvents(Fixture fixture, SimulatedMatch match,

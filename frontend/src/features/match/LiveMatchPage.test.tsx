@@ -16,7 +16,8 @@ import { getLiveMatch, advanceLiveMatch, finishLiveMatch, substituteLiveMatch, c
 
 const STATE = {
   fixtureId: 'f1', competitionName: 'Catarinense', round: 0, matchDate: '2026-03-01',
-  homeClubName: 'Criciúma', awayClubName: 'Rival', managedIsHome: true,
+  homeClubName: 'Criciúma Esporte Clube', homeClubShortName: 'Criciúma',
+  awayClubName: 'Rival Futebol Clube', awayClubShortName: 'Rival', managedIsHome: true,
   minute: 12, homeGoals: 1, awayGoals: 0, status: 'IN_PROGRESS',
   events: [{ minute: 12, type: 'GOAL', home: true, playerId: 'p1', playerName: 'Camisa 9',
     playerInId: null, playerInName: null, severity: null, text: 'GOL! Camisa 9 balança as redes!' }],
@@ -52,6 +53,13 @@ describe('LiveMatchPage', () => {
     renderPage()
     expect(await screen.findByText(/GOL! Camisa 9/)).toBeInTheDocument()
     expect(screen.getByText(/Criciúma/)).toBeInTheDocument()
+  })
+
+  it('renders the short club name, not the full legal name, in the header', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
+    renderPage()
+    expect(await screen.findByText(/Criciúma\b/)).toBeInTheDocument()
+    expect(screen.queryByText(/Criciúma Esporte Clube/)).not.toBeInTheDocument()
   })
 
   it('at full time, Ver resumo finishes and navigates to the news', async () => {

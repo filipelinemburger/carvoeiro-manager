@@ -181,6 +181,23 @@ describe('AdvanceEventCard', () => {
       renderCard(finished)
       expect(screen.getByRole('button', { name: /resumo da temporada/i })).toBeInTheDocument()
     })
+
+    it('prefers the short club name when present', () => {
+      renderCard({
+        ...MATCH_RESULT,
+        results: [
+          {
+            fixtureId: 'f1', homeClubId: 'c1',
+            homeClubName: 'Criciúma Esporte Clube', homeClubShortName: 'Criciúma', homeGoals: 2,
+            awayClubId: 'c2',
+            awayClubName: 'Figueirense Futebol Clube', awayClubShortName: 'Figueirense', awayGoals: 1,
+          },
+        ],
+      })
+      expect(screen.getByText(/Criciúma\b/)).toBeInTheDocument()
+      expect(screen.queryByText(/Criciúma Esporte Clube/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Figueirense Futebol Clube/)).not.toBeInTheDocument()
+    })
   })
 
   describe('TRANSFER type', () => {
