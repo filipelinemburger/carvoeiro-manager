@@ -4,6 +4,7 @@ import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.transfer.TransferWindow;
@@ -21,8 +22,6 @@ import java.util.UUID;
  */
 @Service
 public class ContractService {
-
-    private static final int MAX_SQUAD_SIZE = 30;
 
     private final SaveGameService saveGameService;
     private final PlayerRepository playerRepository;
@@ -84,7 +83,7 @@ public class ContractService {
     }
 
     private void requireSquadRoom(UUID managedClubId) {
-        if (playerRepository.findByClubIdAndYouthProspectFalse(managedClubId).size() >= MAX_SQUAD_SIZE) {
+        if (playerRepository.findByClubIdAndYouthProspectFalse(managedClubId).size() >= SquadRules.MAX_SQUAD_SIZE) {
             throw new ApiException(ErrorCode.SQUAD_FULL, "Squad is full");
         }
     }

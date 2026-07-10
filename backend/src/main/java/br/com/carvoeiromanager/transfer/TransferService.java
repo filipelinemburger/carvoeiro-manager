@@ -8,6 +8,7 @@ import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.common.PageResponse;
+import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.contract.ContractValuation;
 import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.player.ListedReason;
@@ -36,7 +37,6 @@ import java.util.stream.Collectors;
 public class TransferService {
 
     static final int MIN_SQUAD_SIZE = 14;
-    static final int MAX_SQUAD_SIZE = 30;
 
     private static final double BID_CHANCE = 0.15;
     private static final double LISTED_BID_CHANCE = 0.45;
@@ -414,7 +414,7 @@ public class TransferService {
     }
 
     void requireSquadRoom(UUID managedClubId) {
-        if (playerRepository.findByClubIdAndYouthProspectFalse(managedClubId).size() >= MAX_SQUAD_SIZE) {
+        if (playerRepository.findByClubIdAndYouthProspectFalse(managedClubId).size() >= SquadRules.MAX_SQUAD_SIZE) {
             throw new ApiException(ErrorCode.SQUAD_FULL, "Squad is full");
         }
     }

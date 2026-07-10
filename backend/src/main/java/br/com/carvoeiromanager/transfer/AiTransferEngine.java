@@ -3,6 +3,7 @@ package br.com.carvoeiromanager.transfer;
 import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
+import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
@@ -30,7 +31,7 @@ import java.util.stream.Collectors;
  * managed club. Runs once per TRANSFER calendar event, seeded so the same save+date+state always
  * reproduces the same trades.
  *
- * <p>A buyer (AI club, squad below {@link TransferService#MAX_SQUAD_SIZE}, financial health not
+ * <p>A buyer (AI club, squad below {@link SquadRules#MAX_SQUAD_SIZE}, financial health not
  * DESPERATE) considers the listed-player pool (deepest squads' surplus, priced 0.90x value) it
  * can both afford (price &lt;= 40% of balance) and needs (position count below the floor, or an
  * overall upgrade over the position's average). The seller must stay above the squad-size floor
@@ -111,7 +112,7 @@ public class AiTransferEngine {
                 .toList();
 
         List<Club> buyers = aiClubs.stream()
-                .filter(club -> squadByClub.get(club.getId()).size() < TransferService.MAX_SQUAD_SIZE)
+                .filter(club -> squadByClub.get(club.getId()).size() < SquadRules.MAX_SQUAD_SIZE)
                 .filter(club -> financialHealthEvaluator.evaluate(club) != ClubFinancialHealthEvaluator.FinancialHealth.DESPERATE)
                 .sorted(Comparator.comparing(Club::getBalance).reversed().thenComparing(Club::getId))
                 .toList();

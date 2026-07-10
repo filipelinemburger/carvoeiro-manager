@@ -10,6 +10,7 @@ import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.contract.ContractValuation;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
@@ -322,4 +323,27 @@ class TransferServiceBuyingIT {
         assertThat(playerRepository.findById(target.getId()).orElseThrow().getClubId())
                 .isEqualTo(c.clubId());
     }
+
+    @Test
+    void makingAnOfferWhenTheSquadIsAtTheCapIsRejected() {
+        Career c = createCareer();
+        int current = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).size();
+        for (int i = 0; i < SquadRules.MAX_SQUAD_SIZE - current; i++) {
+            Player filler = Player.create(c.id(), c.clubId(), "Reserva " + i,
+                    br.com.carvoeiromanager.player.Position.MID, 22, "Brasil",
+                    55, 55, 55, 45, 10, 60, 55);
+            playerRepository.save(filler);
+        }
+        assertThat(playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).size())
+                .isEqualTo(SquadRules.MAX_SQUAD_SIZE);
+
+        Player target = anAiPlayer(c);
+        BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
+
+        assertThatThrownBy(() ->
+                transferService.makeOffer(c.id(), c.userId(), target.getId(), value, okWage(target), 3))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.SQUAD_FULL));
+    }
 }
+
