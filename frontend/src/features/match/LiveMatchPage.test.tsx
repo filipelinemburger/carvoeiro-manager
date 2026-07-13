@@ -24,6 +24,11 @@ const STATE = {
   onPitch: [], bench: [], subsRemaining: 5,
   currentTactics: { mentality: 'BALANCED', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-3-3' },
   playerRatings: [],
+  opponentOnPitch: [],
+  opponentTactics: { mentality: 'BALANCED', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-4-2' },
+  opponentRatings: [],
+  homeClubColors: { primary: '#f7d417', secondary: '#111111' },
+  awayClubColors: { primary: '#003399', secondary: '#ffffff' },
 }
 
 function renderPage() {
@@ -104,6 +109,27 @@ describe('LiveMatchPage', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
     expect(await screen.findByText(/atuações aparecem conforme/i)).toBeInTheDocument()
+  })
+
+  it('toggles between own and opponent ratings in the Atuações tab', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS',
+      playerRatings: [
+        { playerId: 'p1', name: 'Camisa 9', position: 'ATT', minutesPlayed: 12, goals: 1, rating: 7.0 },
+      ],
+      opponentRatings: [
+        { playerId: 'o1', name: 'Rival Camisa 10', position: 'MID', minutesPlayed: 12, goals: 0, rating: 6.2 },
+      ],
+    } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
+    expect(await screen.findByText('Camisa 9')).toBeInTheDocument()
+    expect(screen.queryByText('Rival Camisa 10')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /adversário/i }))
+    expect(await screen.findByText('Rival Camisa 10')).toBeInTheDocument()
+    expect(screen.queryByText('Camisa 9')).not.toBeInTheDocument()
   })
 
   it('clears the cached live match after finishing so the top bar stops showing Retomar (regression)', async () => {

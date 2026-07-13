@@ -28,6 +28,7 @@ export function LiveMatchPage() {
   const [actionsOpen, setActionsOpen] = useState(false)
   const [actionsTab, setActionsTab] = useState<0 | 1>(0)
   const [feedTab, setFeedTab] = useState<0 | 1>(0)   // 0 = Lances (feed), 1 = Atuações (grades)
+  const [ratingsSide, setRatingsSide] = useState<0 | 1>(0)   // 0 = Meu Time, 1 = Adversário
   const [applyPending, setApplyPending] = useState(false)
   const [subError, setSubError] = useState<string | null>(null)
 
@@ -218,15 +219,23 @@ export function LiveMatchPage() {
       )}
 
       {feedTab === 1 && (
-        state.playerRatings.length > 0 ? (
-          <Box sx={{ mt: 1 }}>
-            <PlayerRatingsList ratings={state.playerRatings} />
-          </Box>
-        ) : (
-          <Typography sx={{ mt: 1, color: 'text.secondary' }}>
-            As atuações aparecem conforme o jogo evolui.
-          </Typography>
-        )
+        <Box sx={{ mt: 1 }}>
+          <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+            <Button size="small" variant={ratingsSide === 0 ? 'contained' : 'outlined'} onClick={() => setRatingsSide(0)}>
+              Meu Time
+            </Button>
+            <Button size="small" variant={ratingsSide === 1 ? 'contained' : 'outlined'} onClick={() => setRatingsSide(1)}>
+              Adversário
+            </Button>
+          </Stack>
+          {(ratingsSide === 0 ? state.playerRatings : state.opponentRatings).length > 0 ? (
+            <PlayerRatingsList ratings={ratingsSide === 0 ? state.playerRatings : state.opponentRatings} />
+          ) : (
+            <Typography sx={{ color: 'text.secondary' }}>
+              As atuações aparecem conforme o jogo evolui.
+            </Typography>
+          )}
+        </Box>
       )}
 
       <MatchActionsDialog

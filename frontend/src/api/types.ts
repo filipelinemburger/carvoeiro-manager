@@ -459,6 +459,7 @@ export type LivePlayer = {
   onPitch: boolean
   used: boolean
   eligible: boolean
+  role: string
 }
 
 /** A managed player's 0–10 performance grade for a finished match. */
@@ -470,6 +471,8 @@ export type PlayerRating = {
   goals: number
   rating: number
 }
+
+export type LiveKitColors = { primary: string; secondary: string }
 
 export type LiveMatchState = {
   fixtureId: string
@@ -492,6 +495,11 @@ export type LiveMatchState = {
   currentTactics: LiveTactics
   /** Managed players' 0–10 grades; populated only at full time, empty otherwise. */
   playerRatings: PlayerRating[]
+  opponentOnPitch: LivePlayer[]
+  opponentTactics: LiveTactics
+  opponentRatings: PlayerRating[]
+  homeClubColors: LiveKitColors
+  awayClubColors: LiveKitColors
 }
 
 export type SubstituteRequest = { outPlayerId: string; inPlayerId: string }
