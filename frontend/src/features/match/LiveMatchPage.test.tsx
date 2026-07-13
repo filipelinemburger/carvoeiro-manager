@@ -153,6 +153,33 @@ describe('LiveMatchPage', () => {
     expect(screen.getByLabelText('Lesionado')).toBeInTheDocument()
   })
 
+  it('does not invert the Campo mapping when the managed club plays away', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE,
+      managedIsHome: false,
+      onPitch: [
+        { playerId: 'p1', name: 'Managed Titular', position: 'MID', overall: 70, fitness: 100,
+          hobbled: false, onPitch: true, used: false, eligible: true, role: 'BOX_TO_BOX' },
+      ],
+      opponentOnPitch: [
+        { playerId: 'o1', name: 'Home Rival Titular', position: 'MID', overall: 65, fitness: 100,
+          hobbled: false, onPitch: true, used: false, eligible: true, role: 'BOX_TO_BOX' },
+      ],
+    } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('tab', { name: /campo/i }))
+
+    // Managed club plays away, so the managed player must render with awayClubColors
+    // (#003399 -> rgb(0, 51, 153)), not homeClubColors — proves the mapping is not inverted.
+    const managedToken = (await screen.findByText('Managed Titular')).closest('[data-testid="player-token"]') as HTMLElement
+    expect(managedToken.querySelector('[data-role="disc"]')).toHaveStyle({ backgroundColor: 'rgb(0, 51, 153)' })
+
+    // The opponent, playing at home, must render with homeClubColors (#f7d417 -> rgb(247, 212, 23)).
+    const opponentToken = (await screen.findByText('Home Rival Titular')).closest('[data-testid="player-token"]') as HTMLElement
+    expect(opponentToken.querySelector('[data-role="disc"]')).toHaveStyle({ backgroundColor: 'rgb(247, 212, 23)' })
+  })
+
   it('clears the cached live match after finishing so the top bar stops showing Retomar (regression)', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, minute: 90, status: 'FULL_TIME' } as never)
     vi.mocked(finishLiveMatch).mockResolvedValue({ type: 'MATCH' } as never)
