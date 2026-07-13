@@ -11,93 +11,93 @@ public final class LiveCommentary {
             "E não adianta me ligar que eu vou mandar a merda.";
 
     private static final String[] GOAL = {
-            "GOL! %s balança as redes!",
-            "%s marca! Que golaço!",
-            "%s aparece na área e não perdoa!",
+            "GOOOOOOOOOOOOOOOOOOL! %s balança as redes!",
+            "%s marca! É GOOOOOOOOOOOOOOOOOOL!!! E que golaaaaçoooo!",
+            "%s aparece na área e não perdoa! É GOOOOOOOOOOOOOOOOOOL!!!",
             "GOOOOL! %s! Eu tô emocionado, gente, que golaço impressionante!",
-            "Bateu, tremeu a rede e caiu o estádio: golaço de %s!",
-            "Não teve chance pro goleiro! %s manda uma bomba e é gol!"};
+            "É GOOOOOOOOOOOOOOOOOOL!!! Bateu, tremeu a rede e caiu o estádio: golaço de %s!",
+            "Joga a luva, goleirão! %s manda uma patada e é gooooooooooool!"};
     private static final String[] SET_PIECE = {
-            "GOL de bola parada! %s converte!", "%s marca na cobrança!"};
+            "De bola parada... É GOOOOOOOOOOOOOOOOOOL!!! %s converte!", "%s marca na cobrança!"};
     private static final String[] CHANCE = {
             "%s arrisca e a bola passa perto!",
-            "Grande defesa! %s quase marcou.",
+            "Defesaaaaaaçaaaa! %s quase marcou.",
             "%s finaliza, mas para fora!",
-            "Ai, quase! %s bateu de primeira e a bola raspou a trave!",
-            "Que perigo! %s levou a torcida ao desespero nessa finalização!"};
+            "QUAAAAAASEEEEEE! %s bateu de primeira e a bola raspou a trave! Isso seria uma pintuuura",
+            "Olha o lanceee... Miiiinhaaa nossa senhooooraaaa! %s levou a torcida ao desespero nessa finalização! A bola foi lá no colegião"};
     private static final String[] YELLOW = {
-            "O juiz não pensou duas vezes: amarelo pra %s!",
-            "%s entra forte e é advertido.",
-            "Cartão amarelo para %s.",
-            "%s exagerou na entrada e o cartão veio na hora!"};
+            "O juiz não pensou duas vezes: é amareeeelo pra %s!",
+            "%s entra forte e o juiz não perdoa: cartão amarelo!",
+            "Cartão amarelo pra %s. Cuidado, hein, que com mais um ele desfalca o time!",
+            "%s exagerou na entrada e o cartão veio na hora! Se liga aí, moleque!"};
     private static final String[] RED = {
-            "Cartão vermelho! %s está expulso!",
-            "%s recebe o vermelho e deixa o time com um a menos.",
-            "Vermelho direto! %s vai pro chuveiro mais cedo!",
+            "É VERMELHOOOO! %s está expulso e vai direto pro vestiário!",
+            "%s recebe o vermelho e deixa o time com um a menos. Agora vai ter que suar a camisa!",
+            "Vermelho direto! %s vai pro chuveiro mais cedo, e olha que sufoco pro time que fica reduzido!",
             "Não teve jeito, %s: o juiz mostrou o vermelho e a arquibancada foi à loucura!"};
     private static final String[] INJURY = {
-            "%s cai lesionado no gramado.",
-            "Preocupação: %s sente e precisa de atendimento.",
+            "%s cai lesionado no gramado, a maca entra e não vai dar pra ele continuar.",
+            "%s sente e precisa de atendimento. Pessoal no banco de reservas se agita e demonstra preocupação",
             "Fica no chão %s, e o coração da torcida aperta junto.",
-            "Sinal de alerta: %s pede a saída, e o departamento médico já entra em campo."};
+            "É sinal de alerta, %s pede a saída, e o departamento médico já entra em campo."};
     private static final String[] PENALTY_GOAL_LINES = {
             "Pênalti! %s converte com categoria!",
-            "GOL DE PÊNALTI! %s não desperdiça!",
-            "Bateu forte, bateu com gosto: %s não erra da marca da cal!",
-            "Frio na barriga e categoria: %s manda pro canto e é gol de pênalti!"};
+            "É PÊÊÊNAAALTII!!! %s bate... É GOOOOOOOOOOOLLLL!",
+            "É GOOOOOOOOOOOLLLL! Que cobrança maravilhooosaaa! Bateu forte e com gosto, %s não erra da marca da cal!",
+            "Vai pra bola... É GOOOOOOOOOLLLLLL!!! Goleiro pra um lado e bola para o outro, %s converte de pênalti!"};
     private static final String[] PENALTY_MISS_LINES = {
-            "Pênalti perdido! %s desperdiça — defesa do goleiro!",
-            "%s cobra o pênalti... e o goleiro defende!",
-            "Ai, que sufoco! %s bateu em cima do goleiro e perdeu a chance de ouro!",
-            "Não foi dessa vez: %s manda para fora e a torcida leva as mãos à cabeça!"};
+            "É PÊNALTI... %s vai para a marca da cal eeee.... PERDEEEUUU! O que é isso meu filho? Essa aí tu mandou lá no Maracajá!",
+            "%s vai pra cobrança do pênalti eeeee... perdeeeeeuuuu! O goleiro foi buscar a bola lá na Seis de Janeiro!",
+            "É PÊÊÊNAAALTII!!! Que sufoco... %s bateu em cima do goleiro e perdeu a chance de ouro! Esse aí não serve nem pra jogar o praião",
+            "É PÊÊÊNAAALTII!!! É agora, correu pra bola eee.... PERDEEEEEEEUUUU! O que é isso? %s pelo amor de Deus, assim você não merece aumento"};
     private static final String[] FREE_KICK_LINES = {
-            "Que cobrança! %s bateu por cima da barreira e é gol de placa!",
-            "Direto pro ângulo! %s pintou a obra de arte na bola parada!",
-            "GOL DE FALTA! %s acerta o ângulo!",
-            "Falta cobrada por %s... GOL!"};
+            "Falta perigosa, %s na bola... bateeeeeeuuuu.... GOLAAAAAAÇOOOOO!!! GOOOOOOOOOOOOLLL! A bola foi por cima da barreira e morreu no fundo do gol!",
+            "Mais uma falta perigosa, %s correu... bateeeu... JOOOOGAAA A LUUUVA GOLEIRÃÃÃOOOO!!! GOOOOOOOOOOOLLLLLLL!!! Isso não foi uma falta, mas sim uma obra de arte!",
+            "Pra ele ali é meio gol... bateeeeeuu... ÉÉÉÉÉÉÉÉÉÉ GOLAAAAÇOOOOOOOOO! %s acerta o ângulo e vai pra torcidaa! Cuidado pra não tomar cartão amarelo!",
+            "Falta cobrada por %s... É GOOOOOOOOOOOOOOL! JOGA A LUUUUUVA GOLEIRÃOOOOOO"};
     private static final String[] CORNER_TWO_NAME = {
-            "%s levanta na área, e %s sobe mais alto que todos para cabecear: GOL!",
+            "%s levanta na área, e %s sobe mais alto que todos para cabecear: É GOOOOOL!",
             "Escanteio de %s, %s sobe e cabeceia: GOL!",
-            "Cobrança de %s, e %s aparece de cabeça para estufar a rede!",
-            "%s bate o escanteio, %s sobe sozinho e manda pra dentro!"};
+            "Cobrança de %s, e %s aparece de cabeça pra estufar a rede!",
+            "%s bate o escanteio, %s sobe sozinho e manda pra dentro! Que jogada de bola parada!"};
     private static final String[] CORNER_ONE_NAME = {
-            "Subiu mais que todo mundo! %s cabeceia e é gol no escanteio!",
-            "GOL de escanteio! %s aparece na área e marca!",
+            "Subiu mais que todo mundo! %s cabeceia e é GOOOOOL no escanteio!",
+            "GOL de escanteio! %s aparece na área e não perdoa!",
             "Bola levantada na área, %s testa e balança as redes!",
             "Escanteio, cabeçada e GOL! %s não perdoa dentro da pequena área!"};
     private static final String[] SUBSTITUTION_LINES = {
-            "Substituição: entra %s, sai %s.",
-            "Troca no time: entra %s no lugar de %s.",
-            "Mudança do treinador: %s entra, %s sai de campo aplaudido.",
+            "Substituição! Entra %s, sai %s. Vamo que vamo!",
+            "Troca no time: entra %s no lugar de %s. Fôlego novo pra reta final!",
+            "Mudança do treinador: %s entra, %s sai de campo aplaudido, bem merecidamente!",
             "Aí vem a mexida! %s pisa no gramado no lugar de %s."};
     private static final String[] HALF_TIME_LINES = {
-            "Apita o juiz e o primeiro tempo chega ao fim!",
-            "Intervalo — fim do primeiro tempo.",
-            "Hora do cafezinho, torcida! Os times vão pro vestiário.",
+            "Apita o juiz e o primeiro tempo chega ao fim! Bora rever o que deu e o que não deu",
+            "Intervalo — fim do primeiro tempo. Hora de ajustar as peças, professor!",
+            "Hora do cafezinho, torcida! Os times vão pro vestiário e a gente já volta com mais",
             "Fim de primeiro tempo, e olha que jogo emocionante estamos tendo hoje!"};
     private static final String[] TACTICS_USER_LINES = {
             "O treinador mexe no time, vamos ver o que muda em campo!",
-            "Mudança tática do treinador.",
-            "Ajuste na estratégia — o comandante não fica parado no banco!"};
+            "Mudança tática do treinador. Vamo ver se essa mudança pega bem",
+            "Ajuste na estratégia — o comandante não fica parado no banco, hein!"};
     private static final String[] TACTICS_PUSH = {
-            "Time visitante sobe as linhas e vai pra cima!",
-            "O adversário se lança ao ataque.",
+            "Eles sobem as linhas e vão pra cima. Segura aí, professor!",
+            "O adversário se lança ao ataque. Agora esse relógio tem que passar voando",
             "Postura ofensiva do adversário, que quer pressionar lá na frente!"};
     private static final String[] TACTICS_ALL_OUT = {
-            "É tudo ou nada agora! O adversário joga por tudo!",
+            "É tudo ou nada agora! O adversário joga por tudo! Essa é hora de apostar no nosso contra-ataque!",
             "Tudo ou nada do adversário: 4-2-4 ofensivo!",
-            "Sem medo de perder: o rival lança todo mundo no ataque!"};
+            "Sem medo de perder: o rival lança todo mundo no ataque! Te segura aí, Tigre!"};
     private static final String[] TACTICS_PROTECT = {
-            "O rival se fecha e tenta administrar a vantagem!",
-            "O adversário recua para segurar o resultado.",
-            "Time visitante prioriza a marcação para não sofrer o empate!"};
+            "O rival se fecha e tenta administrar a vantagem, temos que achar um jeito de penetrar nessa retranca e marcar um gol logo",
+            "O adversário recua para segurar o resultado. Hora de avançarmos as linhas e pressioná-los no campo de defesa",
+            "Eles priorizam a marcação para não sofrer o empate, mas nós vamos com tudo!"};
     private static final String[] TACTICS_PARK_THE_BUS = {
-            "Ônibus estacionado! O adversário só pensa em defender!",
-            "Adversário fecha-se na defesa: 5-4-1.",
-            "Ninguém passa! O rival montou uma muralha lá atrás!"};
+            "Ônibus estacionado! Eles agora só pensam em defender! Tem que furar essa barreira",
+            "Adversário fecha-se na defesa: 5-4-1. Tem que encurralar os caras, vamo pra cima!",
+            "Ninguém passa! O rival montou uma muralha lá atrás! Bem coisa de time pequeno!"};
     private static final String[] TACTICS_NORMAL = {
             "O comandante rival ajusta as peças no tabuleiro!",
-            "O adversário reorganiza a equipe.",
+            "O adversário reorganiza a equipe. Postura mais equilibrada agora",
             "Reorganização no adversário, buscando equilíbrio dentro de campo."};
 
     /**
