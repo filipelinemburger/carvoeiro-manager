@@ -60,13 +60,18 @@ class LiveCommentaryTest {
     }
 
     @Test
-    void comebackGoalOverridesTheNormalGoalPoolForEveryGoalFamilyType() {
+    void comebackGoalAppendsTheSignatureLineAfterTheNormalGoalDescriptionForEveryGoalFamilyType() {
+        String baseGoal = LiveCommentary.of(EventType.GOAL, "Otero", null, 60, null, false, false);
         assertThat(LiveCommentary.of(EventType.GOAL, "Otero", null, 60, null, true, false))
-                .isEqualTo("Homens de pouca fé... homens de muita fé!");
+                .isEqualTo(baseGoal + " Homens de pouca fé... homens de muita fé!");
+
+        String basePenalty = LiveCommentary.of(EventType.PENALTY_GOAL, "Otero", null, 60, null, false, false);
         assertThat(LiveCommentary.of(EventType.PENALTY_GOAL, "Otero", null, 60, null, true, false))
-                .isEqualTo("Homens de pouca fé... homens de muita fé!");
+                .isEqualTo(basePenalty + " Homens de pouca fé... homens de muita fé!");
+
+        String baseCorner = LiveCommentary.of(EventType.CORNER_GOAL, "Otero", "Diego", 60, null, false, false);
         assertThat(LiveCommentary.of(EventType.CORNER_GOAL, "Otero", "Diego", 60, null, true, false))
-                .isEqualTo("Homens de pouca fé... homens de muita fé!");
+                .isEqualTo(baseCorner + " Homens de pouca fé... homens de muita fé!");
     }
 
     @Test

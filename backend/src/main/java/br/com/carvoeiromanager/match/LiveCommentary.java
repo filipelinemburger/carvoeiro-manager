@@ -103,20 +103,18 @@ public final class LiveCommentary {
     /**
      * {@code inName} is only used for substitutions and corner goals (the corner taker).
      * {@code detail} only for TACTICS_CHANGE. {@code comebackGoal} true only for a goal-family
-     * type that erases a deficit for the managed club — overrides the normal goal-family pool
-     * with the signature line. {@code losingStreakHalfTime} true only at HALF_TIME when the
-     * managed club has lost each of its last 2 completed fixtures — overrides the normal
-     * half-time pool with the signature line.
+     * type that erases a deficit for the managed club — appends the signature line after the
+     * normal goal description, so the scorer and the goal itself are still described.
+     * {@code losingStreakHalfTime} true only at HALF_TIME when the managed club has lost each
+     * of its last 2 completed fixtures — overrides the normal half-time pool with the signature
+     * line (half-time has no per-event scorer/action to preserve, unlike a goal).
      */
     public static String of(EventType type, String playerName, String inName, int minute, String detail,
                              boolean comebackGoal, boolean losingStreakHalfTime) {
-        if (comebackGoal && type.isGoal()) {
-            return COMEBACK_GOAL_LINE;
-        }
         if (type == EventType.HALF_TIME && losingStreakHalfTime) {
             return LOSING_STREAK_HALF_TIME_LINE;
         }
-        return switch (type) {
+        String base = switch (type) {
             case GOAL -> pick(GOAL, playerName, minute, type);
             case SET_PIECE_GOAL -> pick(SET_PIECE, playerName, minute, type);
             case CHANCE -> pick(CHANCE, playerName, minute, type);
@@ -131,6 +129,7 @@ public final class LiveCommentary {
             case FREE_KICK_GOAL -> pick(FREE_KICK_LINES, playerName, minute, type);
             case CORNER_GOAL -> corner(playerName, inName, minute);
         };
+        return comebackGoal && type.isGoal() ? base + " " + COMEBACK_GOAL_LINE : base;
     }
 
     /** Two-name line when the taker is known and distinct; single-name fallback otherwise. */
