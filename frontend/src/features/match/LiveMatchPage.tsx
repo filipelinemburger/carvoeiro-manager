@@ -4,10 +4,28 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Box, Stack, Typography, Button, Chip, Alert, LinearProgress, Tabs, Tab } from '@mui/material'
 import { useAuth } from '../../auth/AuthContext'
 import { getLiveMatch, advanceLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics } from '../../api/liveMatch'
-import type { LiveEvent, LiveMatchState, LiveTacticsRequest } from '../../api/types'
+import type { LiveEvent, LiveMatchState, LiveTacticsRequest, LivePlayer, LiveKitColors } from '../../api/types'
 import { MatchActionsDialog } from './MatchActionsDialog'
 import type { SubPair } from './MatchActionsDialog'
 import { PlayerRatingsList } from './PlayerRatingsList'
+import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
+
+/** Builds one side's pitch view-model from its live on-pitch roster. Module-scope (no
+ * component state) so it's freely reusable for either side without a closure. */
+function buildTeam(players: LivePlayer[], formation: string, colors: LiveKitColors): TeamOnPitch {
+  return {
+    formation,
+    kit: colors,
+    showNames: true,
+    players: players.map((p): PlacedPlayer => ({
+      id: p.playerId,
+      surname: p.name,
+      position: p.position as PlacedPlayer['position'],
+      fitness: p.fitness,
+      badges: p.hobbled ? { injured: true } : undefined,
+    })),
+  }
+}
 
 const EVENT_ICON: Record<LiveEvent['type'], string> = {
   GOAL: '⚽', SET_PIECE_GOAL: '⚽', YELLOW_CARD: '🟨', RED_CARD: '🟥',
@@ -27,7 +45,7 @@ export function LiveMatchPage() {
   const [playing, setPlaying] = useState(true)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [actionsTab, setActionsTab] = useState<0 | 1>(0)
-  const [feedTab, setFeedTab] = useState<0 | 1>(0)   // 0 = Lances (feed), 1 = Atuações (grades)
+  const [feedTab, setFeedTab] = useState<0 | 1 | 2>(0)   // 0 = Lances, 1 = Atuações, 2 = Campo
   const [ratingsSide, setRatingsSide] = useState<0 | 1>(0)   // 0 = Meu Time, 1 = Adversário
   const [applyPending, setApplyPending] = useState(false)
   const [subError, setSubError] = useState<string | null>(null)
@@ -202,9 +220,10 @@ export function LiveMatchPage() {
         )}
       </Stack>
 
-      <Tabs value={feedTab} onChange={(_, v) => setFeedTab(v as 0 | 1)} sx={{ mt: 2, minHeight: 40 }}>
+      <Tabs value={feedTab} onChange={(_, v) => setFeedTab(v as 0 | 1 | 2)} sx={{ mt: 2, minHeight: 40 }}>
         <Tab label="Lances" sx={{ minHeight: 40 }} />
         <Tab label="Atuações" sx={{ minHeight: 40 }} />
+        <Tab label="Campo" sx={{ minHeight: 40 }} />
       </Tabs>
 
       {feedTab === 0 && (
@@ -235,6 +254,23 @@ export function LiveMatchPage() {
               As atuações aparecem conforme o jogo evolui.
             </Typography>
           )}
+        </Box>
+      )}
+
+      {feedTab === 2 && (
+        <Box sx={{ mt: 1 }}>
+          <Pitch
+            home={buildTeam(
+              state.managedIsHome ? state.onPitch : state.opponentOnPitch,
+              state.managedIsHome ? state.currentTactics.formation : state.opponentTactics.formation,
+              state.homeClubColors,
+            )}
+            away={buildTeam(
+              state.managedIsHome ? state.opponentOnPitch : state.onPitch,
+              state.managedIsHome ? state.opponentTactics.formation : state.currentTactics.formation,
+              state.awayClubColors,
+            )}
+          />
         </Box>
       )}
 

@@ -132,6 +132,27 @@ describe('LiveMatchPage', () => {
     expect(screen.queryByText('Camisa 9')).not.toBeInTheDocument()
   })
 
+  it('shows both teams on the Campo tab with their names and an injury badge', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE,
+      onPitch: [
+        { playerId: 'p1', name: 'Goleiro Titular', position: 'GK', overall: 70, fitness: 100,
+          hobbled: false, onPitch: true, used: false, eligible: true, role: 'GOALKEEPER' },
+      ],
+      opponentOnPitch: [
+        { playerId: 'o1', name: 'Zagueiro Rival', position: 'DEF', overall: 65, fitness: 100,
+          hobbled: true, onPitch: true, used: false, eligible: true, role: 'STOPPER' },
+      ],
+    } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('tab', { name: /campo/i }))
+    expect(await screen.findByTestId('pitch')).toBeInTheDocument()
+    expect(await screen.findByText('Goleiro Titular')).toBeInTheDocument()
+    expect(screen.getByText('Zagueiro Rival')).toBeInTheDocument()
+    expect(screen.getByLabelText('Lesionado')).toBeInTheDocument()
+  })
+
   it('clears the cached live match after finishing so the top bar stops showing Retomar (regression)', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, minute: 90, status: 'FULL_TIME' } as never)
     vi.mocked(finishLiveMatch).mockResolvedValue({ type: 'MATCH' } as never)
