@@ -19,6 +19,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -58,10 +59,18 @@ class AiListingEngineIT {
                 .filter(club -> "GOI".equals(club.getShortName())).findFirst().orElseThrow();
     }
 
-    /** BRU: a 14-player Catarinense-only club, sitting exactly on MIN_SQUAD_SIZE. */
+    /** BRU with its squad replaced by exactly MIN_SQUAD_SIZE synthetic players (sits exactly on the floor). */
     private Club aFloorSizedAiClub(Career c) {
-        return clubRepository.findBySaveGameId(c.id()).stream()
-                .filter(club -> "BRU".equals(club.getShortName())).findFirst().orElseThrow();
+        Club club = clubRepository.findBySaveGameId(c.id()).stream()
+                .filter(cl -> "BRU".equals(cl.getShortName())).findFirst().orElseThrow();
+        List<Player> squad = new ArrayList<>();
+        for (int i = 0; i < TransferService.MIN_SQUAD_SIZE; i++) {
+            squad.add(Player.create(c.id(), club.getId(), "P-" + UUID.randomUUID(), Position.ATT,
+                    25, "Brasil", 60, 60, 60, 60, 60, 60, 60));
+        }
+        playerRepository.deleteAll(playerRepository.findByClubId(club.getId()));
+        playerRepository.saveAll(squad);
+        return club;
     }
 
     private List<Player> squad(Club club) {

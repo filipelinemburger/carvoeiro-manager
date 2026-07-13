@@ -139,8 +139,10 @@ public class SaveGameService {
                 int overall = overallCalculator.compute(position,
                         seedPlayer.pace(), seedPlayer.finishing(), seedPlayer.passing(),
                         seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina());
-                // Prefer hand-authored ("real") attributes when the seed carries them (all Série B
-                // clubs); otherwise derive the 22 non-anchor attributes from the six anchors.
+                // Prefer hand-authored ("real") attributes when the seed carries them (every club
+                // in the pool, as of the Catarinense data-realism pass); otherwise derive the 22
+                // non-anchor attributes from the six anchors. The derive path still runs for
+                // free agents and newgens generated at runtime.
                 Attributes attributes = seedPlayer.attributes() != null
                         ? seedPlayer.attributes().toAttributes(
                                 seedPlayer.pace(), seedPlayer.finishing(), seedPlayer.passing(),
