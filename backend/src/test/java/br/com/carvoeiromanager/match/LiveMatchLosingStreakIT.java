@@ -110,6 +110,12 @@ class LiveMatchLosingStreakIT {
         assertThat(state).isNotNull();
         LiveEventResponse halfTime = state.events().stream()
                 .filter(e -> "HALF_TIME".equals(e.type())).findFirst().orElseThrow();
-        assertThat(halfTime.text()).isEqualTo("Intervalo — fim do primeiro tempo.");
+        // Membership in the full pool, not a fixed string: HALF_TIME_LINES content is an
+        // ongoing copy pass, and the losing-streak line is the only one that must NOT appear here.
+        assertThat(halfTime.text()).isIn(
+                "Apita o juiz e o primeiro tempo chega ao fim! Bora rever o que deu e o que não deu",
+                "Intervalo — fim do primeiro tempo. Hora de ajustar as peças, professor!",
+                "Hora do cafezinho, torcida! Os times vão pro vestiário e a gente já volta com mais",
+                "Fim de primeiro tempo, e olha que jogo emocionante estamos tendo hoje!");
     }
 }
