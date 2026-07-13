@@ -397,7 +397,8 @@ public class LiveMatchService {
                 e.playerInId() == null ? null : nameOf(byId, e.playerInId()),
                 e.severity(),
                 LiveCommentary.of(e.type(), nameOf(byId, e.playerId()),
-                        e.playerInId() == null ? null : nameOf(byId, e.playerInId()), e.minute(), e.detail()))).toList();
+                        e.playerInId() == null ? null : nameOf(byId, e.playerInId()), e.minute(), e.detail(),
+                        false, false /* comebackGoal, losingStreakHalfTime — wired in Tasks 3-4 */))).toList();
 
         String status = statusAt(lm, timeline, minute);
         int subsUsed = (int) cfg.subSchedule().stream().filter(s -> s.home() == lm.isManagedIsHome()).count();
