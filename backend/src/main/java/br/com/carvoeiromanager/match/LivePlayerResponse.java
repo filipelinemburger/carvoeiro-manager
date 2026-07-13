@@ -9,5 +9,6 @@ public record LivePlayerResponse(
         boolean hobbled,
         boolean onPitch,
         boolean used,
-        boolean eligible) {
+        boolean eligible,
+        String role) {
 }

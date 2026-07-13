@@ -14,6 +14,7 @@ import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
+import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Pressing;
 import br.com.carvoeiromanager.season.AdvanceResponse;
 import br.com.carvoeiromanager.season.SeasonAdvanceService;
@@ -410,28 +411,46 @@ public class LiveMatchService {
         String competitionName = competitionRepository.findById(lm.getCompetitionId())
                 .map(c -> c.getName()).orElse(null);
 
+        boolean managedIsHome = lm.isManagedIsHome();
+        TacticalProfile managedProfile = managedIsHome ? cfg.homeProfile() : cfg.awayProfile();
+        TacticalProfile opponentProfile = managedIsHome ? cfg.awayProfile() : cfg.homeProfile();
+
         // Managed on-pitch/bench for the sub dialog.
-        List<Player> managedXi = lm.isManagedIsHome() ? cfg.homeXi() : cfg.awayXi();
-        List<Player> managedBench = lm.isManagedIsHome() ? cfg.homeBench() : cfg.awayBench();
+        List<Player> managedXi = managedIsHome ? cfg.homeXi() : cfg.awayXi();
+        List<Player> managedBench = managedIsHome ? cfg.homeBench() : cfg.awayBench();
         OnPitch managed = onPitchManaged(lm, timeline, minute, managedXi);
         List<LivePlayerResponse> onPitch = managed.onPitch().stream()
-                .map(id -> livePlayer(byId.get(id), cfg, true, false, managed.hobbled().contains(id))).toList();
+                .map(id -> livePlayer(byId.get(id), cfg, managedProfile, true, false, managed.hobbled().contains(id))).toList();
         List<LivePlayerResponse> bench = managedBench.stream()
-                .map(p -> livePlayer(p, cfg, false, managed.usedIn().contains(p.getId()), false)).toList();
+                .map(p -> livePlayer(p, cfg, managedProfile, false, managed.usedIn().contains(p.getId()), false)).toList();
+
+        // Opponent on-pitch for the ratings sub-tab and the dual-formation pitch view.
+        List<Player> opponentXi = managedIsHome ? cfg.awayXi() : cfg.homeXi();
+        OnPitch opponent = onPitchOpponent(lm, timeline, minute, opponentXi);
+        List<LivePlayerResponse> opponentOnPitch = opponent.onPitch().stream()
+                .map(id -> livePlayer(byId.get(id), cfg, opponentProfile, true, false, opponent.hobbled().contains(id))).toList();
 
         LiveTactics currentTactics = computeCurrentTactics(lm, cfg, minute);
+        LiveTactics opponentTactics = computeOpponentTactics(lm, cfg, minute);
 
         // Live grades: computed from what has been revealed so far (goals/cards/minutes/score through
         // the committed minute). They start near 6.0 and diverge as the game unfolds; at minute 90
         // they equal the final full-time grades. Empty at kickoff (nobody has played yet).
         List<PlayerRating> playerRatings = managedRatings(lm, cfg, timeline, minute);
+        List<PlayerRating> opponentPlayerRatings = opponentRatings(lm, cfg, timeline, minute);
+
+        Club homeClub = clubs.get(fixture.getHomeClubId());
+        Club awayClub = clubs.get(fixture.getAwayClubId());
+        KitColors homeClubColors = new KitColors(homeClub.getPrimaryColor(), homeClub.getSecondaryColor());
+        KitColors awayClubColors = new KitColors(awayClub.getPrimaryColor(), awayClub.getSecondaryColor());
 
         return new LiveMatchState(
                 lm.getFixtureId().toString(), competitionName, lm.getRound(), lm.getMatchDate().toString(),
-                clubs.get(fixture.getHomeClubId()).getName(), shortName(clubs.get(fixture.getHomeClubId())),
-                clubs.get(fixture.getAwayClubId()).getName(), shortName(clubs.get(fixture.getAwayClubId())),
-                lm.isManagedIsHome(), minute, timeline.homeGoalsAt(minute), timeline.awayGoalsAt(minute),
-                status, events, onPitch, bench, MAX_SUBS - subsUsed, currentTactics, playerRatings);
+                homeClub.getName(), shortName(homeClub),
+                awayClub.getName(), shortName(awayClub),
+                managedIsHome, minute, timeline.homeGoalsAt(minute), timeline.awayGoalsAt(minute),
+                status, events, onPitch, bench, MAX_SUBS - subsUsed, currentTactics, playerRatings,
+                opponentOnPitch, opponentTactics, opponentPlayerRatings, homeClubColors, awayClubColors);
     }
 
     /**
@@ -487,31 +506,39 @@ public class LiveMatchService {
         return isLosingStreak(recent, managedClubId);
     }
 
-    /**
-     * Computes the managed club's 0–10 grades from everything revealed through {@code minute}: the
-     * managed players who have featured, their goals/cards so far, minutes played so far, and the
-     * score at that minute. Used live on every advance and, with {@code minute == MINUTES}, produces
-     * the final full-time grades persisted into the news summary.
-     */
     private List<PlayerRating> managedRatings(LiveMatch lm, LiveMatchConfig cfg, LiveTimeline timeline, int minute) {
-        boolean managedIsHome = lm.isManagedIsHome();
-        List<Player> managedXi = managedIsHome ? cfg.homeXi() : cfg.awayXi();
-        List<Player> managedBench = managedIsHome ? cfg.homeBench() : cfg.awayBench();
+        return ratingsFor(cfg, timeline, minute, lm.isManagedIsHome());
+    }
 
-        Map<UUID, Integer> minutes = minutesThrough(managedXi, timeline, minute, managedIsHome);
-        List<Player> everyone = new ArrayList<>(managedXi);
-        everyone.addAll(managedBench);   // rate() self-filters to players with minutes > 0
+    /**
+     * Computes one side's 0–10 grades from everything revealed through {@code minute}: the
+     * side's players who have featured, their goals/cards so far, minutes played so far, and
+     * the score at that minute. Used live on every advance for both the managed side and the
+     * opponent, and with {@code minute == MINUTES}, produces the final full-time grades
+     * persisted into the news summary (managed side only).
+     */
+    private List<PlayerRating> opponentRatings(LiveMatch lm, LiveMatchConfig cfg, LiveTimeline timeline, int minute) {
+        return ratingsFor(cfg, timeline, minute, !lm.isManagedIsHome());
+    }
+
+    private List<PlayerRating> ratingsFor(LiveMatchConfig cfg, LiveTimeline timeline, int minute, boolean isHome) {
+        List<Player> xi = isHome ? cfg.homeXi() : cfg.awayXi();
+        List<Player> bench = isHome ? cfg.homeBench() : cfg.awayBench();
+
+        Map<UUID, Integer> minutes = minutesThrough(xi, timeline, minute, isHome);
+        List<Player> everyone = new ArrayList<>(xi);
+        everyone.addAll(bench);   // rate() self-filters to players with minutes > 0
 
         // A missed penalty must reach the rating calculator (it is NOT persisted; the finish()
         // persist loop and match-event repository still key off plain isCardOrGoal).
         List<AttributedEvent> sideEvents = timeline.eventsThrough(minute).stream()
-                .filter(e -> e.home() == managedIsHome
+                .filter(e -> e.home() == isHome
                         && (isCardOrGoal(e.type()) || e.type() == EventType.PENALTY_MISSED))
                 .map(e -> new AttributedEvent(e.playerId(), e.type(), e.home()))
                 .toList();
 
-        int scored = managedIsHome ? timeline.homeGoalsAt(minute) : timeline.awayGoalsAt(minute);
-        int conceded = managedIsHome ? timeline.awayGoalsAt(minute) : timeline.homeGoalsAt(minute);
+        int scored = isHome ? timeline.homeGoalsAt(minute) : timeline.awayGoalsAt(minute);
+        int conceded = isHome ? timeline.awayGoalsAt(minute) : timeline.homeGoalsAt(minute);
         return playerRatingCalculator.rate(everyone, sideEvents, minutes, scored, conceded);
     }
 
@@ -551,15 +578,24 @@ public class LiveMatchService {
 
     /** Derives the managed side's active tactics at {@code minute}, applying any scheduled changes. */
     private LiveTactics computeCurrentTactics(LiveMatch lm, LiveMatchConfig cfg, int minute) {
-        TacticalProfile base = lm.isManagedIsHome() ? cfg.homeProfile() : cfg.awayProfile();
+        return tacticsFor(cfg, minute, lm.isManagedIsHome());
+    }
+
+    /** Derives the opponent side's active tactics at {@code minute}, applying any scheduled changes. */
+    private LiveTactics computeOpponentTactics(LiveMatch lm, LiveMatchConfig cfg, int minute) {
+        return tacticsFor(cfg, minute, !lm.isManagedIsHome());
+    }
+
+    private LiveTactics tacticsFor(LiveMatchConfig cfg, int minute, boolean isHome) {
+        TacticalProfile base = isHome ? cfg.homeProfile() : cfg.awayProfile();
         String mentality = base.mentality().name();
         String pressing = base.pressing().name();
         String marking = base.marking().name();
         String formation = base.formation();
 
-        // Apply the last scheduled change for the managed side whose minute <= committedMinute
+        // Apply the last scheduled change for this side whose minute <= committedMinute
         for (TimedTactics tt : cfg.tacticsSchedule()) {
-            if (tt.home() == lm.isManagedIsHome() && tt.minute() <= minute) {
+            if (tt.home() == isHome && tt.minute() <= minute) {
                 mentality = tt.mentality().name();
                 pressing = tt.pressing().name();
                 marking = tt.marking().name();
@@ -569,16 +605,24 @@ public class LiveMatchService {
         return new LiveTactics(mentality, pressing, marking, formation);
     }
 
-    /** Managed side's current on-pitch set, hobbled set, and bench-players-already-used, at {@code minute}. */
+    /** One side's current on-pitch set, hobbled set, and bench-players-already-used, at {@code minute}. */
     private record OnPitch(List<UUID> onPitch, Set<UUID> hobbled, Set<UUID> usedIn) {
     }
 
     private OnPitch onPitchManaged(LiveMatch lm, LiveTimeline timeline, int minute, List<Player> managedXi) {
-        List<UUID> onPitch = new ArrayList<>(managedXi.stream().map(Player::getId).toList());
+        return onPitchFor(timeline, minute, lm.isManagedIsHome(), managedXi);
+    }
+
+    private OnPitch onPitchOpponent(LiveMatch lm, LiveTimeline timeline, int minute, List<Player> opponentXi) {
+        return onPitchFor(timeline, minute, !lm.isManagedIsHome(), opponentXi);
+    }
+
+    private OnPitch onPitchFor(LiveTimeline timeline, int minute, boolean isHome, List<Player> xi) {
+        List<UUID> onPitch = new ArrayList<>(xi.stream().map(Player::getId).toList());
         Set<UUID> hobbled = new LinkedHashSet<>();
         Set<UUID> usedIn = new LinkedHashSet<>();
         for (LiveTimelineEvent e : timeline.eventsThrough(minute)) {
-            if (e.home() != lm.isManagedIsHome()) continue;
+            if (e.home() != isHome) continue;
             switch (e.type()) {
                 case SUBSTITUTION -> {
                     onPitch.remove(e.playerId());
@@ -608,10 +652,12 @@ public class LiveMatchService {
         return "IN_PROGRESS";
     }
 
-    private LivePlayerResponse livePlayer(Player p, LiveMatchConfig cfg, boolean onPitch, boolean used, boolean hobbled) {
+    private LivePlayerResponse livePlayer(Player p, LiveMatchConfig cfg, TacticalProfile profile,
+                                          boolean onPitch, boolean used, boolean hobbled) {
         int fit = cfg.fitness().getOrDefault(p.getId(), 100);
+        PlayerRole role = profile.roles().getOrDefault(p.getId(), PlayerRole.defaultFor(p.getPosition()));
         return new LivePlayerResponse(p.getId().toString(), p.getName(), p.getPosition().name(),
-                p.getOverall(), fit, hobbled, onPitch, used, p.isEligible());
+                p.getOverall(), fit, hobbled, onPitch, used, p.isEligible(), role.name());
     }
 
     // ---- helpers ----
