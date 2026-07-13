@@ -398,7 +398,8 @@ public class LiveMatchService {
                 e.severity(),
                 LiveCommentary.of(e.type(), nameOf(byId, e.playerId()),
                         e.playerInId() == null ? null : nameOf(byId, e.playerInId()), e.minute(), e.detail(),
-                        false, false /* comebackGoal, losingStreakHalfTime — wired in Tasks 3-4 */))).toList();
+                        isComebackGoal(revealed, e, lm.isManagedIsHome()),
+                        false /* losingStreakHalfTime — wired in Task 4 */))).toList();
 
         String status = statusAt(lm, timeline, minute);
         int subsUsed = (int) cfg.subSchedule().stream().filter(s -> s.home() == lm.isManagedIsHome()).count();
@@ -431,6 +432,31 @@ public class LiveMatchService {
                 clubs.get(fixture.getAwayClubId()).getName(), shortName(clubs.get(fixture.getAwayClubId())),
                 lm.isManagedIsHome(), minute, timeline.homeGoalsAt(minute), timeline.awayGoalsAt(minute),
                 status, events, onPitch, bench, MAX_SUBS - subsUsed, currentTactics, playerRatings);
+    }
+
+    /**
+     * True only when {@code event} is a goal for the managed side that erases a deficit — the
+     * managed club's goals strictly trailed the opponent's immediately before this event.
+     */
+    static boolean isComebackGoal(List<LiveTimelineEvent> events, LiveTimelineEvent event, boolean managedIsHome) {
+        if (!event.type().isGoal() || event.home() != managedIsHome) {
+            return false;
+        }
+        int managedGoals = 0;
+        int opponentGoals = 0;
+        for (LiveTimelineEvent e : events) {
+            if (e == event) {
+                break;
+            }
+            if (e.type().isGoal()) {
+                if (e.home() == managedIsHome) {
+                    managedGoals++;
+                } else {
+                    opponentGoals++;
+                }
+            }
+        }
+        return managedGoals < opponentGoals;
     }
 
     /**
