@@ -390,6 +390,7 @@ public class LiveMatchService {
 
         List<LiveTimelineEvent> revealed = timeline.eventsThrough(minute);
         Map<UUID, Player> byId = indexAll(cfg);
+        boolean losingStreak = losingStreakHalfTime(lm.getSaveGameId(), save.getManagedClubId());
         List<LiveEventResponse> events = revealed.stream().map(e -> new LiveEventResponse(
                 e.minute(), e.type().name(), e.home(),
                 e.playerId().toString(), nameOf(byId, e.playerId()),
@@ -398,8 +399,7 @@ public class LiveMatchService {
                 e.severity(),
                 LiveCommentary.of(e.type(), nameOf(byId, e.playerId()),
                         e.playerInId() == null ? null : nameOf(byId, e.playerInId()), e.minute(), e.detail(),
-                        isComebackGoal(revealed, e, lm.isManagedIsHome()),
-                        false /* losingStreakHalfTime — wired in Task 4 */))).toList();
+                        isComebackGoal(revealed, e, lm.isManagedIsHome()), losingStreak))).toList();
 
         String status = statusAt(lm, timeline, minute);
         int subsUsed = (int) cfg.subSchedule().stream().filter(s -> s.home() == lm.isManagedIsHome()).count();
@@ -457,6 +457,34 @@ public class LiveMatchService {
             }
         }
         return managedGoals < opponentGoals;
+    }
+
+    /** True when {@code managedClubId}'s two most recent completed fixtures were both losses. */
+    static boolean isLosingStreak(List<Fixture> mostRecentFirst, UUID managedClubId) {
+        if (mostRecentFirst.size() < 2) {
+            return false;
+        }
+        return mostRecentFirst.stream().limit(2).allMatch(f -> lostBy(f, managedClubId));
+    }
+
+    private static boolean lostBy(Fixture f, UUID managedClubId) {
+        boolean managedIsHome = f.getHomeClubId().equals(managedClubId);
+        int managedGoals = managedIsHome ? f.getHomeGoals() : f.getAwayGoals();
+        int opponentGoals = managedIsHome ? f.getAwayGoals() : f.getHomeGoals();
+        return managedGoals < opponentGoals;
+    }
+
+    private boolean losingStreakHalfTime(UUID saveGameId, UUID managedClubId) {
+        // nullsFirst guards against a null matchDate (unscheduled/test fixtures) — without it,
+        // Comparator.comparing's natural ordering throws NPE the moment two such fixtures are compared.
+        List<Fixture> recent = fixtureRepository.findBySaveGameId(saveGameId).stream()
+                .filter(Fixture::isPlayed)
+                .filter(f -> f.getHomeClubId().equals(managedClubId) || f.getAwayClubId().equals(managedClubId))
+                .sorted(java.util.Comparator.comparing(Fixture::getMatchDate,
+                                java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder()))
+                        .thenComparing(Fixture::getRound).reversed())
+                .toList();
+        return isLosingStreak(recent, managedClubId);
     }
 
     /**

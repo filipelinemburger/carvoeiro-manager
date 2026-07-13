@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.competition.Fixture;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -44,5 +45,39 @@ class LiveMatchServiceCommentaryTest {
     void aNonGoalEventIsNeverAComeback() {
         LiveTimelineEvent card = new LiveTimelineEvent(10, EventType.YELLOW_CARD, true, UUID.randomUUID(), null, null, null);
         assertThat(LiveMatchService.isComebackGoal(List.of(card), card, true)).isFalse();
+    }
+
+    @Test
+    void twoConsecutiveLossesTriggersTheStreak() {
+        UUID managedClubId = UUID.randomUUID();
+        UUID opponentId = UUID.randomUUID();
+        Fixture mostRecent = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 5, managedClubId, opponentId, null);
+        mostRecent.recordResult(0, 1);
+        Fixture secondMostRecent = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 4, opponentId, managedClubId, null);
+        secondMostRecent.recordResult(2, 0);
+
+        assertThat(LiveMatchService.isLosingStreak(List.of(mostRecent, secondMostRecent), managedClubId)).isTrue();
+    }
+
+    @Test
+    void aWinOrDrawMixedInBreaksTheStreak() {
+        UUID managedClubId = UUID.randomUUID();
+        UUID opponentId = UUID.randomUUID();
+        Fixture loss = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 5, managedClubId, opponentId, null);
+        loss.recordResult(0, 1);
+        Fixture draw = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 4, opponentId, managedClubId, null);
+        draw.recordResult(1, 1);
+
+        assertThat(LiveMatchService.isLosingStreak(List.of(loss, draw), managedClubId)).isFalse();
+    }
+
+    @Test
+    void fewerThanTwoPlayedFixturesNeverTriggersTheStreak() {
+        UUID managedClubId = UUID.randomUUID();
+        UUID opponentId = UUID.randomUUID();
+        Fixture onlyOne = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 5, managedClubId, opponentId, null);
+        onlyOne.recordResult(0, 1);
+
+        assertThat(LiveMatchService.isLosingStreak(List.of(onlyOne), managedClubId)).isFalse();
     }
 }
