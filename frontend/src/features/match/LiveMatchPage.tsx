@@ -208,6 +208,9 @@ export function LiveMatchPage() {
 
       {feedTab === 0 && (
         <Stack spacing={0.5} sx={{ mt: 1 }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            Narração no estilo de Mateus Mastella
+          </Typography>
           {feed.map((e, i) => (
             <Stack key={`${e.minute}-${i}`} direction="row" spacing={1}>
               <Typography sx={{ minWidth: 32, color: 'text.secondary' }}>{e.minute}'</Typography>

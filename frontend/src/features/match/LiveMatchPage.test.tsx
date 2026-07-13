@@ -55,6 +55,12 @@ describe('LiveMatchPage', () => {
     expect(screen.getByText(/Criciúma/)).toBeInTheDocument()
   })
 
+  it('credits Mateus Mastella under the commentary feed', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
+    renderPage()
+    expect(await screen.findByText(/Narração no estilo de Mateus Mastella/)).toBeInTheDocument()
+  })
+
   it('renders the short club name, not the full legal name, in the header', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
     renderPage()
