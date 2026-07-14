@@ -10,6 +10,7 @@ import { getPlayerStats } from '../../api/playerStats'
 import { formatBRL } from '../../lib/money'
 import { moraleMood } from './morale'
 import { LISTED_REASON_LABEL } from './listedReason'
+import { CARBON, ovrBadgeSx } from '../../muiTheme'
 import type { PlayerResponse, AttributeView } from '../../api/types'
 
 const POSITION_LABEL: Record<PlayerResponse['position'], string> = {
@@ -28,12 +29,12 @@ function formLabel(form: number): string {
   return '–'
 }
 
-/** Colour a 0–99 attribute value on a green→red scale (higher is better). */
-function attrColor(value: number): string {
-  if (value >= 75) return '#1b5e20'
-  if (value >= 55) return '#2e7d32'
-  if (value >= 40) return 'text.primary'
-  return '#c62828'
+/** Colour-tiered pill background for a 0–99 attribute value (higher is better). */
+function attrBadgeSx(value: number) {
+  if (value >= 75) return { bgcolor: 'rgba(16,185,129,0.18)', color: CARBON.pitchGreen, border: `1px solid ${CARBON.pitchGreen}66` }
+  if (value >= 55) return { bgcolor: 'rgba(16,185,129,0.10)', color: '#6EE7B7', border: `1px solid ${CARBON.pitchGreen}33` }
+  if (value >= 40) return { bgcolor: CARBON.bg600, color: '#E5E7EB', border: '1px solid transparent' }
+  return { bgcolor: 'rgba(239,68,68,0.14)', color: CARBON.alertRed, border: `1px solid ${CARBON.alertRed}55` }
 }
 
 /** A small "LABEL / value" stat. */
@@ -48,16 +49,23 @@ function Stat({ label, value, color }: { label: string; value: ReactNode; color?
   )
 }
 
-/** One "label ..... value" attribute row. */
+/** One "label ..... value" attribute row; the value renders as a colour-coded pill. */
 function AttrRow({ attr }: { attr: AttributeView }) {
   return (
-    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 1, py: 0.15 }}>
+    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1, py: 0.3 }}>
       <Typography variant="body2" sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {attr.label}
       </Typography>
-      <Typography variant="body2" sx={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: attrColor(attr.value) }}>
+      <Box
+        component="span"
+        sx={{
+          minWidth: 30, textAlign: 'center', px: 0.75, py: 0.1, borderRadius: 1,
+          fontSize: '0.78rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+          ...attrBadgeSx(attr.value),
+        }}
+      >
         {attr.value}
-      </Typography>
+      </Box>
     </Stack>
   )
 }
@@ -100,16 +108,28 @@ export function PlayerDetails({ player, onClose, saveGameId, lineupControl, cont
     <Dialog open={Boolean(player)} onClose={onClose} fullWidth maxWidth="md">
       {player && (
         <>
-          <DialogTitle sx={{ pr: 6, fontWeight: 700 }}>
-            {player.name}
+          <DialogTitle sx={{ pr: 6, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>{player.name}</Typography>
             <IconButton aria-label="Fechar" onClick={onClose} sx={{ position: 'absolute', right: 8, top: 8 }}>
               <CloseIcon />
             </IconButton>
           </DialogTitle>
-          <DialogContent dividers sx={{ pt: 1.5 }}>
+          <DialogContent dividers sx={{ pt: 1.5, borderColor: CARBON.bg700 }}>
+            <Stack direction="row" spacing={3} useFlexGap sx={{ flexWrap: 'wrap', mb: 1.5 }}>
+              <Stat label="Pos" value={POSITION_LABEL[player.position]} />
+              <Box aria-label={`OVR ${player.overall}`}>
+                <Typography variant="caption" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'text.secondary' }}>OVR</Typography>
+                <Box component="span" sx={{ display: 'inline-block', mt: 0.25, minWidth: 34, textAlign: 'center', px: 1, py: 0.25, borderRadius: 1, fontWeight: 800, ...ovrBadgeSx(player.overall) }}>
+                  {player.overall}
+                </Box>
+              </Box>
+              <Stat label="Forma" value={formLabel(player.form)} />
+              <Stat label="Moral" value={`${moraleMood(player.morale).emoji} ${moraleMood(player.morale).label}`} />
+              <Stat label="Fôlego" value={player.stamina} />
+              <Stat label="Condição" value={`${player.fitness}%`} />
+            </Stack>
+
             <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', mb: 1.5 }}>
-              <Chip size="small" label={POSITION_LABEL[player.position]} sx={{ bgcolor: '#222', color: '#fff', fontWeight: 700 }} />
-              <Chip size="small" color="primary" label={`OVR ${player.overall}`} sx={{ fontWeight: 800 }} />
               <Chip size="small" variant="outlined" label={`${player.age} anos`} />
               {player.suspensionRemaining > 0 && (
                 <Chip size="small" color="error" label={`Suspenso ${player.suspensionRemaining}`} />
@@ -157,50 +177,44 @@ export function PlayerDetails({ player, onClose, saveGameId, lineupControl, cont
             </Tabs>
 
             {tab === 0 && (
-              <Box>
-                <Stack direction="row" spacing={3} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }}>
-                  <Stat label="Forma" value={formLabel(player.form)} />
-                  <Stat label="Moral" value={`${moraleMood(player.morale).emoji} ${moraleMood(player.morale).label}`} />
-                  <Stat label="Fôlego" value={player.stamina} />
-                  <Stat label="Condição" value={`${player.fitness}%`} />
-                </Stack>
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' }, gap: 2.5 }}>
-                  {GROUP_ORDER.map(group => {
-                    const rows = attributes.filter(a => a.group === group)
-                    if (rows.length === 0) return null
-                    return (
-                      <Box key={group}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5, pb: 0.25, borderBottom: '2px solid', borderColor: 'divider' }}>
-                          {GROUP_LABEL[group]}
-                        </Typography>
-                        {rows.map(a => <AttrRow key={a.key} attr={a} />)}
-                      </Box>
-                    )
-                  })}
-                </Box>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' }, gap: 2.5 }}>
+                {GROUP_ORDER.map(group => {
+                  const rows = attributes.filter(a => a.group === group)
+                  if (rows.length === 0) return null
+                  return (
+                    <Box key={group}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5, pb: 0.25, borderBottom: '2px solid', borderColor: 'divider' }}>
+                        {GROUP_LABEL[group]}
+                      </Typography>
+                      {rows.map(a => <AttrRow key={a.key} attr={a} />)}
+                    </Box>
+                  )
+                })}
               </Box>
             )}
 
             {tab === 1 && (
-              <Stack spacing={2}>
-                <Stat
-                  label="Contrato"
-                  value={`${player.contractYears} ano(s)`}
-                  color={contractEnding ? 'error.main' : undefined}
-                />
-                <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-                  <Stat label="Salário pedido" value={formatBRL(player.wageDemand)} />
-                  {contractAction}
-                </Stack>
-                {listingAction && (
-                  <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      {player.transferListed ? 'Este jogador está listado para transferência.' : 'Jogador não está listado para transferência.'}
-                    </Typography>
-                    {listingAction}
+              <Box sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: CARBON.bg700, borderRadius: 2, p: 2 }}>
+                <Stack spacing={2}>
+                  <Stat
+                    label="Contrato"
+                    value={`${player.contractYears} ano(s)`}
+                    color={contractEnding ? 'error.main' : undefined}
+                  />
+                  <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                    <Stat label="Salário pedido" value={formatBRL(player.wageDemand)} />
+                    {contractAction}
                   </Stack>
-                )}
-              </Stack>
+                  {listingAction && (
+                    <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        {player.transferListed ? 'Este jogador está listado para transferência.' : 'Jogador não está listado para transferência.'}
+                      </Typography>
+                      {listingAction}
+                    </Stack>
+                  )}
+                </Stack>
+              </Box>
             )}
 
             {tab === 2 && (

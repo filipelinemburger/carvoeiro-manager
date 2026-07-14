@@ -77,6 +77,24 @@ public class LineupService {
     }
 
     /**
+     * Full player details for any player in the save game — a club's squad member (their
+     * current tactical role, if any) or a free agent (role null, since free agents have no
+     * club and therefore no lineup). Used by contexts that only have a bare player id (transfer
+     * market, free agents) and need the full attribute board, not just the lean summary those
+     * list endpoints return.
+     */
+    public PlayerResponse getPlayer(UUID saveGameId, UUID playerId, UUID userId) {
+        LocalDate onDate = saveGameService.requireOwned(saveGameId, userId).getCurrentDate();
+        Player player = playerRepository.findById(playerId)
+                .filter(p -> p.getSaveGameId().equals(saveGameId))
+                .orElseThrow(() -> new ApiException(ErrorCode.PLAYER_NOT_FOUND, "Player " + playerId + " not found"));
+        PlayerRole role = player.getClubId() != null
+                ? currentRoles(saveGameId, player.getClubId()).get(player.getId())
+                : null;
+        return toPlayerResponse(player, role, onDate);
+    }
+
+    /**
      * Validates and upserts a lineup for the given (saveGameId, clubId).
      *
      * Validation rules:

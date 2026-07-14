@@ -213,12 +213,12 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
         {/* Header */}
         <Box sx={{ mb: 2, pb: 1 }}>
           {dateStr && (
-            <Typography sx={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--cec-black)' }}>
+            <Typography sx={{ fontWeight: 700, fontSize: '1.05rem', color: 'text.primary' }}>
               {dateStr}
             </Typography>
           )}
           {roundLabel && (
-            <Typography sx={{ fontSize: '0.875rem', color: '#555', mt: '2px' }}>
+            <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary', mt: '2px' }}>
               {roundLabel}
             </Typography>
           )}

@@ -518,7 +518,7 @@ describe('SquadPage', () => {
     // The CM-style attribute board renders the grouped attributes.
     expect(within(dialog).getByText('Velocidade')).toBeInTheDocument()
     expect(within(dialog).getByText('Técnico')).toBeInTheDocument()
-    expect(within(dialog).getByText(/OVR 72/)).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(/OVR 72/)).toBeInTheDocument()
   })
 
   it('shows contract details on the Contrato tab', async () => {

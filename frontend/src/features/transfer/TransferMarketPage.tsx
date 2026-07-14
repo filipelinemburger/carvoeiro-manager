@@ -2,11 +2,12 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Alert, Box, Button, Card, CardContent, Chip, Divider, FormControl, Link,
+  Alert, Box, Button, Card, CardContent, Chip, Divider, FormControl, InputAdornment, Link,
   NativeSelect, Pagination, Stack, Tab, Tabs, TextField, Typography,
 } from '@mui/material'
 import {
-  getSaveGame, getMarket, getClubs, getOffers, getSquad, makeOffer, acceptCounter, withdrawOffer, respondToOffer,
+  getSaveGame, getMarket, getClubs, getOffers, getSquad, getPlayer,
+  makeOffer, acceptCounter, withdrawOffer, respondToOffer,
 } from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
@@ -16,14 +17,39 @@ import { PlayerDetails } from '../squad/PlayerDetails'
 import { MoneyField } from '../../components/MoneyField'
 import { MakeOfferDialog, type OfferTarget } from './MakeOfferDialog'
 import { LISTED_REASON_LABEL } from '../squad/listedReason'
-import type { MarketFilters, PlayerResponse, TransferOffer } from '../../api/types'
+import { CARBON } from '../../muiTheme'
+import type { MarketFilters, MarketPlayer, PlayerResponse, TransferOffer } from '../../api/types'
 import { formatBRL, parseMoneyInput } from '../../lib/money'
 import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
 import BalanceIcon from '@mui/icons-material/Balance'
 import SendIcon from '@mui/icons-material/Send'
+import GroupsIcon from '@mui/icons-material/Groups'
+import SportsSoccerIcon from '@mui/icons-material/SportsSoccer'
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
+import StarIcon from '@mui/icons-material/Star'
+import SortIcon from '@mui/icons-material/Sort'
 
 const MARKET_PAGE_SIZE = 20
+
+/** Client-side sort applied to the current page of results (the API paginates unsorted). */
+type SortKey = 'overall_desc' | 'value_desc' | 'value_asc' | 'age_asc' | 'name_asc'
+
+const SORT_LABEL: Record<SortKey, string> = {
+  overall_desc: 'Maior OVR', value_desc: 'Maior valor', value_asc: 'Menor valor',
+  age_asc: 'Mais jovem', name_asc: 'Nome A-Z',
+}
+
+function sortMarketPlayers(players: MarketPlayer[], sort: SortKey): MarketPlayer[] {
+  const sorted = [...players]
+  switch (sort) {
+    case 'overall_desc': return sorted.sort((a, b) => b.overall - a.overall)
+    case 'value_desc': return sorted.sort((a, b) => b.value - a.value)
+    case 'value_asc': return sorted.sort((a, b) => a.value - b.value)
+    case 'age_asc': return sorted.sort((a, b) => a.age - b.age)
+    case 'name_asc': return sorted.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+  }
+}
 
 /** The market filter bar's raw form fields — all strings so empty inputs are unambiguous. */
 type MarketFilterForm = {
@@ -132,7 +158,7 @@ function IncomingProposalCard(props: {
               >
                 {offer.playerName}
               </Link>
-              {player && <Chip size="small" label={player.position} sx={{ bgcolor: '#222', color: '#fff', fontWeight: 700 }} />}
+              {player && <Chip size="small" label={player.position} sx={{ bgcolor: CARBON.bg600, color: '#E5E7EB', fontWeight: 700 }} />}
               {player && <Chip size="small" color="primary" label={`OVR ${player.overall}`} sx={{ fontWeight: 800 }} />}
             </Stack>
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
@@ -218,7 +244,18 @@ export function TransferMarketPage() {
   const isMobile = useIsMobile()
   const saveGameId = searchParams.get('saveGameId') ?? ''
   const [tab, setTab] = useState(0)
+  // Incoming proposals already carry the full player object (from our own squad) — no fetch
+  // needed. Market/free-agent rows only have a bare id, so opening details for one of those
+  // fetches it lazily via detailsPlayerId instead.
   const [detailsPlayer, setDetailsPlayer] = useState<PlayerResponse | null>(null)
+  const [detailsPlayerId, setDetailsPlayerId] = useState<string | null>(null)
+  const detailsPlayerQuery = useQuery({
+    queryKey: ['player', saveGameId, detailsPlayerId],
+    queryFn: () => getPlayer(saveGameId, detailsPlayerId!, token ?? ''),
+    enabled: Boolean(saveGameId && detailsPlayerId && token),
+  })
+  const resolvedDetailsPlayer = detailsPlayer ?? detailsPlayerQuery.data ?? null
+  const closeDetails = () => { setDetailsPlayer(null); setDetailsPlayerId(null) }
   // The market player a transfer offer is being drafted for (opens MakeOfferDialog).
   const [offerTarget, setOfferTarget] = useState<OfferTarget | null>(null)
   // The incoming offer whose inline counter-proposal form is open (one at a time).
@@ -233,6 +270,9 @@ export function TransferMarketPage() {
     setAppliedFilters(toMarketFilters(filterForm))
     setPage(1)
   }
+  // Client-side sort of the current (already-filtered, already-paginated) page — the API
+  // doesn't take a sort param, so this only reorders what's already on screen.
+  const [sortBy, setSortBy] = useState<SortKey>('overall_desc')
 
   const enabled = Boolean(saveGameId && token)
   const save = useQuery({ queryKey: ['saveGame', saveGameId], queryFn: () => getSaveGame(saveGameId, token ?? ''), enabled })
@@ -429,12 +469,13 @@ export function TransferMarketPage() {
       {tab === 1 && (
         <>
           {/* Filter bar */}
-          <Stack direction="row" spacing={1.5} useFlexGap sx={{ alignItems: 'flex-end', flexWrap: 'wrap', mb: 2 }}>
-            <FormControl size="small" sx={{ minWidth: 160 }}>
+          <Stack direction="row" spacing={1.5} useFlexGap sx={{ alignItems: 'flex-end', flexWrap: 'wrap', mb: 1.5 }}>
+            <FormControl size="small" sx={{ minWidth: 170 }}>
               <NativeSelect
                 value={filterForm.clubId}
                 onChange={e => setFilterForm(f => ({ ...f, clubId: e.target.value }))}
                 inputProps={{ 'aria-label': 'Clube' }}
+                startAdornment={<GroupsIcon fontSize="small" sx={{ color: 'text.secondary', mr: 0.75 }} />}
               >
                 <option value="">Todos os clubes</option>
                 {(clubsQuery.data ?? []).filter(c => c.id !== managedClubId).map(c => (
@@ -442,11 +483,12 @@ export function TransferMarketPage() {
                 ))}
               </NativeSelect>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 140 }}>
+            <FormControl size="small" sx={{ minWidth: 150 }}>
               <NativeSelect
                 value={filterForm.position}
                 onChange={e => setFilterForm(f => ({ ...f, position: e.target.value }))}
                 inputProps={{ 'aria-label': 'Posição' }}
+                startAdornment={<SportsSoccerIcon fontSize="small" sx={{ color: 'text.secondary', mr: 0.75 }} />}
               >
                 <option value="">Todas as posições</option>
                 <option value="GK">Goleiro</option>
@@ -461,8 +503,11 @@ export function TransferMarketPage() {
               size="small"
               value={filterForm.ageMin}
               onChange={e => setFilterForm(f => ({ ...f, ageMin: e.target.value }))}
-              sx={{ width: 100 }}
-              slotProps={{ htmlInput: { 'aria-label': 'Idade mínima', min: 0 } }}
+              sx={{ width: 110 }}
+              slotProps={{
+                htmlInput: { 'aria-label': 'Idade mínima', min: 0 },
+                input: { startAdornment: <InputAdornment position="start"><CalendarMonthIcon fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment> },
+              }}
             />
             <TextField
               label="Idade máx"
@@ -470,8 +515,11 @@ export function TransferMarketPage() {
               size="small"
               value={filterForm.ageMax}
               onChange={e => setFilterForm(f => ({ ...f, ageMax: e.target.value }))}
-              sx={{ width: 100 }}
-              slotProps={{ htmlInput: { 'aria-label': 'Idade máxima', min: 0 } }}
+              sx={{ width: 110 }}
+              slotProps={{
+                htmlInput: { 'aria-label': 'Idade máxima', min: 0 },
+                input: { startAdornment: <InputAdornment position="start"><CalendarMonthIcon fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment> },
+              }}
             />
             <TextField
               label="OVR mín"
@@ -479,8 +527,11 @@ export function TransferMarketPage() {
               size="small"
               value={filterForm.overallMin}
               onChange={e => setFilterForm(f => ({ ...f, overallMin: e.target.value }))}
-              sx={{ width: 100 }}
-              slotProps={{ htmlInput: { 'aria-label': 'Overall mínimo', min: 0, max: 99 } }}
+              sx={{ width: 110 }}
+              slotProps={{
+                htmlInput: { 'aria-label': 'Overall mínimo', min: 0, max: 99 },
+                input: { startAdornment: <InputAdornment position="start"><StarIcon fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment> },
+              }}
             />
             <TextField
               label="OVR máx"
@@ -488,8 +539,11 @@ export function TransferMarketPage() {
               size="small"
               value={filterForm.overallMax}
               onChange={e => setFilterForm(f => ({ ...f, overallMax: e.target.value }))}
-              sx={{ width: 100 }}
-              slotProps={{ htmlInput: { 'aria-label': 'Overall máximo', min: 0, max: 99 } }}
+              sx={{ width: 110 }}
+              slotProps={{
+                htmlInput: { 'aria-label': 'Overall máximo', min: 0, max: 99 },
+                input: { startAdornment: <InputAdornment position="start"><StarIcon fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment> },
+              }}
             />
             <MoneyField
               label="Valor mín"
@@ -508,6 +562,22 @@ export function TransferMarketPage() {
             <Button variant="contained" onClick={applyFilters} sx={{ height: 40 }}>Filtrar</Button>
           </Stack>
 
+          {/* Sort control — reorders only the players already on this page (the API isn't sorted). */}
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2 }}>
+            <SortIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <NativeSelect
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value as SortKey)}
+                inputProps={{ 'aria-label': 'Ordenar por' }}
+              >
+                {(Object.keys(SORT_LABEL) as SortKey[]).map(key => (
+                  <option key={key} value={key}>{SORT_LABEL[key]}</option>
+                ))}
+              </NativeSelect>
+            </FormControl>
+          </Stack>
+
           {market.isLoading ? (
             <Typography>Carregando mercado…</Typography>
           ) : market.error ? (
@@ -516,26 +586,34 @@ export function TransferMarketPage() {
             <Typography sx={{ color: 'text.secondary' }}>Nenhum jogador listado com esses filtros.</Typography>
           ) : (
             <>
-              <Stack spacing={1.5}>
-                {(market.data?.content ?? []).map(p => (
+              <Stack spacing={1.25}>
+                {sortMarketPlayers(market.data?.content ?? [], sortBy).map(p => (
                 <Card key={p.playerId} variant="outlined" sx={{ '&:hover': { borderColor: 'primary.main' } }}>
-                  <CardContent>
-                    {/* Identity + market value */}
+                  <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                     <Stack
-                      direction={{ xs: 'column', sm: 'row' }}
-                      spacing={1}
-                      sx={{ justifyContent: 'space-between', alignItems: { sm: 'flex-start' } }}
+                      direction={{ xs: 'column', md: 'row' }}
+                      spacing={1.5}
+                      sx={{ alignItems: { md: 'center' } }}
                     >
-                      <Box sx={{ minWidth: 0 }}>
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
                         <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                          <Typography variant="h6" sx={{ fontWeight: 700 }}>{p.name}</Typography>
-                          <Chip size="small" label={p.position} sx={{ bgcolor: '#222', color: '#fff', fontWeight: 700 }} />
-                          <Chip size="small" color="primary" label={`OVR ${p.overall}`} sx={{ fontWeight: 800 }} />
+                          <Link
+                            component="button"
+                            type="button"
+                            underline="hover"
+                            color="inherit"
+                            onClick={() => setDetailsPlayerId(p.playerId)}
+                            sx={{ font: 'inherit', fontWeight: 700, textAlign: 'left', cursor: 'pointer' }}
+                          >
+                            {p.name}
+                          </Link>
+                          <Chip size="small" label={p.position} sx={{ bgcolor: CARBON.bg600, color: '#E5E7EB', fontWeight: 700, height: 20 }} />
+                          <Chip size="small" color="primary" label={`OVR ${p.overall}`} sx={{ fontWeight: 800, height: 20 }} />
                           {p.listedReason && (
                             <Chip size="small" color="warning" variant="outlined" label={LISTED_REASON_LABEL[p.listedReason]} />
                           )}
                         </Stack>
-                        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }} noWrap>
                           <Box component="span">{p.clubName}</Box> · {p.age} anos
                         </Typography>
                       </Box>
@@ -543,14 +621,11 @@ export function TransferMarketPage() {
                         <Stat label="Valor" value={formatBRL(p.value)} />
                         <Stat label="Salário pedido" value={formatBRL(p.wageDemand)} />
                       </Stack>
-                    </Stack>
-
-                    <Divider sx={{ my: 1.5 }} />
-
-                    <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
                       <Button
                         variant="outlined"
+                        size="small"
                         disabled={!windowOpen}
+                        sx={{ flexShrink: 0 }}
                         onClick={() => setOfferTarget({
                           playerId: p.playerId, name: p.name, value: p.value, wageDemand: p.wageDemand,
                         })}
@@ -577,9 +652,9 @@ export function TransferMarketPage() {
         </>
       )}
 
-      {tab === 2 && <FreeAgentsPanel />}
+      {tab === 2 && <FreeAgentsPanel onOpenDetails={setDetailsPlayerId} />}
 
-      <PlayerDetails player={detailsPlayer} onClose={() => setDetailsPlayer(null)} saveGameId={saveGameId} />
+      <PlayerDetails player={resolvedDetailsPlayer} onClose={closeDetails} saveGameId={saveGameId} />
 
       <MakeOfferDialog
         target={offerTarget}

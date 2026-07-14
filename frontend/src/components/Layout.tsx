@@ -363,10 +363,10 @@ export function Layout({ children }: LayoutProps) {
           <Paper
             elevation={0}
             sx={{
-              bgcolor: 'rgba(255,255,255,0.92)',
+              bgcolor: 'rgba(18,20,29,0.94)',
               p: { xs: 2, md: 3 },
               borderRadius: 2,
-              boxShadow: '0 2px 16px rgba(0,0,0,0.25)',
+              boxShadow: '0 2px 16px rgba(0,0,0,0.4)',
             }}
           >
             {children}

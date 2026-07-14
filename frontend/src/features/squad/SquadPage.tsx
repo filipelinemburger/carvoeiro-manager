@@ -23,6 +23,7 @@ import { teamMorale } from './morale'
 import { SEVERITY_LABEL } from './injurySeverity'
 import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
 import { FORMATION_CODES } from '../pitch/pitchSlots'
+import { CARBON, ovrBadgeSx } from '../../muiTheme'
 
 const FORMATIONS = FORMATION_CODES
 
@@ -415,16 +416,16 @@ export function SquadPage() {
     if (inv.kind === 'RESERVA') {
       return (
         <Button size="small" variant="contained" onClick={() => cyclePlayer(player)} aria-label={`Escalar ${player.name}`}
-          sx={{ ...base, bgcolor: '#cfcfcf', color: '#111', '&:hover': { bgcolor: '#bcbcbc' } }}>
+          sx={{ ...base, bgcolor: CARBON.bg600, color: '#E5E7EB', '&:hover': { bgcolor: CARBON.bg700 } }}>
           {`Sub ${inv.sub}`}
         </Button>
       )
     }
-    // Unpicked: white button with a black "+". Ineligible (suspended/injured) players can't
+    // Unpicked: dark-outlined button with a "+". Ineligible (suspended/injured) players can't
     // be added, so their button is disabled; a picked player always stays clickable to remove.
     return (
       <Button size="small" variant="outlined" disabled={!player.eligible} onClick={() => cyclePlayer(player)} aria-label={`Escalar ${player.name}`}
-        sx={{ ...base, bgcolor: '#fff', color: '#000', borderColor: '#bdbdbd', '&:hover': { bgcolor: '#f5f5f5', borderColor: '#9e9e9e' } }}>
+        sx={{ ...base, color: '#9CA3AF', borderColor: CARBON.bg600, '&:hover': { bgcolor: 'rgba(247,212,23,0.08)', borderColor: CARBON.gold, color: CARBON.gold } }}>
         +
       </Button>
     )
@@ -509,77 +510,88 @@ export function SquadPage() {
 
       {/* Panels stay mounted (hidden) so unsaved lineup AND tactics edits survive tab switches. */}
       <Box role="tabpanel" hidden={tab !== 0} id="squad-tabpanel-0" aria-labelledby="squad-tab-0">
-        {formationSelect}
-        <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 2, flexWrap: 'wrap' }}>
-          <Button size="small" variant="outlined" color="secondary" onClick={autoPickBestXI}>
-            Selecionar melhores
-          </Button>
-          <Button size="small" variant="outlined" color="inherit" onClick={clearSelection} disabled={selected.length === 0}>
-            Limpar
-          </Button>
-        </Stack>
-        {helperAndAlerts}
+            {formationSelect}
+            <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 2, flexWrap: 'wrap' }}>
+              <Button size="small" variant="outlined" color="secondary" onClick={autoPickBestXI}>
+                Selecionar melhores
+              </Button>
+              <Button size="small" variant="outlined" color="inherit" onClick={clearSelection} disabled={selected.length === 0}>
+                Limpar
+              </Button>
+            </Stack>
+            {helperAndAlerts}
 
-        {isMobile ? (
-          <Stack spacing={1.5} sx={{ mb: 2 }}>
-            {displayPlayers.map(player => (
-              <MobileSquadRow
-                key={player.id}
-                player={player}
-                statusButton={statusButton}
-                playerNameButton={playerNameButton}
-                availabilityBadge={availabilityBadge}
-                listedBadge={listedBadge}
-              />
-            ))}
-          </Stack>
-        ) : (
-          <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell align="center">Escalação</TableCell>
-                  <TableCell>Nome</TableCell>
-                  <TableCell align="center">Pos</TableCell>
-                  <TableCell align="center">OVR</TableCell>
-                  <TableCell align="center">Forma</TableCell>
-                  <TableCell align="center">Moral</TableCell>
-                  <TableCell align="center">Condição</TableCell>
-                  <TableCell align="center">Função</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {displayPlayers.map(player => {
-                  const inv = involvementOf(player.id)
-                  return (
-                    <TableRow key={player.id}>
-                      <TableCell align="center">{statusButton(player)}</TableCell>
-                      <TableCell>
-                        {playerNameButton(player)}
-                        {availabilityBadge(player)}
-                        {listedBadge(player)}
-                      </TableCell>
-                      <TableCell align="center">{positionLabel(player.position)}</TableCell>
-                      <TableCell align="center">{player.overall}</TableCell>
-                      <TableCell align="center">{formLabel(player.form)}</TableCell>
-                      <TableCell align="center"><MoodChip morale={player.morale} emojiOnly /></TableCell>
-                      <TableCell align="center"><FitnessBar fitness={player.fitness} /></TableCell>
-                      <TableCell align="center">{inv.kind === 'TITULAR' && roleSelect(player)}</TableCell>
+            {isMobile ? (
+              <Stack spacing={1.5} sx={{ mb: 2 }}>
+                {displayPlayers.map(player => (
+                  <MobileSquadRow
+                    key={player.id}
+                    player={player}
+                    statusButton={statusButton}
+                    playerNameButton={playerNameButton}
+                    availabilityBadge={availabilityBadge}
+                    listedBadge={listedBadge}
+                  />
+                ))}
+              </Stack>
+            ) : (
+              <TableContainer component={Paper} variant="outlined" sx={{ mb: 2, borderRadius: 2 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{
+                      '& th': {
+                        color: 'text.secondary', textTransform: 'uppercase', fontSize: '0.7rem',
+                        letterSpacing: '0.06em', fontWeight: 700, borderBottomColor: CARBON.bg700,
+                      },
+                    }}>
+                      <TableCell align="center" className="sq-sticky-cell" sx={{ position: 'sticky', left: 0, zIndex: 3, bgcolor: 'background.paper' }}>Escalação</TableCell>
+                      <TableCell className="sq-sticky-cell" sx={{ position: 'sticky', left: 96, zIndex: 3, bgcolor: 'background.paper', minWidth: 160 }}>Nome</TableCell>
+                      <TableCell align="center">Pos</TableCell>
+                      <TableCell align="center">OVR</TableCell>
+                      <TableCell align="center">Forma</TableCell>
+                      <TableCell align="center">Moral</TableCell>
+                      <TableCell align="center">Condição</TableCell>
+                      <TableCell align="center">Função</TableCell>
                     </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
+                  </TableHead>
+                  <TableBody>
+                    {displayPlayers.map(player => {
+                      const inv = involvementOf(player.id)
+                      return (
+                        <TableRow key={player.id}>
+                          <TableCell align="center" className="sq-sticky-cell" sx={{ position: 'sticky', left: 0, zIndex: 2, bgcolor: 'background.paper' }}>
+                            {statusButton(player)}
+                          </TableCell>
+                          <TableCell className="sq-sticky-cell" sx={{ position: 'sticky', left: 96, zIndex: 2, bgcolor: 'background.paper' }}>
+                            {playerNameButton(player)}
+                            {availabilityBadge(player)}
+                            {listedBadge(player)}
+                          </TableCell>
+                          <TableCell align="center">{positionLabel(player.position)}</TableCell>
+                          <TableCell align="center">
+                            <Box component="span" sx={{ display: 'inline-block', minWidth: 30, px: 1, py: 0.25, borderRadius: 1, ...ovrBadgeSx(player.overall) }}>
+                              {player.overall}
+                            </Box>
+                          </TableCell>
+                          <TableCell align="center">{formLabel(player.form)}</TableCell>
+                          <TableCell align="center"><MoodChip morale={player.morale} emojiOnly /></TableCell>
+                          <TableCell align="center"><FitnessBar fitness={player.fitness} /></TableCell>
+                          <TableCell align="center">{inv.kind === 'TITULAR' && roleSelect(player)}</TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
 
-        <Button
-          color="secondary"
-          disabled={!canSave || mutation.isPending}
-          onClick={() => mutation.mutate()}
-        >
-          {mutation.isPending ? 'Salvando…' : 'Salvar escalação'}
-        </Button>
+            <Button
+              color="secondary"
+              disabled={!canSave || mutation.isPending}
+              onClick={() => mutation.mutate()}
+            >
+              {mutation.isPending ? 'Salvando…' : 'Salvar escalação'}
+            </Button>
       </Box>
 
       <Box role="tabpanel" hidden={tab !== 1} id="squad-tabpanel-1" aria-labelledby="squad-tab-1">
@@ -692,7 +704,7 @@ function MobileSquadRow({ player, statusButton, playerNameButton, availabilityBa
             {availabilityBadge(player)}
             {listedBadge(player)}
             <Chip size="small" label={positionLabel(player.position)} />
-            <Chip size="small" color="primary" label={`OVR ${player.overall}`} />
+            <Chip size="small" label={`OVR ${player.overall}`} sx={ovrBadgeSx(player.overall)} />
             <Box sx={{ width: 84 }}><FitnessBar fitness={player.fitness} /></Box>
           </Stack>
         </Collapse>

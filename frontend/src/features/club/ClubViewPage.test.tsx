@@ -92,7 +92,7 @@ describe('ClubViewPage', () => {
     await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: 'Alvo Um' }))
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText(/OVR 80/)).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(/OVR 80/)).toBeInTheDocument()
   })
 
   it('opens the offer dialog and fires makeOffer with the drafted terms', async () => {

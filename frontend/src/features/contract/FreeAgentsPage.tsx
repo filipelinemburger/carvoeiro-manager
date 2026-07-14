@@ -2,12 +2,14 @@ import { useState, type ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Alert, Box, Button, Card, CardContent, Chip, InputAdornment,
+  Alert, Box, Button, Card, CardContent, Chip, InputAdornment, Link,
   Stack, TextField, Typography,
 } from '@mui/material'
-import { getSaveGame, getFreeAgents, signFreeAgent } from '../../api/career'
+import { getSaveGame, getFreeAgents, getPlayer, signFreeAgent } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import { formatBRL, formatThousandsBR, parseMoneyInput } from '../../lib/money'
+import { CARBON } from '../../muiTheme'
+import { PlayerDetails } from '../squad/PlayerDetails'
 
 /** A small "LABEL / value" stat used in the player identity zone. */
 function Stat({ label, value }: { label: string; value: ReactNode }) {
@@ -27,8 +29,10 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
 /**
  * The free-agents list: browse and sign unattached players. Rendered inside the
  * Mercado de Transferências "Agentes livres" tab and by the standalone page below.
+ * `onOpenDetails` is called with a player id when their name is clicked — the caller owns
+ * fetching the full player and rendering the PlayerDetails dialog.
  */
-export function FreeAgentsPanel() {
+export function FreeAgentsPanel({ onOpenDetails }: { onOpenDetails: (playerId: string) => void }) {
   const { token } = useAuth()
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
@@ -79,8 +83,17 @@ export function FreeAgentsPanel() {
                   {/* Identity + demand data */}
                   <Box sx={{ minWidth: 0 }}>
                     <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                      <Typography variant="h6" sx={{ fontWeight: 700 }}>{fa.name}</Typography>
-                      <Chip size="small" label={fa.position} sx={{ bgcolor: '#222', color: '#fff', fontWeight: 700 }} />
+                      <Link
+                        component="button"
+                        type="button"
+                        underline="hover"
+                        color="inherit"
+                        onClick={() => onOpenDetails(fa.playerId)}
+                        sx={{ font: 'inherit', fontWeight: 700, fontSize: '1.25rem', textAlign: 'left', cursor: 'pointer' }}
+                      >
+                        {fa.name}
+                      </Link>
+                      <Chip size="small" label={fa.position} sx={{ bgcolor: CARBON.bg600, color: '#E5E7EB', fontWeight: 700 }} />
                       <Chip size="small" color="primary" label={`OVR ${fa.overall}`} sx={{ fontWeight: 800 }} />
                     </Stack>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
@@ -145,10 +158,25 @@ export function FreeAgentsPanel() {
 
 /** Standalone page wrapper, kept for the /free-agents route. */
 export function FreeAgentsPage() {
+  const { token } = useAuth()
+  const [searchParams] = useSearchParams()
+  const saveGameId = searchParams.get('saveGameId') ?? ''
+  const [detailsPlayerId, setDetailsPlayerId] = useState<string | null>(null)
+  const detailsPlayerQuery = useQuery({
+    queryKey: ['player', saveGameId, detailsPlayerId],
+    queryFn: () => getPlayer(saveGameId, detailsPlayerId!, token ?? ''),
+    enabled: Boolean(saveGameId && detailsPlayerId && token),
+  })
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Agentes Livres</Typography>
-      <FreeAgentsPanel />
+      <FreeAgentsPanel onOpenDetails={setDetailsPlayerId} />
+      <PlayerDetails
+        player={detailsPlayerQuery.data ?? null}
+        onClose={() => setDetailsPlayerId(null)}
+        saveGameId={saveGameId}
+      />
     </Box>
   )
 }

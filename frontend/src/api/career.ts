@@ -28,6 +28,7 @@ import type {
   RenewContractRequest,
   SignFreeAgentRequest,
   PlayerContract,
+  PlayerResponse,
 } from './types'
 
 export function createCareer(req: CreateSaveGameRequest, token: string): Promise<SaveGameResponse> {
@@ -49,6 +50,12 @@ export function deleteCareer(id: string, token: string): Promise<void> {
 
 export function getSquad(saveGameId: string, clubId: string, token: string): Promise<SquadResponse> {
   return apiGet<SquadResponse>(`/save-games/${saveGameId}/clubs/${clubId}/players`, token)
+}
+
+// Full details for any player in the save — a club's squad member or a free agent — used to
+// open the details dialog from contexts that only have a bare player id (market, free agents).
+export function getPlayer(saveGameId: string, playerId: string, token: string): Promise<PlayerResponse> {
+  return apiGet<PlayerResponse>(`/save-games/${saveGameId}/players/${playerId}`, token)
 }
 
 // Every club of the save game, sorted by reputation (highest first) — powers "Clubes".

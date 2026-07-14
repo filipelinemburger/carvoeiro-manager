@@ -228,7 +228,7 @@ describe('TransferMarketPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Meu Jogador' }))
       expect(screen.getByRole('dialog')).toBeInTheDocument()
     })
-    expect(within(screen.getByRole('dialog')).getByText(/OVR 78/)).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog')).getByLabelText(/OVR 78/)).toBeInTheDocument()
   })
 
   it('shows the empty state when no player matches the filters', async () => {

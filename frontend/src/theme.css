@@ -4,6 +4,10 @@
   --cec-green: #1f7a3f;
   --cec-white: #ffffff;
   --bg: #f4f4f5;
+  /* Tells the browser to render native form-control chrome (number-input spinners,
+     autofill, scrollbars) in its dark variant, matching the app's dark theme instead
+     of defaulting to a light box that clashes against a dark field. */
+  color-scheme: dark;
 }
 body {
   margin: 0;
@@ -13,3 +17,15 @@ body {
   min-height: 100vh;
 }
 #root { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* MUI TextField type="number" has no custom increment/decrement affordance, so the
+   native spinner buttons are pure visual noise (worse: browsers render them in a
+   light box even with color-scheme: dark set on some engines) — hide them everywhere. */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
