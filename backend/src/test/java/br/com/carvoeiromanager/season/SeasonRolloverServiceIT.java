@@ -24,9 +24,12 @@ import br.com.carvoeiromanager.match.LineupRepository;
 import br.com.carvoeiromanager.match.SetLineupRequest;
 import br.com.carvoeiromanager.match.SetTacticsRequest;
 import br.com.carvoeiromanager.match.LineupStarter;
+import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.Position;
+import br.com.carvoeiromanager.player.TrainingIntensity;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -285,5 +288,79 @@ class SeasonRolloverServiceIT {
         assertThat(archived.get(0).getMinutesPlayed()).isGreaterThanOrEqualTo(90);
 
         assertThat(fixtureAppearanceRepository.findByPlayerId(player.getId())).isEmpty();
+    }
+
+    @Test
+    void trainingFocusBoostsAManagedPlayerAndPersistsAcrossRollover() {
+        // Given a career with a young (age 20) managed player trained on Finalização at Intensa
+        Career c = createCareer();
+        Player trainee = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).get(0);
+        trainee.setAge(20);
+        trainee.setContractYears(5);
+        trainee.setTrainingAssignment(Attribute.FINALIZACAO, TrainingIntensity.INTENSA);
+        int finishingBefore = trainee.getFinishing();
+        playerRepository.save(trainee);
+
+        List<Player> others = playerRepository.findBySaveGameId(c.id()).stream()
+                .filter(p -> !p.getId().equals(trainee.getId())).toList();
+        others.forEach(p -> p.setContractYears(5));
+        playerRepository.saveAll(others);
+
+        finishSeason(c);
+
+        // When rolling over
+        rolloverService.rollover(c.id(), c.userId());
+
+        // Then Finalização rose by at least the Intensa bonus (+3): the age-21 curve delta is
+        // always >= 0 (see PlayerAgingService.delta), so the combined result is a floor, not an
+        // exact value. The assignment itself is a standing instruction and survives unchanged.
+        Player after = playerRepository.findById(trainee.getId()).orElseThrow();
+        assertThat(after.getFinishing()).isGreaterThanOrEqualTo(Math.min(99, finishingBefore + 3));
+        assertThat(after.getTrainingFocus()).isEqualTo(Attribute.FINALIZACAO);
+        assertThat(after.getTrainingIntensity()).isEqualTo(TrainingIntensity.INTENSA);
+    }
+
+    @Test
+    void aiClubPlayersGetTheHeuristicFocusEvenWithoutManagerInput() {
+        // Given a career with an AI club's young (age 20) attacker, never given an assignment
+        Career c = createCareer();
+        Player aiAttacker = playerRepository.findBySaveGameId(c.id()).stream()
+                .filter(p -> p.getClubId() != null && !p.getClubId().equals(c.clubId())
+                        && !p.isYouthProspect() && p.getPosition() == Position.ATT)
+                .findFirst().orElseThrow();
+        aiAttacker.setAge(20);
+        aiAttacker.setContractYears(5);
+        int finishingBefore = aiAttacker.getFinishing();
+        playerRepository.save(aiAttacker);
+
+        List<Player> others = playerRepository.findBySaveGameId(c.id()).stream()
+                .filter(p -> !p.getId().equals(aiAttacker.getId())).toList();
+        others.forEach(p -> p.setContractYears(5));
+        playerRepository.saveAll(others);
+
+        finishSeason(c);
+
+        // When rolling over
+        rolloverService.rollover(c.id(), c.userId());
+
+        // Then Finalização (the heuristic focus for ATT) rose by at least Normal's +2 bonus,
+        // even though no manager ever set a training assignment for this AI-club player.
+        Player after = playerRepository.findById(aiAttacker.getId()).orElseThrow();
+        assertThat(after.getFinishing()).isGreaterThanOrEqualTo(Math.min(99, finishingBefore + 2));
+    }
+
+    @Test
+    void aManagedPlayerWithNoFocusKeepsItNullAfterRollover() {
+        // Given a career whose managed players are never given a training assignment
+        Career c = createCareer();
+
+        finishSeason(c);
+
+        // When rolling over
+        rolloverService.rollover(c.id(), c.userId());
+
+        // Then no managed-club player was auto-assigned a training focus
+        List<Player> managed = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId());
+        assertThat(managed).allMatch(p -> p.getTrainingFocus() == null);
     }
 }
