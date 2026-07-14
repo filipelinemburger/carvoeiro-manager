@@ -59,4 +59,17 @@ public class SquadController {
             @CurrentUser UUID userId) {
         return ResponseEntity.ok(lineupService.setLineup(saveGameId, clubId, request, userId));
     }
+
+    /**
+     * Bulk-sets the training focus + intensity for each listed player in the club's squad.
+     * Returns the updated squad so the frontend can replace its cached view in one round trip.
+     */
+    @PutMapping("/training")
+    public ResponseEntity<SquadResponse> setTraining(
+            @PathVariable UUID saveGameId,
+            @PathVariable UUID clubId,
+            @Valid @RequestBody SetTrainingRequest request,
+            @CurrentUser UUID userId) {
+        return ResponseEntity.ok(lineupService.setTraining(saveGameId, clubId, request, userId));
+    }
 }

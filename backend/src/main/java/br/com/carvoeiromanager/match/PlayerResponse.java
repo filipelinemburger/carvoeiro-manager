@@ -30,6 +30,8 @@ public record PlayerResponse(
         String injurySeverity,
         List<AttributeView> attributes,
         boolean transferListed,
-        String listedReason
+        String listedReason,
+        String trainingFocus,
+        String trainingIntensity
 ) {
 }

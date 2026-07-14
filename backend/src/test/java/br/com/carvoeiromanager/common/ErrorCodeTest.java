@@ -20,6 +20,7 @@ class ErrorCodeTest {
         assertThat(ErrorCode.INVALID_SUBSTITUTION.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.INVALID_TACTICS.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.INVALID_TOKEN.status()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(ErrorCode.INVALID_TRAINING_FOCUS.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.INVALID_TRANSFER.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.LINEUP_REQUIRED.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.LIVE_MATCH_IN_PROGRESS.status()).isEqualTo(HttpStatus.CONFLICT);
@@ -49,7 +50,7 @@ class ErrorCodeTest {
     }
 
     @Test
-    void hasExactlyThirtySevenConstants() {
-        assertThat(ErrorCode.values()).hasSize(37);
+    void hasExactlyThirtyEightConstants() {
+        assertThat(ErrorCode.values()).hasSize(38);
     }
 }

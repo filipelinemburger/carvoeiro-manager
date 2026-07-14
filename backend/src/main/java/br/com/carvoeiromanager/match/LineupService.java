@@ -14,6 +14,7 @@ import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.Pressing;
+import br.com.carvoeiromanager.player.TrainingIntensity;
 import br.com.carvoeiromanager.transfer.TransferValuation;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -152,6 +153,58 @@ public class LineupService {
         }
 
         return new LineupResponse(lineupId, clubId, req.formation(), List.copyOf(starters), List.copyOf(bench));
+    }
+
+    private static final Set<Attribute> TRAINABLE_ATTRIBUTES = Set.of(
+            Attribute.VELOCIDADE, Attribute.FINALIZACAO, Attribute.PASSE,
+            Attribute.DESARME, Attribute.REFLEXOS, Attribute.FOLEGO);
+
+    /**
+     * Bulk-sets each listed player's training focus + intensity for the club within a save game.
+     * Every player must already belong to this club (as returned by
+     * {@code findByClubIdAndYouthProspectFalse} — youth prospects are never trainable).
+     */
+    @Transactional
+    public SquadResponse setTraining(UUID saveGameId, UUID clubId, SetTrainingRequest req, UUID userId) {
+        requireOwnedClub(saveGameId, clubId, userId);
+
+        Map<UUID, Player> clubPlayers = playerRepository.findByClubIdAndYouthProspectFalse(clubId).stream()
+                .collect(Collectors.toMap(Player::getId, p -> p));
+        for (TrainingAssignment assignment : req.assignments()) {
+            Player player = clubPlayers.get(assignment.playerId());
+            if (player == null) {
+                throw new ApiException(ErrorCode.PLAYER_NOT_FOUND,
+                        "Player " + assignment.playerId() + " not found in this club");
+            }
+            Attribute focus = parseTrainingFocus(assignment.focus());
+            TrainingIntensity intensity;
+            try {
+                intensity = TrainingIntensity.valueOf(assignment.intensity());
+            } catch (IllegalArgumentException e) {
+                throw new ApiException(ErrorCode.INVALID_TRAINING_FOCUS,
+                        "Unknown training intensity: " + assignment.intensity());
+            }
+            player.setTrainingAssignment(focus, intensity);
+        }
+        playerRepository.saveAll(clubPlayers.values());
+
+        return getSquad(saveGameId, clubId, userId);
+    }
+
+    private Attribute parseTrainingFocus(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        Attribute attribute;
+        try {
+            attribute = Attribute.valueOf(raw);
+        } catch (IllegalArgumentException e) {
+            throw new ApiException(ErrorCode.INVALID_TRAINING_FOCUS, "Unknown attribute: " + raw);
+        }
+        if (!TRAINABLE_ATTRIBUTES.contains(attribute)) {
+            throw new ApiException(ErrorCode.INVALID_TRAINING_FOCUS, "Attribute is not trainable: " + raw);
+        }
+        return attribute;
     }
 
     /**
@@ -511,7 +564,9 @@ public class LineupService {
                 p.getInjurySeverity().name(),
                 attributes,
                 p.isTransferListed(),
-                p.getListedReason() != null ? p.getListedReason().name() : null);
+                p.getListedReason() != null ? p.getListedReason().name() : null,
+                p.getTrainingFocus() != null ? p.getTrainingFocus().name() : null,
+                p.getTrainingIntensity().name());
     }
 
     @Transactional

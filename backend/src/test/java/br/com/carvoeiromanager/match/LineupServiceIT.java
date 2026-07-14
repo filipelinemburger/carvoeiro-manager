@@ -6,8 +6,10 @@ import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.Position;
+import br.com.carvoeiromanager.player.TrainingIntensity;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -560,6 +562,67 @@ class LineupServiceIT {
 
     private List<UUID> idsOf(List<LineupStarter> starters) {
         return starters.stream().map(LineupStarter::playerId).collect(Collectors.toList());
+    }
+
+    @Test
+    void settingTrainingAssignmentsPersistsAndReturnsTheUpdatedSquad() {
+        // Given
+        Career career = createCareer();
+        UUID saveGameId = career.id();
+        UUID clubId = career.managedClubId();
+        UUID userId = career.userId();
+        Player target = playerRepository.findByClubIdAndYouthProspectFalse(clubId).get(0);
+
+        // When
+        SquadResponse response = lineupService.setTraining(saveGameId, clubId,
+                new SetTrainingRequest(List.of(new TrainingAssignment(target.getId(), "FINALIZACAO", "INTENSA"))),
+                userId);
+
+        // Then the response reflects the new assignment
+        PlayerResponse updated = response.players().stream()
+                .filter(p -> p.id().equals(target.getId())).findFirst().orElseThrow();
+        assertThat(updated.trainingFocus()).isEqualTo("FINALIZACAO");
+        assertThat(updated.trainingIntensity()).isEqualTo("INTENSA");
+
+        // And it's persisted
+        Player persisted = playerRepository.findById(target.getId()).orElseThrow();
+        assertThat(persisted.getTrainingFocus()).isEqualTo(Attribute.FINALIZACAO);
+        assertThat(persisted.getTrainingIntensity()).isEqualTo(TrainingIntensity.INTENSA);
+    }
+
+    @Test
+    void settingAnUntrainableAttributeAsFocusIsRejected() {
+        // Given
+        Career career = createCareer();
+        Player target = playerRepository.findByClubIdAndYouthProspectFalse(career.managedClubId()).get(0);
+
+        // When setting a non-anchor attribute (DRIBLE is not one of the 6 trainable anchors)
+        // Then a 422 INVALID_TRAINING_FOCUS is thrown
+        assertThatThrownBy(() -> lineupService.setTraining(career.id(), career.managedClubId(),
+                new SetTrainingRequest(List.of(new TrainingAssignment(target.getId(), "DRIBLE", "NORMAL"))),
+                career.userId()))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException api = (ApiException) ex;
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.INVALID_TRAINING_FOCUS);
+                    assertThat(api.getStatus().value()).isEqualTo(422);
+                });
+    }
+
+    @Test
+    void settingTrainingFocusForAPlayerOutsideTheClubIsRejected() {
+        // Given two independent careers
+        Career owner = createCareer();
+        Career other = createCareer();
+        Player foreignPlayer = playerRepository.findByClubIdAndYouthProspectFalse(other.managedClubId()).get(0);
+
+        // When targeting a player who belongs to a different club
+        // Then a 404 PLAYER_NOT_FOUND is thrown
+        assertThatThrownBy(() -> lineupService.setTraining(owner.id(), owner.managedClubId(),
+                new SetTrainingRequest(List.of(new TrainingAssignment(foreignPlayer.getId(), "PASSE", "LEVE"))),
+                owner.userId()))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getStatus().value()).isEqualTo(404));
     }
 
 }
