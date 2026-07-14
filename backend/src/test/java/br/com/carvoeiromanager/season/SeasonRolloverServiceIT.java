@@ -292,7 +292,12 @@ class SeasonRolloverServiceIT {
 
     @Test
     void trainingFocusBoostsAManagedPlayerAndPersistsAcrossRollover() {
-        // Given a career with a young (age 20) managed player trained on Finalização at Intensa
+        // Given a career with a young (age 20, so 21 after rollover's +1) managed player trained
+        // on Finalização at Intensa. Age 21 is the ONLY PlayerAgingService.delta band whose range
+        // is non-negative (rng.nextInt(4), 0..+3 — see delta()'s "age <= 21" branch); every older
+        // band (22-29: -1..+1, 30-32: -2..0, 33+: -4..-1) can roll negative, which would make a
+        // floor assertion fail even when training is correctly applied. This band is deliberately
+        // chosen so the floor below can never be a false failure against correct code.
         Career c = createCareer();
         Player trainee = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).get(0);
         trainee.setAge(20);
@@ -313,7 +318,10 @@ class SeasonRolloverServiceIT {
 
         // Then Finalização rose by at least the Intensa bonus (+3): the age-21 curve delta is
         // always >= 0 (see PlayerAgingService.delta), so the combined result is a floor, not an
-        // exact value. The assignment itself is a standing instruction and survives unchanged.
+        // exact value — this can only under-detect a future regression (small chance the age
+        // curve alone hits +3), never over-report one (training's fixed bonus is added on top of
+        // a delta that's never negative, so a correct implementation can never dip below this
+        // floor). The assignment itself is a standing instruction and survives unchanged.
         Player after = playerRepository.findById(trainee.getId()).orElseThrow();
         assertThat(after.getFinishing()).isGreaterThanOrEqualTo(Math.min(99, finishingBefore + 3));
         assertThat(after.getTrainingFocus()).isEqualTo(Attribute.FINALIZACAO);
@@ -322,7 +330,10 @@ class SeasonRolloverServiceIT {
 
     @Test
     void aiClubPlayersGetTheHeuristicFocusEvenWithoutManagerInput() {
-        // Given a career with an AI club's young (age 20) attacker, never given an assignment
+        // Given a career with an AI club's young (age 20, so 21 after rollover's +1) attacker,
+        // never given an assignment. Age 21 is the only non-negative PlayerAgingService.delta
+        // band (0..+3) — see the comment on trainingFocusBoosts...() above for why this age is
+        // deliberately chosen over an older one.
         Career c = createCareer();
         Player aiAttacker = playerRepository.findBySaveGameId(c.id()).stream()
                 .filter(p -> p.getClubId() != null && !p.getClubId().equals(c.clubId())
@@ -344,7 +355,8 @@ class SeasonRolloverServiceIT {
         rolloverService.rollover(c.id(), c.userId());
 
         // Then Finalização (the heuristic focus for ATT) rose by at least Normal's +2 bonus,
-        // even though no manager ever set a training assignment for this AI-club player.
+        // even though no manager ever set a training assignment for this AI-club player. As
+        // above, this floor can only under-detect a regression, never false-fail correct code.
         Player after = playerRepository.findById(aiAttacker.getId()).orElseThrow();
         assertThat(after.getFinishing()).isGreaterThanOrEqualTo(Math.min(99, finishingBefore + 2));
     }
