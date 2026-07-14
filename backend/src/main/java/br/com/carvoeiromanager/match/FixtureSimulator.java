@@ -36,6 +36,9 @@ import java.util.stream.Collectors;
 @Service
 public class FixtureSimulator {
 
+    private static final double ASSIST_CHANCE = 0.65;
+    private static final double BASE_FOUL_RATE = 0.13;
+
     private final LineupService lineupService;
     private final TacticsService tacticsService;
     private final TeamStrengthCalculator teamStrengthCalculator;
@@ -192,6 +195,7 @@ public class FixtureSimulator {
                                              TacticalProfile homeProfile, TacticalProfile awayProfile,
                                              UUID homeClubId, UUID awayClubId, long seed) {
         Random rng = new Random(seed ^ 0x5DEECE66DL);
+        Random assistRng = new Random(seed ^ 0x5A551571L);
         List<AttributedEvent> attributed = new ArrayList<>();
         for (SimulatedEvent event : match.events()) {
             List<Player> xi = event.home() ? homeXi : awayXi;
@@ -212,8 +216,57 @@ public class FixtureSimulator {
                     MatchEvent.create(fixture.getId(), event.minute(), event.type().name(),
                             player.getId(), clubId));
             attributed.add(new AttributedEvent(player.getId(), event.type(), event.home()));
+
+            Player assister = assisterFor(event, player, xi, profile, assistRng);
+            if (assister != null) {
+                matchEventRepository.save(
+                        MatchEvent.create(fixture.getId(), event.minute(), "ASSIST", assister.getId(), clubId));
+            }
         }
         return attributed;
+    }
+
+    /**
+     * The assister for one scoring event, or null when unassisted. CORNER_GOAL's crossing-weighted
+     * taker (distinct from the header-scorer) is the assist deterministically — no extra RNG draw.
+     * GOAL rolls a ~65% chance and, if hit, picks a creativity-weighted teammate excluding the
+     * scorer. PENALTY_GOAL and FREE_KICK_GOAL are never assisted.
+     */
+    private Player assisterFor(SimulatedEvent event, Player scorer, List<Player> xi,
+                               TacticalProfile profile, Random assistRng) {
+        return switch (event.type()) {
+            case GOAL -> assistRng.nextDouble() < ASSIST_CHANCE
+                    ? pickByWeightExcluding(xi, scorer, FixtureSimulator::assistWeight, assistRng)
+                    : null;
+            case CORNER_GOAL -> SetPieces.takerOrFallback(xi, profile.cornerTakerId(),
+                    p -> p.attribute(Attribute.CRUZAMENTO));
+            default -> null;
+        };
+    }
+
+    /** Weighted pick over an XI excluding one player; null if no eligible teammate remains. */
+    private Player pickByWeightExcluding(List<Player> xi, Player exclude, ToIntFunction<Player> weight, Random rng) {
+        List<Player> pool = xi.stream().filter(p -> !p.getId().equals(exclude.getId())).toList();
+        if (pool.isEmpty()) {
+            return null;
+        }
+        int totalWeight = pool.stream().mapToInt(p -> Math.max(0, weight.applyAsInt(p))).sum();
+        if (totalWeight <= 0) {
+            return pool.get(rng.nextInt(pool.size()));
+        }
+        int pick = rng.nextInt(totalWeight);
+        int accumulated = 0;
+        for (Player p : pool) {
+            accumulated += Math.max(0, weight.applyAsInt(p));
+            if (pick < accumulated) return p;
+        }
+        return pool.get(pool.size() - 1);
+    }
+
+    /** Mirrors LiveMatchEngine.assistWeight — creative-passing composite. */
+    private static int assistWeight(Player p) {
+        return p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO)
+                + p.attribute(Attribute.CRUZAMENTO) + 10;
     }
 
     private Player pickWeighted(List<Player> xi, ToIntFunction<Player> attribute, Random rng) {
@@ -268,6 +321,48 @@ public class FixtureSimulator {
             case GK -> 0;
         };
         return positionFactor * (p.getFinishing() + 10);
+    }
+
+    /**
+     * Per-player foul counts for one fixture's two XIs, drawn directly (no minute-by-minute
+     * simulation — nothing displays instant-match fouls live, only the final per-player count
+     * matters). Mirrors LiveMatchEngine.maybeFoul's calibration and weighting, using a fixed
+     * "average aggression" input since the instant path has no per-minute TeamMatchInput here.
+     */
+    Map<UUID, Integer> foulCounts(List<Player> homeXi, List<Player> awayXi, long seed) {
+        Random foulRng = new Random(seed ^ 0xF0011E5L);
+        Map<UUID, Integer> counts = new HashMap<>();
+        for (int minute = 1; minute <= 90; minute++) {
+            drawFoul(homeXi, foulRng, counts);
+            drawFoul(awayXi, foulRng, counts);
+        }
+        return counts;
+    }
+
+    private void drawFoul(List<Player> xi, Random foulRng, Map<UUID, Integer> counts) {
+        if (xi.isEmpty() || foulRng.nextDouble() >= BASE_FOUL_RATE) {
+            return;
+        }
+        int totalWeight = xi.stream().mapToInt(p -> Math.max(0, foulWeight(p))).sum();
+        Player fouler;
+        if (totalWeight <= 0) {
+            fouler = xi.get(foulRng.nextInt(xi.size()));
+        } else {
+            int pick = foulRng.nextInt(totalWeight);
+            int acc = 0;
+            Player chosen = xi.get(xi.size() - 1);
+            for (Player p : xi) {
+                acc += Math.max(0, foulWeight(p));
+                if (pick < acc) { chosen = p; break; }
+            }
+            fouler = chosen;
+        }
+        counts.merge(fouler.getId(), 1, Integer::sum);
+    }
+
+    /** Mirrors LiveMatchEngine.foulWeight. */
+    private static int foulWeight(Player p) {
+        return p.attribute(Attribute.AGRESSIVIDADE) + p.attribute(Attribute.DESARME) + 10;
     }
 
     private Map<UUID, Integer> effectiveFitness(List<Player> xi, LocalDate onDate) {
