@@ -29,6 +29,7 @@ import type {
   SignFreeAgentRequest,
   PlayerContract,
   PlayerResponse,
+  SetTrainingRequest,
 } from './types'
 
 export function createCareer(req: CreateSaveGameRequest, token: string): Promise<SaveGameResponse> {
@@ -56,6 +57,15 @@ export function getSquad(saveGameId: string, clubId: string, token: string): Pro
 // open the details dialog from contexts that only have a bare player id (market, free agents).
 export function getPlayer(saveGameId: string, playerId: string, token: string): Promise<PlayerResponse> {
   return apiGet<PlayerResponse>(`/save-games/${saveGameId}/players/${playerId}`, token)
+}
+
+export function setTraining(
+  saveGameId: string,
+  clubId: string,
+  req: SetTrainingRequest,
+  token: string,
+): Promise<SquadResponse> {
+  return apiPut<SquadResponse>(`/save-games/${saveGameId}/clubs/${clubId}/training`, req, token)
 }
 
 // Every club of the save game, sorted by reputation (highest first) — powers "Clubes".

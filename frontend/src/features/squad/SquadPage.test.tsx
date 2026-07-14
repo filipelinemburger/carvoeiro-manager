@@ -11,6 +11,7 @@ vi.mock('../../api/career', () => ({
   getSquad: vi.fn(),
   getLineup: vi.fn(),
   setLineup: vi.fn(),
+  setTraining: vi.fn(),
   getTactics: vi.fn(),
   setTactics: vi.fn(),
   renewContract: vi.fn(),
@@ -20,7 +21,7 @@ vi.mock('../../api/career', () => ({
 
 vi.mock('../../lib/useIsMobile', () => ({ useIsMobile: vi.fn(() => false) }))
 
-import { getSquad, getLineup, setLineup, getTactics, renewContract, listPlayer, unlistPlayer } from '../../api/career'
+import { getSquad, getLineup, setLineup, getTactics, renewContract, listPlayer, unlistPlayer, setTraining } from '../../api/career'
 
 const mockGetSquad = vi.mocked(getSquad)
 const mockGetLineup = vi.mocked(getLineup)
@@ -28,6 +29,7 @@ const mockSetLineup = vi.mocked(setLineup)
 const mockRenewContract = vi.mocked(renewContract)
 const mockListPlayer = vi.mocked(listPlayer)
 const mockUnlistPlayer = vi.mocked(unlistPlayer)
+const mockSetTraining = vi.mocked(setTraining)
 
 // `as const` narrows injurySeverity to the literal 'NONE' so it satisfies
 // PlayerResponse's union type (not widened to string) when spread into fixtures.
@@ -208,6 +210,36 @@ describe('SquadPage', () => {
     const panelId = taticasTab.getAttribute('aria-controls')!
     const tacticsPanel = document.getElementById(panelId)!
     expect(tacticsPanel).not.toBeVisible()
+  })
+
+  it('lets the user set a training focus/intensity and saves them for the whole squad', async () => {
+    mockSetTraining.mockResolvedValue(squad)
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Treino' }))
+
+    fireEvent.change(
+      screen.getByRole('combobox', { name: `Foco de treino de ${GK.name}` }),
+      { target: { value: 'REFLEXOS' } },
+    )
+    fireEvent.change(
+      screen.getByRole('combobox', { name: `Intensidade de treino de ${GK.name}` }),
+      { target: { value: 'INTENSA' } },
+    )
+    fireEvent.click(screen.getByRole('button', { name: /salvar treino/i }))
+
+    await waitFor(() =>
+      expect(mockSetTraining).toHaveBeenCalledWith(
+        'sg-1', 'club-1',
+        expect.objectContaining({
+          assignments: expect.arrayContaining([
+            expect.objectContaining({ playerId: GK.id, focus: 'REFLEXOS', intensity: 'INTENSA' }),
+          ]),
+        }),
+        'test-token',
+      ),
+    )
   })
 
   it('shows tactics controls above the pitch in the Táticas de jogo tab', async () => {

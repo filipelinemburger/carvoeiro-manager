@@ -9,11 +9,11 @@ import {
 import HealingIcon from '@mui/icons-material/Healing'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
-import { getSquad, getLineup, setLineup, renewContract, listPlayer, unlistPlayer } from '../../api/career'
+import { getSquad, getLineup, setLineup, setTraining, renewContract, listPlayer, unlistPlayer } from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
-import type { PlayerResponse, PlayerRole, LineupStarter } from '../../api/types'
+import type { PlayerResponse, PlayerRole, LineupStarter, TrainableAttribute, TrainingIntensity, TrainingAssignment } from '../../api/types'
 import { TacticsPanel } from './TacticsPanel'
 import { PlayerDetails } from './PlayerDetails'
 import { Collapsible } from '../../components/Collapsible'
@@ -92,6 +92,21 @@ const ROLE_LABEL: Record<PlayerRole, string> = {
   WINGER: 'Ponta',
 }
 
+const TRAINABLE_ATTRIBUTE_LABEL: Record<TrainableAttribute, string> = {
+  VELOCIDADE: 'Velocidade',
+  FINALIZACAO: 'Finalização',
+  PASSE: 'Passe',
+  DESARME: 'Desarme',
+  REFLEXOS: 'Reflexos',
+  FOLEGO: 'Fôlego',
+}
+
+const INTENSITY_LABEL: Record<TrainingIntensity, string> = {
+  LEVE: 'Leve',
+  NORMAL: 'Normal',
+  INTENSA: 'Intensa',
+}
+
 // Championship-Manager-style squad-slot abbreviation shown on the selection button.
 const POS_ABBR: Record<PlayerResponse['position'], string> = { GK: 'GK', DEF: 'DC', MID: 'MC', ATT: 'AT' }
 
@@ -161,6 +176,10 @@ export function SquadPage() {
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [detailsPlayer, setDetailsPlayer] = useState<PlayerResponse | null>(null)
   const [tab, setTab] = useState(0)
+  const [trainingAssignments, setTrainingAssignments] = useState<
+    Record<string, { focus: TrainableAttribute | null; intensity: TrainingIntensity }>
+  >({})
+  const [trainingSaveSuccess, setTrainingSaveSuccess] = useState(false)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['squad', saveGameId, clubId],
@@ -198,6 +217,18 @@ export function SquadPage() {
     hydrated.current = true
   }, [savedLineup.isSuccess, savedLineup.data])
 
+  // Seed the training tab from the squad query exactly once, the same way the lineup form is
+  // seeded from its own query above — a separate ref so the two hydrations don't interfere.
+  const trainingHydrated = useRef(false)
+  useEffect(() => {
+    if (trainingHydrated.current || !data) return
+    setTrainingAssignments(Object.fromEntries(data.players.map(p => [
+      p.id,
+      { focus: p.trainingFocus ?? null, intensity: p.trainingIntensity ?? 'NORMAL' },
+    ])))
+    trainingHydrated.current = true
+  }, [data])
+
   const mutation = useMutation({
     mutationFn: () => {
       const toStarter = (id: string): LineupStarter => {
@@ -216,6 +247,21 @@ export function SquadPage() {
       void queryClient.invalidateQueries({ queryKey: ['lineup', saveGameId] })
       // Re-check the advance gate: fixing the lineup may clear an ineligible-starter block.
       void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
+    },
+  })
+
+  const trainingMutation = useMutation({
+    mutationFn: () => {
+      const assignments: TrainingAssignment[] = displayPlayers.map(p => ({
+        playerId: p.id,
+        focus: trainingAssignments[p.id]?.focus ?? null,
+        intensity: trainingAssignments[p.id]?.intensity ?? 'NORMAL',
+      }))
+      return setTraining(saveGameId, clubId, { assignments }, token ?? '')
+    },
+    onSuccess: () => {
+      setTrainingSaveSuccess(true)
+      void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] })
     },
   })
 
@@ -317,6 +363,20 @@ export function SquadPage() {
 
   function changeRole(player: PlayerResponse, role: PlayerRole) {
     setRoles(prev => ({ ...prev, [player.id]: role }))
+  }
+
+  function changeTrainingFocus(player: PlayerResponse, focus: TrainableAttribute | ''): void {
+    setTrainingAssignments(prev => ({
+      ...prev,
+      [player.id]: { focus: focus === '' ? null : focus, intensity: prev[player.id]?.intensity ?? 'NORMAL' },
+    }))
+  }
+
+  function changeTrainingIntensity(player: PlayerResponse, intensity: TrainingIntensity): void {
+    setTrainingAssignments(prev => ({
+      ...prev,
+      [player.id]: { focus: prev[player.id]?.focus ?? null, intensity },
+    }))
   }
 
   // Fills the XI with the highest-rated eligible players for each line of the current
@@ -446,6 +506,39 @@ export function SquadPage() {
     )
   }
 
+  function trainingFocusSelect(player: PlayerResponse) {
+    const value = trainingAssignments[player.id]?.focus ?? ''
+    return (
+      <NativeSelect
+        value={value}
+        onChange={e => changeTrainingFocus(player, e.target.value as TrainableAttribute | '')}
+        inputProps={{ 'aria-label': `Foco de treino de ${player.name}` }}
+        sx={{ fontSize: '0.85rem' }}
+      >
+        <option value="">Nenhum</option>
+        {(Object.keys(TRAINABLE_ATTRIBUTE_LABEL) as TrainableAttribute[]).map(a => (
+          <option key={a} value={a}>{TRAINABLE_ATTRIBUTE_LABEL[a]}</option>
+        ))}
+      </NativeSelect>
+    )
+  }
+
+  function trainingIntensitySelect(player: PlayerResponse) {
+    const value = trainingAssignments[player.id]?.intensity ?? 'NORMAL'
+    return (
+      <NativeSelect
+        value={value}
+        onChange={e => changeTrainingIntensity(player, e.target.value as TrainingIntensity)}
+        inputProps={{ 'aria-label': `Intensidade de treino de ${player.name}` }}
+        sx={{ fontSize: '0.85rem' }}
+      >
+        {(Object.keys(INTENSITY_LABEL) as TrainingIntensity[]).map(i => (
+          <option key={i} value={i}>{INTENSITY_LABEL[i]}</option>
+        ))}
+      </NativeSelect>
+    )
+  }
+
   function renewButton(player: PlayerResponse) {
     return (
       <Button
@@ -506,6 +599,7 @@ export function SquadPage() {
             aria-label="Seções do elenco">
         <Tab label="Plantel" id="squad-tab-0" aria-controls="squad-tabpanel-0" />
         <Tab label="Táticas de jogo" id="squad-tab-1" aria-controls="squad-tabpanel-1" />
+        <Tab label="Treino" id="squad-tab-2" aria-controls="squad-tabpanel-2" />
       </Tabs>
 
       {/* Panels stay mounted (hidden) so unsaved lineup AND tactics edits survive tab switches. */}
@@ -612,6 +706,49 @@ export function SquadPage() {
         )}
       </Box>
 
+      <Box role="tabpanel" hidden={tab !== 2} id="squad-tabpanel-2" aria-labelledby="squad-tab-2">
+        {/* Unlike the Plantel/Táticas panels above, this content is only mounted while the tab
+            is active rather than kept mounted-but-hidden: `trainingAssignments` lives in this
+            component's own state (not in any uncontrolled child state), so nothing is lost by
+            unmounting on tab-away. Mounting it unconditionally would render every player's name
+            a second time into the DOM at all times (this table has no selection gate the way the
+            Táticas tab's pitch/taker-selects do), breaking every other test that waits on a
+            player's name via `getByText`. */}
+        {tab === 2 && (
+          <>
+            <TableContainer component={Paper} variant="outlined" sx={{ mb: 2, borderRadius: 2 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Nome</TableCell>
+                    <TableCell align="center">Pos</TableCell>
+                    <TableCell align="center">Foco</TableCell>
+                    <TableCell align="center">Intensidade</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {displayPlayers.map(player => (
+                    <TableRow key={player.id}>
+                      <TableCell>{playerNameButton(player)}</TableCell>
+                      <TableCell align="center">{positionLabel(player.position)}</TableCell>
+                      <TableCell align="center">{trainingFocusSelect(player)}</TableCell>
+                      <TableCell align="center">{trainingIntensitySelect(player)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <Button
+              color="secondary"
+              disabled={trainingMutation.isPending}
+              onClick={() => trainingMutation.mutate()}
+            >
+              {trainingMutation.isPending ? 'Salvando…' : 'Salvar treino'}
+            </Button>
+          </>
+        )}
+      </Box>
+
       <PlayerDetails
         player={detailsPlayer}
         onClose={() => setDetailsPlayer(null)}
@@ -637,6 +774,23 @@ export function SquadPage() {
           sx={{ width: '100%' }}
         >
           {mutation.isError ? 'Erro ao salvar escalação.' : 'Escalação salva com sucesso!'}
+        </Alert>
+      </Snackbar>
+
+      {/* Training save outcome, shown the same way as the lineup save toast above. */}
+      <Snackbar
+        open={trainingSaveSuccess || trainingMutation.isError}
+        autoHideDuration={4000}
+        onClose={() => { setTrainingSaveSuccess(false); trainingMutation.reset() }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={trainingMutation.isError ? 'error' : 'success'}
+          variant="filled"
+          onClose={() => { setTrainingSaveSuccess(false); trainingMutation.reset() }}
+          sx={{ width: '100%' }}
+        >
+          {trainingMutation.isError ? 'Erro ao salvar treino.' : 'Treino salvo com sucesso!'}
         </Alert>
       </Snackbar>
 

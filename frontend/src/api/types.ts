@@ -105,6 +105,9 @@ export type PlayerResponse = {
   /** Always sent by the API; optional here only to keep older test fixtures compiling. */
   transferListed?: boolean
   listedReason?: ListedReason | null
+  /** One of the 6 trainable anchor attributes, or null if the player isn't currently training. */
+  trainingFocus?: TrainableAttribute | null
+  trainingIntensity?: TrainingIntensity
 }
 
 /** Why a player is currently transfer-listed — AI triggers, or OWNER for a manual listing. */
@@ -127,6 +130,19 @@ export type SquadResponse = {
   players: PlayerResponse[]
   primaryColor: string
   secondaryColor: string
+}
+
+export type TrainableAttribute = 'VELOCIDADE' | 'FINALIZACAO' | 'PASSE' | 'DESARME' | 'REFLEXOS' | 'FOLEGO'
+export type TrainingIntensity = 'LEVE' | 'NORMAL' | 'INTENSA'
+
+export type TrainingAssignment = {
+  playerId: string
+  focus: TrainableAttribute | null
+  intensity: TrainingIntensity
+}
+
+export type SetTrainingRequest = {
+  assignments: TrainingAssignment[]
 }
 
 export type SeasonStatsLine = {
