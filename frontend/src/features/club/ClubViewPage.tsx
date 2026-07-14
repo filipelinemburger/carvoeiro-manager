@@ -199,7 +199,7 @@ export function ClubViewPage() {
         )
       )}
 
-      <PlayerDetails player={detailsPlayer} onClose={() => setDetailsPlayer(null)} />
+      <PlayerDetails player={detailsPlayer} onClose={() => setDetailsPlayer(null)} saveGameId={saveGameId} />
 
       <MakeOfferDialog
         target={offerTarget}

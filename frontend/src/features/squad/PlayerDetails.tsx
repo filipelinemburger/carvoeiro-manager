@@ -4,6 +4,9 @@ import {
   Chip, Tabs, Tab,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
+import { useQuery } from '@tanstack/react-query'
+import { useAuth } from '../../auth/AuthContext'
+import { getPlayerStats } from '../../api/playerStats'
 import { formatBRL } from '../../lib/money'
 import { moraleMood } from './morale'
 import { LISTED_REASON_LABEL } from './listedReason'
@@ -62,26 +65,36 @@ function AttrRow({ attr }: { attr: AttributeView }) {
 /**
  * A modal breakdown of one player. Identity (position/OVR/age/status) stays pinned at the top;
  * the "Atributos" tab shows the Championship-Manager-style board (Técnico / Mental / Físico /
- * Goleiro columns), and "Contrato" shows the contract term + wage. A red dot marks the Contrato
- * tab when the deal is running out (<= 1 year).
+ * Goleiro columns), "Contrato" shows the contract term + wage, and "Estatísticas" shows
+ * season-by-season matches/minutes/goals/assists/fouls/cards plus career totals (fetched lazily,
+ * only once that tab is opened). A red dot marks the Contrato tab when the deal is running out
+ * (<= 1 year).
  *
  * `lineupControl` (the role selector), `contractAction` (Renovar), and `listingAction`
  * (list/unlist toggle) render when provided.
  */
-export function PlayerDetails({ player, onClose, lineupControl, contractAction, listingAction }: {
+export function PlayerDetails({ player, onClose, saveGameId, lineupControl, contractAction, listingAction }: {
   player: PlayerResponse | null
   onClose: () => void
+  saveGameId: string
   lineupControl?: ReactNode
   contractAction?: ReactNode
   listingAction?: ReactNode
 }) {
   const [tab, setTab] = useState(0)
+  const { token } = useAuth()
   const contractEnding = (player?.contractYears ?? 99) <= 1
 
   // Reset to the Atributos tab whenever a different player opens.
   useEffect(() => { setTab(0) }, [player?.id])
 
   const attributes = player?.attributes ?? []
+
+  const statsQuery = useQuery({
+    queryKey: ['playerStats', saveGameId, player?.id],
+    queryFn: () => getPlayerStats(saveGameId, player!.id, token ?? ''),
+    enabled: tab === 2 && Boolean(saveGameId && player?.id && token),
+  })
 
   return (
     <Dialog open={Boolean(player)} onClose={onClose} fullWidth maxWidth="md">
@@ -140,6 +153,7 @@ export function PlayerDetails({ player, onClose, lineupControl, contractAction, 
                   </Stack>
                 }
               />
+              <Tab label="Estatísticas" sx={{ minHeight: 40 }} />
             </Tabs>
 
             {tab === 0 && (
@@ -187,6 +201,59 @@ export function PlayerDetails({ player, onClose, lineupControl, contractAction, 
                   </Stack>
                 )}
               </Stack>
+            )}
+
+            {tab === 2 && (
+              <Box>
+                {statsQuery.isLoading && (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>Carregando…</Typography>
+                )}
+                {statsQuery.data && statsQuery.data.seasons.length === 0 && (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Nenhuma partida registrada ainda.
+                  </Typography>
+                )}
+                {statsQuery.data && statsQuery.data.seasons.length > 0 && (
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                      <Box component="thead">
+                        <Box component="tr">
+                          {['Temporada', 'Competição', 'J', 'Min', 'G', 'A', 'F', 'CA', 'CV'].map(h => (
+                            <Box component="th" key={h} sx={{ textAlign: 'left', py: 0.5, borderBottom: '2px solid', borderColor: 'divider', color: 'text.secondary', fontWeight: 700 }}>
+                              {h}
+                            </Box>
+                          ))}
+                        </Box>
+                      </Box>
+                      <Box component="tbody">
+                        {statsQuery.data.seasons.map((s, i) => (
+                          <Box component="tr" key={`${s.seasonYear}-${s.competitionName}-${i}`}>
+                            <Box component="td" sx={{ py: 0.5 }}>{s.seasonYear}</Box>
+                            <Box component="td" sx={{ py: 0.5 }}>{s.competitionName}</Box>
+                            <Box component="td" sx={{ py: 0.5 }}>{s.matchesPlayed}</Box>
+                            <Box component="td" sx={{ py: 0.5 }}>{s.minutesPlayed}</Box>
+                            <Box component="td" sx={{ py: 0.5, fontWeight: 700 }}>{s.goals}</Box>
+                            <Box component="td" sx={{ py: 0.5 }}>{s.assists}</Box>
+                            <Box component="td" sx={{ py: 0.5 }}>{s.fouls}</Box>
+                            <Box component="td" sx={{ py: 0.5 }}>{s.yellowCards}</Box>
+                            <Box component="td" sx={{ py: 0.5 }}>{s.redCards}</Box>
+                          </Box>
+                        ))}
+                        <Box component="tr" sx={{ borderTop: '2px solid', borderColor: 'divider' }}>
+                          <Box component="td" sx={{ py: 0.5, fontWeight: 800 }} colSpan={2}>Total</Box>
+                          <Box component="td" sx={{ py: 0.5, fontWeight: 800 }}>{statsQuery.data.totals.matchesPlayed}</Box>
+                          <Box component="td" sx={{ py: 0.5, fontWeight: 800 }}>{statsQuery.data.totals.minutesPlayed}</Box>
+                          <Box component="td" sx={{ py: 0.5, fontWeight: 800 }}>{statsQuery.data.totals.goals}</Box>
+                          <Box component="td" sx={{ py: 0.5, fontWeight: 800 }}>{statsQuery.data.totals.assists}</Box>
+                          <Box component="td" sx={{ py: 0.5, fontWeight: 800 }}>{statsQuery.data.totals.fouls}</Box>
+                          <Box component="td" sx={{ py: 0.5, fontWeight: 800 }}>{statsQuery.data.totals.yellowCards}</Box>
+                          <Box component="td" sx={{ py: 0.5, fontWeight: 800 }}>{statsQuery.data.totals.redCards}</Box>
+                        </Box>
+                      </Box>
+                    </Box>
+                  </Box>
+                )}
+              </Box>
             )}
           </DialogContent>
         </>

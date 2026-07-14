@@ -579,7 +579,7 @@ export function TransferMarketPage() {
 
       {tab === 2 && <FreeAgentsPanel />}
 
-      <PlayerDetails player={detailsPlayer} onClose={() => setDetailsPlayer(null)} />
+      <PlayerDetails player={detailsPlayer} onClose={() => setDetailsPlayer(null)} saveGameId={saveGameId} />
 
       <MakeOfferDialog
         target={offerTarget}

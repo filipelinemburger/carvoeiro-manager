@@ -603,6 +603,7 @@ export function SquadPage() {
       <PlayerDetails
         player={detailsPlayer}
         onClose={() => setDetailsPlayer(null)}
+        saveGameId={saveGameId}
         lineupControl={isMobile && detailsPlayer && selected.includes(detailsPlayer.id)
           ? roleSelect(detailsPlayer)
           : undefined}

@@ -129,6 +129,23 @@ export type SquadResponse = {
   secondaryColor: string
 }
 
+export type SeasonStatsLine = {
+  seasonYear: number
+  competitionName: string
+  matchesPlayed: number
+  minutesPlayed: number
+  goals: number
+  assists: number
+  fouls: number
+  yellowCards: number
+  redCards: number
+}
+
+export type PlayerStatsResponse = {
+  seasons: SeasonStatsLine[]
+  totals: SeasonStatsLine
+}
+
 /** One club in the club-browsing list, sorted by reputation (highest first). */
 export type ClubSummary = {
   id: string
