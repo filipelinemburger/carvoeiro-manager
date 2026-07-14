@@ -128,6 +128,9 @@ public final class LiveCommentary {
             case PENALTY_MISSED -> pick(PENALTY_MISS_LINES, playerName, minute, type);
             case FREE_KICK_GOAL -> pick(FREE_KICK_LINES, playerName, minute, type);
             case CORNER_GOAL -> corner(playerName, inName, minute);
+            // FOUL commentary lines land in a later task; a compile-time-exhaustive switch requires
+            // this arm to exist now that EventType has a 14th member.
+            case FOUL -> throw new IllegalStateException("LiveCommentary does not support FOUL yet");
         };
         return comebackGoal && type.isGoal() ? base + " " + COMEBACK_GOAL_LINE : base;
     }

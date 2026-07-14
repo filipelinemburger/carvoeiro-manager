@@ -6,7 +6,7 @@ import java.util.List;
 public enum EventType {
     GOAL, SET_PIECE_GOAL, YELLOW_CARD, RED_CARD, CHANCE, INJURY, SUBSTITUTION, TACTICS_CHANGE, HALF_TIME,
     // Appended (ordinals above feed LiveCommentary variant selection and must not shift).
-    PENALTY_GOAL, FREE_KICK_GOAL, CORNER_GOAL, PENALTY_MISSED;
+    PENALTY_GOAL, FREE_KICK_GOAL, CORNER_GOAL, PENALTY_MISSED, FOUL;
 
     /**
      * True for every type that counts on the scoreboard. SET_PIECE_GOAL is legacy: no longer

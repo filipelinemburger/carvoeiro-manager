@@ -125,6 +125,85 @@ class LiveMatchEngineTest {
     }
 
     @Test
+    void openPlayGoalsAreSometimesAssistedAndSometimesNot() {
+        // Across many seeds, roughly ASSIST_CHANCE (~65%) of plain GOAL events should carry
+        // a non-null playerInId (the assister). PENALTY_GOAL/FREE_KICK_GOAL never do (checked below).
+        int assisted = 0;
+        int total = 0;
+        for (long seed = 0; seed < 300; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            for (LiveTimelineEvent e : t.events()) {
+                if (e.type() == EventType.GOAL) {
+                    total++;
+                    if (e.playerInId() != null) assisted++;
+                }
+            }
+        }
+        assertThat(total).isGreaterThan(50);
+        double rate = (double) assisted / total;
+        assertThat(rate).isBetween(0.5, 0.8);
+    }
+
+    @Test
+    void anAssistNeverCreditsTheScorerThemself() {
+        for (long seed = 0; seed < 300; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            for (LiveTimelineEvent e : t.events()) {
+                if (e.type() == EventType.GOAL && e.playerInId() != null) {
+                    assertThat(e.playerInId()).isNotEqualTo(e.playerId());
+                }
+            }
+        }
+    }
+
+    @Test
+    void penaltiesAndFreeKicksAreNeverAssisted() {
+        for (long seed = 0; seed < 300; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            t.events().stream()
+                    .filter(e -> e.type() == EventType.PENALTY_GOAL || e.type() == EventType.FREE_KICK_GOAL)
+                    .forEach(e -> assertThat(e.playerInId()).isNull());
+        }
+    }
+
+    @Test
+    void assistAndFoulOutcomesAreDeterministicForAFixedSeed() {
+        LiveMatchConfig cfg = config(1234L, List.of());
+        LiveTimeline a = engine.simulate(cfg);
+        LiveTimeline b = engine.simulate(cfg);
+        assertThat(a.events()).isEqualTo(b.events());
+    }
+
+    @Test
+    void foulsOccurAtARealisticPerTeamRateAndAreNeverAttributedToAnEmptyPitch() {
+        // ~10-13 fouls per team per match; sample many seeds and check the per-seed average
+        // lands in a broad realistic band (loose bounds — this is a calibration sanity check,
+        // not an exact-value assertion).
+        int totalHomeFouls = 0;
+        int seeds = 150;
+        for (long seed = 0; seed < seeds; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            List<LiveTimelineEvent> homeFouls = t.events().stream()
+                    .filter(e -> e.type() == EventType.FOUL && e.home()).toList();
+            totalHomeFouls += homeFouls.size();
+            homeFouls.forEach(e -> assertThat(e.playerId()).isNotNull());
+        }
+        double avgPerTeamPerMatch = (double) totalHomeFouls / seeds;
+        assertThat(avgPerTeamPerMatch).isBetween(5.0, 20.0);
+    }
+
+    @Test
+    void foulsNeverAppearInTheGoalCountingOrCardStreams() {
+        // FOUL must never satisfy isGoal() and must be a distinct type from cards, so downstream
+        // consumers that don't explicitly handle it (match_events persistence, ratings) skip it safely.
+        for (long seed = 0; seed < 50; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            t.events().stream().filter(e -> e.type() == EventType.FOUL)
+                    .forEach(e -> assertThat(e.type().isGoal()).isFalse());
+        }
+    }
+
+    @Test
     void sameInputsProduceIdenticalTimelines() {
         LiveMatchConfig cfg = config(1234L, List.of());
         LiveTimeline a = engine.simulate(cfg);

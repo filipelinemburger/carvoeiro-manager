@@ -36,6 +36,8 @@ public class LiveMatchEngine {
     private static final double RED_SHARE = 0.06;
     private static final double CHANCE_RATE = 0.12;   // flavor near-miss/save rate per side per minute
     private static final double HOBBLE_MULT = 0.5;    // an injured player who plays on contributes at half
+    private static final double ASSIST_CHANCE = 0.65;
+    private static final double BASE_FOUL_RATE = 0.13;   // ~11-12 fouls/team/90min at aggression 1.0
 
     private final TeamStrengthCalculator teamStrengthCalculator;
     private final FitnessCalculator fitnessCalculator;
@@ -68,6 +70,8 @@ public class LiveMatchEngine {
         Random rng = new Random(cfg.seed());
         Random attrRng = new Random(cfg.seed() ^ 0x9E3779B97F4A7C15L);
         Random injuryRng = new Random(cfg.seed() ^ 0x1A70F1E5L);
+        Random assistRng = new Random(cfg.seed() ^ 0x5A551571L);
+        Random foulRng = new Random(cfg.seed() ^ 0xF0011E5L);
 
         Side home = buildSide(true, cfg.homeXi(), cfg.homeBench());
         Side away = buildSide(false, cfg.awayXi(), cfg.awayBench());
@@ -115,13 +119,15 @@ public class LiveMatchEngine {
                     homeInput.defense() * homeFf + HOME_ADVANTAGE) * tempo;
 
             if (rng.nextDouble() < homeChance) {
-                if (resolveScoringEvent(minute, home, homeInput, rng, attrRng, events)) homeGoals++;
+                if (resolveScoringEvent(minute, home, homeInput, rng, attrRng, assistRng, events)) homeGoals++;
             }
             if (rng.nextDouble() < awayChance) {
-                if (resolveScoringEvent(minute, away, awayInput, rng, attrRng, events)) awayGoals++;
+                if (resolveScoringEvent(minute, away, awayInput, rng, attrRng, assistRng, events)) awayGoals++;
             }
             maybeCard(minute, home, homeInput, rng, attrRng, events);
             maybeCard(minute, away, awayInput, rng, attrRng, events);
+            maybeFoul(minute, home, homeInput, foulRng, events);
+            maybeFoul(minute, away, awayInput, foulRng, events);
 
             if (rng.nextDouble() < CHANCE_RATE && !home.onPitch.isEmpty()) {
                 events.add(new LiveTimelineEvent(minute, EventType.CHANCE, true,
@@ -319,17 +325,72 @@ public class LiveMatchEngine {
     }
 
     /**
+     * Silent foul simulation: a per-minute per-side chance, scaled by aggression exactly like
+     * {@link #maybeCard}, drawn entirely from the dedicated foul stream (chance roll AND
+     * attribution pick both come from {@code foulRng}) so the match/attribution/injury streams
+     * are untouched. FOUL events are never rendered in the live feed (filtered in
+     * {@code LiveMatchService.toState}) and never persisted to match_events — they exist only so
+     * {@code LiveMatchService.finish()} can count them into fixture_appearance.fouls.
+     */
+    private void maybeFoul(int minute, Side side, TeamMatchInput input, Random foulRng,
+                          List<LiveTimelineEvent> events) {
+        if (foulRng.nextDouble() < BASE_FOUL_RATE * input.aggression() && !side.onPitch.isEmpty()) {
+            UUID fouler = pickByWeight(side, LiveMatchEngine::foulWeight, foulRng);
+            events.add(new LiveTimelineEvent(minute, EventType.FOUL, side.home, fouler, null, null, null));
+        }
+    }
+
+    /**
+     * Weighted random pick over the on-pitch players EXCLUDING one id (keeps an assister
+     * distinct from the scorer). Returns null if no eligible teammate remains on the pitch
+     * (e.g. a heavily red-carded side) — the goal is simply left unassisted in that case.
+     */
+    private UUID pickByWeightExcluding(Side side, UUID exclude, ToIntFunction<Player> weight, Random rng) {
+        List<UUID> pool = side.onPitch.stream().filter(id -> !id.equals(exclude)).toList();
+        if (pool.isEmpty()) {
+            return null;
+        }
+        int totalWeight = pool.stream().mapToInt(id -> Math.max(0, weight.applyAsInt(side.all.get(id)))).sum();
+        if (totalWeight <= 0) {
+            return pool.get(rng.nextInt(pool.size()));
+        }
+        int pick = rng.nextInt(totalWeight);
+        int acc = 0;
+        for (UUID id : pool) {
+            acc += Math.max(0, weight.applyAsInt(side.all.get(id)));
+            if (pick < acc) return id;
+        }
+        return pool.get(pool.size() - 1);
+    }
+
+    /** Creative-passing composite for assist attribution: playmakers and wide players lead. */
+    private static int assistWeight(Player p) {
+        return p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO)
+                + p.attribute(Attribute.CRUZAMENTO) + 10;
+    }
+
+    /** Foul propensity composite: aggressive, tackle-heavy players commit more fouls. */
+    private static int foulWeight(Player p) {
+        return p.attribute(Attribute.AGRESSIVIDADE) + p.attribute(Attribute.DESARME) + 10;
+    }
+
+    /**
      * Resolves one scoring chance: open play or a distinct set piece. Returns true when a goal
      * was actually scored — a missed penalty emits PENALTY_MISSED and returns false. RNG use:
      * the set-piece?/subtype/conversion rolls draw from the match stream; scorer picks draw from
-     * the attribution stream, mirroring the pre-split draw discipline. For CORNER_GOAL the
-     * corner taker rides in {@code playerInId} so commentary can name taker and scorer.
+     * the attribution stream; the open-play assist chance+pick draws from the dedicated assist
+     * stream, never disturbing the match/attribution/injury streams. For CORNER_GOAL the corner
+     * taker rides in {@code playerInId} so commentary can name taker and scorer, and — per the
+     * player-stats feature — that taker also counts as the assist at persistence time.
      */
     private boolean resolveScoringEvent(int minute, Side side, TeamMatchInput input, Random rng,
-                                        Random attrRng, List<LiveTimelineEvent> events) {
+                                        Random attrRng, Random assistRng, List<LiveTimelineEvent> events) {
         if (rng.nextDouble() >= SetPieces.share(input.cornerThreat(), input.freeKickThreat())) {
             UUID scorer = pickByWeight(side, LiveMatchEngine::goalWeight, attrRng);
-            events.add(new LiveTimelineEvent(minute, EventType.GOAL, side.home, scorer, null, null, null));
+            UUID assister = assistRng.nextDouble() < ASSIST_CHANCE
+                    ? pickByWeightExcluding(side, scorer, LiveMatchEngine::assistWeight, assistRng)
+                    : null;
+            events.add(new LiveTimelineEvent(minute, EventType.GOAL, side.home, scorer, assister, null, null));
             return true;
         }
         List<Player> onPitch = side.onPitch.stream().map(side.all::get).toList();

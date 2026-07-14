@@ -34,5 +34,6 @@ class EventTypeTest {
         // LiveCommentary.pick derives variant choice from ordinal — pre-split values must not shift.
         assertThat(EventType.GOAL.ordinal()).isZero();
         assertThat(EventType.HALF_TIME.ordinal()).isEqualTo(8);
+        assertThat(EventType.FOUL.isGoal()).isFalse();
     }
 }
