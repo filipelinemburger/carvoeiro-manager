@@ -389,7 +389,11 @@ public class LiveMatchService {
     private LiveMatchState toState(LiveMatch lm, SaveGame save, LiveMatchConfig cfg, LiveTimeline timeline) {
         int minute = lm.getCommittedMinute();
 
-        List<LiveTimelineEvent> revealed = timeline.eventsThrough(minute);
+        // FOUL events exist only for fixture_appearance.fouls counting (see finish()) — silent by
+        // design, they never reach the commentary feed.
+        List<LiveTimelineEvent> revealed = timeline.eventsThrough(minute).stream()
+                .filter(e -> e.type() != EventType.FOUL)
+                .toList();
         Map<UUID, Player> byId = indexAll(cfg);
         boolean losingStreak = losingStreakHalfTime(lm.getSaveGameId(), save.getManagedClubId());
         List<LiveEventResponse> events = revealed.stream().map(e -> new LiveEventResponse(

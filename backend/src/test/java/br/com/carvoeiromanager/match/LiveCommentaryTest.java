@@ -135,4 +135,21 @@ class LiveCommentaryTest {
                 "Hora do cafezinho, torcida! Os times vão pro vestiário e a gente já volta com mais",
                 "Fim de primeiro tempo, e olha que jogo emocionante estamos tendo hoje!");
     }
+
+    @Test
+    void anAssistedGoalUsesTheTwoNamePoolNamingBothPlayers() {
+        String result = LiveCommentary.of(EventType.GOAL, "Otero", "Diego", 60, null, false, false);
+        assertThat(result).contains("Otero").contains("Diego");
+    }
+
+    @Test
+    void anUnassistedGoalKeepsUsingTheOneNamePool() {
+        assertThat(LiveCommentary.of(EventType.GOAL, "Otero", null, 60, null, false, false)).isIn(
+                "GOOOOOOOOOOOOOOOOOOL! Otero balança as redes!",
+                "Otero marca! É GOOOOOOOOOOOOOOOOOOL!!! E que golaaaaçoooo!",
+                "Otero aparece na área e não perdoa! É GOOOOOOOOOOOOOOOOOOL!!!",
+                "GOOOOL! Otero! Eu tô emocionado, gente, que golaço impressionante!",
+                "É GOOOOOOOOOOOOOOOOOOL!!! Bateu, tremeu a rede e caiu o estádio: golaço de Otero!",
+                "Joga a luva, goleirão! Otero manda uma patada e é gooooooooooool!");
+    }
 }

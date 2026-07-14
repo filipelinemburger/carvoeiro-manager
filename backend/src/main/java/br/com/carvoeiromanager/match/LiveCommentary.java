@@ -17,6 +17,11 @@ public final class LiveCommentary {
             "GOOOOL! %s! Eu tô emocionado, gente, que golaço impressionante!",
             "É GOOOOOOOOOOOOOOOOOOL!!! Bateu, tremeu a rede e caiu o estádio: golaço de %s!",
             "Joga a luva, goleirão! %s manda uma patada e é gooooooooooool!"};
+    private static final String[] GOAL_ASSISTED = {
+            "%s cruza na medida, %s aparece... É GOOOOOOOOOOOOOOOOOOL!!!",
+            "Belo passe de %s, %s só teve o trabalho de empurrar pra dentro! GOOOOOOOOOOOOOOOOOOL!",
+            "%s enxergou o espaço, tocou pra %s, e é GOOOOOOOOOOOOOOOOOOL!!! Que jogada coletiva!",
+            "Assistência de %s! %s bateu de primeira e mandou pro fundo do gol! GOOOOOOOOOOOOL!"};
     private static final String[] SET_PIECE = {
             "De bola parada... É GOOOOOOOOOOOOOOOOOOL!!! %s converte!", "%s marca na cobrança!"};
     private static final String[] CHANCE = {
@@ -101,13 +106,14 @@ public final class LiveCommentary {
             "Reorganização no adversário, buscando equilíbrio dentro de campo."};
 
     /**
-     * {@code inName} is only used for substitutions and corner goals (the corner taker).
-     * {@code detail} only for TACTICS_CHANGE. {@code comebackGoal} true only for a goal-family
-     * type that erases a deficit for the managed club — appends the signature line after the
-     * normal goal description, so the scorer and the goal itself are still described.
-     * {@code losingStreakHalfTime} true only at HALF_TIME when the managed club has lost each
-     * of its last 2 completed fixtures — overrides the normal half-time pool with the signature
-     * line (half-time has no per-event scorer/action to preserve, unlike a goal).
+     * {@code inName} is used for substitutions, corner goals (the corner taker), and assisted
+     * open-play goals (the assister — {@code playerInId} on the event). {@code detail} only for
+     * TACTICS_CHANGE. {@code comebackGoal} true only for a goal-family type that erases a deficit
+     * for the managed club — appends the signature line after the normal goal description, so
+     * the scorer and the goal itself are still described. {@code losingStreakHalfTime} true only
+     * at HALF_TIME when the managed club has lost each of its last 2 completed fixtures —
+     * overrides the normal half-time pool with the signature line (half-time has no per-event
+     * scorer/action to preserve, unlike a goal).
      */
     public static String of(EventType type, String playerName, String inName, int minute, String detail,
                              boolean comebackGoal, boolean losingStreakHalfTime) {
@@ -115,7 +121,9 @@ public final class LiveCommentary {
             return LOSING_STREAK_HALF_TIME_LINE;
         }
         String base = switch (type) {
-            case GOAL -> pick(GOAL, playerName, minute, type);
+            case GOAL -> inName != null
+                    ? pick2(GOAL_ASSISTED, inName, playerName, minute, type)
+                    : pick(GOAL, playerName, minute, type);
             case SET_PIECE_GOAL -> pick(SET_PIECE, playerName, minute, type);
             case CHANCE -> pick(CHANCE, playerName, minute, type);
             case YELLOW_CARD -> pick(YELLOW, playerName, minute, type);
@@ -128,9 +136,8 @@ public final class LiveCommentary {
             case PENALTY_MISSED -> pick(PENALTY_MISS_LINES, playerName, minute, type);
             case FREE_KICK_GOAL -> pick(FREE_KICK_LINES, playerName, minute, type);
             case CORNER_GOAL -> corner(playerName, inName, minute);
-            // FOUL commentary lines land in a later task; a compile-time-exhaustive switch requires
-            // this arm to exist now that EventType has a 14th member.
-            case FOUL -> throw new IllegalStateException("LiveCommentary does not support FOUL yet");
+            case FOUL -> throw new IllegalStateException(
+                    "FOUL is never rendered — LiveMatchService.toState() must filter it before calling of()");
         };
         return comebackGoal && type.isGoal() ? base + " " + COMEBACK_GOAL_LINE : base;
     }
