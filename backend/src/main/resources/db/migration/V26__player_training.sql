@@ -1,0 +1,2 @@
+ALTER TABLE players ADD COLUMN training_focus VARCHAR(20);
+ALTER TABLE players ADD COLUMN training_intensity VARCHAR(10) NOT NULL DEFAULT 'NORMAL';

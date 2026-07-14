@@ -95,6 +95,14 @@ public class Player {
     @Column(name = "listed_reason", length = 16)
     private ListedReason listedReason;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "training_focus", length = 20)
+    private Attribute trainingFocus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "training_intensity", nullable = false, length = 10)
+    private TrainingIntensity trainingIntensity = TrainingIntensity.NORMAL;
+
     @Column(name = "season_appearances", nullable = false)
     private int seasonAppearances;
 
@@ -266,6 +274,16 @@ public class Player {
 
     public boolean isTransferListed() { return transferListed; }
     public ListedReason getListedReason() { return listedReason; }
+
+    public Attribute getTrainingFocus() { return trainingFocus; }
+    public TrainingIntensity getTrainingIntensity() { return trainingIntensity; }
+
+    /** Sets the manager's standing training instruction for this player; a null focus opts out. */
+    public void setTrainingAssignment(Attribute focus, TrainingIntensity intensity) {
+        this.trainingFocus = focus;
+        this.trainingIntensity = intensity == null ? TrainingIntensity.NORMAL : intensity;
+    }
+
     public int getSeasonAppearances() { return seasonAppearances; }
 
     /** Puts the player up for transfer with the given reason; overwrites any prior reason. */
