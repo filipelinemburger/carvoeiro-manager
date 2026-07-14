@@ -1,8 +1,8 @@
 CREATE TABLE fixture_appearance (
     id              UUID PRIMARY KEY,
     fixture_id      UUID NOT NULL REFERENCES fixtures(id) ON DELETE CASCADE,
-    player_id       UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-    club_id         UUID NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+    player_id       UUID NOT NULL REFERENCES players(id),
+    club_id         UUID NOT NULL REFERENCES clubs(id),
     minutes_played  INT NOT NULL,
     fouls           INT NOT NULL DEFAULT 0
 );
