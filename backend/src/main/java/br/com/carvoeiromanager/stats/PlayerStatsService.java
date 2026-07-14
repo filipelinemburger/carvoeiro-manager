@@ -66,9 +66,7 @@ public class PlayerStatsService {
         saveGameService.requireOwned(saveGameId, userId);
 
         List<SeasonStatsLine> current = currentSeasonLines(saveGameId, playerId);
-        List<SeasonStatsLine> archived = seasonPlayerStatsRepository.findByPlayerId(playerId).stream()
-                .map(this::toLine)
-                .toList();
+        List<SeasonStatsLine> archived = archivedSeasonLines(saveGameId, playerId);
 
         List<SeasonStatsLine> seasons = new ArrayList<>();
         seasons.addAll(current);
@@ -96,8 +94,26 @@ public class PlayerStatsService {
         return lines;
     }
 
-    private SeasonStatsLine toLine(SeasonPlayerStats row) {
-        Season season = seasonRepository.findById(row.getSeasonId()).orElseThrow();
+    /**
+     * Archived stat lines for this player, restricted to the requesting save game. {@code
+     * SeasonPlayerStats} has no {@code saveGameId} column of its own — it only reaches one
+     * indirectly through {@code Season.saveGameId} — so a row belonging to a different save game
+     * (possibly a different user's career, if the same player id happens to recur) must be
+     * resolved and filtered out here rather than trusted at face value.
+     */
+    private List<SeasonStatsLine> archivedSeasonLines(UUID saveGameId, UUID playerId) {
+        List<SeasonStatsLine> lines = new ArrayList<>();
+        for (SeasonPlayerStats row : seasonPlayerStatsRepository.findByPlayerId(playerId)) {
+            Season season = seasonRepository.findById(row.getSeasonId()).orElseThrow();
+            if (!season.getSaveGameId().equals(saveGameId)) {
+                continue;
+            }
+            lines.add(toLine(row, season));
+        }
+        return lines;
+    }
+
+    private SeasonStatsLine toLine(SeasonPlayerStats row, Season season) {
         return new SeasonStatsLine(season.getSeasonYear(), season.getCompetitionName(),
                 row.getMatchesPlayed(), row.getMinutesPlayed(), row.getGoals(), row.getAssists(),
                 row.getFouls(), row.getYellowCards(), row.getRedCards());

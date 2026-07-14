@@ -16,6 +16,10 @@ import br.com.carvoeiromanager.match.MatchEvent;
 import br.com.carvoeiromanager.match.MatchEventRepository;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
+import br.com.carvoeiromanager.season.Season;
+import br.com.carvoeiromanager.season.SeasonPlayerStats;
+import br.com.carvoeiromanager.season.SeasonPlayerStatsRepository;
+import br.com.carvoeiromanager.season.SeasonRepository;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +46,8 @@ class PlayerStatsServiceIT {
     @Autowired PlayerRepository playerRepository;
     @Autowired FixtureAppearanceRepository fixtureAppearanceRepository;
     @Autowired MatchEventRepository matchEventRepository;
+    @Autowired SeasonRepository seasonRepository;
+    @Autowired SeasonPlayerStatsRepository seasonPlayerStatsRepository;
 
     @Test
     void currentSeasonStatsAggregateAppearancesAndEventsForOnePlayer() {
@@ -93,6 +99,43 @@ class PlayerStatsServiceIT {
 
         PlayerStatsResponse response = playerStatsService.getStats(saveGameId, player.getId(), user.getId());
 
+        assertThat(response.seasons()).isEmpty();
+        assertThat(response.totals().matchesPlayed()).isZero();
+        assertThat(response.totals().goals()).isZero();
+    }
+
+    @Test
+    void archivedStatsFromADifferentSaveGameAreNotLeakedIntoThisSavesResponse() {
+        // Save game A hosts the archived Season + SeasonPlayerStats row.
+        User userA = User.create("stats_iso_a_" + UUID.randomUUID(), "hash");
+        userRepository.save(userA);
+        SaveGameResponse saveA = saveGameService.createCareer(userA.getId());
+        Competition competitionA = competitionRepository.findBySaveGameId(saveA.id()).get(0);
+
+        // Save game B is the one actually being queried, by a different user entirely.
+        User userB = User.create("stats_iso_b_" + UUID.randomUUID(), "hash");
+        userRepository.save(userB);
+        SaveGameResponse saveB = saveGameService.createCareer(userB.getId());
+        Competition competitionB = competitionRepository.findBySaveGameId(saveB.id()).get(0);
+        Fixture fixtureB = fixtureRepository
+                .findBySaveGameIdAndCompetitionId(saveB.id(), competitionB.getId()).get(0);
+        Player playerB = playerRepository.findByClubId(fixtureB.getHomeClubId()).get(0);
+
+        // Archive a SeasonPlayerStats row under save game A's season, but keyed to save B's
+        // player id — reproducing the exact collision scenario the isolation gap allowed:
+        // season_player_stats has no saveGameId column of its own, only reaching one indirectly
+        // through Season.saveGameId, so a row must never be trusted without checking that join.
+        Season seasonA = Season.create(saveA.id(), competitionA.getId(), competitionA.getSeasonYear(),
+                competitionA.getName(), UUID.randomUUID(), "Champion FC",
+                saveA.managedClubId(), "Managed FC", 1);
+        seasonRepository.save(seasonA);
+        seasonPlayerStatsRepository.save(SeasonPlayerStats.create(seasonA.getId(), playerB.getId(),
+                playerB.getName(), fixtureB.getHomeClubId(), "Some Club", 30, 2700, 10, 5, 12, 3, 0));
+
+        PlayerStatsResponse response = playerStatsService.getStats(saveB.id(), playerB.getId(), userB.getId());
+
+        assertThat(response.seasons()).noneMatch(l -> l.competitionName().equals(competitionA.getName())
+                && l.seasonYear() == competitionA.getSeasonYear());
         assertThat(response.seasons()).isEmpty();
         assertThat(response.totals().matchesPlayed()).isZero();
         assertThat(response.totals().goals()).isZero();
