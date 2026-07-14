@@ -66,6 +66,7 @@ public class SeasonRolloverService {
     private final SeasonRepository seasonRepository;
     private final SeasonStandingRepository seasonStandingRepository;
     private final SeasonTopScorerRepository seasonTopScorerRepository;
+    private final SeasonPlayerStatsRepository seasonPlayerStatsRepository;
     private final PlayerAgingService playerAgingService;
     private static final int FREE_AGENT_FLOOR = 6;
 
@@ -77,6 +78,8 @@ public class SeasonRolloverService {
     private final SeasonEventRepository seasonEventRepository;
     private final NewsItemRepository newsItemRepository;
     private final YouthDevelopmentService youthDevelopmentService;
+    private final br.com.carvoeiromanager.stats.PlayerStatsService playerStatsService;
+    private final br.com.carvoeiromanager.match.FixtureAppearanceRepository fixtureAppearanceRepository;
 
     private static final int MAX_INTAKE_PER_SEASON = 3;
     private static final int ACADEMY_TARGET = 10;
@@ -87,6 +90,7 @@ public class SeasonRolloverService {
                                  CompetitionRepository competitionRepository,
                                  FixtureRepository fixtureRepository,
                                  MatchEventRepository matchEventRepository,
+                                 br.com.carvoeiromanager.match.FixtureAppearanceRepository fixtureAppearanceRepository,
                                  ClubRepository clubRepository,
                                  PlayerRepository playerRepository,
                                  LineupRepository lineupRepository,
@@ -96,6 +100,8 @@ public class SeasonRolloverService {
                                  SeasonRepository seasonRepository,
                                  SeasonStandingRepository seasonStandingRepository,
                                  SeasonTopScorerRepository seasonTopScorerRepository,
+                                 SeasonPlayerStatsRepository seasonPlayerStatsRepository,
+                                 br.com.carvoeiromanager.stats.PlayerStatsService playerStatsService,
                                  PlayerAgingService playerAgingService,
                                  NewgenGenerator newgenGenerator,
                                  FreeAgentGenerator freeAgentGenerator,
@@ -110,6 +116,7 @@ public class SeasonRolloverService {
         this.competitionRepository = competitionRepository;
         this.fixtureRepository = fixtureRepository;
         this.matchEventRepository = matchEventRepository;
+        this.fixtureAppearanceRepository = fixtureAppearanceRepository;
         this.clubRepository = clubRepository;
         this.playerRepository = playerRepository;
         this.lineupRepository = lineupRepository;
@@ -119,6 +126,8 @@ public class SeasonRolloverService {
         this.seasonRepository = seasonRepository;
         this.seasonStandingRepository = seasonStandingRepository;
         this.seasonTopScorerRepository = seasonTopScorerRepository;
+        this.seasonPlayerStatsRepository = seasonPlayerStatsRepository;
+        this.playerStatsService = playerStatsService;
         this.playerAgingService = playerAgingService;
         this.newgenGenerator = newgenGenerator;
         this.freeAgentGenerator = freeAgentGenerator;
@@ -156,6 +165,7 @@ public class SeasonRolloverService {
                     .map(Fixture::getId).toList();
             if (!fixtureIds.isEmpty()) {
                 matchEventRepository.deleteByFixtureIdIn(fixtureIds);
+                fixtureAppearanceRepository.deleteByFixtureIdIn(fixtureIds);
             }
             fixtureRepository.deleteAll(
                     fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, competition.getId()));
@@ -315,6 +325,20 @@ public class SeasonRolloverService {
             seasonTopScorerRepository.save(SeasonTopScorer.create(season.getId(), rank++,
                     scorer.playerId(), scorer.playerName(), scorer.clubId(), scorer.clubName(),
                     scorer.goals()));
+        }
+
+        Map<UUID, br.com.carvoeiromanager.player.Player> playersById = playerRepository
+                .findBySaveGameId(saveGameId).stream()
+                .collect(Collectors.toMap(br.com.carvoeiromanager.player.Player::getId, Function.identity()));
+        for (Map.Entry<UUID, br.com.carvoeiromanager.stats.PlayerStatsService.CompetitionPlayerAggregate> entry
+                : playerStatsService.aggregateCompetition(saveGameId, competition.getId()).entrySet()) {
+            br.com.carvoeiromanager.stats.PlayerStatsService.CompetitionPlayerAggregate agg = entry.getValue();
+            br.com.carvoeiromanager.player.Player player = playersById.get(entry.getKey());
+            String playerName = player != null ? player.getName() : "";
+            String clubName = agg.clubId() != null ? clubNameById.getOrDefault(agg.clubId(), "") : "";
+            seasonPlayerStatsRepository.save(SeasonPlayerStats.create(season.getId(), entry.getKey(), playerName,
+                    agg.clubId(), clubName, agg.matchesPlayed(), agg.minutesPlayed(), agg.goals(),
+                    agg.assists(), agg.fouls(), agg.yellowCards(), agg.redCards()));
         }
     }
 

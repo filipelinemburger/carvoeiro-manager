@@ -121,11 +121,11 @@ public class PlayerStatsService {
 
     /**
      * Aggregates EVERY player's stat line for one competition from currently-live season-scoped
-     * data. Package-private: called from here for a single player's live display, and from
+     * data. Public: called from here for a single player's live display, and from
      * {@code SeasonRolloverService} for every player at archival time — the only place this math
      * is written.
      */
-    Map<UUID, CompetitionPlayerAggregate> aggregateCompetition(UUID saveGameId, UUID competitionId) {
+    public Map<UUID, CompetitionPlayerAggregate> aggregateCompetition(UUID saveGameId, UUID competitionId) {
         List<UUID> fixtureIds = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, competitionId)
                 .stream().map(Fixture::getId).toList();
         if (fixtureIds.isEmpty()) {

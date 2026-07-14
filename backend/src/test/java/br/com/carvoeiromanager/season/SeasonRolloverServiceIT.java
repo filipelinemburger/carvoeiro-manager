@@ -17,6 +17,8 @@ import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.competition.StandingRow;
 import br.com.carvoeiromanager.competition.StandingsService;
+import br.com.carvoeiromanager.match.FixtureAppearance;
+import br.com.carvoeiromanager.match.FixtureAppearanceRepository;
 import br.com.carvoeiromanager.match.LineupService;
 import br.com.carvoeiromanager.match.LineupRepository;
 import br.com.carvoeiromanager.match.SetLineupRequest;
@@ -61,6 +63,8 @@ class SeasonRolloverServiceIT {
     @Autowired SeasonRepository seasonRepository;
     @Autowired SeasonStandingRepository seasonStandingRepository;
     @Autowired SeasonTopScorerRepository seasonTopScorerRepository;
+    @Autowired FixtureAppearanceRepository fixtureAppearanceRepository;
+    @Autowired SeasonPlayerStatsRepository seasonPlayerStatsRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -254,5 +258,32 @@ class SeasonRolloverServiceIT {
 
         // And: the managed lineup was cleared so the user must re-pick after rollover
         assertThat(lineupRepository.findBySaveGameIdAndClubId(c.id(), c.clubId())).isEmpty();
+    }
+
+    @Test
+    void rolloverArchivesSeasonPlayerStatsAndPurgesFixtureAppearance() {
+        Career c = createCareer();
+        List<LineupStarter> xi = lineupService.bestXi(c.clubId()).stream()
+                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .toList();
+        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi, null), c.userId());
+
+        Competition competition = competitionRepository.findBySaveGameId(c.id()).stream()
+                .filter(comp -> comp.getName().contains("Catarinense"))
+                .findFirst().orElseThrow();
+        Fixture fixture = fixtureRepository
+                .findBySaveGameIdAndCompetitionId(c.id(), competition.getId()).get(0);
+        Player player = playerRepository.findByClubId(fixture.getHomeClubId()).get(0);
+        fixtureAppearanceRepository.save(FixtureAppearance.create(
+                fixture.getId(), player.getId(), fixture.getHomeClubId(), 90, 5));
+
+        finishSeason(c);
+        rolloverService.rollover(c.id(), c.userId());
+
+        List<SeasonPlayerStats> archived = seasonPlayerStatsRepository.findByPlayerId(player.getId());
+        assertThat(archived).isNotEmpty();
+        assertThat(archived.get(0).getMinutesPlayed()).isGreaterThanOrEqualTo(90);
+
+        assertThat(fixtureAppearanceRepository.findByPlayerId(player.getId())).isEmpty();
     }
 }
