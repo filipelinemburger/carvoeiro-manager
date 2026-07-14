@@ -57,6 +57,7 @@ public class LiveMatchService {
     private final ClubRepository clubRepository;
     private final PlayerRepository playerRepository;
     private final MatchEventRepository matchEventRepository;
+    private final FixtureAppearanceRepository fixtureAppearanceRepository;
     private final MatchOutcomeApplier matchOutcomeApplier;
     private final SeasonAdvanceService seasonAdvanceService;
     private final ObjectMapper objectMapper;
@@ -68,6 +69,7 @@ public class LiveMatchService {
                             SeasonEventRepository seasonEventRepository, FixtureRepository fixtureRepository,
                             CompetitionRepository competitionRepository, ClubRepository clubRepository,
                             PlayerRepository playerRepository, MatchEventRepository matchEventRepository,
+                            FixtureAppearanceRepository fixtureAppearanceRepository,
                             MatchOutcomeApplier matchOutcomeApplier, SeasonAdvanceService seasonAdvanceService,
                             ObjectMapper objectMapper) {
         this.saveGameService = saveGameService;
@@ -83,6 +85,7 @@ public class LiveMatchService {
         this.clubRepository = clubRepository;
         this.playerRepository = playerRepository;
         this.matchEventRepository = matchEventRepository;
+        this.fixtureAppearanceRepository = fixtureAppearanceRepository;
         this.matchOutcomeApplier = matchOutcomeApplier;
         this.seasonAdvanceService = seasonAdvanceService;
         this.objectMapper = objectMapper;
@@ -272,11 +275,17 @@ public class LiveMatchService {
         fixtureRepository.save(fixture);
 
         // Persist real match events (goals + cards), mirroring the instant path's match_events rows.
+        // A goal-family event with a non-null playerInId (open-play assist, or a corner taker who
+        // IS the assist) also gets a sibling ASSIST row crediting that player.
         for (LiveTimelineEvent e : timeline.events()) {
             if (isCardOrGoal(e.type())) {
                 UUID clubId = e.home() ? homeClubId : awayClubId;
                 matchEventRepository.save(
                         MatchEvent.create(fixture.getId(), e.minute(), e.type().name(), e.playerId(), clubId));
+                if (e.type().isGoal() && e.playerInId() != null) {
+                    matchEventRepository.save(
+                            MatchEvent.create(fixture.getId(), e.minute(), "ASSIST", e.playerInId(), clubId));
+                }
             }
         }
 
@@ -300,11 +309,14 @@ public class LiveMatchService {
         List<Player> allPlayed = new ArrayList<>();
         allPlayed.addAll(homePlayed);
         allPlayed.addAll(awayPlayed);
+        Map<UUID, Integer> foulsByPlayer = foulsByPlayer(timeline);
         for (Player p : allPlayed) {
             int eff = cfg.fitness().getOrDefault(p.getId(), 100);
             int minutes = timeline.minutesPlayed().getOrDefault(p.getId(), 0);
             int newBase = fitnessCalculator.decayedBaseFitness(eff, p.getStamina(), p.getAge(), p.getPosition(), minutes);
             p.recordAppearance(newBase, lm.getMatchDate());
+            fixtureAppearanceRepository.save(FixtureAppearance.create(fixture.getId(), p.getId(), p.getClubId(),
+                    minutes, foulsByPlayer.getOrDefault(p.getId(), 0)));
         }
         playerRepository.saveAll(allPlayed);
 
@@ -325,6 +337,16 @@ public class LiveMatchService {
 
     private boolean isCardOrGoal(EventType t) {
         return t.isGoal() || t == EventType.YELLOW_CARD || t == EventType.RED_CARD;
+    }
+
+    private Map<UUID, Integer> foulsByPlayer(LiveTimeline timeline) {
+        Map<UUID, Integer> counts = new HashMap<>();
+        for (LiveTimelineEvent e : timeline.events()) {
+            if (e.type() == EventType.FOUL) {
+                counts.merge(e.playerId(), 1, Integer::sum);
+            }
+        }
+        return counts;
     }
 
     private String shortName(Club club) {

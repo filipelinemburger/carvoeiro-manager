@@ -44,6 +44,7 @@ public class FixtureSimulator {
     private final TeamStrengthCalculator teamStrengthCalculator;
     private final MatchSimulationService matchSimulationService;
     private final MatchEventRepository matchEventRepository;
+    private final FixtureAppearanceRepository fixtureAppearanceRepository;
     private final MatchOutcomeApplier matchOutcomeApplier;
     private final PlayerRepository playerRepository;
     private final ClubRepository clubRepository;
@@ -55,6 +56,7 @@ public class FixtureSimulator {
                             TeamStrengthCalculator teamStrengthCalculator,
                             MatchSimulationService matchSimulationService,
                             MatchEventRepository matchEventRepository,
+                            FixtureAppearanceRepository fixtureAppearanceRepository,
                             MatchOutcomeApplier matchOutcomeApplier,
                             PlayerRepository playerRepository,
                             ClubRepository clubRepository,
@@ -65,6 +67,7 @@ public class FixtureSimulator {
         this.teamStrengthCalculator = teamStrengthCalculator;
         this.matchSimulationService = matchSimulationService;
         this.matchEventRepository = matchEventRepository;
+        this.fixtureAppearanceRepository = fixtureAppearanceRepository;
         this.matchOutcomeApplier = matchOutcomeApplier;
         this.playerRepository = playerRepository;
         this.clubRepository = clubRepository;
@@ -172,6 +175,7 @@ public class FixtureSimulator {
 
         List<AttributedEvent> attributed = saveEvents(fixture, match, homeXi, awayXi,
                 homeProfile, awayProfile, homeClubId, awayClubId, seed);
+        persistAppearances(fixture, homeXi, awayXi, homeClubId, awayClubId, seed);
 
         Club homeClub = clubById.get(homeClubId);
         Club awayClub = clubById.get(awayClubId);
@@ -224,6 +228,20 @@ public class FixtureSimulator {
             }
         }
         return attributed;
+    }
+
+    /** Every starter plays all 90 minutes — the instant path has no substitutions. */
+    private void persistAppearances(Fixture fixture, List<Player> homeXi, List<Player> awayXi,
+                                    UUID homeClubId, UUID awayClubId, long seed) {
+        Map<UUID, Integer> fouls = foulCounts(homeXi, awayXi, seed);
+        for (Player p : homeXi) {
+            fixtureAppearanceRepository.save(FixtureAppearance.create(
+                    fixture.getId(), p.getId(), homeClubId, 90, fouls.getOrDefault(p.getId(), 0)));
+        }
+        for (Player p : awayXi) {
+            fixtureAppearanceRepository.save(FixtureAppearance.create(
+                    fixture.getId(), p.getId(), awayClubId, 90, fouls.getOrDefault(p.getId(), 0)));
+        }
     }
 
     /**

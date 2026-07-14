@@ -42,6 +42,7 @@ class FixtureSimulatorAssistFoulIT {
     @Autowired FixtureRepository fixtureRepository;
     @Autowired MatchEventRepository matchEventRepository;
     @Autowired PlayerRepository playerRepository;
+    @Autowired FixtureAppearanceRepository fixtureAppearanceRepository;
 
     private UUID saveGameId;
     private UUID managedClubId;
@@ -137,5 +138,25 @@ class FixtureSimulatorAssistFoulIT {
 
     private List<UUID> playerIdsFor(UUID clubId) {
         return playerRepository.findByClubId(clubId).stream().map(Player::getId).limit(11).toList();
+    }
+
+    @Test
+    void simulateRoundPersistsFixtureAppearanceRowsForEveryPlayerWhoPlayed() {
+        Competition competition = competitionRepository.findBySaveGameId(saveGameId).get(0);
+        List<Fixture> aiFixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, competition.getId())
+                .stream()
+                .filter(f -> !f.getHomeClubId().equals(managedClubId) && !f.getAwayClubId().equals(managedClubId))
+                .limit(5)
+                .toList();
+        SaveGame save = saveGameRepository.findById(saveGameId).orElseThrow();
+        fixtureSimulator.simulateRound(save, competition.getId(), aiFixtures);
+
+        List<UUID> fixtureIds = aiFixtures.stream().map(Fixture::getId).toList();
+        List<FixtureAppearance> appearances = fixtureAppearanceRepository.findByFixtureIdIn(fixtureIds);
+        assertThat(appearances).isNotEmpty();
+        assertThat(appearances).allMatch(a -> a.getMinutesPlayed() == 90);
+        assertThat(appearances).anyMatch(a -> a.getFouls() >= 0);
+        // 11 starters per side per fixture, no substitutions in the instant path.
+        assertThat(appearances.size()).isEqualTo(aiFixtures.size() * 22);
     }
 }

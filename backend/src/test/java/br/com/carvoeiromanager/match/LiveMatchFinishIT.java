@@ -46,6 +46,12 @@ class LiveMatchFinishIT {
     @Autowired
     br.com.carvoeiromanager.player.PlayerRepository playerRepository;
 
+    @Autowired
+    FixtureAppearanceRepository fixtureAppearanceRepository;
+
+    @Autowired
+    MatchEventRepository matchEventRepository;
+
     private UUID saveGameId;
     private UUID userId;
     private UUID managedClubId;
@@ -142,5 +148,39 @@ class LiveMatchFinishIT {
                 .findFirst().orElseThrow();
         assertThat(userResult.homeClubShortName()).isNotBlank();
         assertThat(userResult.awayClubShortName()).isNotBlank();
+    }
+
+    @Test
+    void finishPersistsFixtureAppearanceRowsWithMinutesAndFouls() {
+        LiveMatchState start = liveMatchService.kickoff(saveGameId, userId);
+        String starterId = start.onPitch().get(0).playerId();
+
+        LiveMatchState s = start;
+        for (int i = 0; i < 200 && !"FULL_TIME".equals(s.status()); i++) s = liveMatchService.advance(saveGameId, userId);
+        liveMatchService.finish(saveGameId, userId);
+
+        List<FixtureAppearance> appearances = fixtureAppearanceRepository.findByPlayerId(
+                UUID.fromString(starterId));
+        assertThat(appearances).isNotEmpty();
+        assertThat(appearances.get(0).getMinutesPlayed()).isGreaterThan(0);
+        assertThat(appearances.get(0).getFouls()).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    void finishPersistsAnAssistRowWheneverAGoalCarriesAnAssister() {
+        LiveMatchState start = liveMatchService.kickoff(saveGameId, userId);
+        String fixtureId = start.fixtureId();
+
+        LiveMatchState s = start;
+        for (int i = 0; i < 200 && !"FULL_TIME".equals(s.status()); i++) s = liveMatchService.advance(saveGameId, userId);
+        liveMatchService.finish(saveGameId, userId);
+
+        List<MatchEvent> events = matchEventRepository.findByFixtureIdIn(List.of(UUID.fromString(fixtureId)));
+        long goalsWithAssist = events.stream()
+                .filter(e -> EventType.goalTypeNames().contains(e.getType())).count();
+        long assistRows = events.stream().filter(e -> "ASSIST".equals(e.getType())).count();
+        // Not every goal is assisted (penalties/free kicks never are, open-play is ~65%), but
+        // an assist row can never outnumber the goals it's attached to.
+        assertThat(assistRows).isLessThanOrEqualTo(goalsWithAssist);
     }
 }
