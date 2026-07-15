@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -97,5 +98,21 @@ class StaffServiceIT {
         assertThatThrownBy(() -> staffService.hire(c.id(), c.clubId(), StaffRole.FISIOTERAPEUTA, 3, c.userId()))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getStatus().value()).isEqualTo(400));
+    }
+
+    @Test
+    void aClubFromADifferentSaveGameIsRejected() {
+        // A second, independent save game — its managed club must not be reachable through the
+        // first save game's id, even though both careers belong to the same authenticated user.
+        Career c1 = createCareer();
+        Career c2 = createCareer();
+
+        assertThatThrownBy(() -> staffService.getRoster(c1.id(), c2.clubId(), c1.userId()))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException api = (ApiException) ex;
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.CLUB_NOT_FOUND);
+                    assertThat(api.getStatus().value()).isEqualTo(404);
+                });
     }
 }

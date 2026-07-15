@@ -2,6 +2,8 @@ package br.com.carvoeiromanager.staff;
 
 import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.club.Club;
+import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import org.springframework.stereotype.Service;
@@ -20,16 +22,19 @@ public class StaffService {
     private final SaveGameService saveGameService;
     private final StaffRepository staffRepository;
     private final StaffCandidateGenerator staffCandidateGenerator;
+    private final ClubRepository clubRepository;
 
     public StaffService(SaveGameService saveGameService, StaffRepository staffRepository,
-                        StaffCandidateGenerator staffCandidateGenerator) {
+                        StaffCandidateGenerator staffCandidateGenerator, ClubRepository clubRepository) {
         this.saveGameService = saveGameService;
         this.staffRepository = staffRepository;
         this.staffCandidateGenerator = staffCandidateGenerator;
+        this.clubRepository = clubRepository;
     }
 
     public StaffRosterResponse getRoster(UUID saveGameId, UUID clubId, UUID userId) {
         saveGameService.requireOwned(saveGameId, userId);
+        requireClubInSave(saveGameId, clubId);
         Map<StaffRole, Staff> byRole = staffRepository.findByClubId(clubId).stream()
                 .collect(Collectors.toMap(Staff::getRole, s -> s));
         return toRosterResponse(byRole);
@@ -38,6 +43,7 @@ public class StaffService {
     public List<StaffCandidateResponse> getCandidates(UUID saveGameId, UUID clubId, StaffRole role,
                                                        UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        requireClubInSave(saveGameId, clubId);
         List<StaffCandidate> candidates = staffCandidateGenerator.generate(
                 saveGameId, clubId, role, save.getCurrentDate(), CANDIDATE_COUNT);
         return toCandidateResponses(candidates);
@@ -47,6 +53,7 @@ public class StaffService {
     public StaffRosterResponse hire(UUID saveGameId, UUID clubId, StaffRole role, int candidateIndex,
                                     UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        requireClubInSave(saveGameId, clubId);
         List<StaffCandidate> candidates = staffCandidateGenerator.generate(
                 saveGameId, clubId, role, save.getCurrentDate(), CANDIDATE_COUNT);
         if (candidateIndex < 0 || candidateIndex >= candidates.size()) {
@@ -65,6 +72,20 @@ public class StaffService {
                 chosen.name(), chosen.wage()));
 
         return getRoster(saveGameId, clubId, userId);
+    }
+
+    /**
+     * Enforces that {@code clubId} actually belongs to {@code saveGameId} — without this,
+     * saveGameId ownership alone would let a caller read or hire staff against a clubId from a
+     * different save game (their own second career, or another user's, if the UUID were known).
+     * Mirrors {@code LineupService.requireOwnedClub}.
+     */
+    private void requireClubInSave(UUID saveGameId, UUID clubId) {
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new ApiException(ErrorCode.CLUB_NOT_FOUND, "Club not found"));
+        if (!club.getSaveGameId().equals(saveGameId)) {
+            throw new ApiException(ErrorCode.CLUB_NOT_FOUND, "Club not found");
+        }
     }
 
     private StaffRosterResponse toRosterResponse(Map<StaffRole, Staff> byRole) {
