@@ -13,7 +13,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class MatchOutcomeApplierTimelineTest {
 
-    private final MatchOutcomeApplier applier = new MatchOutcomeApplier(new FitnessCalculator());
+    private final MatchOutcomeApplier applier =
+            new MatchOutcomeApplier(new FitnessCalculator(), org.mockito.Mockito.mock(br.com.carvoeiromanager.staff.StaffEffectsService.class));
 
     private Player player(Position pos) {
         return Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", pos, 25, "BRA",

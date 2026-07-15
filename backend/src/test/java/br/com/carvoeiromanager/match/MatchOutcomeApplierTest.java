@@ -3,7 +3,9 @@ package br.com.carvoeiromanager.match;
 import br.com.carvoeiromanager.match.FitnessCalculator;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.Position;
+import br.com.carvoeiromanager.staff.StaffEffectsService;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.List;
 import java.util.UUID;
@@ -12,7 +14,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class MatchOutcomeApplierTest {
 
-    private final MatchOutcomeApplier applier = new MatchOutcomeApplier(new FitnessCalculator());
+    private final StaffEffectsService staffEffectsService = Mockito.mock(StaffEffectsService.class);
+    private final MatchOutcomeApplier applier =
+            new MatchOutcomeApplier(new FitnessCalculator(), staffEffectsService);
 
     private Player player(Position pos) {
         return Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", pos, 25, "BRA",
@@ -93,6 +97,8 @@ class MatchOutcomeApplierTest {
 
     @Test
     void exhaustedPlayersAreInjuredWithASeverityTierAndLayoff() {
+        Mockito.when(staffEffectsService.injuryRiskMultiplierFor(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(1.0);
         Player p = player(Position.MID);
         java.util.Map<java.util.UUID, Integer> fitness = java.util.Map.of(p.getId(), 1); // near-zero fitness
         MatchOutcomeApplier.Summary acc = new MatchOutcomeApplier.Summary();
@@ -114,6 +120,8 @@ class MatchOutcomeApplierTest {
     }
 
     private int countInjuries(int fitnessValue) {
+        Mockito.when(staffEffectsService.injuryRiskMultiplierFor(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(1.0);
         int injured = 0;
         java.util.Random rng = new java.util.Random(99);
         for (int i = 0; i < 5000; i++) {
@@ -186,5 +194,21 @@ class MatchOutcomeApplierTest {
 
         assertThat(fresh.getMorale()).isEqualTo(-1);
         assertThat(low.getMorale()).isEqualTo(-2);
+    }
+
+    @Test
+    void aZeroPhysioMultiplierMeansAnInjuryNeverRolls() {
+        Player p = player(Position.MID);
+        Mockito.when(staffEffectsService.injuryRiskMultiplierFor(p.getClubId(), true)).thenReturn(0.0);
+        java.util.Map<java.util.UUID, Integer> fitness = java.util.Map.of(p.getId(), 1); // near-zero fitness
+        MatchOutcomeApplier.Summary acc = new MatchOutcomeApplier.Summary();
+
+        // Even at near-zero fitness (a high real injury chance), a 0.0 multiplier must guarantee
+        // no injury ever rolls — run enough seeds that a real bug would show up reliably.
+        for (int seed = 0; seed < 200; seed++) {
+            applier.applyInjuries(List.of(p), fitness, new java.util.Random(seed), true, acc);
+        }
+
+        assertThat(p.getInjuryMatches()).isZero();
     }
 }

@@ -11,6 +11,7 @@ import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.Pressing;
 import br.com.carvoeiromanager.match.TimedTactics;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -27,8 +28,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class LiveMatchEngineTest {
 
+    private final br.com.carvoeiromanager.staff.StaffEffectsService staffEffectsService =
+            Mockito.mock(br.com.carvoeiromanager.staff.StaffEffectsService.class);
     private final LiveMatchEngine engine =
-            new LiveMatchEngine(new TeamStrengthCalculator(), new FitnessCalculator());
+            new LiveMatchEngine(new TeamStrengthCalculator(), new FitnessCalculator(), staffEffectsService);
+
+    {
+        Mockito.when(staffEffectsService.injuryRiskMultiplierFor(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(1.0);
+    }
 
     /** Reuse the same factory pattern as TeamStrengthCalculatorTest. */
     private static Player p(Position pos, int rating) {

@@ -3,6 +3,7 @@ package br.com.carvoeiromanager.match;
 import br.com.carvoeiromanager.player.InjurySeverity;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.Position;
+import br.com.carvoeiromanager.staff.StaffEffectsService;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -24,9 +25,11 @@ import java.util.UUID;
 public class MatchOutcomeApplier {
 
     private final FitnessCalculator fitnessCalculator;
+    private final StaffEffectsService staffEffectsService;
 
-    public MatchOutcomeApplier(FitnessCalculator fitnessCalculator) {
+    public MatchOutcomeApplier(FitnessCalculator fitnessCalculator, StaffEffectsService staffEffectsService) {
         this.fitnessCalculator = fitnessCalculator;
+        this.staffEffectsService = staffEffectsService;
     }
 
     public record TeamOutcome(List<Player> xi, int scored, int conceded, boolean managed) {
@@ -160,7 +163,8 @@ public class MatchOutcomeApplier {
                               Random rng, boolean managed, Summary acc) {
         for (Player p : playedXi) {
             int fitness = effectiveFitnessById.getOrDefault(p.getId(), 100);
-            double chance = fitnessCalculator.injuryChance(fitness, p.getAge());
+            double chance = fitnessCalculator.injuryChance(fitness, p.getAge())
+                    * staffEffectsService.injuryRiskMultiplierFor(p.getClubId(), managed);
             if (rng.nextDouble() < chance) {
                 InjurySeverity severity = InjurySeverity.roll(rng);
                 int matches = severity.layoffMatches(rng);

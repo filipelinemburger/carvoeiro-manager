@@ -3,6 +3,7 @@ package br.com.carvoeiromanager.match;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.InjurySeverity;
 import br.com.carvoeiromanager.player.Player;
+import br.com.carvoeiromanager.staff.StaffEffectsService;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -41,10 +42,13 @@ public class LiveMatchEngine {
 
     private final TeamStrengthCalculator teamStrengthCalculator;
     private final FitnessCalculator fitnessCalculator;
+    private final StaffEffectsService staffEffectsService;
 
-    public LiveMatchEngine(TeamStrengthCalculator teamStrengthCalculator, FitnessCalculator fitnessCalculator) {
+    public LiveMatchEngine(TeamStrengthCalculator teamStrengthCalculator, FitnessCalculator fitnessCalculator,
+                           StaffEffectsService staffEffectsService) {
         this.teamStrengthCalculator = teamStrengthCalculator;
         this.fitnessCalculator = fitnessCalculator;
+        this.staffEffectsService = staffEffectsService;
     }
 
     /** Mutable on-pitch bookkeeping for one side. */
@@ -425,12 +429,16 @@ public class LiveMatchEngine {
     private void maybeInjury(int minute, Side side, LiveMatchConfig cfg, Random injuryRng,
                              List<LiveTimelineEvent> events, List<TimedInjury> injuries) {
         if (side.onPitch.isEmpty()) return;
+        // side.home == Boolean.TRUE.equals(cfg.aiHome()) means this side is the AI-controlled one
+        // (LiveMatchService always passes aiHome = !managedIsHome, see LiveMatchService.java:397).
+        boolean sideManaged = side.home != Boolean.TRUE.equals(cfg.aiHome());
         // Aggregate the per-player match injury chance into a per-minute team chance, preserving the
         // low-fitness/age bias when picking who gets hurt.
         double teamChance = 0.0;
         for (UUID id : side.onPitch) {
             Player p = side.all.get(id);
-            teamChance += fitnessCalculator.injuryChance(cfg.fitness().getOrDefault(id, 100), p.getAge());
+            teamChance += fitnessCalculator.injuryChance(cfg.fitness().getOrDefault(id, 100), p.getAge())
+                    * staffEffectsService.injuryRiskMultiplierFor(p.getClubId(), sideManaged);
         }
         teamChance /= MINUTES;
         if (injuryRng.nextDouble() >= teamChance) return;
@@ -446,14 +454,19 @@ public class LiveMatchEngine {
     }
 
     private UUID pickInjured(Side side, LiveMatchConfig cfg, Random rng) {
+        boolean sideManaged = side.home != Boolean.TRUE.equals(cfg.aiHome());
         double total = 0.0;
         for (UUID id : side.onPitch) {
-            total += fitnessCalculator.injuryChance(cfg.fitness().getOrDefault(id, 100), side.all.get(id).getAge());
+            Player p = side.all.get(id);
+            total += fitnessCalculator.injuryChance(cfg.fitness().getOrDefault(id, 100), p.getAge())
+                    * staffEffectsService.injuryRiskMultiplierFor(p.getClubId(), sideManaged);
         }
         double pick = rng.nextDouble() * total;
         double acc = 0.0;
         for (UUID id : side.onPitch) {
-            acc += fitnessCalculator.injuryChance(cfg.fitness().getOrDefault(id, 100), side.all.get(id).getAge());
+            Player p = side.all.get(id);
+            acc += fitnessCalculator.injuryChance(cfg.fitness().getOrDefault(id, 100), p.getAge())
+                    * staffEffectsService.injuryRiskMultiplierFor(p.getClubId(), sideManaged);
             if (pick < acc) return id;
         }
         return side.onPitch.get(side.onPitch.size() - 1);
