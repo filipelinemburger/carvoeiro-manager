@@ -190,6 +190,7 @@ export function Layout({ children }: LayoutProps) {
         { to: `/table?saveGameId=${sgId}&competitionId=${standingsCompetitionId}&managedClubId=${managedClubId}`, label: 'Classificação' },
         { to: `/clubs?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Clubes' },
         { to: `/finances?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Finanças' },
+        { to: `/staff?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Comissão Técnica' },
         { to: `/transfers?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Mercado' },
         { to: `/history?saveGameId=${sgId}`, label: 'Histórico' },
         { to: `/news?saveGameId=${sgId}`, label: 'News' },

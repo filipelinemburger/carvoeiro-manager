@@ -30,6 +30,9 @@ import type {
   PlayerContract,
   PlayerResponse,
   SetTrainingRequest,
+  StaffRole,
+  StaffRoster,
+  StaffCandidate,
 } from './types'
 
 export function createCareer(req: CreateSaveGameRequest, token: string): Promise<SaveGameResponse> {
@@ -248,4 +251,29 @@ export function renewContract(
   token: string,
 ): Promise<PlayerContract> {
   return apiPost<PlayerContract>(`/save-games/${saveGameId}/players/${playerId}/renew`, req, token)
+}
+
+export function getStaffRoster(saveGameId: string, clubId: string, token: string): Promise<StaffRoster> {
+  return apiGet<StaffRoster>(`/save-games/${saveGameId}/clubs/${clubId}/staff`, token)
+}
+
+export function getStaffCandidates(
+  saveGameId: string,
+  clubId: string,
+  role: StaffRole,
+  token: string,
+): Promise<StaffCandidate[]> {
+  return apiGet<StaffCandidate[]>(
+    `/save-games/${saveGameId}/clubs/${clubId}/staff/candidates?role=${role}`, token)
+}
+
+export function hireStaff(
+  saveGameId: string,
+  clubId: string,
+  role: StaffRole,
+  candidateIndex: number,
+  token: string,
+): Promise<StaffRoster> {
+  return apiPut<StaffRoster>(
+    `/save-games/${saveGameId}/clubs/${clubId}/staff/${role}`, { candidateIndex }, token)
 }

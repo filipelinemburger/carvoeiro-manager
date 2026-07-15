@@ -14,6 +14,7 @@ import { TransferMarketPage } from './features/transfer/TransferMarketPage'
 import { FreeAgentsPage } from './features/contract/FreeAgentsPage'
 import { NewsPage } from './features/news/NewsPage'
 import { LiveMatchPage } from './features/match/LiveMatchPage'
+import { StaffPage } from './features/staff/StaffPage'
 import { Layout } from './components/Layout'
 import { useAuth } from './auth/AuthContext'
 import type { ReactNode } from 'react'
@@ -98,6 +99,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <FinancesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/staff"
+        element={
+          <ProtectedRoute>
+            <StaffPage />
           </ProtectedRoute>
         }
       />

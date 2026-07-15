@@ -449,6 +449,29 @@ export type RenewContractRequest = { wage: number; contractYears: number }
 export type SignFreeAgentRequest = { wage: number; contractYears: number }
 export type PlayerContract = { playerId: string; name: string; wage: number; contractYears: number }
 
+export type StaffRole = 'ASSISTENTE' | 'PREPARADOR_FISICO' | 'OLHEIRO' | 'FISIOTERAPEUTA'
+export type StaffQuality = 'REGULAR' | 'BOM' | 'EXCELENTE'
+
+export type StaffMember = {
+  name: string
+  quality: StaffQuality
+  wage: number
+}
+
+export type StaffRoster = {
+  assistente: StaffMember | null
+  preparadorFisico: StaffMember | null
+  olheiro: StaffMember | null
+  fisioterapeuta: StaffMember | null
+}
+
+export type StaffCandidate = {
+  index: number
+  name: string
+  quality: StaffQuality
+  wage: number
+}
+
 export type MakeOfferRequest = { playerId: string; amount: number; wage: number; contractYears: number }
 export type RespondOfferRequest = { action: 'ACCEPT' | 'REJECT' | 'COUNTER'; counterAmount: number | null }
 
