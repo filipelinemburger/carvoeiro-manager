@@ -1,8 +1,10 @@
 package br.com.carvoeiromanager.player;
 
+import br.com.carvoeiromanager.staff.StaffEffectsService;
 import org.springframework.stereotype.Component;
 
 import java.util.Random;
+import java.util.UUID;
 
 /**
  * Manager-directed training: biases one of a player's six anchor attributes beyond what the
@@ -15,13 +17,16 @@ import java.util.Random;
 public class TrainingService {
 
     private final OverallCalculator overallCalculator;
+    private final StaffEffectsService staffEffectsService;
 
-    public TrainingService(OverallCalculator overallCalculator) {
+    public TrainingService(OverallCalculator overallCalculator, StaffEffectsService staffEffectsService) {
         this.overallCalculator = overallCalculator;
+        this.staffEffectsService = staffEffectsService;
     }
 
     /** No-op when {@code focus} is null — "not training" must leave the player untouched. */
-    public void applyTraining(Player player, Attribute focus, TrainingIntensity intensity, Random rng) {
+    public void applyTraining(Player player, Attribute focus, TrainingIntensity intensity, Random rng,
+                              UUID clubId, boolean managed) {
         if (focus == null) {
             return;
         }
@@ -31,6 +36,7 @@ public class TrainingService {
             case NORMAL -> 2;
             case INTENSA -> 3;
         };
+        bonus += staffEffectsService.trainingBonusFor(clubId, managed);
 
         int pace = player.getPace();
         int finishing = player.getFinishing();

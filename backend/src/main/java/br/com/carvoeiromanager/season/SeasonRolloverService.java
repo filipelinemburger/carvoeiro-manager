@@ -253,10 +253,10 @@ public class SeasonRolloverService {
             player.resetSeasonState();
             if (managed) {
                 trainingService.applyTraining(player, player.getTrainingFocus(),
-                        player.getTrainingIntensity(), rng);
+                        player.getTrainingIntensity(), rng, player.getClubId(), true);
             } else if (!freeAgent) {
                 trainingService.applyTraining(player, TrainingService.heuristicFocusFor(player.getPosition()),
-                        TrainingIntensity.NORMAL, rng);
+                        TrainingIntensity.NORMAL, rng, player.getClubId(), false);
             }
             if (!freeAgent) {
                 player.setContractYears(player.getContractYears() - 1);
