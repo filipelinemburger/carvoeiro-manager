@@ -108,6 +108,10 @@ export function StaffPage() {
         <DialogContent>
           {hireMut.isError && <Alert severity="error" sx={{ mb: 2 }}>Não foi possível contratar.</Alert>}
           {candidates.isLoading && <Typography>Carregando candidatos…</Typography>}
+          {candidates.isError && <Alert severity="error" sx={{ mb: 2 }}>Erro ao carregar candidatos.</Alert>}
+          {candidates.isSuccess && (candidates.data ?? []).length === 0 && (
+            <Typography color="text.secondary">Nenhum candidato disponível.</Typography>
+          )}
           <List>
             {(candidates.data ?? []).map(c => (
               <ListItemButton

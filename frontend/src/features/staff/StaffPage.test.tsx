@@ -63,4 +63,14 @@ describe('StaffPage', () => {
       expect(mockHireStaff).toHaveBeenCalledWith('sg-1', 'club-1', 'OLHEIRO', 2, 'test-token'),
     )
   })
+
+  it('shows an error message when the candidate list fails to load', async () => {
+    mockGetStaffCandidates.mockRejectedValue(new Error('fail'))
+    renderPage()
+
+    await waitFor(() => screen.getByText('Olheiro'))
+    fireEvent.click(within(screen.getByTestId('staff-role-OLHEIRO')).getByRole('button', { name: /contratar/i }))
+
+    expect(await screen.findByText('Erro ao carregar candidatos.')).toBeInTheDocument()
+  })
 })
