@@ -7,6 +7,7 @@ import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
+import br.com.carvoeiromanager.staff.StaffEffectsService;
 import br.com.carvoeiromanager.transfer.TransferWindow;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,15 +28,18 @@ public class ContractService {
     private final PlayerRepository playerRepository;
     private final ContractValuation contractValuation;
     private final TransferWindow transferWindow;
+    private final StaffEffectsService staffEffectsService;
 
     public ContractService(SaveGameService saveGameService,
                            PlayerRepository playerRepository,
                            ContractValuation contractValuation,
-                           TransferWindow transferWindow) {
+                           TransferWindow transferWindow,
+                           StaffEffectsService staffEffectsService) {
         this.saveGameService = saveGameService;
         this.playerRepository = playerRepository;
         this.contractValuation = contractValuation;
         this.transferWindow = transferWindow;
+        this.staffEffectsService = staffEffectsService;
     }
 
     @Transactional
@@ -43,17 +47,20 @@ public class ContractService {
                                                 BigDecimal wage, int contractYears) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         Player player = requireManagedPlayer(saveGameId, save.getManagedClubId(), playerId);
-        applyTerms(player, wage, contractYears);
+        applyTerms(player, wage, contractYears, save.getManagedClubId());
         playerRepository.save(player);
         return toResponse(player);
     }
 
     public List<FreeAgentResponse> getFreeAgents(UUID saveGameId, UUID userId) {
-        saveGameService.requireOwned(saveGameId, userId);
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        BigDecimal scoutMult = BigDecimal.valueOf(
+                staffEffectsService.wageDemandMultiplierFor(save.getManagedClubId(), true));
         return playerRepository.findBySaveGameIdAndClubIdIsNull(saveGameId).stream()
                 .map(p -> new FreeAgentResponse(p.getId(), p.getName(), p.getPosition().name(),
                         p.getAge(), p.getOverall(),
-                        contractValuation.wageDemand(p.getOverall(), p.getAge())))
+                        contractValuation.wageDemand(p.getOverall(), p.getAge())
+                                .multiply(scoutMult).setScale(2, java.math.RoundingMode.HALF_UP)))
                 .sorted(Comparator.comparing(FreeAgentResponse::overall).reversed())
                 .toList();
     }
@@ -70,7 +77,7 @@ public class ContractService {
                 .filter(Player::isFreeAgent)
                 .orElseThrow(() -> new ApiException(ErrorCode.PLAYER_NOT_FOUND, "Free agent not found"));
 
-        applyTerms(player, wage, contractYears);   // validates length/wage + acceptance
+        applyTerms(player, wage, contractYears, save.getManagedClubId());   // validates length/wage + acceptance
         player.setClubId(save.getManagedClubId()); // joins the squad; no fee, no ledger
         playerRepository.save(player);
         return toResponse(player);
@@ -90,13 +97,16 @@ public class ContractService {
 
     // ---- shared helpers (signFreeAgent in Task 8 reuses applyTerms + validation) ----
 
-    void applyTerms(Player player, BigDecimal wage, int contractYears) {
+    void applyTerms(Player player, BigDecimal wage, int contractYears, UUID managedClubId) {
         if (!contractValuation.isValidLength(contractYears) || wage == null || wage.signum() <= 0) {
             throw new ApiException(ErrorCode.INVALID_CONTRACT,
                     "Contract length must be 1-5 years and wage must be positive");
         }
-        if (!contractValuation.acceptsWage(player.getOverall(), player.getAge(), wage)) {
-            BigDecimal demand = contractValuation.wageDemand(player.getOverall(), player.getAge());
+        BigDecimal scoutMult = BigDecimal.valueOf(
+                staffEffectsService.wageDemandMultiplierFor(managedClubId, true));
+        BigDecimal demand = contractValuation.wageDemand(player.getOverall(), player.getAge())
+                .multiply(scoutMult).setScale(2, java.math.RoundingMode.HALF_UP);
+        if (wage.compareTo(demand) < 0) {
             throw new ApiException(ErrorCode.PLAYER_REJECTS_TERMS,
                     "Player rejects these terms; demands at least " + demand);
         }

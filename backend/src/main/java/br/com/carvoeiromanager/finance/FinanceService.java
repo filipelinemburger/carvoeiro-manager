@@ -16,6 +16,9 @@ import br.com.carvoeiromanager.competition.StandingRow;
 import br.com.carvoeiromanager.competition.StandingsCalculator;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
+import br.com.carvoeiromanager.staff.Staff;
+import br.com.carvoeiromanager.staff.StaffEffectsService;
+import br.com.carvoeiromanager.staff.StaffRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,6 +56,8 @@ public class FinanceService {
     private final FixtureRepository fixtureRepository;
     private final FinanceTransactionRepository financeTransactionRepository;
     private final FinanceCalculator financeCalculator;
+    private final StaffRepository staffRepository;
+    private final StaffEffectsService staffEffectsService;
     private final StandingsCalculator standingsCalculator = new StandingsCalculator();
 
     public FinanceService(SaveGameService saveGameService,
@@ -63,7 +68,9 @@ public class FinanceService {
                           CompetitionClubRepository competitionClubRepository,
                           FixtureRepository fixtureRepository,
                           FinanceTransactionRepository financeTransactionRepository,
-                          FinanceCalculator financeCalculator) {
+                          FinanceCalculator financeCalculator,
+                          StaffRepository staffRepository,
+                          StaffEffectsService staffEffectsService) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.clubRepository = clubRepository;
@@ -73,6 +80,8 @@ public class FinanceService {
         this.fixtureRepository = fixtureRepository;
         this.financeTransactionRepository = financeTransactionRepository;
         this.financeCalculator = financeCalculator;
+        this.staffRepository = staffRepository;
+        this.staffEffectsService = staffEffectsService;
     }
 
     /**
@@ -195,23 +204,34 @@ public class FinanceService {
 
         List<Club> clubs = clubRepository.findBySaveGameId(saveGameId);
         Map<UUID, BigDecimal> wageBillByClub = monthlyWageBills(saveGameId);
+        Map<UUID, BigDecimal> staffWageBillByClub = monthlyStaffWageBills(saveGameId);
 
         for (Club club : clubs) {
+            boolean managed = club.getId().equals(managedClubId);
             BigDecimal wages = wageBillByClub.getOrDefault(club.getId(), BigDecimal.ZERO);
-            BigDecimal sponsorship = financeCalculator.monthlySponsorship(club.getReputation());
+            BigDecimal staffWages = staffWageBillByClub.getOrDefault(club.getId(), BigDecimal.ZERO);
+            BigDecimal sponsorshipMult = BigDecimal.valueOf(
+                    staffEffectsService.sponsorshipMultiplierFor(club.getId(), managed));
+            BigDecimal sponsorship = financeCalculator.monthlySponsorship(club.getReputation())
+                    .multiply(sponsorshipMult).setScale(2, java.math.RoundingMode.HALF_UP);
             BigDecimal upkeep = financeCalculator.monthlyUpkeep(club.getStadiumCapacity());
 
-            BigDecimal net = sponsorship.subtract(wages).subtract(upkeep);
+            BigDecimal net = sponsorship.subtract(wages).subtract(upkeep).subtract(staffWages);
             club.adjustBalance(net);
             clubRepository.save(club);
 
-            if (club.getId().equals(managedClubId)) {
+            if (managed) {
                 record(saveGameId, managedClubId, seasonYear, round,
                         FinanceTransactionType.SPONSOR, sponsorship, "Patrocínio mensal", monthDate);
                 record(saveGameId, managedClubId, seasonYear, round,
                         FinanceTransactionType.WAGES, wages.negate(), "Salários mensais", monthDate);
                 record(saveGameId, managedClubId, seasonYear, round,
                         FinanceTransactionType.UPKEEP, upkeep.negate(), "Manutenção mensal do estádio", monthDate);
+                if (staffWages.signum() > 0) {
+                    record(saveGameId, managedClubId, seasonYear, round,
+                            FinanceTransactionType.STAFF_WAGES, staffWages.negate(),
+                            "Salários da comissão técnica", monthDate);
+                }
             }
         }
         saveGame.setLastFinanceMonth(month);
@@ -286,6 +306,12 @@ public class FinanceService {
                         Collectors.reducing(BigDecimal.ZERO,
                                 p -> financeCalculator.monthlyWage(p.getOverall(), p.getAge()),
                                 BigDecimal::add)));
+    }
+
+    private Map<UUID, BigDecimal> monthlyStaffWageBills(UUID saveGameId) {
+        return staffRepository.findBySaveGameId(saveGameId).stream()
+                .collect(Collectors.groupingBy(Staff::getClubId,
+                        Collectors.reducing(BigDecimal.ZERO, Staff::getWage, BigDecimal::add)));
     }
 
     private void record(UUID saveGameId, UUID clubId, int seasonYear, int round,
