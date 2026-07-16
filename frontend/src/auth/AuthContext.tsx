@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import { apiPost } from '../api/client'
 import type { AuthResponse, LoginRequest, RegisterRequest } from '../api/types'
+import { TOKEN_KEY, USER_KEY, clearAuthStorage } from './authStorage'
 
 interface User {
   username: string
@@ -16,9 +17,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
-
-const TOKEN_KEY = 'carvoeiro_manager_token'
-const USER_KEY = 'carvoeiro_manager_user'
 
 function loadFromStorage(): { token: string | null; user: User | null } {
   const token = localStorage.getItem(TOKEN_KEY)
@@ -51,8 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(USER_KEY)
+    clearAuthStorage()
     setToken(null)
     setUser(null)
   }
