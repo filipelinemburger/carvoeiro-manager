@@ -21,7 +21,7 @@ vi.mock('../../api/career', () => ({
   signFreeAgent: vi.fn(),
 }))
 
-import { getSaveGame, getMarket, getClubs, getOffers, makeOffer, respondToOffer, getFreeAgents, getSquad } from '../../api/career'
+import { getSaveGame, getMarket, getClubs, getOffers, makeOffer, respondToOffer, withdrawOffer, getFreeAgents, getSquad } from '../../api/career'
 
 const SAVE_OPEN = {
   id: 'sg-1', seasonYear: 2026, competitionId: 'c-1', competitionName: 'Catarinense',
@@ -270,5 +270,158 @@ describe('TransferMarketPage', () => {
     await waitFor(() =>
       expect(getMarket).toHaveBeenCalledWith('sg-1', expect.anything(), 2, 20, 'test-token'),
     )
+  })
+
+  it('optimistically removes a withdrawn offer before the request resolves', async () => {
+    const OUTGOING = {
+      id: 'out1', playerId: 'p9', playerName: 'Alvo Nove', fromClubId: 'club-1', fromClubName: 'Criciúma',
+      toClubId: 'club-9', toClubName: 'Rival FC', direction: 'OUTGOING' as const, amount: 1000000,
+      counterAmount: 1300000, status: 'COUNTERED' as const, round: 0, wage: null, contractYears: null,
+    }
+    vi.mocked(getOffers).mockResolvedValue([OUTGOING])
+    let resolveWithdraw!: (v: typeof OUTGOING) => void
+    vi.mocked(withdrawOffer).mockReturnValue(new Promise(resolve => { resolveWithdraw = resolve }))
+
+    renderPage()
+    expect(await screen.findByText(/contraproposta de/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Desistir' }))
+
+    // Removed immediately — before the mocked request has resolved.
+    await waitFor(() => expect(screen.queryByText(/contraproposta de/i)).not.toBeInTheDocument())
+
+    resolveWithdraw({ ...OUTGOING, status: 'WITHDRAWN' })
+  })
+
+  it('restores the offer list if withdrawing fails', async () => {
+    const OUTGOING = {
+      id: 'out1', playerId: 'p9', playerName: 'Alvo Nove', fromClubId: 'club-1', fromClubName: 'Criciúma',
+      toClubId: 'club-9', toClubName: 'Rival FC', direction: 'OUTGOING' as const, amount: 1000000,
+      counterAmount: 1300000, status: 'COUNTERED' as const, round: 0, wage: null, contractYears: null,
+    }
+    vi.mocked(getOffers).mockResolvedValue([OUTGOING])
+    let rejectWithdraw!: (e: Error) => void
+    vi.mocked(withdrawOffer).mockReturnValue(new Promise((_, reject) => { rejectWithdraw = reject }))
+
+    renderPage()
+    expect(await screen.findByText(/contraproposta de/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Desistir' }))
+    await waitFor(() => expect(screen.queryByText(/contraproposta de/i)).not.toBeInTheDocument())
+
+    rejectWithdraw(new Error('network'))
+
+    // Rolled back once the rejection settles.
+    await waitFor(() => expect(screen.getByText(/contraproposta de/i)).toBeInTheDocument())
+  })
+
+  it('optimistically removes an accepted incoming offer and invalidates the squad', async () => {
+    vi.mocked(getOffers).mockResolvedValue([
+      { id: 'in1', playerId: 'mp1', playerName: 'Meu Jogador', fromClubId: 'club-9', fromClubName: 'Rival FC',
+        toClubId: 'club-1', toClubName: 'Criciúma', direction: 'INCOMING', amount: 2000000,
+        counterAmount: null, status: 'PENDING', round: 0, wage: null, contractYears: null },
+    ])
+    let resolveRespond!: (v: unknown) => void
+    vi.mocked(respondToOffer).mockReturnValue(new Promise(resolve => { resolveRespond = resolve }))
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+
+    render(
+      <MemoryRouter initialEntries={['/transfers?saveGameId=sg-1&clubId=club-1']}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <TransferMarketPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText('Meu Jogador')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aceitar' }))
+    await waitFor(() => expect(screen.queryByText('Meu Jogador')).not.toBeInTheDocument())
+
+    resolveRespond({
+      id: 'in1', playerId: 'mp1', playerName: 'Meu Jogador', fromClubId: 'club-9', fromClubName: 'Rival FC',
+      toClubId: 'club-1', toClubName: 'Criciúma', direction: 'INCOMING', amount: 2000000,
+      counterAmount: null, status: 'ACCEPTED', round: 0, wage: null, contractYears: null,
+    })
+
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['squad', 'sg-1', 'club-1'] }))
+  })
+
+  it('restores a rejected incoming offer if the request fails', async () => {
+    vi.mocked(getOffers).mockResolvedValue([
+      { id: 'in1', playerId: 'mp1', playerName: 'Meu Jogador', fromClubId: 'club-9', fromClubName: 'Rival FC',
+        toClubId: 'club-1', toClubName: 'Criciúma', direction: 'INCOMING', amount: 2000000,
+        counterAmount: null, status: 'PENDING', round: 0, wage: null, contractYears: null },
+    ])
+    let rejectRespond!: (e: Error) => void
+    vi.mocked(respondToOffer).mockReturnValue(new Promise((_, reject) => { rejectRespond = reject }))
+
+    renderPage()
+    expect(await screen.findByText('Meu Jogador')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Recusar' }))
+    await waitFor(() => expect(screen.queryByText('Meu Jogador')).not.toBeInTheDocument())
+
+    rejectRespond(new Error('network'))
+
+    // Rolled back once the rejection settles.
+    await waitFor(() => expect(screen.getByText('Meu Jogador')).toBeInTheDocument())
+  })
+
+  it('write-throughs an accepted outgoing offer without re-fetching offers, and invalidates market + squad', async () => {
+    vi.mocked(makeOffer).mockResolvedValue({
+      id: 'o1', playerId: 'p1', playerName: 'Alvo Um', fromClubId: 'club-1', fromClubName: 'Criciúma',
+      toClubId: 'club-9', toClubName: 'Rival FC', direction: 'OUTGOING', amount: 3000000,
+      counterAmount: null, status: 'ACCEPTED', round: 0, wage: null, contractYears: null,
+    })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+    render(
+      <MemoryRouter initialEntries={['/transfers?saveGameId=sg-1&clubId=club-1']}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <TransferMarketPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    openMarketTab()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    expect(getOffers).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: /fazer proposta/i }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/Valor para Alvo Um/i), { target: { value: '3000000' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: /fazer proposta/i }))
+
+    await waitFor(() => expect(screen.getByText(/Proposta aceita/i)).toBeInTheDocument())
+    expect(getOffers).toHaveBeenCalledTimes(1)
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['market', 'sg-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['squad', 'sg-1', 'club-1'] })
+  })
+
+  it('does not refetch the market or offers on a second mount when the query client is reused', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const renderOnce = () => render(
+      <MemoryRouter initialEntries={['/transfers?saveGameId=sg-1&clubId=club-1']}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <TransferMarketPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    const { unmount } = renderOnce()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    expect(getMarket).toHaveBeenCalledTimes(1)
+    expect(getOffers).toHaveBeenCalledTimes(1)
+    unmount()
+
+    renderOnce()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    expect(getMarket).toHaveBeenCalledTimes(1)
+    expect(getOffers).toHaveBeenCalledTimes(1)
   })
 })

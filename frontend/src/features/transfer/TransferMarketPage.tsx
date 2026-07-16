@@ -281,8 +281,14 @@ export function TransferMarketPage() {
     queryKey: ['market', saveGameId, appliedFilters, page],
     queryFn: () => getMarket(saveGameId, appliedFilters, page, MARKET_PAGE_SIZE, token ?? ''),
     enabled,
+    staleTime: Infinity,
   })
-  const offers = useQuery({ queryKey: ['offers', saveGameId], queryFn: () => getOffers(saveGameId, token ?? ''), enabled })
+  const offers = useQuery({
+    queryKey: ['offers', saveGameId],
+    queryFn: () => getOffers(saveGameId, token ?? ''),
+    enabled,
+    staleTime: Infinity,
+  })
 
   // My squad — used to open full player details for a player another club is bidding on.
   const managedClubId = save.data?.managedClubId ?? ''
@@ -293,37 +299,99 @@ export function TransferMarketPage() {
   })
   const squadById = new Map((squad.data?.players ?? []).map(p => [p.id, p]))
 
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
-    void queryClient.invalidateQueries({ queryKey: ['offers', saveGameId] })
-    // Resolving offers may clear a "window closing with pending bids" advance block.
-    void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
-  }
   // The most recent negotiation outcome (offer / accept-counter / respond), surfaced as the
   // feedback banner. Every action that produces an AI decision feeds this — not just makeOffer —
   // so accepting a counter or answering an incoming bid also tells the user what happened.
   const [lastResult, setLastResult] = useState<TransferOffer | null>(null)
-  const showResult = (offer: TransferOffer) => {
-    invalidate()
-    setLastResult(offer)
-  }
 
   const offerMut = useMutation({
     mutationFn: (v: { playerId: string; amount: number; wage: number; contractYears: number }) =>
       makeOffer(saveGameId, v, token ?? ''),
     onSuccess: (offer) => {
-      showResult(offer)
+      // Write-through: the AI's decision is unknown until the response arrives, but once it
+      // does, upsert it into the cache instead of paying for an offers refetch.
+      queryClient.setQueryData<TransferOffer[]>(['offers', saveGameId], (old) => {
+        const rest = (old ?? []).filter(o => o.id !== offer.id)
+        return [...rest, offer]
+      })
+      void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
+      if (offer.status === 'ACCEPTED') {
+        void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
+        void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, managedClubId] })
+      }
+      setLastResult(offer)
       setOfferTarget(null)
     },
   })
-  const acceptMut = useMutation({ mutationFn: (id: string) => acceptCounter(saveGameId, id, token ?? ''), onSuccess: showResult })
-  const withdrawMut = useMutation({ mutationFn: (id: string) => withdrawOffer(saveGameId, id, token ?? ''), onSuccess: invalidate })
+
+  const acceptMut = useMutation({
+    mutationFn: (id: string) => acceptCounter(saveGameId, id, token ?? ''),
+    onSuccess: (offer) => {
+      queryClient.setQueryData<TransferOffer[]>(['offers', saveGameId], (old) =>
+        (old ?? []).map(o => (o.id === offer.id ? offer : o)))
+      void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
+      if (offer.status === 'ACCEPTED') {
+        void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
+        void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, managedClubId] })
+      }
+      setLastResult(offer)
+    },
+  })
+
+  const withdrawMut = useMutation({
+    mutationFn: (id: string) => withdrawOffer(saveGameId, id, token ?? ''),
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ['offers', saveGameId] })
+      const previous = queryClient.getQueryData<TransferOffer[]>(['offers', saveGameId])
+      queryClient.setQueryData<TransferOffer[]>(['offers', saveGameId], (old) =>
+        (old ?? []).filter(o => o.id !== id))
+      return { previous }
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(['offers', saveGameId], context.previous)
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['offers', saveGameId] })
+      void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
+    },
+  })
 
   const [counters, setCounters] = useState<Record<string, string>>({})
   const respondMut = useMutation({
     mutationFn: (v: { offerId: string; action: 'ACCEPT' | 'REJECT' | 'COUNTER'; counterAmount: number | null }) =>
       respondToOffer(saveGameId, v.offerId, { action: v.action, counterAmount: v.counterAmount }, token ?? ''),
-    onSuccess: showResult,
+    onMutate: async (v) => {
+      await queryClient.cancelQueries({ queryKey: ['offers', saveGameId] })
+      const previous = queryClient.getQueryData<TransferOffer[]>(['offers', saveGameId])
+      // ACCEPT/REJECT are the manager's own explicit, fully-predictable choice — remove the
+      // card immediately. COUNTER's outcome depends on the AI's next move, so leave it alone
+      // and let onSuccess's write-through handle it once the response arrives.
+      if (v.action !== 'COUNTER') {
+        queryClient.setQueryData<TransferOffer[]>(['offers', saveGameId], (old) =>
+          (old ?? []).filter(o => o.id !== v.offerId))
+      }
+      return { previous }
+    },
+    onSuccess: (offer, v) => {
+      setLastResult(offer)
+      if (v.action === 'COUNTER') {
+        queryClient.setQueryData<TransferOffer[]>(['offers', saveGameId], (old) =>
+          (old ?? []).map(o => (o.id === offer.id ? offer : o)))
+      }
+    },
+    onError: (_err, _v, context) => {
+      if (context?.previous) queryClient.setQueryData(['offers', saveGameId], context.previous)
+    },
+    onSettled: (_offer, _err, v) => {
+      if (v.action !== 'COUNTER') {
+        // Belt-and-suspenders against any server-side divergence (e.g. a race with a round-advance).
+        void queryClient.invalidateQueries({ queryKey: ['offers', saveGameId] })
+      }
+      void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
+      if (v.action === 'ACCEPT') {
+        void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, managedClubId] })
+      }
+    },
   })
 
   // Date-based window status from the backend (the single source of truth).
@@ -334,9 +402,15 @@ export function TransferMarketPage() {
   const hasProposals = incoming.length > 0 || outgoing.length > 0
 
   // Land on the market instead of the (disabled) proposals tab when there's nothing to respond to.
+  // Gated on withdrawMut/respondMut being idle: those two mutations are the only ones that
+  // optimistically remove an offer via onMutate, so hasProposals can go transiently false while
+  // one is in flight. Waiting for isPending to clear means we react to the settled data (already
+  // corrected by onError's rollback, which runs before onSettled) instead of the transient dip.
   useEffect(() => {
-    if (offers.isSuccess && !hasProposals && tab === 0) setTab(1)
-  }, [offers.isSuccess, hasProposals, tab])
+    if (offers.isSuccess && !hasProposals && tab === 0 && !withdrawMut.isPending && !respondMut.isPending) {
+      setTab(1)
+    }
+  }, [offers.isSuccess, hasProposals, tab, withdrawMut.isPending, respondMut.isPending])
 
   return (
     <Box sx={{ p: 3 }}>

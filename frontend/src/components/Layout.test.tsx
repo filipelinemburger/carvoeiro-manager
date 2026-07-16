@@ -297,4 +297,25 @@ describe('Layout shell', () => {
     expect(screen.getByText(/Cansado Silva/)).toBeInTheDocument()
     expect(screen.getByText(/pouca condição/i)).toBeInTheDocument()
   })
+
+  it('invalidates the market cache after an instant advance (AI trades can relist/withdraw players)', async () => {
+    ;(getAdvancePreview as Mock).mockResolvedValue({ ...PREVIEW_OK, managedClubPlaysNext: false } satisfies AdvancePreviewResponse)
+    ;(advanceRound as Mock).mockResolvedValue(ADVANCE_RESPONSE)
+    seedAuth('U1', 'sg-1')
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <AuthProvider>
+            <Layout><div>Page content</div></Layout>
+          </AuthProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    const avancarBtn = await screen.findByRole('button', { name: /^avançar$/i })
+    fireEvent.click(avancarBtn)
+
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['market'] }))
+  })
 })
