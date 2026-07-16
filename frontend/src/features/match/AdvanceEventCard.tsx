@@ -7,6 +7,12 @@ import type { AdvanceResponse } from '../../api/types'
 import { SEVERITY_LABEL } from '../squad/injurySeverity'
 import { PlayerRatingsList } from './PlayerRatingsList'
 
+const QUALITY_LABEL: Record<string, string> = {
+  REGULAR: 'Regular',
+  BOM: 'Bom',
+  EXCELENTE: 'Excelente',
+}
+
 interface AdvanceEventCardProps {
   result: AdvanceResponse
   saveGameId: string
@@ -232,6 +238,11 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
               Temporada Encerrada
             </Typography>
           )}
+          {result.type === 'TRAINING_REPORT' && (
+            <Typography sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
+              Relatório de Treino
+            </Typography>
+          )}
         </Box>
         <Divider sx={{ mb: 2, borderBottomWidth: 2, borderColor: 'var(--cec-yellow)' }} />
 
@@ -284,6 +295,23 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
                 Temporada encerrada!
               </Typography>
               <SeasonSummaryCTA url={seasonSummaryUrl} />
+            </TimelineNode>
+          )}
+
+          {result.type === 'TRAINING_REPORT' && result.trainingReport && (
+            <TimelineNode dot="🏋️">
+              <Typography component="strong" sx={{ fontWeight: 700 }}>
+                Preparador Físico {result.trainingReport.staffName}
+                {' · '}
+                {QUALITY_LABEL[result.trainingReport.quality] ?? result.trainingReport.quality}
+              </Typography>
+              <List dense disablePadding sx={{ mt: 0.5 }}>
+                {result.trainingReport.entries.map((e, i) => (
+                  <ListItem key={`${e.playerName}-${i}`} disablePadding>
+                    {e.message}
+                  </ListItem>
+                ))}
+              </List>
             </TimelineNode>
           )}
         </Box>

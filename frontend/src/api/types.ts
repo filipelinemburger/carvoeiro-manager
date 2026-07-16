@@ -263,8 +263,19 @@ export type CompletedTransferResponse = {
   fee: number
 }
 
+export type TrainingReportEntry = {
+  playerName: string
+  message: string
+}
+
+export type TrainingReportResponse = {
+  staffName: string
+  quality: StaffQuality
+  entries: TrainingReportEntry[]
+}
+
 export type AdvanceResponse = {
-  type: 'MATCH' | 'TRANSFER' | 'FINISHED'
+  type: 'MATCH' | 'TRANSFER' | 'FINISHED' | 'TRAINING_REPORT'
   date: string | null
   competitionName: string | null
   round: number | null
@@ -280,6 +291,9 @@ export type AdvanceResponse = {
   /** AI-to-AI trades completed during a TRANSFER event; null (not just empty) on news payloads
    * persisted before this field existed — always null-guard before reading it. */
   transfers?: CompletedTransferResponse[] | null
+  /** The Preparador Físico's weekly digest; only on TRAINING_REPORT items, null everywhere
+   * else and on payloads persisted before the feature existed — always null-guard it. */
+  trainingReport?: TrainingReportResponse | null
 }
 
 export type TopScorerResponse = {

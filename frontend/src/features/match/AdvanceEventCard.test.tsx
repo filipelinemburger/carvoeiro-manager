@@ -60,6 +60,28 @@ const FINISHED_RESULT: AdvanceResponse = {
   seasonFinished: true,
 }
 
+const TRAINING_REPORT_RESULT: AdvanceResponse = {
+  type: 'TRAINING_REPORT',
+  date: '2026-03-16',
+  competitionName: null,
+  round: null,
+  results: [],
+  bookings: [],
+  newSuspensions: [],
+  newInjuries: [],
+  finance: null,
+  bidsReceived: 0,
+  seasonFinished: false,
+  trainingReport: {
+    staffName: 'Preparador Teste',
+    quality: 'EXCELENTE',
+    entries: [
+      { playerName: 'Fulano', message: 'Fulano evoluiu em Passe (50 → 51).' },
+      { playerName: 'Beltrano', message: 'Beltrano está perto de evoluir Finalização.' },
+    ],
+  },
+}
+
 function renderCard(result: AdvanceResponse) {
   return render(
     <MemoryRouter>
@@ -252,6 +274,31 @@ describe('AdvanceEventCard', () => {
     it('renders season summary CTA', () => {
       renderCard(FINISHED_RESULT)
       expect(screen.getByRole('button', { name: /resumo da temporada/i })).toBeInTheDocument()
+    })
+  })
+
+  describe('TRAINING_REPORT type', () => {
+    it('renders the report header and the formatted date', () => {
+      renderCard(TRAINING_REPORT_RESULT)
+      expect(screen.getByText('Relatório de Treino')).toBeInTheDocument()
+      expect(screen.getByText(/16\/03\/2026/)).toBeInTheDocument()
+    })
+
+    it('attributes the report to the physio with the quality label', () => {
+      renderCard(TRAINING_REPORT_RESULT)
+      expect(screen.getByText(/Preparador Físico Preparador Teste · Excelente/)).toBeInTheDocument()
+    })
+
+    it('renders every entry message', () => {
+      renderCard(TRAINING_REPORT_RESULT)
+      expect(screen.getByText('Fulano evoluiu em Passe (50 → 51).')).toBeInTheDocument()
+      expect(screen.getByText('Beltrano está perto de evoluir Finalização.')).toBeInTheDocument()
+    })
+
+    it('renders nothing report-specific when trainingReport is null (defensive)', () => {
+      renderCard({ ...TRAINING_REPORT_RESULT, trainingReport: null })
+      expect(screen.getByText('Relatório de Treino')).toBeInTheDocument()
+      expect(screen.queryByText(/Preparador Físico/)).not.toBeInTheDocument()
     })
   })
 })
