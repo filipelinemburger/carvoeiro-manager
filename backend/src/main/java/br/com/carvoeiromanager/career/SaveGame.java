@@ -53,6 +53,9 @@ public class SaveGame {
     @Column(name = "last_finance_month", nullable = false)
     private int lastFinanceMonth = 0;
 
+    @Column(name = "last_training_week", nullable = false)
+    private int lastTrainingWeek = 0;
+
     @Column(name = "manager_name", nullable = false, length = 80)
     private String managerName;
 
@@ -106,6 +109,9 @@ public class SaveGame {
     public int getLastFinanceMonth() { return lastFinanceMonth; }
     public void setLastFinanceMonth(int lastFinanceMonth) { this.lastFinanceMonth = lastFinanceMonth; }
 
+    public int getLastTrainingWeek() { return lastTrainingWeek; }
+    public void setLastTrainingWeek(int lastTrainingWeek) { this.lastTrainingWeek = lastTrainingWeek; }
+
     /** Rolls this career forward into the next season. */
     public void advanceToNextSeason() {
         this.seasonYear += 1;
@@ -113,5 +119,6 @@ public class SaveGame {
         this.currentDate = LocalDate.of(this.seasonYear, 1, 15);
         this.status = SaveGameStatus.IN_PROGRESS;
         this.lastFinanceMonth = 0; // reset so each new season charges monthly costs fresh
+        this.lastTrainingWeek = 0; // reset so each new season trains weekly from scratch
     }
 }

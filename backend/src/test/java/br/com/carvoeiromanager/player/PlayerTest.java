@@ -49,4 +49,14 @@ class PlayerTest {
 
         assertThat(p.getTrainingFocus()).isNull();
     }
+
+    @Test
+    void resetSeasonStateZeroesTrainingProgress() {
+        Player p = player();
+        p.setTrainingProgress(25);
+
+        p.resetSeasonState();
+
+        assertThat(p.getTrainingProgress()).isZero();
+    }
 }

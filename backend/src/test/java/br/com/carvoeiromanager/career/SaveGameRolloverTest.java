@@ -38,4 +38,18 @@ class SaveGameRolloverTest {
         assertThat(save.getLastFinanceMonth()).isEqualTo(0);
         assertThat(save.getSeasonYear()).isEqualTo(2027);
     }
+
+    @Test
+    void advanceToNextSeasonResetsLastTrainingWeekToZero() {
+        // Given a save whose weekly training already ran late into the season
+        SaveGame save = SaveGame.create(UUID.randomUUID(), 2026);
+        save.setLastTrainingWeek(202645); // ISO week 45 of 2026 was the last trained week
+        save.setStatus(SaveGameStatus.FINISHED);
+
+        // When advancing to the next season
+        save.advanceToNextSeason();
+
+        // Then lastTrainingWeek is reset so the new season trains fresh
+        assertThat(save.getLastTrainingWeek()).isEqualTo(0);
+    }
 }

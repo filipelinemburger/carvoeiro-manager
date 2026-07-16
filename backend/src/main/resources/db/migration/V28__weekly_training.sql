@@ -1,0 +1,2 @@
+ALTER TABLE save_games ADD COLUMN last_training_week INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE players ADD COLUMN training_progress INTEGER NOT NULL DEFAULT 0;

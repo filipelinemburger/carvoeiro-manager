@@ -103,6 +103,10 @@ public class Player {
     @Column(name = "training_intensity", nullable = false, length = 10)
     private TrainingIntensity trainingIntensity = TrainingIntensity.NORMAL;
 
+    /** Accumulated weekly training, in fortieths of an attribute point (a point fires at 40). */
+    @Column(name = "training_progress", nullable = false)
+    private int trainingProgress = 0;
+
     @Column(name = "season_appearances", nullable = false)
     private int seasonAppearances;
 
@@ -262,6 +266,7 @@ public class Player {
         this.transferListed = false;
         this.listedReason = null;
         this.seasonAppearances = 0;
+        this.trainingProgress = 0;
     }
 
     public BigDecimal getWage() { return wage; }
@@ -283,6 +288,9 @@ public class Player {
         this.trainingFocus = focus;
         this.trainingIntensity = intensity == null ? TrainingIntensity.NORMAL : intensity;
     }
+
+    public int getTrainingProgress() { return trainingProgress; }
+    public void setTrainingProgress(int trainingProgress) { this.trainingProgress = trainingProgress; }
 
     public int getSeasonAppearances() { return seasonAppearances; }
 
