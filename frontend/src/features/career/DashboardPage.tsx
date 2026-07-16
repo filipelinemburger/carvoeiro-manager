@@ -1,11 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Box, Button, Card, CardContent, Stack, Typography } from '@mui/material'
 import { useAuth } from '../../auth/AuthContext'
 import { getSaveGame, getFinances, listCareers } from '../../api/career'
 import { saveGameKeyFor } from './saveGameKey'
-import { resumeCareer } from './resumeCareer'
 import { formatBRL } from '../../lib/money'
 import type { SaveGameResponse, SaveGameSummary } from '../../api/types'
 
@@ -29,8 +27,6 @@ function StatRow({ label, value, color }: { label: string; value: ReactNode; col
 
 export function DashboardPage() {
   const { user, token } = useAuth()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
 
   const saveGameKey = saveGameKeyFor(user?.userId)
   const [saveGameId, setSaveGameId] = useState<string | null>(() =>
@@ -69,7 +65,12 @@ export function DashboardPage() {
 
   const loadLatest = () => {
     if (careers && careers.length > 0) {
-      resumeCareer(careers[0].id, saveGameKey, queryClient, navigate)
+      // Deliberately not resumeCareer() here: DashboardPage is already mounted at
+      // /dashboard when this button is clicked, so navigate('/dashboard') wouldn't
+      // remount it, and saveGameId (seeded once via useState) would never pick up
+      // the localStorage change. Update the state directly instead.
+      localStorage.setItem(saveGameKey, careers[0].id)
+      setSaveGameId(careers[0].id)
     }
   }
 

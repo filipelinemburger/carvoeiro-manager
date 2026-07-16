@@ -128,6 +128,19 @@ describe('DashboardPage', () => {
       { id: 'save-recent', managedClubName: 'Clube Recente', seasonYear: 2026, currentRound: 3, currentDate: '2026-02-01', status: 'IN_PROGRESS', createdAt: '2026-01-01T00:00:00Z', lastPlayedAt: '2026-02-01T00:00:00Z' },
       { id: 'save-older', managedClubName: 'Clube Antigo', seasonYear: 2025, currentRound: 10, currentDate: '2025-12-01', status: 'IN_PROGRESS', createdAt: '2025-06-01T00:00:00Z', lastPlayedAt: '2025-12-01T00:00:00Z' },
     ])
+    ;(getSaveGame as Mock).mockResolvedValue({
+      id: 'save-recent',
+      seasonYear: 2026,
+      competitionId: 'comp-1',
+      competitionName: 'Campeonato Catarinense',
+      managedClubId: 'club-1',
+      managedClubName: 'Clube Recente',
+      currentRound: 3,
+      totalRounds: 18,
+      managerName: 'Filipe Silva',
+      managerNationality: 'Brasil',
+    })
+    ;(getFinances as Mock).mockResolvedValue({ balance: 12500000, transactions: [] })
 
     renderDashboard()
 
@@ -135,6 +148,13 @@ describe('DashboardPage', () => {
     fireEvent.click(button)
 
     expect(localStorage.getItem('carvoeiro_manager_save_game_id_U3')).toBe('save-recent')
+
+    // The career must actually load and render in place, not just be written to
+    // localStorage — without a route change, nothing else forces a re-render.
+    await waitFor(() => {
+      expect(screen.getByText(/Clube Recente/)).toBeInTheDocument()
+    })
+    expect(getSaveGame).toHaveBeenCalledWith('save-recent', 'test-token')
   })
 
   it('does not show "Carregar última carreira" when the user has no careers at all', async () => {
