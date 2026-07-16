@@ -71,6 +71,9 @@ public class TrainingService {
         int week = eventDate.get(IsoFields.WEEK_BASED_YEAR) * 100
                 + eventDate.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR);
         // Self-idempotency guard: one tick per ISO week, mirroring FinanceService.processMonth.
+        // Assumes the season stays within one ISO week-based year (the calendar runs Jan-Nov and
+        // rollover resets the guard): a late-December date falling in week 1 of the NEXT
+        // week-based year would produce a smaller int and be silently skipped.
         if (week <= save.getLastTrainingWeek()) {
             return null;
         }
