@@ -37,6 +37,7 @@ export function SeasonSummaryPage() {
     queryKey: ['standings', saveGameId, competitionId],
     queryFn: () => getStandings(saveGameId, competitionId, token ?? ''),
     enabled: Boolean(saveGameId && competitionId && token),
+    staleTime: Infinity,
   })
 
   const scorers = useQuery({

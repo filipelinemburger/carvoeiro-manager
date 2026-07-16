@@ -117,4 +117,25 @@ describe('TablePage', () => {
     const criciuRow = rows[1]
     expect(criciuRow).toHaveAttribute('data-managed', 'true')
   })
+
+  it('does not refetch the standings on a second mount when the query client is reused', async () => {
+    const qc = makeQueryClient()
+    const renderOnce = () => render(
+      <MemoryRouter initialEntries={[`/table?saveGameId=sg-1&competitionId=comp-1&managedClubId=${MANAGED_CLUB_ID}`]}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <TablePage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    const { unmount } = renderOnce()
+    await waitFor(() => expect(screen.getByText('Criciúma')).toBeInTheDocument())
+    expect(mockGetStandings).toHaveBeenCalledTimes(1)
+    unmount()
+
+    renderOnce()
+    await waitFor(() => expect(screen.getByText('Criciúma')).toBeInTheDocument())
+    expect(mockGetStandings).toHaveBeenCalledTimes(1)
+  })
 })

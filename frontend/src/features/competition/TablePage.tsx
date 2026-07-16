@@ -98,6 +98,7 @@ export function TablePage() {
     queryKey: ['standings', saveGameId, competitionId],
     queryFn: () => getStandings(saveGameId, competitionId, token ?? ''),
     enabled: Boolean(saveGameId && competitionId && token),
+    staleTime: Infinity,
   })
 
   const competitions = saveGame?.competitions ?? []
