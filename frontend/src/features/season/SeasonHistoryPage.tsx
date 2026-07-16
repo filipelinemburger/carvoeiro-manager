@@ -20,12 +20,14 @@ export function SeasonHistoryPage() {
     queryKey: ['seasonHistory', saveGameId],
     queryFn: () => getSeasonHistory(saveGameId, token ?? ''),
     enabled: Boolean(saveGameId && token),
+    staleTime: Infinity,
   })
 
   const detail = useQuery({
     queryKey: ['season', saveGameId, selectedYear],
     queryFn: () => getSeason(saveGameId, selectedYear!, token ?? ''),
     enabled: Boolean(saveGameId && token && selectedYear !== null),
+    staleTime: Infinity,
   })
 
   if (history.isLoading) return <Typography sx={{ p: 3 }}>Carregando histórico…</Typography>

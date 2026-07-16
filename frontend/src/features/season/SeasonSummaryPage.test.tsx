@@ -85,4 +85,28 @@ describe('SeasonSummaryPage', () => {
     expect(await screen.findByText(/Contratos expirados/)).toBeInTheDocument()
     expect(screen.getByText(/Zé Tigre/)).toBeInTheDocument()
   })
+
+  it('invalidates squad, youth, free agents, and season history after rolling over', async () => {
+    vi.mocked(rolloverSeason).mockResolvedValue({
+      seasonYear: 2027, currentRound: 0, retirements: [], expiredContracts: [], youthIntake: [], youthDepartures: [],
+    })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+    render(
+      <MemoryRouter initialEntries={['/season-summary?saveGameId=sg-1&competitionId=c-1&managedClubId=club-1']}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <SeasonSummaryPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    await waitFor(() => screen.getByRole('button', { name: /próxima temporada/i }))
+    fireEvent.click(screen.getByRole('button', { name: /próxima temporada/i }))
+
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['squad', 'sg-1', 'club-1'] }))
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['youth', 'sg-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['freeAgents', 'sg-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['seasonHistory', 'sg-1'] })
+  })
 })

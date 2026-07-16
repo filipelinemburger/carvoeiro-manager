@@ -68,4 +68,25 @@ describe('SeasonHistoryPage', () => {
     await waitFor(() => expect(screen.getByText('Artilheiro (Campeao FC) — 21')).toBeInTheDocument())
     expect(getSeason).toHaveBeenCalledWith('sg-1', 2026, 'test-token')
   })
+
+  it('does not refetch the season history on a second mount when the query client is reused', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const renderOnce = () => render(
+      <MemoryRouter initialEntries={['/history?saveGameId=sg-1']}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <SeasonHistoryPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    const { unmount } = renderOnce()
+    await waitFor(() => expect(screen.getByText('Campeao FC')).toBeInTheDocument())
+    expect(getSeasonHistory).toHaveBeenCalledTimes(1)
+    unmount()
+
+    renderOnce()
+    await waitFor(() => expect(screen.getByText('Campeao FC')).toBeInTheDocument())
+    expect(getSeasonHistory).toHaveBeenCalledTimes(1)
+  })
 })

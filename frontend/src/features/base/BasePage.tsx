@@ -33,6 +33,7 @@ export function BasePage() {
     queryKey: ['youth', saveGameId],
     queryFn: () => listProspects(saveGameId, token ?? ''),
     enabled: Boolean(saveGameId && token),
+    staleTime: Infinity,
   })
 
   const invalidate = () => {

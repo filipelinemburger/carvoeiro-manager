@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   Box, Button, Card, CardContent, Chip, List, ListItem, Paper, Stack,
@@ -29,6 +29,7 @@ export function SeasonSummaryPage() {
   const { token } = useAuth()
   const isMobile = useIsMobile()
   const [searchParams] = useSearchParams()
+  const queryClient = useQueryClient()
   const saveGameId = searchParams.get('saveGameId') ?? ''
   const competitionId = searchParams.get('competitionId') ?? ''
   const managedClubId = searchParams.get('managedClubId') ?? ''
@@ -48,6 +49,15 @@ export function SeasonSummaryPage() {
 
   const rollover = useMutation<RolloverResponse>({
     mutationFn: () => rolloverSeason(saveGameId, token ?? ''),
+    onSuccess: () => {
+      // Aging, retirements, contract expiry, youth intake/departures, and free-agent pool
+      // top-up all happen here — this is the one place that must tell every affected cache
+      // it's stale now (under staleTime: Infinity nothing else will).
+      void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, managedClubId] })
+      void queryClient.invalidateQueries({ queryKey: ['youth', saveGameId] })
+      void queryClient.invalidateQueries({ queryKey: ['freeAgents', saveGameId] })
+      void queryClient.invalidateQueries({ queryKey: ['seasonHistory', saveGameId] })
+    },
   })
 
   if (standings.isLoading) return <Typography sx={{ p: 3 }}>Carregando resumo da temporada…</Typography>

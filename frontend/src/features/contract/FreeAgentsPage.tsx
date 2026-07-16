@@ -42,7 +42,12 @@ export function FreeAgentsPanel({ onOpenDetails }: { onOpenDetails: (playerId: s
 
   const enabled = Boolean(saveGameId && token)
   const save = useQuery({ queryKey: ['saveGame', saveGameId], queryFn: () => getSaveGame(saveGameId, token ?? ''), enabled })
-  const pool = useQuery({ queryKey: ['freeAgents', saveGameId], queryFn: () => getFreeAgents(saveGameId, token ?? ''), enabled })
+  const pool = useQuery({
+    queryKey: ['freeAgents', saveGameId],
+    queryFn: () => getFreeAgents(saveGameId, token ?? ''),
+    enabled,
+    staleTime: Infinity,
+  })
 
   const signMut = useMutation({
     mutationFn: (v: { playerId: string; wage: number; contractYears: number }) =>

@@ -107,4 +107,25 @@ describe('BasePage', () => {
     expect(await screen.findByText('Falha ao promover')).toBeInTheDocument()
     confirmSpy.mockRestore()
   })
+
+  it('does not refetch the youth list on a second mount when the query client is reused', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const renderOnce = () => render(
+      <MemoryRouter initialEntries={['/base?saveGameId=sg-1&clubId=club-1']}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <BasePage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    const { unmount } = renderOnce()
+    await waitFor(() => expect(screen.getByText('Joia da Base')).toBeInTheDocument())
+    expect(mockList).toHaveBeenCalledTimes(1)
+    unmount()
+
+    renderOnce()
+    await waitFor(() => expect(screen.getByText('Joia da Base')).toBeInTheDocument())
+    expect(mockList).toHaveBeenCalledTimes(1)
+  })
 })
