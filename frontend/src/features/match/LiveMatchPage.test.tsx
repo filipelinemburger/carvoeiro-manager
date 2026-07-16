@@ -72,6 +72,49 @@ describe('LiveMatchPage', () => {
     expect(screen.getAllByText(STATE.awayClubShortName).length).toBeGreaterThan(0)
   })
 
+  it('does not invert the pre-match lineup mapping when the managed club plays away', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE,
+      minute: 0,
+      managedIsHome: false,
+      onPitch: [
+        { playerId: 'h1', name: 'Goleiro Visitante', position: 'GK', overall: 60, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+      ],
+      opponentOnPitch: [
+        { playerId: 'a1', name: 'Goleiro Mandante', position: 'GK', overall: 58, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+      ],
+    } as never)
+    renderPage()
+
+    // Walks up from a player's name to the nearest ancestor whose text includes one of the
+    // club short names — that ancestor is the LineupColumn for that player. The score-bar
+    // header (which also renders both short names) sits outside this subtree, so it can't
+    // create a false match.
+    const columnFor = async (playerName: string) => {
+      let el: HTMLElement | null = await screen.findByText(playerName)
+      for (
+        let i = 0;
+        i < 10 && el && !el.textContent?.includes(STATE.homeClubShortName) && !el.textContent?.includes(STATE.awayClubShortName);
+        i++
+      ) {
+        el = el.parentElement
+      }
+      if (!el) throw new Error(`Could not locate the lineup column for "${playerName}"`)
+      return el
+    }
+
+    // Managed club plays away, so the managed player (onPitch) must land in the column
+    // headed by the away club's short name, not the home one — proves the mapping is not inverted.
+    const managedColumn = await columnFor('Goleiro Visitante')
+    expect(within(managedColumn).getByText(STATE.awayClubShortName)).toBeInTheDocument()
+    expect(within(managedColumn).queryByText(STATE.homeClubShortName)).not.toBeInTheDocument()
+
+    // The AI opponent, playing at home, must land in the home column.
+    const opponentColumn = await columnFor('Goleiro Mandante')
+    expect(within(opponentColumn).getByText(STATE.homeClubShortName)).toBeInTheDocument()
+    expect(within(opponentColumn).queryByText(STATE.awayClubShortName)).not.toBeInTheDocument()
+  })
+
   it('shows the score and the commentary feed', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
     renderPage()
