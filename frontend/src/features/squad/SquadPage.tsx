@@ -185,6 +185,7 @@ export function SquadPage() {
     queryKey: ['squad', saveGameId, clubId],
     queryFn: () => getSquad(saveGameId, clubId, token ?? ''),
     enabled: Boolean(saveGameId && clubId && token),
+    staleTime: Infinity,
   })
 
   const players = data?.players ?? []
@@ -200,6 +201,7 @@ export function SquadPage() {
     queryKey: ['lineup', saveGameId, clubId],
     queryFn: () => getLineup(saveGameId, clubId, token ?? ''),
     enabled: Boolean(saveGameId && clubId && token),
+    staleTime: Infinity,
   })
 
   // Seed the form from the saved lineup exactly once. A guard prevents later refetches
@@ -239,12 +241,13 @@ export function SquadPage() {
       const benchStarters: LineupStarter[] = bench.filter((id): id is string => id !== null).map(toStarter)
       return setLineup(saveGameId, clubId, { formation, starters, bench: benchStarters }, token ?? '')
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       setSaveSuccess(true)
+      // Write-through: the response is already this exact lineup query's fresh data — every
+      // observer (this page's own savedLineup query AND Layout's advance-gate query, since both
+      // key on the same [saveGameId, clubId]) picks it up immediately, no extra round-trip.
+      queryClient.setQueryData(['lineup', saveGameId, clubId], data)
       void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] })
-      // Refresh the layout's lineup-based advance gate: without this the "Escale seu time"
-      // warning persists and Avançar stays disabled until a full page reload.
-      void queryClient.invalidateQueries({ queryKey: ['lineup', saveGameId] })
       // Re-check the advance gate: fixing the lineup may clear an ineligible-starter block.
       void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
     },
@@ -259,9 +262,11 @@ export function SquadPage() {
       }))
       return setTraining(saveGameId, clubId, { assignments }, token ?? '')
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       setTrainingSaveSuccess(true)
-      void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] })
+      // Write-through: setTraining already returns a SquadResponse — the exact shape of the
+      // squad query — so patch the cache directly instead of paying for a refetch.
+      queryClient.setQueryData(['squad', saveGameId, clubId], data)
     },
   })
 

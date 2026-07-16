@@ -90,4 +90,24 @@ describe('TacticsPanel', () => {
     const marking = screen.getByLabelText('Marcação') as HTMLSelectElement
     expect(Array.from(marking.options).map(o => o.text)).toEqual(['Por zona', 'Individual'])
   })
+
+  it('invalidates its own tactics query after saving', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <TacticsPanel saveGameId="sg-1" clubId="club-1" starters={[{ id: 'p1', name: 'Craque Um' }]} />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    await waitFor(() => expect(screen.getByLabelText('Mentalidade')).toHaveValue('ATTACKING'))
+    fireEvent.click(screen.getByRole('button', { name: /salvar tática/i }))
+
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['tactics', 'sg-1', 'club-1'] }),
+    )
+  })
 })

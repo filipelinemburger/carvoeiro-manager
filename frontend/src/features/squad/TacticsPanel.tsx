@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Box, Stack, Button, NativeSelect, FormControl, Typography, Alert, Snackbar } from '@mui/material'
 import { getTactics, setTactics } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
@@ -47,6 +47,7 @@ function SelectField({ label, value, onChange, children }: {
 
 export function TacticsPanel({ saveGameId, clubId, starters }: TacticsPanelProps) {
   const { token } = useAuth()
+  const queryClient = useQueryClient()
   const [mentality, setMentality] = useState<Mentality>('BALANCED')
   const [pressing, setPressing] = useState<Pressing>('MEDIUM')
   const [marking, setMarking] = useState<Marking>('ZONAL')
@@ -87,7 +88,10 @@ export function TacticsPanel({ saveGameId, clubId, starters }: TacticsPanelProps
         },
         token ?? '',
       ),
-    onSuccess: () => setSaved(true),
+    onSuccess: () => {
+      setSaved(true)
+      void queryClient.invalidateQueries({ queryKey: ['tactics', saveGameId, clubId] })
+    },
   })
 
   const takerSelect = (label: string, value: string, onChange: (v: string) => void) => (

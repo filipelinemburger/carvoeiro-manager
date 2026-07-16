@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -74,5 +74,26 @@ describe('FreeAgentsPage', () => {
     expect(signSpy).toHaveBeenCalledWith(
       'S1', 'P1', { wage: 120000, contractYears: 3 }, 'tok',
     )
+  })
+
+  it('invalidates the squad cache after signing so the roster picks up the new player', async () => {
+    vi.spyOn(api, 'getSaveGame').mockResolvedValue({ managedClubId: 'club-1', transferWindowOpen: true } as never)
+    vi.spyOn(api, 'getFreeAgents').mockResolvedValue([
+      { playerId: 'P1', name: 'Livre Um', position: 'ATT', age: 27, overall: 68, wageDemand: 100000 },
+    ] as never)
+    vi.spyOn(api, 'signFreeAgent').mockResolvedValue({} as never)
+    const qc = new QueryClient()
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/free-agents?saveGameId=S1']}>
+          <FreeAgentsPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await userEvent.click(await screen.findByRole('button', { name: 'Contratar' }))
+
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['squad', 'S1', 'club-1'] }))
   })
 })

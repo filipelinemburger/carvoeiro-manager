@@ -289,12 +289,16 @@ describe('SquadPage', () => {
     expect(saveBtn).not.toBeDisabled()
   })
 
-  it('invalidates the lineup query after saving so the advance gate refreshes', async () => {
+  it('writes the saved lineup directly into the lineup cache so the advance gate refreshes without a refetch', async () => {
     // Regression: the layout's "Escale seu time" warning + disabled Avançar are driven by the
-    // ['lineup', saveGameId, clubId] query. Saving a lineup must invalidate it, otherwise the
-    // warning persists and Avançar stays disabled until a full page reload.
+    // ['lineup', saveGameId, clubId] query. Saving a lineup must update it, otherwise the
+    // warning persists and Avançar stays disabled until a full page reload — now done via a
+    // direct cache write (write-through) instead of invalidate-then-refetch.
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+    mockSetLineup.mockResolvedValue({
+      lineupId: 'l-2', clubId: 'club-1', formation: '4-3-3',
+      starters: [{ playerId: GK.id, role: 'GOALKEEPER' }], bench: [],
+    })
     render(
       <MemoryRouter initialEntries={['/squad?saveGameId=sg-1&clubId=club-1']}>
         <AuthProvider>
@@ -313,8 +317,46 @@ describe('SquadPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /salvar escala/i }))
 
     await waitFor(() =>
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['lineup', 'sg-1'] }),
+      expect(qc.getQueryData(['lineup', 'sg-1', 'club-1'])).toEqual(
+        expect.objectContaining({ lineupId: 'l-2' }),
+      ),
     )
+    // getLineup itself was only called once (the initial mount) — no extra round-trip.
+    expect(mockGetLineup).toHaveBeenCalledTimes(1)
+  })
+
+  it('writes the saved training result directly into the squad cache without an extra fetch', async () => {
+    mockSetTraining.mockResolvedValue(squad)
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    expect(mockGetSquad).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Treino' }))
+    fireEvent.click(screen.getByRole('button', { name: /salvar treino/i }))
+
+    await waitFor(() => expect(mockSetTraining).toHaveBeenCalled())
+    expect(mockGetSquad).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not refetch the squad on a second mount when the query client is reused', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const renderOnce = () => render(
+      <MemoryRouter initialEntries={['/squad?saveGameId=sg-1&clubId=club-1']}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <SquadPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    const { unmount } = renderOnce()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    expect(mockGetSquad).toHaveBeenCalledTimes(1)
+    unmount()
+
+    renderOnce()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    expect(mockGetSquad).toHaveBeenCalledTimes(1)
   })
 
   it('blocks selecting more attackers than the formation allows', async () => {

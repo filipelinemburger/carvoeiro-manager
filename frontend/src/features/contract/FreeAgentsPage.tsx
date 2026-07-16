@@ -49,6 +49,8 @@ export function FreeAgentsPanel({ onOpenDetails }: { onOpenDetails: (playerId: s
       signFreeAgent(saveGameId, v.playerId, { wage: v.wage, contractYears: v.contractYears }, token ?? ''),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['freeAgents', saveGameId] })
+      // A signed player joins the managed club's roster.
+      void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, save.data?.managedClubId ?? ''] })
     },
   })
 
