@@ -71,7 +71,12 @@ public class StaffService {
         staffRepository.save(Staff.create(saveGameId, clubId, role, chosen.quality(),
                 chosen.name(), chosen.wage()));
 
-        return getRoster(saveGameId, clubId, userId);
+        // Build the response directly rather than calling getRoster(...) again: ownership and
+        // save-game membership were already established above, so re-running requireOwned/
+        // requireClubInSave here would just repeat the same two checks for no benefit.
+        Map<StaffRole, Staff> byRole = staffRepository.findByClubId(clubId).stream()
+                .collect(Collectors.toMap(Staff::getRole, s -> s));
+        return toRosterResponse(byRole);
     }
 
     /**

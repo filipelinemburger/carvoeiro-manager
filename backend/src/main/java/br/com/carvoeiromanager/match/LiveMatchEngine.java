@@ -80,6 +80,12 @@ public class LiveMatchEngine {
         Side home = buildSide(true, cfg.homeXi(), cfg.homeBench());
         Side away = buildSide(false, cfg.awayXi(), cfg.awayBench());
 
+        // Resolved once per side: the multiplier depends only on the side's club and whether it is
+        // AI- or user-managed, neither of which changes mid-match, so per-minute recomputation would
+        // be a redundant, uncached repository query per player per minute (see resolveInjuryRiskMultiplier).
+        double homeInjuryRisk = resolveInjuryRiskMultiplier(home, cfg);
+        double awayInjuryRisk = resolveInjuryRiskMultiplier(away, cfg);
+
         // Initialise each side's active profile from config; tactics changes update these mid-match.
         home.currentProfile = cfg.homeProfile();
         away.currentProfile = cfg.awayProfile();
@@ -142,8 +148,8 @@ public class LiveMatchEngine {
                         pickByWeight(away, LiveMatchEngine::goalWeight, attrRng), null, null, null));
             }
 
-            maybeInjury(minute, home, cfg, injuryRng, events, injuries);
-            maybeInjury(minute, away, cfg, injuryRng, events, injuries);
+            maybeInjury(minute, home, cfg, homeInjuryRisk, injuryRng, events, injuries);
+            maybeInjury(minute, away, cfg, awayInjuryRisk, injuryRng, events, injuries);
 
             // Emit a half-time marker at the END of minute 45 (after all RNG draws for this minute).
             // Consumes zero RNG — the marker sorts last among minute-45 events when the list is
@@ -426,24 +432,35 @@ public class LiveMatchEngine {
         };
     }
 
-    private void maybeInjury(int minute, Side side, LiveMatchConfig cfg, Random injuryRng,
+    /**
+     * Resolves this side's injury-risk multiplier once, up front, instead of once per player per
+     * minute. The multiplier depends only on the side's club and whether it is AI- or user-managed
+     * (side.home == Boolean.TRUE.equals(cfg.aiHome()) means this side is the AI-controlled one —
+     * LiveMatchService always passes aiHome = !managedIsHome, see LiveMatchService.java:397) —
+     * neither changes over the course of a match, so a single lookup per side is representative for
+     * every player on that side, on the pitch or not, all match long.
+     */
+    private double resolveInjuryRiskMultiplier(Side side, LiveMatchConfig cfg) {
+        boolean sideManaged = side.home != Boolean.TRUE.equals(cfg.aiHome());
+        UUID clubId = side.all.values().iterator().next().getClubId();
+        return staffEffectsService.injuryRiskMultiplierFor(clubId, sideManaged);
+    }
+
+    private void maybeInjury(int minute, Side side, LiveMatchConfig cfg, double riskMultiplier, Random injuryRng,
                              List<LiveTimelineEvent> events, List<TimedInjury> injuries) {
         if (side.onPitch.isEmpty()) return;
-        // side.home == Boolean.TRUE.equals(cfg.aiHome()) means this side is the AI-controlled one
-        // (LiveMatchService always passes aiHome = !managedIsHome, see LiveMatchService.java:397).
-        boolean sideManaged = side.home != Boolean.TRUE.equals(cfg.aiHome());
         // Aggregate the per-player match injury chance into a per-minute team chance, preserving the
         // low-fitness/age bias when picking who gets hurt.
         double teamChance = 0.0;
         for (UUID id : side.onPitch) {
             Player p = side.all.get(id);
             teamChance += fitnessCalculator.injuryChance(cfg.fitness().getOrDefault(id, 100), p.getAge())
-                    * staffEffectsService.injuryRiskMultiplierFor(p.getClubId(), sideManaged);
+                    * riskMultiplier;
         }
         teamChance /= MINUTES;
         if (injuryRng.nextDouble() >= teamChance) return;
 
-        UUID victim = pickInjured(side, cfg, injuryRng);
+        UUID victim = pickInjured(side, cfg, injuryRng, riskMultiplier);
         if (Boolean.TRUE.equals(side.hobbled.get(victim))) return; // already carrying a knock
         InjurySeverity severity = InjurySeverity.roll(injuryRng);
         int layoff = severity.layoffMatches(injuryRng);
@@ -453,20 +470,17 @@ public class LiveMatchEngine {
         events.add(new LiveTimelineEvent(minute, EventType.INJURY, side.home, victim, null, severity.name(), null));
     }
 
-    private UUID pickInjured(Side side, LiveMatchConfig cfg, Random rng) {
-        boolean sideManaged = side.home != Boolean.TRUE.equals(cfg.aiHome());
+    private UUID pickInjured(Side side, LiveMatchConfig cfg, Random rng, double riskMultiplier) {
         double total = 0.0;
         for (UUID id : side.onPitch) {
             Player p = side.all.get(id);
-            total += fitnessCalculator.injuryChance(cfg.fitness().getOrDefault(id, 100), p.getAge())
-                    * staffEffectsService.injuryRiskMultiplierFor(p.getClubId(), sideManaged);
+            total += fitnessCalculator.injuryChance(cfg.fitness().getOrDefault(id, 100), p.getAge()) * riskMultiplier;
         }
         double pick = rng.nextDouble() * total;
         double acc = 0.0;
         for (UUID id : side.onPitch) {
             Player p = side.all.get(id);
-            acc += fitnessCalculator.injuryChance(cfg.fitness().getOrDefault(id, 100), p.getAge())
-                    * staffEffectsService.injuryRiskMultiplierFor(p.getClubId(), sideManaged);
+            acc += fitnessCalculator.injuryChance(cfg.fitness().getOrDefault(id, 100), p.getAge()) * riskMultiplier;
             if (pick < acc) return id;
         }
         return side.onPitch.get(side.onPitch.size() - 1);

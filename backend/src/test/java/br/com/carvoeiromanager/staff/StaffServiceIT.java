@@ -102,8 +102,9 @@ class StaffServiceIT {
 
     @Test
     void aClubFromADifferentSaveGameIsRejected() {
-        // A second, independent save game — its managed club must not be reachable through the
-        // first save game's id, even though both careers belong to the same authenticated user.
+        // Two independent save games, each with its own user (createCareer mints a fresh User every
+        // call) — c2's club must not be reachable through c1's save-game id, proving the
+        // requireClubInSave guard blocks cross-save-game access regardless of which user owns which save.
         Career c1 = createCareer();
         Career c2 = createCareer();
 
