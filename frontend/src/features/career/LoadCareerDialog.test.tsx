@@ -21,8 +21,8 @@ const USER_ID = 'U1'
 const KEY = `carvoeiro_manager_save_game_id_${USER_ID}`
 
 const CAREERS = [
-  { id: 'save-1', managedClubName: 'Criciúma EC', seasonYear: 2026, currentRound: 5, currentDate: '2026-03-01', status: 'IN_PROGRESS', createdAt: '2026-01-15T10:00:00Z' },
-  { id: 'save-2', managedClubName: 'Outro Clube', seasonYear: 2026, currentRound: 1, currentDate: '2026-01-15', status: 'IN_PROGRESS', createdAt: '2026-01-10T10:00:00Z' },
+  { id: 'save-1', managedClubName: 'Criciúma EC', seasonYear: 2026, currentRound: 5, currentDate: '2026-03-01', status: 'IN_PROGRESS', createdAt: '2026-01-15T10:00:00Z', lastPlayedAt: '2026-01-15T10:00:00Z' },
+  { id: 'save-2', managedClubName: 'Outro Clube', seasonYear: 2026, currentRound: 1, currentDate: '2026-01-15', status: 'IN_PROGRESS', createdAt: '2026-01-10T10:00:00Z', lastPlayedAt: '2026-01-10T10:00:00Z' },
 ]
 
 function renderDialog() {

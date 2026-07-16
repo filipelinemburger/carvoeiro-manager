@@ -1,11 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Box, Card, CardContent, Stack, Typography } from '@mui/material'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import { Box, Button, Card, CardContent, Stack, Typography } from '@mui/material'
 import { useAuth } from '../../auth/AuthContext'
-import { getSaveGame, getFinances } from '../../api/career'
+import { getSaveGame, getFinances, listCareers } from '../../api/career'
 import { saveGameKeyFor } from './saveGameKey'
+import { resumeCareer } from './resumeCareer'
 import { formatBRL } from '../../lib/money'
-import type { SaveGameResponse } from '../../api/types'
+import type { SaveGameResponse, SaveGameSummary } from '../../api/types'
 
 /** A single "Label: value" stat row with a bold label. */
 function StatRow({ label, value, color }: { label: string; value: ReactNode; color?: string }) {
@@ -27,6 +29,8 @@ function StatRow({ label, value, color }: { label: string; value: ReactNode; col
 
 export function DashboardPage() {
   const { user, token } = useAuth()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const saveGameKey = saveGameKeyFor(user?.userId)
   const [saveGameId, setSaveGameId] = useState<string | null>(() =>
@@ -46,6 +50,13 @@ export function DashboardPage() {
     enabled: Boolean(saveGame && token),
   })
 
+  // Only needed to offer "Carregar última carreira" while there's no active career.
+  const { data: careers } = useQuery<SaveGameSummary[]>({
+    queryKey: ['careers'],
+    queryFn: () => listCareers(token ?? ''),
+    enabled: Boolean(!saveGameId && token),
+  })
+
   // If the stored save game can't be loaded (deleted, or not owned by this
   // user), forget it so the user can start a fresh career instead of being
   // stuck on a 404.
@@ -56,6 +67,12 @@ export function DashboardPage() {
     }
   }, [isError, saveGameId, saveGameKey])
 
+  const loadLatest = () => {
+    if (careers && careers.length > 0) {
+      resumeCareer(careers[0].id, saveGameKey, queryClient, navigate)
+    }
+  }
+
   return (
     <Box sx={{ p: { xs: 2, sm: 3 } }}>
       <Typography variant="h5" component="h2" sx={{ fontWeight: 700 }}>
@@ -63,10 +80,17 @@ export function DashboardPage() {
       </Typography>
 
       {!saveGameId && (
-        <Typography sx={{ mt: 2, color: 'text.secondary', maxWidth: 640 }}>
-          Você ainda não tem uma carreira. Abra o menu <Box component="strong">⚙️</Box> no canto
-          superior direito e escolha <Box component="strong">Nova Carreira</Box> para começar.
-        </Typography>
+        <>
+          <Typography sx={{ mt: 2, color: 'text.secondary', maxWidth: 640 }}>
+            Você ainda não tem uma carreira. Abra o menu <Box component="strong">⚙️</Box> no canto
+            superior direito e escolha <Box component="strong">Nova Carreira</Box> para começar.
+          </Typography>
+          {careers && careers.length > 0 && (
+            <Button variant="contained" sx={{ mt: 2 }} onClick={loadLatest}>
+              Carregar última carreira
+            </Button>
+          )}
+        </>
       )}
 
       {loadingGame && saveGameId && <Typography sx={{ mt: 2 }}>Carregando carreira…</Typography>}

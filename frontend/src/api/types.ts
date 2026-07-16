@@ -64,6 +64,7 @@ export type SaveGameSummary = {
   currentDate: string | null
   status: 'IN_PROGRESS' | 'FINISHED'
   createdAt: string
+  lastPlayedAt: string | null
 }
 
 export type Mentality = 'DEFENSIVE' | 'BALANCED' | 'ATTACKING'

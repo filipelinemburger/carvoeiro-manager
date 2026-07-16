@@ -8,6 +8,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
 import { useAuth } from '../../auth/AuthContext'
 import { listCareers, deleteCareer } from '../../api/career'
 import { saveGameKeyFor } from './saveGameKey'
+import { resumeCareer } from './resumeCareer'
 import type { SaveGameSummary } from '../../api/types'
 
 type Props = { open: boolean; onClose: () => void }
@@ -38,10 +39,8 @@ export function LoadCareerDialog({ open, onClose }: Props) {
   })
 
   const resume = (career: SaveGameSummary) => {
-    localStorage.setItem(storageKey, career.id)
-    queryClient.invalidateQueries({ queryKey: ['saveGame'] })
+    resumeCareer(career.id, storageKey, queryClient, navigate)
     onClose()
-    void navigate('/dashboard')
   }
 
   const confirmDelete = (career: SaveGameSummary) => {

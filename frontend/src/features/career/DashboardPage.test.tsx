@@ -1,15 +1,16 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { DashboardPage } from './DashboardPage'
 import { AuthProvider } from '../../auth/AuthContext'
-import { getSaveGame, getFinances } from '../../api/career'
+import { getSaveGame, getFinances, listCareers } from '../../api/career'
 
 vi.mock('../../api/career', () => ({
   getSaveGame: vi.fn(),
   createCareer: vi.fn(),
   getFinances: vi.fn(),
+  listCareers: vi.fn(),
 }))
 
 function renderDashboard() {
@@ -119,5 +120,30 @@ describe('DashboardPage', () => {
     // Then U3 sees the empty-state hint and never fetches the other user's save
     expect(screen.getByText(/você ainda não tem uma carreira/i)).toBeInTheDocument()
     expect(getSaveGame).not.toHaveBeenCalled()
+  })
+
+  it('shows "Carregar última carreira" when there is no active career, and clicking it resumes the most recent one', async () => {
+    seedAuth('U3')
+    ;(listCareers as Mock).mockResolvedValue([
+      { id: 'save-recent', managedClubName: 'Clube Recente', seasonYear: 2026, currentRound: 3, currentDate: '2026-02-01', status: 'IN_PROGRESS', createdAt: '2026-01-01T00:00:00Z', lastPlayedAt: '2026-02-01T00:00:00Z' },
+      { id: 'save-older', managedClubName: 'Clube Antigo', seasonYear: 2025, currentRound: 10, currentDate: '2025-12-01', status: 'IN_PROGRESS', createdAt: '2025-06-01T00:00:00Z', lastPlayedAt: '2025-12-01T00:00:00Z' },
+    ])
+
+    renderDashboard()
+
+    const button = await screen.findByRole('button', { name: /carregar última carreira/i })
+    fireEvent.click(button)
+
+    expect(localStorage.getItem('carvoeiro_manager_save_game_id_U3')).toBe('save-recent')
+  })
+
+  it('does not show "Carregar última carreira" when the user has no careers at all', async () => {
+    seedAuth('U4')
+    ;(listCareers as Mock).mockResolvedValue([])
+
+    renderDashboard()
+
+    await waitFor(() => expect(listCareers).toHaveBeenCalled())
+    expect(screen.queryByRole('button', { name: /carregar última carreira/i })).not.toBeInTheDocument()
   })
 })
