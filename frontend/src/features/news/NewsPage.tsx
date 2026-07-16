@@ -1,15 +1,18 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { Box, Stack, Typography } from '@mui/material'
+import { Box, Button, Stack, Typography } from '@mui/material'
 import { getNews, getSaveGame } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import { AdvanceEventCard } from '../match/AdvanceEventCard'
-import type { AdvanceResponse, SaveGameResponse } from '../../api/types'
+import type { AdvanceResponse, PageResponse, SaveGameResponse } from '../../api/types'
+
+const NEWS_PAGE_SIZE = 10
 
 /**
  * Persisted news feed. Every season advance (match round, transfer window, or
  * season end) is stored server-side and shown here, most recent first, using the
- * same timeline rendering as the live advance result.
+ * same timeline rendering as the live advance result. Loaded 10 at a time via
+ * "Carregar mais" — only the loaded pages live in the client cache.
  */
 export function NewsPage() {
   const { token } = useAuth()
@@ -23,10 +26,15 @@ export function NewsPage() {
     staleTime: 30_000,
   })
 
-  const { data: news, isLoading, error } = useQuery<AdvanceResponse[]>({
+  const {
+    data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage,
+  } = useInfiniteQuery<PageResponse<AdvanceResponse>>({
     queryKey: ['news', saveGameId],
-    queryFn: () => getNews(saveGameId, token ?? ''),
+    queryFn: ({ pageParam }) => getNews(saveGameId, pageParam as number, NEWS_PAGE_SIZE, token ?? ''),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => (lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined),
     enabled: Boolean(saveGameId && token),
+    staleTime: Infinity,
   })
 
   if (isLoading) return <Typography>Carregando notícias…</Typography>
@@ -34,7 +42,7 @@ export function NewsPage() {
 
   const competitionId = saveGame?.competitionId ?? ''
   const managedClubId = saveGame?.managedClubId ?? ''
-  const items = news ?? []
+  const items = (data?.pages ?? []).flatMap(p => p.content)
 
   return (
     <Box>
@@ -60,6 +68,14 @@ export function NewsPage() {
             />
           ))}
         </Stack>
+      )}
+
+      {hasNextPage && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+          <Button variant="outlined" disabled={isFetchingNextPage} onClick={() => fetchNextPage()}>
+            {isFetchingNextPage ? 'Carregando…' : 'Carregar mais'}
+          </Button>
+        </Box>
       )}
     </Box>
   )

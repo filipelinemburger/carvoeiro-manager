@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -80,7 +80,7 @@ describe('NewsPage', () => {
   })
 
   it('renders the Transferências block for a news item that carries completed AI trades', async () => {
-    vi.mocked(getNews).mockResolvedValue([TRANSFER_ITEM_WITH_TRADES])
+    vi.mocked(getNews).mockResolvedValue({ content: [TRANSFER_ITEM_WITH_TRADES], page: 1, size: 10, totalElements: 1, totalPages: 1 })
     renderPage()
     await waitFor(() => expect(screen.getByText(/proposta\(s\) recebida\(s\)/)).toBeInTheDocument())
     expect(screen.getByText('Transferências')).toBeInTheDocument()
@@ -88,9 +88,53 @@ describe('NewsPage', () => {
   })
 
   it('renders a TRANSFER news item persisted before `transfers` existed without crashing or showing the block', async () => {
-    vi.mocked(getNews).mockResolvedValue([TRANSFER_ITEM_WITHOUT_TRADES])
+    vi.mocked(getNews).mockResolvedValue({ content: [TRANSFER_ITEM_WITHOUT_TRADES], page: 1, size: 10, totalElements: 1, totalPages: 1 })
     renderPage()
     await waitFor(() => expect(screen.getByText(/proposta\(s\) recebida\(s\)/)).toBeInTheDocument())
     expect(screen.queryByText('Transferências')).not.toBeInTheDocument()
+  })
+
+  it('loads more news items when "Carregar mais" is clicked, and hides the button once exhausted', async () => {
+    const page1 = Array.from({ length: 10 }, (_, i) => ({ ...TRANSFER_ITEM_WITH_TRADES, date: `2026-07-${10 - i}` }))
+    const page2 = [{ ...TRANSFER_ITEM_WITH_TRADES, date: '2026-06-01' }]
+    vi.mocked(getNews).mockImplementation((_saveGameId, page) =>
+      Promise.resolve(
+        page === 1
+          ? { content: page1, page: 1, size: 10, totalElements: 11, totalPages: 2 }
+          : { content: page2, page: 2, size: 10, totalElements: 11, totalPages: 2 },
+      ),
+    )
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByText('Transferências')).toHaveLength(10))
+    const loadMore = screen.getByRole('button', { name: /carregar mais/i })
+
+    fireEvent.click(loadMore)
+
+    await waitFor(() => expect(screen.getAllByText('Transferências')).toHaveLength(11))
+    expect(getNews).toHaveBeenCalledWith('sg-1', 2, 10, 'test-token')
+    expect(screen.queryByRole('button', { name: /carregar mais/i })).not.toBeInTheDocument()
+  })
+
+  it('does not refetch news on a second mount when the query client is reused', async () => {
+    vi.mocked(getNews).mockResolvedValue({ content: [TRANSFER_ITEM_WITH_TRADES], page: 1, size: 10, totalElements: 1, totalPages: 1 })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const renderOnce = () => render(
+      <MemoryRouter initialEntries={['/news?saveGameId=sg-1']}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <NewsPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    const { unmount } = renderOnce()
+    await waitFor(() => expect(screen.getByText('Transferências')).toBeInTheDocument())
+    expect(getNews).toHaveBeenCalledTimes(1)
+    unmount()
+
+    renderOnce()
+    await waitFor(() => expect(screen.getByText('Transferências')).toBeInTheDocument())
+    expect(getNews).toHaveBeenCalledTimes(1)
   })
 })
