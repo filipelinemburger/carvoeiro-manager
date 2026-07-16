@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -94,6 +95,7 @@ public class LiveMatchService {
     @Transactional
     public LiveMatchState kickoff(UUID saveGameId, UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        save.setLastPlayedAt(Instant.now());
         Optional<LiveMatch> existing = liveMatchRepository.findBySaveGameId(saveGameId);
         if (existing.isPresent()) {
             return toState(existing.get(), save);   // resume, idempotent

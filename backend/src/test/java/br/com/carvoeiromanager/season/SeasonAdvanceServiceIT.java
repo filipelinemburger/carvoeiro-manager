@@ -25,6 +25,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -197,6 +198,22 @@ class SeasonAdvanceServiceIT {
                     assertThat(api.getCode()).isEqualTo(ErrorCode.SEASON_FINISHED);
                     assertThat(api.getStatus().value()).isEqualTo(409);
                 });
+    }
+
+    @Test
+    void advanceBumpsLastPlayedAt() {
+        // Given a fresh career (lastPlayedAt already stamped at creation)
+        Career c = createCareer();
+        SaveGame before = saveGameRepository.findById(c.id()).orElseThrow();
+        assertThat(before.getLastPlayedAt()).isNotNull();
+        Instant beforeAdvance = Instant.now();
+
+        // When advancing once
+        seasonAdvanceService.advance(c.id(), c.userId());
+
+        // Then lastPlayedAt moved to at/after this call
+        SaveGame after = saveGameRepository.findById(c.id()).orElseThrow();
+        assertThat(after.getLastPlayedAt()).isAfterOrEqualTo(beforeAdvance);
     }
 
     @Test

@@ -60,6 +60,38 @@ class SaveGameListDeleteIT {
     }
 
     @Test
+    void creatingACareerStampsLastPlayedAt() throws Exception {
+        // Given a freshly created career
+        String token = register("lastplayed_" + UUID.randomUUID());
+        String careerId = createCareer(token).get("id").asString();
+
+        // Then its list entry carries a non-null lastPlayedAt (stamped at creation)
+        JsonNode list = listCareers(token);
+        JsonNode entry = list.get(0);
+        assertThat(entry.get("id").asString()).isEqualTo(careerId);
+        assertThat(entry.has("lastPlayedAt")).isTrue();
+        assertThat(entry.get("lastPlayedAt").isNull()).isFalse();
+    }
+
+    @Test
+    void playingAnOlderCareerMovesItAheadOfANeverRepeatedNewerOne() throws Exception {
+        // Given two careers, B created after A — by creation order alone B sorts first
+        String token = register("reorder_" + UUID.randomUUID());
+        String careerA = createCareer(token).get("id").asString();
+        String careerB = createCareer(token).get("id").asString();
+        assertThat(listCareers(token).get(0).get("id").asString()).isEqualTo(careerB);
+
+        // When A is played again (advance bumps its lastPlayedAt to now)
+        mockMvc.perform(post("/api/v1/save-games/" + careerA + "/advance")
+                        .header("Authorization", bearer(token)))
+                .andExpect(status().isOk());
+
+        // Then A now sorts ahead of B, because it was played more recently than B was ever
+        // (re-)played — proving the list orders by lastPlayedAt, not creation order
+        assertThat(listCareers(token).get(0).get("id").asString()).isEqualTo(careerA);
+    }
+
+    @Test
     void deleteRemovesTheCareerAndCascades_andForeignUserGets404() throws Exception {
         // Given: user A with two careers, user B is a foreign user
         String tokenA = register("delA_" + UUID.randomUUID());

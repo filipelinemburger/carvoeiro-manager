@@ -259,11 +259,15 @@ public class SaveGameService {
         return new ApiException(ErrorCode.SAVE_GAME_NOT_FOUND, "Save game not found");
     }
 
-    /** All of a user's careers, newest first, as lightweight summaries for the load dialog. */
+    /** All of a user's careers, most-recently-played first (falling back to creation time for
+     * careers that have only ever been created, never resumed). */
     @Transactional(readOnly = true)
     public List<SaveGameSummaryResponse> listCareers(UUID userId) {
         return saveGameRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
                 .map(this::toSummary)
+                .sorted(Comparator.comparing(
+                        (SaveGameSummaryResponse r) -> r.lastPlayedAt() != null ? r.lastPlayedAt() : r.createdAt())
+                        .reversed())
                 .toList();
     }
 
@@ -278,7 +282,8 @@ public class SaveGameService {
                 saveGame.getCurrentRound(),
                 currentDate,
                 saveGame.getStatus().name(),
-                saveGame.getCreatedAt());
+                saveGame.getCreatedAt(),
+                saveGame.getLastPlayedAt());
     }
 
     /** Deletes one career (ownership-checked). Cascade FKs clear all of that career's data. */

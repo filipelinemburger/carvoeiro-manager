@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -33,6 +34,9 @@ class LiveMatchServiceKickoffIT {
 
     @Autowired
     SaveGameService saveGameService;
+
+    @Autowired
+    br.com.carvoeiromanager.career.SaveGameRepository saveGameRepository;
 
     @Autowired
     UserRepository userRepository;
@@ -99,6 +103,19 @@ class LiveMatchServiceKickoffIT {
         // Save-scoped: the unique constraint on save_game_id means presence after two kickoffs
         // proves no duplicate was created for this save game (avoids cross-IT flake from shared container).
         assertThat(liveMatchRepository.findBySaveGameId(saveGameId)).isPresent();
+    }
+
+    @Test
+    void kickoffBumpsLastPlayedAt() {
+        // Given the career from @BeforeEach (already has a valid lineup)
+        Instant beforeKickoff = Instant.now();
+
+        // When kicking off
+        liveMatchService.kickoff(saveGameId, userId);
+
+        // Then lastPlayedAt moved to at/after this call
+        br.com.carvoeiromanager.career.SaveGame after = saveGameRepository.findById(saveGameId).orElseThrow();
+        assertThat(after.getLastPlayedAt()).isAfterOrEqualTo(beforeKickoff);
     }
 
     @Test

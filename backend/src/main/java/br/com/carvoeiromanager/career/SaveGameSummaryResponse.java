@@ -14,5 +14,6 @@ public record SaveGameSummaryResponse(
         int currentRound,
         String currentDate,
         String status,
-        Instant createdAt
+        Instant createdAt,
+        Instant lastPlayedAt
 ) {}

@@ -42,6 +42,9 @@ public class SaveGame {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "last_played_at")
+    private Instant lastPlayedAt;
+
     @Column(name = "\"current_date\"")
     private LocalDate currentDate;
 
@@ -76,6 +79,7 @@ public class SaveGame {
         this.currentRound = currentRound;
         this.status = status;
         this.createdAt = createdAt;
+        this.lastPlayedAt = createdAt;
         this.managerName = managerName;
         this.managerNationality = managerNationality;
     }
@@ -97,6 +101,8 @@ public class SaveGame {
     public int getCurrentRound() { return currentRound; }
     public SaveGameStatus getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }
+    public Instant getLastPlayedAt() { return lastPlayedAt; }
+    public void setLastPlayedAt(Instant lastPlayedAt) { this.lastPlayedAt = lastPlayedAt; }
     public String getManagerName() { return managerName; }
     public String getManagerNationality() { return managerNationality; }
 

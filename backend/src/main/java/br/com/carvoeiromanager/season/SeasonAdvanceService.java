@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -110,6 +111,7 @@ public class SeasonAdvanceService {
     @Transactional
     public AdvanceResponse advance(UUID saveGameId, UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        save.setLastPlayedAt(Instant.now());
         if (save.getStatus() == SaveGameStatus.FINISHED) {
             throw new ApiException(ErrorCode.SEASON_FINISHED, "The season has already finished");
         }
