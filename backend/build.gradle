@@ -35,7 +35,10 @@ dependencies {
     testImplementation 'org.assertj:assertj-core'
 }
 
-tasks.named('test') { useJUnitPlatform() }
+tasks.named('test') {
+    useJUnitPlatform()
+    maxHeapSize = '3g'
+}
 
 tasks.withType(JavaCompile).configureEach {
     options.compilerArgs << '-Xlint:deprecation'
