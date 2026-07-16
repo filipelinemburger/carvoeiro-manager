@@ -4,6 +4,7 @@ import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.common.PageResponse;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +30,7 @@ class NewsFeedIT {
     @Autowired SaveGameService saveGameService;
     @Autowired UserRepository userRepository;
     @Autowired NewsItemRepository newsItemRepository;
+    @Autowired AdvanceController advanceController;
     @Autowired tools.jackson.databind.ObjectMapper objectMapper;
 
     private record Career(UUID userId, SaveGameResponse save) {
@@ -123,5 +125,60 @@ class NewsFeedIT {
         // Seq values are 1..5, ordered desc in the result
         List<Integer> seqs = items.stream().map(NewsItem::getSeq).toList();
         assertThat(seqs).containsExactly(5, 4, 3, 2, 1);
+    }
+
+    /** Persists {@code count} minimal MATCH news items (seq 1..count) without driving a real
+     *  calendar advance — isolates the pagination math from how many events a season has. */
+    private void persistNewsItems(UUID saveGameId, int count) {
+        AdvanceResponse minimal = new AdvanceResponse("MATCH", null, null, null, List.of(), List.of(),
+                List.of(), List.of(), null, 0, false, null, null, null);
+        for (int seq = 1; seq <= count; seq++) {
+            String payload;
+            try {
+                payload = objectMapper.writeValueAsString(minimal);
+            } catch (Exception e) {
+                throw new AssertionError("Failed to serialize test news payload", e);
+            }
+            newsItemRepository.save(NewsItem.create(saveGameId, seq, null, "MATCH", payload));
+        }
+    }
+
+    @Test
+    void newsFeedDefaultsToPageOneSizeTen() {
+        Career c = createCareer();
+        persistNewsItems(c.id(), 15);
+
+        PageResponse<AdvanceResponse> page = advanceController.getNews(c.id(), c.userId(), 1, 10).getBody();
+
+        assertThat(page.content()).hasSize(10);
+        assertThat(page.page()).isEqualTo(1);
+        assertThat(page.size()).isEqualTo(10);
+        assertThat(page.totalElements()).isEqualTo(15);
+        assertThat(page.totalPages()).isEqualTo(2);
+    }
+
+    @Test
+    void newsFeedSecondPageReturnsTheRemainingOlderItems() {
+        Career c = createCareer();
+        persistNewsItems(c.id(), 15);
+
+        PageResponse<AdvanceResponse> page = advanceController.getNews(c.id(), c.userId(), 2, 10).getBody();
+
+        assertThat(page.content()).hasSize(5);
+        assertThat(page.page()).isEqualTo(2);
+        assertThat(page.totalElements()).isEqualTo(15);
+        assertThat(page.totalPages()).isEqualTo(2);
+    }
+
+    @Test
+    void newsFeedOutOfRangePageReturnsEmptyContentWithCorrectTotals() {
+        Career c = createCareer();
+        persistNewsItems(c.id(), 3);
+
+        PageResponse<AdvanceResponse> page = advanceController.getNews(c.id(), c.userId(), 5, 10).getBody();
+
+        assertThat(page.content()).isEmpty();
+        assertThat(page.totalElements()).isEqualTo(3);
+        assertThat(page.totalPages()).isEqualTo(1);
     }
 }
