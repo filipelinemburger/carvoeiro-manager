@@ -164,4 +164,31 @@ describe('ClubViewPage', () => {
     await waitFor(() => expect(screen.getByText('Meu Jogador')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /fazer proposta/i })).not.toBeInTheDocument()
   })
+
+  it('invalidates the managed squad when an offer for a rival player is accepted', async () => {
+    vi.mocked(makeOffer).mockResolvedValue({
+      id: 'o1', playerId: 'p1', playerName: 'Alvo Um', fromClubId: MANAGED_CLUB_ID, fromClubName: 'Criciúma',
+      toClubId: OTHER_CLUB_ID, toClubName: 'Rival FC', direction: 'OUTGOING', amount: 2688000,
+      counterAmount: null, status: 'ACCEPTED', round: 0, wage: 60000, contractYears: 3,
+    })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+    render(
+      <MemoryRouter initialEntries={[`/club?saveGameId=sg-1&clubId=${OTHER_CLUB_ID}`]}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <ClubViewPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /fazer proposta/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /fazer proposta/i }))
+
+    await waitFor(() => expect(screen.getByText(/Proposta aceita/i)).toBeInTheDocument())
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['squad', 'sg-1', MANAGED_CLUB_ID] })
+  })
 })

@@ -72,6 +72,9 @@ export function ClubViewPage() {
       void queryClient.invalidateQueries({ queryKey: ['offers', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
+      if (offer.status === 'ACCEPTED') {
+        void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, save.data?.managedClubId ?? ''] })
+      }
     },
   })
 
