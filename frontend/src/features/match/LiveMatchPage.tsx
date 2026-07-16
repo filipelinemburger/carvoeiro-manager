@@ -46,7 +46,6 @@ export function LiveMatchPage() {
   const [actionsOpen, setActionsOpen] = useState(false)
   const [actionsTab, setActionsTab] = useState<0 | 1>(0)
   const [feedTab, setFeedTab] = useState<0 | 1 | 2>(0)   // 0 = Lances, 1 = Atuações, 2 = Campo
-  const [ratingsSide, setRatingsSide] = useState<0 | 1>(0)   // 0 = Meu Time, 1 = Adversário
   const [applyPending, setApplyPending] = useState(false)
   const [subError, setSubError] = useState<string | null>(null)
 
@@ -238,23 +237,34 @@ export function LiveMatchPage() {
       )}
 
       {feedTab === 1 && (
-        <Box sx={{ mt: 1 }}>
-          <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-            <Button size="small" variant={ratingsSide === 0 ? 'contained' : 'outlined'} onClick={() => setRatingsSide(0)}>
-              Meu Time
-            </Button>
-            <Button size="small" variant={ratingsSide === 1 ? 'contained' : 'outlined'} onClick={() => setRatingsSide(1)}>
-              Adversário
-            </Button>
-          </Stack>
-          {(ratingsSide === 0 ? state.playerRatings : state.opponentRatings).length > 0 ? (
-            <PlayerRatingsList ratings={ratingsSide === 0 ? state.playerRatings : state.opponentRatings} />
-          ) : (
-            <Typography sx={{ color: 'text.secondary' }}>
-              As atuações aparecem conforme o jogo evolui.
-            </Typography>
-          )}
-        </Box>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 700, mb: 0.5 }}>Meu Time</Typography>
+            {state.playerRatings.length > 0 ? (
+              <PlayerRatingsList
+                ratings={state.playerRatings}
+                onPitchIds={new Set(state.onPitch.map(p => p.playerId))}
+              />
+            ) : (
+              <Typography sx={{ color: 'text.secondary' }}>
+                As atuações aparecem conforme o jogo evolui.
+              </Typography>
+            )}
+          </Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 700, mb: 0.5 }}>Adversário</Typography>
+            {state.opponentRatings.length > 0 ? (
+              <PlayerRatingsList
+                ratings={state.opponentRatings}
+                onPitchIds={new Set(state.opponentOnPitch.map(p => p.playerId))}
+              />
+            ) : (
+              <Typography sx={{ color: 'text.secondary' }}>
+                As atuações aparecem conforme o jogo evolui.
+              </Typography>
+            )}
+          </Box>
+        </Stack>
       )}
 
       {feedTab === 2 && (

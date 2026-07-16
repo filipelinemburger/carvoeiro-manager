@@ -104,14 +104,14 @@ describe('LiveMatchPage', () => {
     expect(screen.getByText('6.7')).toBeInTheDocument()
   })
 
-  it('shows a hint in the Atuações tab before any grades exist', async () => {
-    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', playerRatings: [] } as never)
+  it('shows a hint in each column when no grades exist yet', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', playerRatings: [], opponentRatings: [] } as never)
     renderPage()
     fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
-    expect(await screen.findByText(/atuações aparecem conforme/i)).toBeInTheDocument()
+    expect(await screen.findAllByText(/atuações aparecem conforme/i)).toHaveLength(2)
   })
 
-  it('toggles between own and opponent ratings in the Atuações tab', async () => {
+  it('shows both teams\' ratings simultaneously in two columns, no toggle needed', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({
       ...STATE, status: 'IN_PROGRESS',
       playerRatings: [
@@ -125,11 +125,30 @@ describe('LiveMatchPage', () => {
 
     fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
     expect(await screen.findByText('Camisa 9')).toBeInTheDocument()
-    expect(screen.queryByText('Rival Camisa 10')).not.toBeInTheDocument()
+    expect(screen.getByText('Rival Camisa 10')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^meu time$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^adversário$/i })).not.toBeInTheDocument()
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: /adversário/i }))
-    expect(await screen.findByText('Rival Camisa 10')).toBeInTheDocument()
-    expect(screen.queryByText('Camisa 9')).not.toBeInTheDocument()
+  it('dims a player who has been substituted off in the ratings list', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS',
+      onPitch: [
+        { playerId: 'p1', name: 'Camisa 9', position: 'ATT', overall: 70, fitness: 80, hobbled: false, onPitch: true, used: false, eligible: true, role: 'ST' },
+      ],
+      playerRatings: [
+        { playerId: 'p1', name: 'Camisa 9', position: 'ATT', minutesPlayed: 90, goals: 1, rating: 7.0 },
+        { playerId: 'p2', name: 'Saiu Cedo', position: 'MID', minutesPlayed: 45, goals: 0, rating: 6.0 },
+      ],
+    } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
+    const stillPlayingRow = (await screen.findByText('Camisa 9')).closest('div')
+    const subbedOffRow = (await screen.findByText('Saiu Cedo')).closest('div')
+
+    expect(stillPlayingRow?.style.opacity).toBe('')
+    expect(subbedOffRow?.style.opacity).toBe('0.5')
   })
 
   it('shows both teams on the Campo tab with their names and an injury badge', async () => {
