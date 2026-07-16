@@ -17,6 +17,8 @@ import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.match.MatchOutcomeApplier;
 import br.com.carvoeiromanager.match.PlayerRating;
 import br.com.carvoeiromanager.match.RoundOutcome;
+import br.com.carvoeiromanager.player.TrainingService;
+import br.com.carvoeiromanager.player.TrainingWeekReport;
 import br.com.carvoeiromanager.transfer.CompletedTransferResponse;
 import br.com.carvoeiromanager.transfer.TransferDirection;
 import br.com.carvoeiromanager.transfer.TransferOfferRepository;
@@ -53,6 +55,12 @@ import java.util.UUID;
  * called and {@code lastFinanceMonth} is updated. This guarantees wages, sponsorship, and
  * stadium upkeep are charged exactly once per in-game month regardless of how many events
  * fall within that month or across two interleaved competitions.
+ *
+ * <h3>Weekly training</h3>
+ * Likewise, before processing each event the weekly training tick runs once per in-game ISO
+ * week ({@code save.lastTrainingWeek}, a YYYYWW int) via {@link TrainingService#processWeek};
+ * when the managed club's Preparador Físico produced a report it is persisted as its own
+ * {@code TRAINING_REPORT} news item.
  */
 @Service
 public class SeasonAdvanceService {
@@ -69,6 +77,7 @@ public class SeasonAdvanceService {
     private final NewsItemRepository newsItemRepository;
     private final LiveMatchRepository liveMatchRepository;
     private final ObjectMapper objectMapper;
+    private final TrainingService trainingService;
 
     public SeasonAdvanceService(SaveGameService saveGameService,
                                 SaveGameRepository saveGameRepository,
@@ -81,7 +90,8 @@ public class SeasonAdvanceService {
                                 TransferOfferRepository transferOfferRepository,
                                 NewsItemRepository newsItemRepository,
                                 LiveMatchRepository liveMatchRepository,
-                                ObjectMapper objectMapper) {
+                                ObjectMapper objectMapper,
+                                TrainingService trainingService) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.seasonEventRepository = seasonEventRepository;
@@ -94,6 +104,7 @@ public class SeasonAdvanceService {
         this.newsItemRepository = newsItemRepository;
         this.liveMatchRepository = liveMatchRepository;
         this.objectMapper = objectMapper;
+        this.trainingService = trainingService;
     }
 
     @Transactional
@@ -113,7 +124,7 @@ public class SeasonAdvanceService {
             save.setStatus(SaveGameStatus.FINISHED);
             saveGameRepository.save(save);
             return new AdvanceResponse("FINISHED", null, null, null,
-                    List.of(), List.of(), List.of(), List.of(), null, 0, true, List.of(), List.of());
+                    List.of(), List.of(), List.of(), List.of(), null, 0, true, List.of(), List.of(), null);
         }
 
         LocalDate eventDate = event.getEventDate();
@@ -124,6 +135,11 @@ public class SeasonAdvanceService {
         // This assumes the calendar never leaves a >1-month gap with no events (SeasonCalendarGenerator
         // spaces events at most a few days apart), so no month is silently skipped.
         financeService.processMonth(saveGameId, eventDate);
+
+        // Weekly training: tick every club's training once per in-game ISO week. processWeek
+        // self-guards like processMonth; when the physio produced a report, persist it as its
+        // own TRAINING_REPORT feed item (lower seq than the event's item → shows as older news).
+        maybePersistTrainingReport(saveGameId, eventDate);
 
         AdvanceResponse response = switch (event.getType()) {
             case MATCH -> processMatch(save, event);
@@ -192,7 +208,7 @@ public class SeasonAdvanceService {
         return new AdvanceResponse("MATCH", eventDate.toString(), competitionName, round,
                 List.copyOf(outcome.results()), List.copyOf(outcome.bookings()),
                 List.copyOf(outcome.newSuspensions()), List.copyOf(outcome.newInjuries()),
-                finance, 0, seasonFinished, List.copyOf(playerRatings), List.of());
+                finance, 0, seasonFinished, List.copyOf(playerRatings), List.of(), null);
     }
 
     /**
@@ -211,6 +227,7 @@ public class SeasonAdvanceService {
         final LocalDate eventDate = event.getEventDate();
         save.setCurrentDate(eventDate);
         financeService.processMonth(saveGameId, eventDate);
+        maybePersistTrainingReport(saveGameId, eventDate);
 
         List<Fixture> fixtures = fixtureRepository
                 .findBySaveGameIdAndCompetitionIdAndRound(saveGameId, event.getCompetitionId(), event.getRound());
@@ -246,7 +263,7 @@ public class SeasonAdvanceService {
         List<CompletedTransferResponse> transfers = transferService.processMarketDay(save.getId(), event.getEventDate());
         int bidsReceived = Math.max(0, activeIncomingBids(save.getId()) - before);
         return new AdvanceResponse("TRANSFER", event.getEventDate().toString(), null, null,
-                List.of(), List.of(), List.of(), List.of(), null, bidsReceived, false, List.of(), transfers);
+                List.of(), List.of(), List.of(), List.of(), null, bidsReceived, false, List.of(), transfers, null);
     }
 
     private int activeIncomingBids(UUID saveGameId) {
@@ -254,6 +271,22 @@ public class SeasonAdvanceService {
                         List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED)).stream()
                 .filter(o -> o.getDirection() == TransferDirection.INCOMING)
                 .count();
+    }
+
+    /** Runs the weekly training tick and persists the physio's report (when any) as news. */
+    private void maybePersistTrainingReport(UUID saveGameId, LocalDate eventDate) {
+        TrainingWeekReport report = trainingService.processWeek(saveGameId, eventDate);
+        if (report == null) {
+            return;
+        }
+        TrainingReportResponse dto = new TrainingReportResponse(report.staffName(), report.quality(),
+                report.entries().stream()
+                        .map(e -> new TrainingReportEntry(e.playerName(), e.message()))
+                        .toList());
+        AdvanceResponse response = new AdvanceResponse("TRAINING_REPORT", eventDate.toString(),
+                null, null, List.of(), List.of(), List.of(), List.of(), null, 0, false,
+                List.of(), List.of(), dto);
+        persistNewsItem(saveGameId, eventDate, response);
     }
 
     /** Serialize the response and write a news_item row (seq = count + 1). */

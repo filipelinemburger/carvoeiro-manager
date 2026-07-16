@@ -22,6 +22,8 @@ import java.util.List;
  *       bids are generated.</li>
  *   <li>{@code FINISHED} — all event-specific fields are null/zero/empty; the season is
  *       over with no calendar entries remaining.</li>
+ *   <li>{@code TRAINING_REPORT} — only {@code date} and {@code trainingReport} are meaningful;
+ *       persisted as its own news item when the weekly training tick produced notable events.</li>
  * </ul>
  * {@code playerRatings} holds the managed club's 0–10 performance grades and is populated only for
  * the user's own (live-played) match; it is empty for AI-simulated rounds, transfers and older
@@ -29,6 +31,9 @@ import java.util.List;
  * {@code transfers} holds AI-to-AI trades completed during a TRANSFER event (empty for
  * MATCH/FINISHED, and deserialized as {@code null} — not empty — from news payloads persisted
  * before this field existed, so callers must null-guard it).
+ * {@code trainingReport} is populated only on {@code TRAINING_REPORT} items (the Preparador
+ * Físico's weekly digest); it deserializes as {@code null} from every older payload and from
+ * MATCH/TRANSFER/FINISHED items — callers must null-guard it.
  */
 public record AdvanceResponse(
         String type,
@@ -43,5 +48,6 @@ public record AdvanceResponse(
         int bidsReceived,
         boolean seasonFinished,
         List<PlayerRating> playerRatings,
-        List<CompletedTransferResponse> transfers) {
+        List<CompletedTransferResponse> transfers,
+        TrainingReportResponse trainingReport) {
 }
