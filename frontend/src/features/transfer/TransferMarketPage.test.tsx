@@ -293,6 +293,32 @@ describe('TransferMarketPage', () => {
     resolveWithdraw({ ...OUTGOING, status: 'WITHDRAWN' })
   })
 
+  it('auto-switches to the market tab once a successful withdraw settles with no proposals left', async () => {
+    const OUTGOING = {
+      id: 'out1', playerId: 'p9', playerName: 'Alvo Nove', fromClubId: 'club-1', fromClubName: 'Criciúma',
+      toClubId: 'club-9', toClubName: 'Rival FC', direction: 'OUTGOING' as const, amount: 1000000,
+      counterAmount: 1300000, status: 'COUNTERED' as const, round: 0, wage: null, contractYears: null,
+    }
+    vi.mocked(getOffers).mockResolvedValue([OUTGOING])
+    let resolveWithdraw!: (v: typeof OUTGOING) => void
+    vi.mocked(withdrawOffer).mockReturnValue(new Promise(resolve => { resolveWithdraw = resolve }))
+
+    renderPage()
+    expect(await screen.findByText(/contraproposta de/i)).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /propostas recebidas/i })).toHaveAttribute('aria-selected', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Desistir' }))
+    await waitFor(() => expect(screen.queryByText(/contraproposta de/i)).not.toBeInTheDocument())
+
+    // The mocked backend now reflects the withdrawal too, so the onSettled-triggered
+    // offers refetch (from withdrawMut) doesn't bring the offer back.
+    vi.mocked(getOffers).mockResolvedValue([])
+    resolveWithdraw({ ...OUTGOING, status: 'WITHDRAWN' })
+
+    // Genuinely settled with nothing left to review — the effect should now switch tabs.
+    await waitFor(() => expect(screen.getByRole('tab', { name: /jogadores dispon/i })).toHaveAttribute('aria-selected', 'true'))
+  })
+
   it('restores the offer list if withdrawing fails', async () => {
     const OUTGOING = {
       id: 'out1', playerId: 'p9', playerName: 'Alvo Nove', fromClubId: 'club-1', fromClubName: 'Criciúma',
