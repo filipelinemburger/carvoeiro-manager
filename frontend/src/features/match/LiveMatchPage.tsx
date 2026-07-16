@@ -8,6 +8,7 @@ import type { LiveEvent, LiveMatchState, LiveTacticsRequest, LivePlayer, LiveKit
 import { MatchActionsDialog } from './MatchActionsDialog'
 import type { SubPair } from './MatchActionsDialog'
 import { PlayerRatingsList } from './PlayerRatingsList'
+import { PreMatchLineups } from './PreMatchLineups'
 import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
 
 /** Builds one side's pitch view-model from its live on-pitch roster. Module-scope (no
@@ -226,14 +227,29 @@ export function LiveMatchPage() {
       </Tabs>
 
       {feedTab === 0 && (
-        <Stack spacing={0.5} sx={{ mt: 1 }}>
-          {feed.map((e, i) => (
-            <Stack key={`${e.minute}-${i}`} direction="row" spacing={1}>
-              <Typography sx={{ minWidth: 32, color: 'text.secondary' }}>{e.minute}'</Typography>
-              <Typography component="span">{EVENT_ICON[e.type]} {e.text}</Typography>
-            </Stack>
-          ))}
-        </Stack>
+        state.minute === 0 ? (
+          <PreMatchLineups
+            home={{
+              clubName: state.homeClubShortName,
+              formation: state.managedIsHome ? state.currentTactics.formation : state.opponentTactics.formation,
+              players: state.managedIsHome ? state.onPitch : state.opponentOnPitch,
+            }}
+            away={{
+              clubName: state.awayClubShortName,
+              formation: state.managedIsHome ? state.opponentTactics.formation : state.currentTactics.formation,
+              players: state.managedIsHome ? state.opponentOnPitch : state.onPitch,
+            }}
+          />
+        ) : (
+          <Stack spacing={0.5} sx={{ mt: 1 }}>
+            {feed.map((e, i) => (
+              <Stack key={`${e.minute}-${i}`} direction="row" spacing={1}>
+                <Typography sx={{ minWidth: 32, color: 'text.secondary' }}>{e.minute}'</Typography>
+                <Typography component="span">{EVENT_ICON[e.type]} {e.text}</Typography>
+              </Stack>
+            ))}
+          </Stack>
+        )
       )}
 
       {feedTab === 1 && (

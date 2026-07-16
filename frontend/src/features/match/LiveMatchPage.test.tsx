@@ -53,6 +53,25 @@ describe('LiveMatchPage', () => {
     vi.mocked(advanceLiveMatch).mockResolvedValue({ ...STATE, minute: 13, status: 'IN_PROGRESS' } as never)
   })
 
+  it('shows both starting lineups at kickoff (minute 0) instead of the empty feed', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE,
+      minute: 0,
+      onPitch: [
+        { playerId: 'h1', name: 'Goleiro Casa', position: 'GK', overall: 60, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+      ],
+      opponentOnPitch: [
+        { playerId: 'a1', name: 'Goleiro Fora', position: 'GK', overall: 58, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+      ],
+    } as never)
+    renderPage()
+
+    expect(await screen.findByText('Goleiro Casa')).toBeInTheDocument()
+    expect(screen.getByText('Goleiro Fora')).toBeInTheDocument()
+    expect(screen.getAllByText(STATE.homeClubShortName).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(STATE.awayClubShortName).length).toBeGreaterThan(0)
+  })
+
   it('shows the score and the commentary feed', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
     renderPage()
