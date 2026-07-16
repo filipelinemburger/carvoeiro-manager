@@ -27,8 +27,6 @@ import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerAgingService;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
-import br.com.carvoeiromanager.player.TrainingIntensity;
-import br.com.carvoeiromanager.player.TrainingService;
 import br.com.carvoeiromanager.player.YouthDevelopmentService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,7 +68,6 @@ public class SeasonRolloverService {
     private final SeasonTopScorerRepository seasonTopScorerRepository;
     private final SeasonPlayerStatsRepository seasonPlayerStatsRepository;
     private final PlayerAgingService playerAgingService;
-    private final TrainingService trainingService;
     private static final int FREE_AGENT_FLOOR = 6;
 
     private final NewgenGenerator newgenGenerator;
@@ -106,7 +103,6 @@ public class SeasonRolloverService {
                                  SeasonPlayerStatsRepository seasonPlayerStatsRepository,
                                  br.com.carvoeiromanager.stats.PlayerStatsService playerStatsService,
                                  PlayerAgingService playerAgingService,
-                                 TrainingService trainingService,
                                  NewgenGenerator newgenGenerator,
                                  FreeAgentGenerator freeAgentGenerator,
                                  FinanceTransactionRepository financeTransactionRepository,
@@ -133,7 +129,6 @@ public class SeasonRolloverService {
         this.seasonPlayerStatsRepository = seasonPlayerStatsRepository;
         this.playerStatsService = playerStatsService;
         this.playerAgingService = playerAgingService;
-        this.trainingService = trainingService;
         this.newgenGenerator = newgenGenerator;
         this.freeAgentGenerator = freeAgentGenerator;
         this.financeTransactionRepository = financeTransactionRepository;
@@ -249,15 +244,8 @@ public class SeasonRolloverService {
                 continue;
             }
 
-            // Carried over: reset per-season state, then apply training, then tick the contract.
+            // Carried over: reset per-season state, then tick the contract.
             player.resetSeasonState();
-            if (managed) {
-                trainingService.applyTraining(player, player.getTrainingFocus(),
-                        player.getTrainingIntensity(), rng, player.getClubId(), true);
-            } else if (!freeAgent) {
-                trainingService.applyTraining(player, TrainingService.heuristicFocusFor(player.getPosition()),
-                        TrainingIntensity.NORMAL, rng, player.getClubId(), false);
-            }
             if (!freeAgent) {
                 player.setContractYears(player.getContractYears() - 1);
                 if (player.getContractYears() <= 0) {

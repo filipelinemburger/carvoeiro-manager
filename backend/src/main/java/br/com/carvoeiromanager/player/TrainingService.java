@@ -252,35 +252,4 @@ public class TrainingService {
         p.evolveAttributes(pace, finishing, passing, tackling, goalkeeping, stamina, overall);
     }
 
-    // ------------------------------------------------------------------
-    // Legacy one-shot rollover training — deleted in the next task together
-    // with its SeasonRolloverService call sites (kept here so the build stays
-    // green between tasks).
-    // ------------------------------------------------------------------
-
-    /** No-op when {@code focus} is null — "not training" must leave the player untouched. */
-    public void applyTraining(Player player, Attribute focus, TrainingIntensity intensity, Random rng,
-                              UUID clubId, boolean managed) {
-        if (focus == null) {
-            return;
-        }
-
-        int bonus = intensityBonus(intensity);
-        bonus += staffEffectsService.trainingBonusFor(clubId, managed);
-
-        applyAnchor(player, focus, clamp(anchorValue(player, focus) + bonus));
-
-        double risk = switch (intensity) {
-            case LEVE -> 0.0;
-            case NORMAL -> 0.03;
-            case INTENSA -> 0.08;
-        };
-        if (rng.nextDouble() < risk) {
-            player.addInjury(1 + rng.nextInt(2));
-        }
-    }
-
-    private int clamp(int value) {
-        return Math.max(1, Math.min(99, value));
-    }
 }
