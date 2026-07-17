@@ -60,6 +60,7 @@ export function TacticsPanel({ saveGameId, clubId, starters }: TacticsPanelProps
     queryKey: ['tactics', saveGameId, clubId],
     queryFn: () => getTactics(saveGameId, clubId, token ?? ''),
     enabled: Boolean(saveGameId && clubId && token),
+    staleTime: Infinity,
   })
 
   useEffect(() => {

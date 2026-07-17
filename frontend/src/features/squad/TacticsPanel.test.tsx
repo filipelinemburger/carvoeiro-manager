@@ -110,4 +110,25 @@ describe('TacticsPanel', () => {
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['tactics', 'sg-1', 'club-1'] }),
     )
   })
+
+  it('does not refetch tactics on a second mount when the query client is reused', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const renderOnce = () => render(
+      <MemoryRouter>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <TacticsPanel saveGameId="sg-1" clubId="club-1" starters={[{ id: 'p1', name: 'Craque Um' }]} />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    const { unmount } = renderOnce()
+    await waitFor(() => expect(screen.getByLabelText('Mentalidade')).toHaveValue('ATTACKING'))
+    expect(mockGet).toHaveBeenCalledTimes(1)
+    unmount()
+
+    renderOnce()
+    await waitFor(() => expect(screen.getByLabelText('Mentalidade')).toHaveValue('ATTACKING'))
+    expect(mockGet).toHaveBeenCalledTimes(1)
+  })
 })
