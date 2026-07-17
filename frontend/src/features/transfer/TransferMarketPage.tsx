@@ -275,7 +275,7 @@ export function TransferMarketPage() {
   const [sortBy, setSortBy] = useState<SortKey>('overall_desc')
 
   const enabled = Boolean(saveGameId && token)
-  const save = useQuery({ queryKey: ['saveGame', saveGameId], queryFn: () => getSaveGame(saveGameId, token ?? ''), enabled })
+  const save = useQuery({ queryKey: ['saveGame', saveGameId], queryFn: () => getSaveGame(saveGameId, token ?? ''), enabled, staleTime: 30_000 })
   const clubsQuery = useQuery({ queryKey: ['clubs', saveGameId], queryFn: () => getClubs(saveGameId, token ?? ''), enabled })
   const market = useQuery({
     queryKey: ['market', saveGameId, appliedFilters, page],

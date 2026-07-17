@@ -428,7 +428,7 @@ describe('TransferMarketPage', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['squad', 'sg-1', 'club-1'] })
   })
 
-  it('does not refetch the market or offers on a second mount when the query client is reused', async () => {
+  it('does not refetch the market, offers, or save game on a second mount when the query client is reused', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const renderOnce = () => render(
       <MemoryRouter initialEntries={['/transfers?saveGameId=sg-1&clubId=club-1']}>
@@ -443,11 +443,13 @@ describe('TransferMarketPage', () => {
     await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
     expect(getMarket).toHaveBeenCalledTimes(1)
     expect(getOffers).toHaveBeenCalledTimes(1)
+    expect(getSaveGame).toHaveBeenCalledTimes(1)
     unmount()
 
     renderOnce()
     await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
     expect(getMarket).toHaveBeenCalledTimes(1)
     expect(getOffers).toHaveBeenCalledTimes(1)
+    expect(getSaveGame).toHaveBeenCalledTimes(1)
   })
 })

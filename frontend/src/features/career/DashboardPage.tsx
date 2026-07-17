@@ -38,6 +38,7 @@ export function DashboardPage() {
     queryFn: () => getSaveGame(saveGameId!, token ?? ''),
     enabled: Boolean(saveGameId && token),
     retry: false,
+    staleTime: 30_000,
   })
 
   const { data: finances } = useQuery({

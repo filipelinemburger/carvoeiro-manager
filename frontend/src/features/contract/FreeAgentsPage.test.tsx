@@ -97,8 +97,8 @@ describe('FreeAgentsPage', () => {
     await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['squad', 'S1', 'club-1'] }))
   })
 
-  it('does not refetch the free-agent pool on a second mount when the query client is reused', async () => {
-    vi.spyOn(api, 'getSaveGame').mockResolvedValue({ transferWindowOpen: true } as never)
+  it('does not refetch the free-agent pool or save game on a second mount when the query client is reused', async () => {
+    const save = vi.spyOn(api, 'getSaveGame').mockResolvedValue({ transferWindowOpen: true } as never)
     const pool = vi.spyOn(api, 'getFreeAgents').mockResolvedValue([
       { playerId: 'P1', name: 'Livre Um', position: 'ATT', age: 27, overall: 68, wageDemand: 100000 },
     ] as never)
@@ -113,10 +113,12 @@ describe('FreeAgentsPage', () => {
     const { unmount } = renderOnce()
     await screen.findByText('Livre Um')
     expect(pool).toHaveBeenCalledTimes(1)
+    expect(save).toHaveBeenCalledTimes(1)
     unmount()
 
     renderOnce()
     await screen.findByText('Livre Um')
     expect(pool).toHaveBeenCalledTimes(1)
+    expect(save).toHaveBeenCalledTimes(1)
   })
 })

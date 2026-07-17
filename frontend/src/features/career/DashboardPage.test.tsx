@@ -85,6 +85,41 @@ describe('DashboardPage', () => {
     expect(getSaveGame).toHaveBeenCalledWith('save-2', 'test-token')
   })
 
+  it('does not refetch the save game on a second mount within its staleTime window', async () => {
+    seedAuth('U2')
+    localStorage.setItem('carvoeiro_manager_save_game_id_U2', 'save-2')
+    ;(getSaveGame as Mock).mockResolvedValue({
+      id: 'save-2',
+      seasonYear: 2026,
+      competitionId: 'comp-1',
+      competitionName: 'Campeonato Catarinense',
+      managedClubId: 'club-1',
+      managedClubName: 'Criciúma Esporte Clube',
+      currentRound: 5,
+      totalRounds: 18,
+    })
+    ;(getFinances as Mock).mockResolvedValue({ balance: 12500000, transactions: [] })
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const renderOnce = () => render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <AuthProvider>
+            <DashboardPage />
+          </AuthProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    const { unmount } = renderOnce()
+    await waitFor(() => expect(screen.getByText(/Criciúma Esporte Clube/)).toBeInTheDocument())
+    expect(getSaveGame).toHaveBeenCalledTimes(1)
+    unmount()
+
+    renderOnce()
+    await waitFor(() => expect(screen.getByText(/Criciúma Esporte Clube/)).toBeInTheDocument())
+    expect(getSaveGame).toHaveBeenCalledTimes(1)
+  })
+
   it('hides the Técnico row for a save created before manager identity existed', async () => {
     seedAuth('U4')
     localStorage.setItem('carvoeiro_manager_save_game_id_U4', 'save-4')

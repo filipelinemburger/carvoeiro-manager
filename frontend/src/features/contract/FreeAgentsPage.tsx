@@ -41,7 +41,7 @@ export function FreeAgentsPanel({ onOpenDetails }: { onOpenDetails: (playerId: s
   const [years, setYears] = useState<Record<string, string>>({})
 
   const enabled = Boolean(saveGameId && token)
-  const save = useQuery({ queryKey: ['saveGame', saveGameId], queryFn: () => getSaveGame(saveGameId, token ?? ''), enabled })
+  const save = useQuery({ queryKey: ['saveGame', saveGameId], queryFn: () => getSaveGame(saveGameId, token ?? ''), enabled, staleTime: 30_000 })
   const pool = useQuery({
     queryKey: ['freeAgents', saveGameId],
     queryFn: () => getFreeAgents(saveGameId, token ?? ''),
