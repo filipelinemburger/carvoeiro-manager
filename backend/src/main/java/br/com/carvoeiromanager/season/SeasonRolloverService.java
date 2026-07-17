@@ -21,7 +21,6 @@ import br.com.carvoeiromanager.match.LineupPlayerRepository;
 import br.com.carvoeiromanager.transfer.TransferOfferRepository;
 import br.com.carvoeiromanager.match.LineupRepository;
 import br.com.carvoeiromanager.match.MatchEventRepository;
-import br.com.carvoeiromanager.contract.FreeAgentGenerator;
 import br.com.carvoeiromanager.player.NewgenGenerator;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerAgingService;
@@ -68,10 +67,8 @@ public class SeasonRolloverService {
     private final SeasonTopScorerRepository seasonTopScorerRepository;
     private final SeasonPlayerStatsRepository seasonPlayerStatsRepository;
     private final PlayerAgingService playerAgingService;
-    private static final int FREE_AGENT_FLOOR = 6;
 
     private final NewgenGenerator newgenGenerator;
-    private final FreeAgentGenerator freeAgentGenerator;
     private final FinanceTransactionRepository financeTransactionRepository;
     private final TransferOfferRepository transferOfferRepository;
     private final SeasonCalendarGenerator seasonCalendarGenerator;
@@ -104,7 +101,6 @@ public class SeasonRolloverService {
                                  br.com.carvoeiromanager.stats.PlayerStatsService playerStatsService,
                                  PlayerAgingService playerAgingService,
                                  NewgenGenerator newgenGenerator,
-                                 FreeAgentGenerator freeAgentGenerator,
                                  FinanceTransactionRepository financeTransactionRepository,
                                  TransferOfferRepository transferOfferRepository,
                                  SeasonCalendarGenerator seasonCalendarGenerator,
@@ -130,7 +126,6 @@ public class SeasonRolloverService {
         this.playerStatsService = playerStatsService;
         this.playerAgingService = playerAgingService;
         this.newgenGenerator = newgenGenerator;
-        this.freeAgentGenerator = freeAgentGenerator;
         this.financeTransactionRepository = financeTransactionRepository;
         this.transferOfferRepository = transferOfferRepository;
         this.seasonCalendarGenerator = seasonCalendarGenerator;
@@ -264,12 +259,6 @@ public class SeasonRolloverService {
         playerRepository.deleteAll(toDelete);
         playerRepository.flush();
         playerRepository.saveAll(toSave);
-
-        // Replenish the free-agent pool to the floor so the market never dies.
-        int poolSize = playerRepository.findBySaveGameIdAndClubIdIsNull(saveGameId).size();
-        for (int i = poolSize; i < FREE_AGENT_FLOOR; i++) {
-            playerRepository.save(freeAgentGenerator.generate(saveGameId, rng));
-        }
 
         // Top up the managed club's youth academy toward the target.
         int academySize = playerRepository.findByClubIdAndYouthProspectTrue(managedClubId).size();

@@ -102,15 +102,18 @@ class RolloverContractsIT {
     }
 
     @Test
-    void theFreeAgentPoolIsReplenishedToTheFloor() {
+    void theFreeAgentPoolIsNotReplenishedAtRollover() {
         Career c = playToSeasonEnd();
         List<Player> allPlayers = playerRepository.findBySaveGameId(c.id());
-        allPlayers.forEach(p -> p.setContractYears(5));
+        allPlayers.forEach(p -> p.setContractYears(5)); // nobody's contract expires this rollover
         playerRepository.saveAll(allPlayers);
+        int poolBefore = playerRepository.findBySaveGameIdAndClubIdIsNull(c.id()).size();
 
         rolloverService.rollover(c.id(), c.userId());
 
+        // No contracts expired, so the pool can only shrink (a free agent retiring)
+        // or stay the same — it must never be topped back up by generation.
         assertThat(playerRepository.findBySaveGameIdAndClubIdIsNull(c.id()).size())
-                .isGreaterThanOrEqualTo(6);
+                .isLessThanOrEqualTo(poolBefore);
     }
 }

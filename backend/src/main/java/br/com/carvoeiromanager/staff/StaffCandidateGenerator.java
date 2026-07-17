@@ -12,10 +12,10 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * Rolls staff candidates on demand — never persisted, unlike {@code FreeAgentGenerator}'s shared
- * pool. Deterministic for a given (saveGameId, clubId, role, onDate): the offer is stable within
- * a game-day and changes only as the season advances, so re-browsing the same role on the same
- * day always shows the same three candidates.
+ * Rolls staff candidates on demand — never persisted, unlike the free-agent pool (seeded once
+ * from real data and only ever shrinks). Deterministic for a given (saveGameId, clubId, role,
+ * onDate): the offer is stable within a game-day and changes only as the season advances, so
+ * re-browsing the same role on the same day always shows the same three candidates.
  */
 @Component
 public class StaffCandidateGenerator {
