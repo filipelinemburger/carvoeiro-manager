@@ -1,0 +1,5 @@
+# Caddy terminates HTTPS (automatic Let's Encrypt via the DOMAIN env var)
+# and proxies everything to the Spring Boot app.
+{$DOMAIN} {
+	reverse_proxy app:8088
+}

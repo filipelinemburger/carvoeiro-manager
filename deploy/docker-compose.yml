@@ -1,0 +1,57 @@
+name: carvoeiro-manager
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: carvoeiro-manager
+      POSTGRES_USER: carvoeiro-manager
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in deploy/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U carvoeiro-manager -d carvoeiro-manager"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    # Built by .github/workflows/deploy-backend.yml on the CI runner and
+    # shipped here as a tarball — the 1 GB VM never runs a Gradle build.
+    image: carvoeiro-manager-backend:latest
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/carvoeiro-manager
+      DB_USER: carvoeiro-manager
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in deploy/.env}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in deploy/.env}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://carvoeiromanager.vercel.app}
+      PORT: "8088"
+      # Keep the JVM inside its slice of the 1 GB instance; the swapfile
+      # (see README) absorbs rare spikes instead of the OOM killer.
+      JAVA_TOOL_OPTIONS: "-Xmx384m -XX:MaxMetaspaceSize=128m"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

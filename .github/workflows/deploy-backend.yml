@@ -1,0 +1,60 @@
+name: Deploy backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'deploy/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The image is built here (the 1 GB VM can't fit a Gradle build) and
+      # shipped as a tarball over SSH — no container registry needed.
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          load: true
+          tags: carvoeiro-manager-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Export image
+        run: docker save carvoeiro-manager-backend:latest | gzip > image.tar.gz
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Ship image and deploy config to VM
+        run: |
+          rsync -az --delete --exclude='.env' -e "ssh -i ~/.ssh/deploy_key" \
+            deploy ubuntu@${{ secrets.DEPLOY_HOST }}:~/carvoeiro-manager/
+          scp -i ~/.ssh/deploy_key image.tar.gz \
+            ubuntu@${{ secrets.DEPLOY_HOST }}:~/carvoeiro-manager/
+
+      - name: Load image and restart
+        run: |
+          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} \
+            "cd ~/carvoeiro-manager \
+             && docker load < image.tar.gz \
+             && rm image.tar.gz \
+             && cd deploy \
+             && docker compose up -d \
+             && docker image prune -f"
