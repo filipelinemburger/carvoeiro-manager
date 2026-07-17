@@ -175,4 +175,30 @@ class SeedLoaderTest {
         assertThat(pressings).as("pressing variety across the pool")
                 .containsExactlyInAnyOrder("LOW", "MEDIUM", "HIGH");
     }
+
+    @Test
+    void loadsFreeAgentsFromTheSeedFile() {
+        var freeAgents = new SeedLoader().loadFreeAgents();
+
+        assertThat(freeAgents).isNotEmpty();
+        assertThat(freeAgents).allSatisfy(p -> {
+            assertThat(VALID_POSITIONS).contains(p.position());
+            assertThat(p.attributes()).as("%s should be authored", p.name()).isNotNull();
+            assertThat(p.nationality()).isNotBlank();
+        });
+    }
+
+    @Test
+    void freeAgentNamesDoNotCollideWithAnyClubRosterPlayer() {
+        SeedLoader loader = new SeedLoader();
+        Set<String> clubNames = loader.loadCareer().clubPool().stream()
+                .flatMap(c -> c.players().stream())
+                .map(SeedPlayer::name)
+                .collect(Collectors.toSet());
+        Set<String> freeAgentNames = loader.loadFreeAgents().stream()
+                .map(SeedPlayer::name).collect(Collectors.toSet());
+
+        assertThat(clubNames).as("free agent names must not collide with any club roster player")
+                .doesNotContainAnyElementsOf(freeAgentNames);
+    }
 }
