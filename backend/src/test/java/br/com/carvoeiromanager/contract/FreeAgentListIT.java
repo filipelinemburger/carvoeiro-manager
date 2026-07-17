@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.seed.SeedLoader;
 import br.com.carvoeiromanager.transfer.TransferService;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,7 @@ class FreeAgentListIT {
     void careerCreationSeedsAFreeAgentPool() {
         Career c = createCareer();
         var pool = contractService.getFreeAgents(c.id(), c.userId());
-        assertThat(pool).hasSize(10);
+        assertThat(pool).hasSize(new SeedLoader().loadFreeAgents().size());
         assertThat(pool).allMatch(fa -> fa.wageDemand().signum() > 0);
     }
 

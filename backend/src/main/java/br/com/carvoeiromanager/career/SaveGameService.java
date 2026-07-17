@@ -7,7 +7,6 @@ import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClub;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
-import br.com.carvoeiromanager.contract.FreeAgentGenerator;
 import br.com.carvoeiromanager.finance.FinanceCalculator;
 import br.com.carvoeiromanager.player.AttributeDeriver;
 import br.com.carvoeiromanager.player.Attributes;
@@ -49,7 +48,6 @@ public class SaveGameService {
     private final SeasonCalendarGenerator seasonCalendarGenerator;
     private final OverallCalculator overallCalculator;
     private final FinanceCalculator financeCalculator;
-    private final FreeAgentGenerator freeAgentGenerator;
     private final br.com.carvoeiromanager.transfer.TransferWindow transferWindow;
     // TransferService depends back on SaveGameService (ownership checks on the user-facing
     // endpoints), so this side of the cycle is broken with @Lazy: the day-one market run is the
@@ -71,7 +69,6 @@ public class SaveGameService {
                            SeasonCalendarGenerator seasonCalendarGenerator,
                            OverallCalculator overallCalculator,
                            FinanceCalculator financeCalculator,
-                           FreeAgentGenerator freeAgentGenerator,
                            br.com.carvoeiromanager.transfer.TransferWindow transferWindow,
                            @Lazy br.com.carvoeiromanager.transfer.TransferService transferService) {
         this.seedLoader = seedLoader;
@@ -82,7 +79,6 @@ public class SaveGameService {
         this.seasonCalendarGenerator = seasonCalendarGenerator;
         this.overallCalculator = overallCalculator;
         this.financeCalculator = financeCalculator;
-        this.freeAgentGenerator = freeAgentGenerator;
         this.transferWindow = transferWindow;
         this.transferService = transferService;
     }
@@ -178,10 +174,23 @@ public class SaveGameService {
         }
         playerRepository.saveAll(allPlayers);
 
-        // Seed an initial free-agent pool (clubless) so there is always a market to shop.
-        Random faRng = new Random(saveGame.getId().getMostSignificantBits() ^ 0xFA11AC0DL);
-        for (int i = 0; i < 10; i++) {
-            entityManager.persist(freeAgentGenerator.generate(saveGame.getId(), faRng));
+        // Seed the real free-agent pool (clubless) so there is always a market to shop —
+        // hand-authored South American players, not procedurally generated.
+        for (SeedPlayer seedPlayer : seedLoader.loadFreeAgents()) {
+            Position position = Position.valueOf(seedPlayer.position());
+            int overall = overallCalculator.compute(position,
+                    seedPlayer.pace(), seedPlayer.finishing(), seedPlayer.passing(),
+                    seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina());
+            Attributes attributes = seedPlayer.attributes() != null
+                    ? seedPlayer.attributes().toAttributes(
+                            seedPlayer.pace(), seedPlayer.finishing(), seedPlayer.passing(),
+                            seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina())
+                    : AttributeDeriver.derive(position,
+                            seedPlayer.pace(), seedPlayer.finishing(), seedPlayer.passing(),
+                            seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina(), overall);
+            Player freeAgent = Player.create(saveGame.getId(), null, seedPlayer.name(), position,
+                    seedPlayer.age(), seedPlayer.nationality(), attributes, overall);
+            entityManager.persist(freeAgent);
         }
 
         // 3. Create competitions and save membership rows BEFORE calling SeasonCalendarGenerator

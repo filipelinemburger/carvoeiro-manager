@@ -107,6 +107,34 @@ class SaveGameServiceIT {
     }
 
     @Test
+    void creatingCareerSeedsTheRealFreeAgentPool() {
+        // Given a persisted user
+        User user = User.create("tigre_fa_" + UUID.randomUUID(), "hash");
+        userRepository.save(user);
+
+        // When a career is created
+        SaveGameResponse response = saveGameService.createCareer(user.getId());
+
+        // Then the free-agent pool is seeded 1:1 from the real seed file — no
+        // procedural generation, no wage, no contract.
+        var freeAgentSeeds = new SeedLoader().loadFreeAgents();
+        var freeAgents = playerRepository.findBySaveGameIdAndClubIdIsNull(response.id());
+        assertThat(freeAgents).hasSize(freeAgentSeeds.size());
+        assertThat(freeAgents).allSatisfy(p ->
+                assertThat(p.getWage()).isEqualByComparingTo(java.math.BigDecimal.ZERO));
+        assertThat(freeAgents).allSatisfy(p -> assertThat(p.getContractYears()).isZero());
+
+        // More than one South American nationality is represented — this is a
+        // real multi-country pool, not the old Brasil-only procedural generator.
+        var nationalities = freeAgents.stream()
+                .map(br.com.carvoeiromanager.player.Player::getNationality)
+                .collect(Collectors.toSet());
+        assertThat(nationalities)
+                .as("free-agent pool should span more than one nationality")
+                .hasSizeGreaterThan(1);
+    }
+
+    @Test
     void criciumaPlayersGetAuthoredAttributesThroughCareerCreation() {
         // Given a persisted user
         User user = User.create("tigre_attrs", "hash");
