@@ -190,5 +190,27 @@ describe('ClubViewPage', () => {
 
     await waitFor(() => expect(screen.getByText(/Proposta aceita/i)).toBeInTheDocument())
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['squad', 'sg-1', MANAGED_CLUB_ID] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['finances', 'sg-1', MANAGED_CLUB_ID] })
+  })
+
+  it('does not refetch clubs on a second mount when the query client is reused', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const renderOnce = () => render(
+      <MemoryRouter initialEntries={[`/club?saveGameId=sg-1&clubId=${OTHER_CLUB_ID}`]}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <ClubViewPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    const { unmount } = renderOnce()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    expect(getClubs).toHaveBeenCalledTimes(1)
+    unmount()
+
+    renderOnce()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    expect(getClubs).toHaveBeenCalledTimes(1)
   })
 })

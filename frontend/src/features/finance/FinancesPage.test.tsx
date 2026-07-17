@@ -80,4 +80,26 @@ describe('FinancesPage', () => {
     await waitFor(() => expect(screen.getByText(/Saldo:/)).toBeInTheDocument())
     expect(screen.getByText(/Nenhuma transação/i)).toBeInTheDocument()
   })
+
+  it('does not refetch finances on a second mount when the query client is reused', async () => {
+    vi.mocked(getFinances).mockResolvedValue({ balance: 5000000, transactions: [] })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const renderOnce = () => render(
+      <MemoryRouter initialEntries={['/finances?saveGameId=sg-1&clubId=club-1']}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <FinancesPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    const { unmount } = renderOnce()
+    await waitFor(() => expect(screen.getByText(/Saldo:/)).toBeInTheDocument())
+    expect(getFinances).toHaveBeenCalledTimes(1)
+    unmount()
+
+    renderOnce()
+    await waitFor(() => expect(screen.getByText(/Saldo:/)).toBeInTheDocument())
+    expect(getFinances).toHaveBeenCalledTimes(1)
+  })
 })

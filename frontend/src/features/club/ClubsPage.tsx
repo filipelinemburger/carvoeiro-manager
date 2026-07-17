@@ -47,6 +47,7 @@ export function ClubsPage() {
     queryKey: ['clubs', saveGameId],
     queryFn: () => getClubs(saveGameId, token ?? ''),
     enabled: Boolean(saveGameId && token),
+    staleTime: Infinity,
   })
 
   const clubs = data ?? []

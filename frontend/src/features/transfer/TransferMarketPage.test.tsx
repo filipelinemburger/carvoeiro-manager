@@ -373,6 +373,36 @@ describe('TransferMarketPage', () => {
     })
 
     await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['squad', 'sg-1', 'club-1'] }))
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['finances', 'sg-1', 'club-1'] })
+  })
+
+  it('invalidates finances when an incoming offer is accepted (selling a player)', async () => {
+    vi.mocked(getOffers).mockResolvedValue([
+      { id: 'in1', playerId: 'mp1', playerName: 'Meu Jogador', fromClubId: 'club-9', fromClubName: 'Rival FC',
+        toClubId: 'club-1', toClubName: 'Criciúma', direction: 'INCOMING', amount: 2000000,
+        counterAmount: null, status: 'PENDING', round: 0, wage: null, contractYears: null },
+    ])
+    vi.mocked(respondToOffer).mockResolvedValue({
+      id: 'in1', playerId: 'mp1', playerName: 'Meu Jogador', fromClubId: 'club-9', fromClubName: 'Rival FC',
+      toClubId: 'club-1', toClubName: 'Criciúma', direction: 'INCOMING', amount: 2000000,
+      counterAmount: null, status: 'ACCEPTED', round: 0, wage: null, contractYears: null,
+    })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+    render(
+      <MemoryRouter initialEntries={['/transfers?saveGameId=sg-1&clubId=club-1']}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <TransferMarketPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText('Meu Jogador')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aceitar' }))
+
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['finances', 'sg-1', 'club-1'] }))
   })
 
   it('restores a rejected incoming offer if the request fails', async () => {
@@ -426,6 +456,7 @@ describe('TransferMarketPage', () => {
     expect(getOffers).toHaveBeenCalledTimes(1)
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['market', 'sg-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['squad', 'sg-1', 'club-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['finances', 'sg-1', 'club-1'] })
   })
 
   it('does not refetch the market, offers, or save game on a second mount when the query client is reused', async () => {
@@ -444,12 +475,14 @@ describe('TransferMarketPage', () => {
     expect(getMarket).toHaveBeenCalledTimes(1)
     expect(getOffers).toHaveBeenCalledTimes(1)
     expect(getSaveGame).toHaveBeenCalledTimes(1)
+    expect(getClubs).toHaveBeenCalledTimes(1)
     unmount()
 
     renderOnce()
     await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
     expect(getMarket).toHaveBeenCalledTimes(1)
     expect(getOffers).toHaveBeenCalledTimes(1)
+    expect(getClubs).toHaveBeenCalledTimes(1)
     expect(getSaveGame).toHaveBeenCalledTimes(1)
   })
 })

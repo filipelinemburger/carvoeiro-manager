@@ -50,7 +50,7 @@ export function ClubViewPage() {
     queryKey: ['clubs', saveGameId],
     queryFn: () => getClubs(saveGameId, token ?? ''),
     enabled,
-    staleTime: 30_000,
+    staleTime: Infinity,
   })
   const { data, isLoading, error } = useQuery({
     queryKey: ['squad', saveGameId, clubId],
@@ -74,6 +74,7 @@ export function ClubViewPage() {
       void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
       if (offer.status === 'ACCEPTED') {
         void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, save.data?.managedClubId ?? ''] })
+        void queryClient.invalidateQueries({ queryKey: ['finances', saveGameId, save.data?.managedClubId ?? ''] })
       }
     },
   })

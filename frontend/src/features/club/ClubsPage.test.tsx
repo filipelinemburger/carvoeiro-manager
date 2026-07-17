@@ -74,4 +74,28 @@ describe('ClubsPage', () => {
     fireEvent.click(screen.getByText('Avaí'))
     expect(await screen.findByText('club-view-marker')).toBeInTheDocument()
   })
+
+  it('does not refetch clubs on a second mount when the query client is reused', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const renderOnce = () => render(
+      <MemoryRouter initialEntries={[`/clubs?saveGameId=sg-1&clubId=${MANAGED_CLUB_ID}`]}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <Routes>
+              <Route path="/clubs" element={<ClubsPage />} />
+              <Route path="/club" element={<div>club-view-marker</div>} />
+            </Routes>
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    const { unmount } = renderOnce()
+    await waitFor(() => expect(screen.getByText('Avaí')).toBeInTheDocument())
+    expect(getClubs).toHaveBeenCalledTimes(1)
+    unmount()
+
+    renderOnce()
+    await waitFor(() => expect(screen.getByText('Avaí')).toBeInTheDocument())
+    expect(getClubs).toHaveBeenCalledTimes(1)
+  })
 })

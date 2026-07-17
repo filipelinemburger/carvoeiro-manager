@@ -132,9 +132,11 @@ describe('LiveMatchPage', () => {
   it('at full time, Ver resumo finishes and navigates to the news', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, minute: 90, status: 'FULL_TIME' } as never)
     vi.mocked(finishLiveMatch).mockResolvedValue({ type: 'MATCH' } as never)
-    renderPage()
+    const { qc } = renderPage()
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
     fireEvent.click(await screen.findByRole('button', { name: /continuar/i }))
     await waitFor(() => expect(finishLiveMatch).toHaveBeenCalledWith('sg-1', 'test-token'))
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['finances'] })
   })
 
   it('at full time, auto-switches to the Atuações tab and shows final grades', async () => {

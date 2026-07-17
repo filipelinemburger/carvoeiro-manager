@@ -73,4 +73,31 @@ describe('StaffPage', () => {
 
     expect(await screen.findByText('Erro ao carregar candidatos.')).toBeInTheDocument()
   })
+
+  it('does not refetch the roster or a role\'s candidates on a second mount when the query client is reused', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const renderOnce = () => render(
+      <MemoryRouter initialEntries={['/staff?saveGameId=sg-1&clubId=club-1']}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <StaffPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    const { unmount } = renderOnce()
+    await waitFor(() => screen.getByText('Olheiro'))
+    fireEvent.click(within(screen.getByTestId('staff-role-OLHEIRO')).getByRole('button', { name: /contratar/i }))
+    await waitFor(() => screen.getByText('Roberto Lima'))
+    expect(mockGetStaffRoster).toHaveBeenCalledTimes(1)
+    expect(mockGetStaffCandidates).toHaveBeenCalledTimes(1)
+    unmount()
+
+    renderOnce()
+    await waitFor(() => screen.getByText('Olheiro'))
+    fireEvent.click(within(screen.getByTestId('staff-role-OLHEIRO')).getByRole('button', { name: /contratar/i }))
+    await waitFor(() => screen.getByText('Roberto Lima'))
+    expect(mockGetStaffRoster).toHaveBeenCalledTimes(1)
+    expect(mockGetStaffCandidates).toHaveBeenCalledTimes(1)
+  })
 })

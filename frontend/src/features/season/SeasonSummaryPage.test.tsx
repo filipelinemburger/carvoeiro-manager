@@ -86,7 +86,7 @@ describe('SeasonSummaryPage', () => {
     expect(screen.getByText(/Zé Tigre/)).toBeInTheDocument()
   })
 
-  it('invalidates squad, youth, free agents, and season history after rolling over', async () => {
+  it('invalidates squad, youth, free agents, season history, and clubs after rolling over', async () => {
     vi.mocked(rolloverSeason).mockResolvedValue({
       seasonYear: 2027, currentRound: 0, retirements: [], expiredContracts: [], youthIntake: [], youthDepartures: [],
     })
@@ -108,5 +108,6 @@ describe('SeasonSummaryPage', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['youth', 'sg-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['freeAgents', 'sg-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['seasonHistory', 'sg-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['clubs', 'sg-1'] })
   })
 })

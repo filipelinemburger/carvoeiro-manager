@@ -317,5 +317,7 @@ describe('Layout shell', () => {
     fireEvent.click(avancarBtn)
 
     await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['market'] }))
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['clubs'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['staffCandidates'] })
   })
 })

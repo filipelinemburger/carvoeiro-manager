@@ -91,6 +91,8 @@ export function Layout({ children }: LayoutProps) {
       void queryClient.invalidateQueries({ queryKey: ['offers'] })
       void queryClient.invalidateQueries({ queryKey: ['squad'] })
       void queryClient.invalidateQueries({ queryKey: ['market'] })
+      void queryClient.invalidateQueries({ queryKey: ['clubs'] })
+      void queryClient.invalidateQueries({ queryKey: ['staffCandidates'] })
       // The advance outcome is persisted as a news item; show it on the News tab.
       void navigate(`/news?saveGameId=${saveGameId}`)
     },

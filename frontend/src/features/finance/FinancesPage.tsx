@@ -64,6 +64,7 @@ export function FinancesPage() {
     queryKey: ['finances', saveGameId, clubId],
     queryFn: () => getFinances(saveGameId, clubId, token ?? ''),
     enabled: Boolean(saveGameId && clubId && token),
+    staleTime: Infinity,
   })
 
   if (isLoading) return <Typography sx={{ p: 3 }}>Carregando finanças…</Typography>

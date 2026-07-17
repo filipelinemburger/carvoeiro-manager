@@ -57,6 +57,7 @@ export function SeasonSummaryPage() {
       void queryClient.invalidateQueries({ queryKey: ['youth', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['freeAgents', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['seasonHistory', saveGameId] })
+      void queryClient.invalidateQueries({ queryKey: ['clubs', saveGameId] })
     },
   })
 

@@ -39,12 +39,14 @@ export function StaffPage() {
     queryKey: ['staffRoster', saveGameId, clubId],
     queryFn: () => getStaffRoster(saveGameId, clubId, token ?? ''),
     enabled,
+    staleTime: Infinity,
   })
 
   const candidates = useQuery({
     queryKey: ['staffCandidates', saveGameId, clubId, browsingRole],
     queryFn: () => getStaffCandidates(saveGameId, clubId, browsingRole!, token ?? ''),
     enabled: enabled && browsingRole !== null,
+    staleTime: Infinity,
   })
 
   const hireMut = useMutation({

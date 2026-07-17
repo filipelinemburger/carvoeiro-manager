@@ -276,7 +276,7 @@ export function TransferMarketPage() {
 
   const enabled = Boolean(saveGameId && token)
   const save = useQuery({ queryKey: ['saveGame', saveGameId], queryFn: () => getSaveGame(saveGameId, token ?? ''), enabled, staleTime: 30_000 })
-  const clubsQuery = useQuery({ queryKey: ['clubs', saveGameId], queryFn: () => getClubs(saveGameId, token ?? ''), enabled })
+  const clubsQuery = useQuery({ queryKey: ['clubs', saveGameId], queryFn: () => getClubs(saveGameId, token ?? ''), enabled, staleTime: Infinity })
   const market = useQuery({
     queryKey: ['market', saveGameId, appliedFilters, page],
     queryFn: () => getMarket(saveGameId, appliedFilters, page, MARKET_PAGE_SIZE, token ?? ''),
@@ -318,6 +318,7 @@ export function TransferMarketPage() {
       if (offer.status === 'ACCEPTED') {
         void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
         void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, managedClubId] })
+        void queryClient.invalidateQueries({ queryKey: ['finances', saveGameId, managedClubId] })
       }
       setLastResult(offer)
       setOfferTarget(null)
@@ -333,6 +334,7 @@ export function TransferMarketPage() {
       if (offer.status === 'ACCEPTED') {
         void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
         void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, managedClubId] })
+        void queryClient.invalidateQueries({ queryKey: ['finances', saveGameId, managedClubId] })
       }
       setLastResult(offer)
     },
@@ -390,6 +392,7 @@ export function TransferMarketPage() {
       void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
       if (v.action === 'ACCEPT') {
         void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, managedClubId] })
+        void queryClient.invalidateQueries({ queryKey: ['finances', saveGameId, managedClubId] })
       }
     },
   })
