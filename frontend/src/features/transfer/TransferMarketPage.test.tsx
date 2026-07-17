@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { TransferMarketPage } from './TransferMarketPage'
 import { AuthProvider } from '../../auth/AuthContext'
 import { ApiError } from '../../api/client'
-import type { ClubSummary, MarketPlayer, PageResponse } from '../../api/types'
+import type { ClubSummary, MarketPlayer, PageResponse, TransferOffer } from '../../api/types'
 
 vi.mock('../../api/career', () => ({
   getSaveGame: vi.fn(),
@@ -279,7 +279,7 @@ describe('TransferMarketPage', () => {
       counterAmount: 1300000, status: 'COUNTERED' as const, round: 0, wage: null, contractYears: null,
     }
     vi.mocked(getOffers).mockResolvedValue([OUTGOING])
-    let resolveWithdraw!: (v: typeof OUTGOING) => void
+    let resolveWithdraw!: (v: TransferOffer) => void
     vi.mocked(withdrawOffer).mockReturnValue(new Promise(resolve => { resolveWithdraw = resolve }))
 
     renderPage()
@@ -300,7 +300,7 @@ describe('TransferMarketPage', () => {
       counterAmount: 1300000, status: 'COUNTERED' as const, round: 0, wage: null, contractYears: null,
     }
     vi.mocked(getOffers).mockResolvedValue([OUTGOING])
-    let resolveWithdraw!: (v: typeof OUTGOING) => void
+    let resolveWithdraw!: (v: TransferOffer) => void
     vi.mocked(withdrawOffer).mockReturnValue(new Promise(resolve => { resolveWithdraw = resolve }))
 
     renderPage()
@@ -347,7 +347,7 @@ describe('TransferMarketPage', () => {
         toClubId: 'club-1', toClubName: 'Criciúma', direction: 'INCOMING', amount: 2000000,
         counterAmount: null, status: 'PENDING', round: 0, wage: null, contractYears: null },
     ])
-    let resolveRespond!: (v: unknown) => void
+    let resolveRespond!: (v: TransferOffer) => void
     vi.mocked(respondToOffer).mockReturnValue(new Promise(resolve => { resolveRespond = resolve }))
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
