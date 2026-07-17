@@ -8,6 +8,10 @@ services:
       POSTGRES_DB: carvoeiro-manager
       POSTGRES_USER: carvoeiro-manager
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in deploy/.env}
+    ports:
+      # Loopback-only: reachable exclusively through an SSH tunnel, never
+      # from the internet. GUI clients tunnel to localhost:5433 on the VM.
+      - "127.0.0.1:5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
