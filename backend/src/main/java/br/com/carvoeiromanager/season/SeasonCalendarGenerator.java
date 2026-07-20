@@ -29,6 +29,7 @@ public class SeasonCalendarGenerator {
     static final int PRE_SEASON_DAYS = 42;
     static final int MID_WINDOW_START_DAYS = 140;
     static final int MID_WINDOW_END_DAYS = 168;
+    static final int PRE_CONTRACT_WINDOW_START_DAYS = 181; // July 15 = Jan 15 + 181 days
 
     private final CompetitionClubRepository competitionClubRepository;
     private final FixtureScheduler fixtureScheduler = new FixtureScheduler();
@@ -104,9 +105,14 @@ public class SeasonCalendarGenerator {
                     SeasonEvent.createMatch(saveGameId, date, unit.competitionId(), unit.round(), 0));
         }
 
-        // 4. TRANSFER events inside each window range (sequence 1).
+        // 4. TRANSFER events inside each window range (sequence 1), plus pre-contract
+        //    market stops from July 15 up to the final scheduled match. Stop offsets are
+        //    ≡ 1 (mod 5) so they never share a date with a MATCH event (multiples of 5)
+        //    and always precede the season finale that flips the save to FINISHED.
         addTransferEvents(saveGameId, seasonStart, 0, PRE_SEASON_DAYS);
         addTransferEvents(saveGameId, seasonStart, MID_WINDOW_START_DAYS, MID_WINDOW_END_DAYS);
+        int lastMatchOffset = (ordered.size() - 1) * MATCH_INTERVAL_DAYS;
+        addTransferEvents(saveGameId, seasonStart, PRE_CONTRACT_WINDOW_START_DAYS, lastMatchOffset + 1);
     }
 
     private void addTransferEvents(UUID saveGameId, LocalDate seasonStart, int startOffset, int endOffset) {

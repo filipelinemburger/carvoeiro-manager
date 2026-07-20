@@ -6,6 +6,8 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.career.SaveGameStatus;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.contract.PreContractEventResponse;
+import br.com.carvoeiromanager.contract.PreContractService;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.FixtureRepository;
@@ -79,6 +81,7 @@ public class SeasonAdvanceService {
     private final LiveMatchRepository liveMatchRepository;
     private final ObjectMapper objectMapper;
     private final TrainingService trainingService;
+    private final PreContractService preContractService;
 
     public SeasonAdvanceService(SaveGameService saveGameService,
                                 SaveGameRepository saveGameRepository,
@@ -92,7 +95,8 @@ public class SeasonAdvanceService {
                                 NewsItemRepository newsItemRepository,
                                 LiveMatchRepository liveMatchRepository,
                                 ObjectMapper objectMapper,
-                                TrainingService trainingService) {
+                                TrainingService trainingService,
+                                PreContractService preContractService) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.seasonEventRepository = seasonEventRepository;
@@ -106,6 +110,7 @@ public class SeasonAdvanceService {
         this.liveMatchRepository = liveMatchRepository;
         this.objectMapper = objectMapper;
         this.trainingService = trainingService;
+        this.preContractService = preContractService;
     }
 
     @Transactional
@@ -126,7 +131,8 @@ public class SeasonAdvanceService {
             save.setStatus(SaveGameStatus.FINISHED);
             saveGameRepository.save(save);
             return new AdvanceResponse("FINISHED", null, null, null,
-                    List.of(), List.of(), List.of(), List.of(), null, 0, true, List.of(), List.of(), null);
+                    List.of(), List.of(), List.of(), List.of(), null, 0, true, List.of(), List.of(), null,
+                    List.of());
         }
 
         LocalDate eventDate = event.getEventDate();
@@ -210,7 +216,7 @@ public class SeasonAdvanceService {
         return new AdvanceResponse("MATCH", eventDate.toString(), competitionName, round,
                 List.copyOf(outcome.results()), List.copyOf(outcome.bookings()),
                 List.copyOf(outcome.newSuspensions()), List.copyOf(outcome.newInjuries()),
-                finance, 0, seasonFinished, List.copyOf(playerRatings), List.of(), null);
+                finance, 0, seasonFinished, List.copyOf(playerRatings), List.of(), null, List.of());
     }
 
     /**
@@ -264,8 +270,11 @@ public class SeasonAdvanceService {
         int before = activeIncomingBids(save.getId());
         List<CompletedTransferResponse> transfers = transferService.processMarketDay(save.getId(), event.getEventDate());
         int bidsReceived = Math.max(0, activeIncomingBids(save.getId()) - before);
+        List<PreContractEventResponse> preContractEvents =
+                preContractService.processMarketDay(save, event.getEventDate());
         return new AdvanceResponse("TRANSFER", event.getEventDate().toString(), null, null,
-                List.of(), List.of(), List.of(), List.of(), null, bidsReceived, false, List.of(), transfers, null);
+                List.of(), List.of(), List.of(), List.of(), null, bidsReceived, false,
+                List.of(), transfers, null, preContractEvents);
     }
 
     private int activeIncomingBids(UUID saveGameId) {
@@ -287,7 +296,7 @@ public class SeasonAdvanceService {
                         .toList());
         AdvanceResponse response = new AdvanceResponse("TRAINING_REPORT", eventDate.toString(),
                 null, null, List.of(), List.of(), List.of(), List.of(), null, 0, false,
-                List.of(), List.of(), dto);
+                List.of(), List.of(), dto, List.of());
         persistNewsItem(saveGameId, eventDate, response);
     }
 

@@ -16,9 +16,15 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -42,6 +48,7 @@ public class PreContractService {
     private final PreContractWindow preContractWindow;
     private final NewsItemRepository newsItemRepository;
     private final ObjectMapper objectMapper;
+    private final AiContractRenewalPolicy renewalPolicy;
 
     public PreContractService(SaveGameService saveGameService,
                               PlayerRepository playerRepository,
@@ -50,7 +57,8 @@ public class PreContractService {
                               PreContractNegotiation negotiation,
                               PreContractWindow preContractWindow,
                               NewsItemRepository newsItemRepository,
-                              ObjectMapper objectMapper) {
+                              ObjectMapper objectMapper,
+                              AiContractRenewalPolicy renewalPolicy) {
         this.saveGameService = saveGameService;
         this.playerRepository = playerRepository;
         this.clubRepository = clubRepository;
@@ -59,6 +67,158 @@ public class PreContractService {
         this.preContractWindow = preContractWindow;
         this.newsItemRepository = newsItemRepository;
         this.objectMapper = objectMapper;
+        this.renewalPolicy = renewalPolicy;
+    }
+
+    // Distinct RNG streams per concern so pre-contract rolls never disturb the
+    // incoming-bid RNG on a shared date (same convention as TransferService).
+    private static final long RENEWAL_SALT = 0x5052454E45574CL;  // "PRENEWL"
+    private static final long MARKET_SALT = 0x505245434D4BL;     // "PRECMK"
+
+    /**
+     * The TRANSFER-day pulse inside the pre-contract window, in spec order:
+     * 1) AI clubs renew the final-year players they want to keep (seeded PER SEASON, so
+     *    rerunning on every stop is idempotent — the same players are released each day);
+     * 2) AGREED deals from earlier days resolve — the current club counter-renews or the
+     *    deal locks (incoming deals lock unless the manager already renewed the player);
+     * 3) at most one AI club agrees a poach with a managed final-year player.
+     * Returns the day's events for the advance card / news feed.
+     */
+    @Transactional
+    public List<PreContractEventResponse> processMarketDay(SaveGame save, LocalDate eventDate) {
+        if (!preContractWindow.isOpen(eventDate)) {
+            return List.of();
+        }
+        List<PreContractEventResponse> events = new ArrayList<>();
+        runAiRenewalPass(save);
+        resolvePendingAgreements(save, eventDate, events);
+        aiPoach(save, eventDate, events);
+        return events;
+    }
+
+    private void runAiRenewalPass(SaveGame save) {
+        Random rng = new Random(save.getId().getMostSignificantBits()
+                ^ (long) save.getSeasonYear() ^ RENEWAL_SALT);
+        List<Club> clubs = clubRepository.findBySaveGameId(save.getId()).stream()
+                .filter(c -> !c.getId().equals(save.getManagedClubId()))
+                .sorted(Comparator.comparing(Club::getId)).toList();
+        for (Club club : clubs) {
+            List<Player> squad = playerRepository.findByClubIdAndYouthProspectFalse(club.getId()).stream()
+                    .sorted(Comparator.comparing(Player::getId)).toList();
+            int median = squadMedianOverall(squad);
+            int remaining = squad.size();
+            for (Player p : squad) {
+                if (p.getContractYears() != 1) {
+                    continue;
+                }
+                // The per-player decision consumes RNG in a fixed (id-sorted) order, so the
+                // same seed yields the same renewals on every stop of the season.
+                int years = renewalPolicy.renewYears(rng);
+                if (renewalPolicy.shouldRelease(p.getAge(), p.getOverall(), median, remaining)) {
+                    remaining--;                      // released: stays at 1, poachable
+                } else {
+                    p.setContractYears(1 + years);    // renewed: current season + 2-4 more
+                    playerRepository.save(p);
+                }
+            }
+        }
+    }
+
+    private void resolvePendingAgreements(SaveGame save, LocalDate eventDate,
+                                          List<PreContractEventResponse> events) {
+        Random rng = new Random(save.getId().getMostSignificantBits()
+                ^ eventDate.toEpochDay() ^ MARKET_SALT);
+        List<PreContractAgreement> pending = agreementRepository
+                .findBySaveGameIdAndStatus(save.getId(), PreContractStatus.AGREED).stream()
+                .filter(a -> a.getCreatedDate().isBefore(eventDate))
+                .sorted(Comparator.comparing(PreContractAgreement::getId)).toList();
+        Map<UUID, Club> clubs = clubRepository.findBySaveGameId(save.getId()).stream()
+                .collect(Collectors.toMap(Club::getId, Function.identity()));
+        for (PreContractAgreement a : pending) {
+            Optional<Player> playerOpt = playerRepository.findById(a.getPlayerId());
+            if (playerOpt.isEmpty()) {
+                a.cancel();
+                agreementRepository.save(a);
+                continue;
+            }
+            Player player = playerOpt.get();
+            boolean outgoing = a.getToClubId().equals(save.getManagedClubId());
+            String fromName = clubs.containsKey(a.getFromClubId()) ? clubs.get(a.getFromClubId()).getName() : "?";
+            String toName = clubs.containsKey(a.getToClubId()) ? clubs.get(a.getToClubId()).getName() : "?";
+            if (outgoing) {
+                int fromRep = clubs.get(a.getFromClubId()).getReputation();
+                int toRep = clubs.get(a.getToClubId()).getReputation();
+                double keep = negotiation.keepProbability(fromRep, toRep, player.getAge());
+                if (rng.nextDouble() < keep) {
+                    a.cancel();
+                    player.setContractYears(1 + renewalPolicy.renewYears(rng));
+                    playerRepository.save(player);
+                    events.add(new PreContractEventResponse("CANCELLED_OUT",
+                            player.getName(), fromName, a.getWage(), a.getContractYears()));
+                } else {
+                    a.lock();
+                    events.add(new PreContractEventResponse("LOCKED_OUT",
+                            player.getName(), fromName, a.getWage(), a.getContractYears()));
+                }
+            } else {
+                // Incoming threat: the manager's defense was a renewal before this stop
+                // (which cancels the agreement in ContractService, Task 5). Still AGREED
+                // here means no successful defense — the deal locks.
+                a.lock();
+                events.add(new PreContractEventResponse("LOCKED_IN",
+                        player.getName(), toName, a.getWage(), a.getContractYears()));
+            }
+            agreementRepository.save(a);
+        }
+    }
+
+    private void aiPoach(SaveGame save, LocalDate eventDate, List<PreContractEventResponse> events) {
+        Random rng = new Random(save.getId().getMostSignificantBits()
+                ^ eventDate.toEpochDay() ^ MARKET_SALT ^ 1L);
+        if (rng.nextDouble() >= 0.5) {
+            return; // no poach attempt today
+        }
+        Set<UUID> underAgreement = new HashSet<>(agreementRepository.findBySaveGameId(save.getId()).stream()
+                .filter(a -> ACTIVE.contains(a.getStatus()))
+                .map(PreContractAgreement::getPlayerId).toList());
+        List<Player> targets = playerRepository
+                .findByClubIdAndYouthProspectFalse(save.getManagedClubId()).stream()
+                .filter(p -> p.getContractYears() == 1 && p.getAge() <= 33)
+                .filter(p -> !underAgreement.contains(p.getId()))
+                .sorted(Comparator.comparing(Player::getOverall).reversed()
+                        .thenComparing(Player::getId))
+                .toList();
+        if (targets.isEmpty()) {
+            return;
+        }
+        List<Club> aiClubs = clubRepository.findBySaveGameId(save.getId()).stream()
+                .filter(c -> !c.getId().equals(save.getManagedClubId()))
+                .sorted(Comparator.comparing(Club::getReputation).reversed()
+                        .thenComparing(Club::getId))
+                .toList();
+        for (Player target : targets) {
+            for (Club club : aiClubs) {
+                List<Player> squad = playerRepository.findByClubIdAndYouthProspectFalse(club.getId());
+                if (target.getOverall() >= squadMedianOverall(squad)) {
+                    BigDecimal wage = negotiation.demand(target.getOverall(), target.getAge());
+                    PreContractAgreement agreement = PreContractAgreement.create(save.getId(),
+                            target.getId(), save.getManagedClubId(), club.getId(), wage,
+                            renewalPolicy.renewYears(rng), eventDate);
+                    agreementRepository.save(agreement);
+                    events.add(new PreContractEventResponse("POACHED_IN", target.getName(),
+                            club.getName(), wage, agreement.getContractYears()));
+                    return; // spec: at most ONE new poach per TRANSFER day
+                }
+            }
+        }
+    }
+
+    private int squadMedianOverall(List<Player> squad) {
+        if (squad.isEmpty()) {
+            return 0;
+        }
+        List<Integer> sorted = squad.stream().map(Player::getOverall).sorted().toList();
+        return sorted.get(sorted.size() / 2);
     }
 
     public List<PreContractEligibleResponse> getEligiblePlayers(UUID saveGameId, UUID userId) {

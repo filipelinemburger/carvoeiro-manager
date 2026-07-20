@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.season;
 
+import br.com.carvoeiromanager.contract.PreContractEventResponse;
 import br.com.carvoeiromanager.finance.FinanceRoundResponse;
 import br.com.carvoeiromanager.match.BookingResponse;
 import br.com.carvoeiromanager.match.FixtureResultResponse;
@@ -34,6 +35,8 @@ import java.util.List;
  * {@code trainingReport} is populated only on {@code TRAINING_REPORT} items (the Preparador
  * Físico's weekly digest); it deserializes as {@code null} from every older payload and from
  * MATCH/TRANSFER/FINISHED items — callers must null-guard it.
+ * {@code preContractEvents} — pre-contract happenings on a TRANSFER day; null in payloads
+ * persisted before the feature existed — callers must null-guard.
  */
 public record AdvanceResponse(
         String type,
@@ -49,5 +52,6 @@ public record AdvanceResponse(
         boolean seasonFinished,
         List<PlayerRating> playerRatings,
         List<CompletedTransferResponse> transfers,
-        TrainingReportResponse trainingReport) {
+        TrainingReportResponse trainingReport,
+        List<PreContractEventResponse> preContractEvents) {
 }

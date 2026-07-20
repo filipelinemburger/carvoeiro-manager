@@ -131,7 +131,7 @@ class NewsFeedIT {
      *  calendar advance — isolates the pagination math from how many events a season has. */
     private void persistNewsItems(UUID saveGameId, int count) {
         AdvanceResponse minimal = new AdvanceResponse("MATCH", null, null, null, List.of(), List.of(),
-                List.of(), List.of(), null, 0, false, null, null, null);
+                List.of(), List.of(), null, 0, false, null, null, null, null);
         for (int seq = 1; seq <= count; seq++) {
             String payload;
             try {
