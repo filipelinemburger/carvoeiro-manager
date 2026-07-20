@@ -13,6 +13,7 @@ import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { FreeAgentsPanel } from '../contract/FreeAgentsPage'
+import PreContractsPanel from './PreContractsPanel'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { MoneyField } from '../../components/MoneyField'
 import { MakeOfferDialog, type OfferTarget } from './MakeOfferDialog'
@@ -399,6 +400,10 @@ export function TransferMarketPage() {
 
   // Date-based window status from the backend (the single source of truth).
   const windowOpen = save.data?.transferWindowOpen ?? true
+  const currentDate = save.data?.currentDate ? new Date(save.data.currentDate) : null
+  const preContractWindowOpen = currentDate
+    ? currentDate >= new Date(currentDate.getFullYear(), 6, 15) // July 15 (month is 0-based)
+    : false
   const outgoing = (offers.data ?? []).filter(o => o.direction === 'OUTGOING' && o.status === 'COUNTERED')
   const incoming = (offers.data ?? []).filter(o => o.direction === 'INCOMING' && o.status === 'PENDING')
   const last = lastResult
@@ -447,6 +452,7 @@ export function TransferMarketPage() {
             <option value={0} disabled={!hasProposals}>Propostas recebidas</option>
             <option value={1}>Jogadores disponíveis</option>
             <option value={2}>Agentes livres</option>
+            <option value={3}>Pré-contratos</option>
           </NativeSelect>
         </FormControl>
       ) : (
@@ -467,6 +473,7 @@ export function TransferMarketPage() {
           />
           <Tab label="Jogadores disponíveis" />
           <Tab label="Agentes livres" />
+          <Tab label="Pré-contratos" />
         </Tabs>
       )}
 
@@ -730,6 +737,15 @@ export function TransferMarketPage() {
       )}
 
       {tab === 2 && <FreeAgentsPanel onOpenDetails={setDetailsPlayerId} />}
+
+      {tab === 3 && (
+        <PreContractsPanel
+          saveGameId={saveGameId}
+          token={token ?? ''}
+          managedClubId={managedClubId}
+          windowOpen={preContractWindowOpen}
+        />
+      )}
 
       <PlayerDetails player={resolvedDetailsPlayer} onClose={closeDetails} saveGameId={saveGameId} />
 

@@ -177,6 +177,30 @@ export function SeasonSummaryPage() {
               </List>
             </Box>
           )}
+          {((result.preContractArrivals ?? []).length > 0) && (
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>Chegadas por pré-contrato</Typography>
+              <List dense disablePadding>
+                {(result.preContractArrivals ?? []).map((c, i) => (
+                  <ListItem key={i} disableGutters sx={{ py: 0.25 }}>
+                    <Typography variant="body2">{c.playerName} ({c.position}, {c.age})</Typography>
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
+          {((result.preContractDepartures ?? []).length > 0) && (
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>Saídas por pré-contrato</Typography>
+              <List dense disablePadding>
+                {(result.preContractDepartures ?? []).map((c, i) => (
+                  <ListItem key={i} disableGutters sx={{ py: 0.25 }}>
+                    <Typography variant="body2">{c.playerName} ({c.position}, {c.age})</Typography>
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
           {result.youthIntake.length > 0 && (
             <SquadChangeList title="Reforços da Base" changes={result.youthIntake} />
           )}

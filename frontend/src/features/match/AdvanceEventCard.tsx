@@ -233,6 +233,11 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
               Janela de Transferências
             </Typography>
           )}
+          {result.type === 'PRECONTRACT' && (
+            <Typography sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
+              Pré-contrato
+            </Typography>
+          )}
           {result.type === 'FINISHED' && (
             <Typography sx={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--cec-green)' }}>
               Temporada Encerrada
@@ -283,6 +288,33 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
                 {result.transfers.map((t, i) => (
                   <ListItem key={`${t.playerName}-${i}`} disablePadding>
                     {t.playerName}: {t.fromClubName} → {t.toClubName} ({formatBRL(t.fee)})
+                  </ListItem>
+                ))}
+              </List>
+            </TimelineNode>
+          )}
+
+          {(result.preContractEvents?.length ?? 0) > 0 && (
+            <TimelineNode dot="🖋️">
+              <Typography component="strong" sx={{ fontWeight: 700 }}>Pré-contratos</Typography>
+              <List dense disablePadding sx={{ mt: 0.5 }}>
+                {result.preContractEvents!.map((e, i) => (
+                  <ListItem key={`${e.playerName}-${i}`} disablePadding>
+                    {e.kind === 'AGREED_OUT' && (
+                      <>✅ {e.playerName} aceitou seu pré-contrato (vem de {e.clubName})</>
+                    )}
+                    {e.kind === 'POACHED_IN' && (
+                      <>⚠️ {e.playerName} assinou pré-contrato com {e.clubName} — renove para defender!</>
+                    )}
+                    {e.kind === 'LOCKED_OUT' && (
+                      <>🔒 Pré-contrato de {e.playerName} confirmado — chega na próxima temporada</>
+                    )}
+                    {e.kind === 'CANCELLED_OUT' && (
+                      <>❌ {e.clubName} renovou com {e.playerName} — seu pré-contrato caiu</>
+                    )}
+                    {e.kind === 'LOCKED_IN' && (
+                      <>🔒 {e.playerName} vai mesmo para {e.clubName} no fim do contrato</>
+                    )}
                   </ListItem>
                 ))}
               </List>
