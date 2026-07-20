@@ -3,6 +3,7 @@ package br.com.carvoeiromanager.common;
 import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
+    CANNOT_WATCH_OWN_PLAYER(HttpStatus.UNPROCESSABLE_CONTENT),
     CLUB_NOT_FOUND(HttpStatus.NOT_FOUND),
     COMPETITION_NOT_FOUND(HttpStatus.NOT_FOUND),
     INJURED_PLAYER(HttpStatus.UNPROCESSABLE_CONTENT),

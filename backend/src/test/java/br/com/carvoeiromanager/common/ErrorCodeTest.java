@@ -9,6 +9,7 @@ class ErrorCodeTest {
 
     @Test
     void everyConstantHasItsExpectedStatus() {
+        assertThat(ErrorCode.CANNOT_WATCH_OWN_PLAYER.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.CLUB_NOT_FOUND.status()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(ErrorCode.COMPETITION_NOT_FOUND.status()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(ErrorCode.INJURED_PLAYER.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
@@ -55,7 +56,7 @@ class ErrorCodeTest {
     }
 
     @Test
-    void hasExactlyFortyThreeConstants() {
-        assertThat(ErrorCode.values()).hasSize(43);
+    void hasExactlyFortyFourConstants() {
+        assertThat(ErrorCode.values()).hasSize(44);
     }
 }
