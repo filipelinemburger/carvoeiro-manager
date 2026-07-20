@@ -16,6 +16,9 @@ import br.com.carvoeiromanager.competition.StandingRow;
 import br.com.carvoeiromanager.competition.StandingsService;
 import br.com.carvoeiromanager.competition.TopScorerRow;
 import br.com.carvoeiromanager.competition.TopScorersService;
+import br.com.carvoeiromanager.contract.PreContractAgreement;
+import br.com.carvoeiromanager.contract.PreContractAgreementRepository;
+import br.com.carvoeiromanager.contract.PreContractService;
 import br.com.carvoeiromanager.finance.FinanceTransactionRepository;
 import br.com.carvoeiromanager.match.LineupPlayerRepository;
 import br.com.carvoeiromanager.transfer.TransferOfferRepository;
@@ -77,6 +80,8 @@ public class SeasonRolloverService {
     private final YouthDevelopmentService youthDevelopmentService;
     private final br.com.carvoeiromanager.stats.PlayerStatsService playerStatsService;
     private final br.com.carvoeiromanager.match.FixtureAppearanceRepository fixtureAppearanceRepository;
+    private final PreContractService preContractService;
+    private final PreContractAgreementRepository preContractAgreementRepository;
 
     private static final int MAX_INTAKE_PER_SEASON = 3;
     private static final int ACADEMY_TARGET = 10;
@@ -106,7 +111,9 @@ public class SeasonRolloverService {
                                  SeasonCalendarGenerator seasonCalendarGenerator,
                                  SeasonEventRepository seasonEventRepository,
                                  NewsItemRepository newsItemRepository,
-                                 YouthDevelopmentService youthDevelopmentService) {
+                                 YouthDevelopmentService youthDevelopmentService,
+                                 PreContractService preContractService,
+                                 PreContractAgreementRepository preContractAgreementRepository) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.competitionRepository = competitionRepository;
@@ -132,6 +139,8 @@ public class SeasonRolloverService {
         this.seasonEventRepository = seasonEventRepository;
         this.newsItemRepository = newsItemRepository;
         this.youthDevelopmentService = youthDevelopmentService;
+        this.preContractService = preContractService;
+        this.preContractAgreementRepository = preContractAgreementRepository;
     }
 
     @Transactional
@@ -145,6 +154,11 @@ public class SeasonRolloverService {
         final UUID managedClubId = saveGame.getManagedClubId();
         final Random rng = new Random(
                 saveGameId.getMostSignificantBits() ^ (long) finishingYear);
+
+        // Resolve any pre-contract deal still AGREED, then map LOCKED deals by player so
+        // the contract-tick pass below executes them instead of lapsing/renewing.
+        Map<UUID, PreContractAgreement> lockedDeals =
+                preContractService.resolveRemainingAgreements(saveGame, rng);
 
         final List<Club> clubs = clubRepository.findBySaveGameId(saveGameId);
         final Map<UUID, String> clubNameById = clubs.stream()
@@ -192,6 +206,8 @@ public class SeasonRolloverService {
         List<SquadChangeResponse> expiredContracts = new ArrayList<>();
         List<SquadChangeResponse> youthIntake = new ArrayList<>();
         List<SquadChangeResponse> youthDepartures = new ArrayList<>();
+        List<SquadChangeResponse> preContractArrivals = new ArrayList<>();
+        List<SquadChangeResponse> preContractDepartures = new ArrayList<>();
         List<Player> toDelete = new ArrayList<>();
         List<Player> toSave = new ArrayList<>();
 
@@ -219,6 +235,9 @@ public class SeasonRolloverService {
             boolean managed = !freeAgent && player.getClubId().equals(managedClubId);
 
             if (retires) {
+                // A retiring player dies with any LOCKED pre-contract deal still on him — the
+                // lockedDeals map is only consulted below, for players who don't retire, so a
+                // retiree's deal is simply purged with the rest of the season-scoped table.
                 if (freeAgent) {
                     // A free agent who retires simply leaves the pool (no replacement).
                     toDelete.add(player);
@@ -244,13 +263,29 @@ public class SeasonRolloverService {
             if (!freeAgent) {
                 player.setContractYears(player.getContractYears() - 1);
                 if (player.getContractYears() <= 0) {
-                    if (managed) {
-                        expiredContracts.add(new SquadChangeResponse(
-                                player.getName(), player.getPosition().name(), player.getAge()));
-                        player.setClubId(null);          // lapses into the free-agent pool
-                        player.setContractYears(0);
+                    PreContractAgreement deal = lockedDeals.get(player.getId());
+                    if (deal != null) {
+                        // A binding pre-contract executes: free move, agreed terms.
+                        player.setClubId(deal.getToClubId());
+                        player.setWage(deal.getWage());
+                        player.setContractYears(deal.getContractYears());
+                        SquadChangeResponse change = new SquadChangeResponse(
+                                player.getName(), player.getPosition().name(), player.getAge());
+                        if (deal.getToClubId().equals(managedClubId)) {
+                            preContractArrivals.add(change);
+                        } else if (deal.getFromClubId().equals(managedClubId)) {
+                            preContractDepartures.add(change);
+                        }
                     } else {
-                        player.setContractYears(2 + rng.nextInt(3)); // AI auto-renews
+                        // No deal: the contract simply lapses — managed AND AI players
+                        // alike now fall into the free-agent pool (the silent AI
+                        // auto-renew is gone; AI clubs renew proactively in-season).
+                        if (managed) {
+                            expiredContracts.add(new SquadChangeResponse(
+                                    player.getName(), player.getPosition().name(), player.getAge()));
+                        }
+                        player.setClubId(null);
+                        player.setContractYears(0);
                     }
                 }
             }
@@ -259,6 +294,9 @@ public class SeasonRolloverService {
         playerRepository.deleteAll(toDelete);
         playerRepository.flush();
         playerRepository.saveAll(toSave);
+
+        // Pre-contract agreements are season-scoped: executed or dead, all purged now.
+        preContractAgreementRepository.deleteBySaveGameId(saveGameId);
 
         // Top up the managed club's youth academy toward the target.
         int academySize = playerRepository.findByClubIdAndYouthProspectTrue(managedClubId).size();
@@ -286,7 +324,8 @@ public class SeasonRolloverService {
 
         return new RolloverResponse(saveGame.getSeasonYear(), saveGame.getCurrentRound(),
                 List.copyOf(retirements), List.copyOf(expiredContracts),
-                List.copyOf(youthIntake), List.copyOf(youthDepartures));
+                List.copyOf(youthIntake), List.copyOf(youthDepartures),
+                List.copyOf(preContractArrivals), List.copyOf(preContractDepartures));
     }
 
     private void archive(UUID saveGameId, UUID userId, Competition competition, int finishingYear,

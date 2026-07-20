@@ -8,5 +8,7 @@ public record RolloverResponse(
         List<SquadChangeResponse> retirements,
         List<SquadChangeResponse> expiredContracts,
         List<SquadChangeResponse> youthIntake,
-        List<SquadChangeResponse> youthDepartures
+        List<SquadChangeResponse> youthDepartures,
+        List<SquadChangeResponse> preContractArrivals,
+        List<SquadChangeResponse> preContractDepartures
 ) {}

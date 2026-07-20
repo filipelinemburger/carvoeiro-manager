@@ -315,6 +315,50 @@ public class PreContractService {
         agreementRepository.delete(agreement);
     }
 
+    /**
+     * Rollover entry point: any deal still AGREED (no TRANSFER stop remained after it was
+     * struck) resolves exactly as the next stop would have — outgoing deals run the current
+     * club's counter-renew roll, incoming threats lock (the manager's defense window has
+     * passed). Returns every LOCKED agreement keyed by player id for the contract-tick pass.
+     */
+    @Transactional
+    public Map<UUID, PreContractAgreement> resolveRemainingAgreements(SaveGame save, Random rng) {
+        UUID saveGameId = save.getId();
+        Map<UUID, Club> clubs = clubRepository.findBySaveGameId(saveGameId).stream()
+                .collect(Collectors.toMap(Club::getId, Function.identity()));
+        List<PreContractAgreement> pending = agreementRepository
+                .findBySaveGameIdAndStatus(saveGameId, PreContractStatus.AGREED).stream()
+                .sorted(Comparator.comparing(PreContractAgreement::getId)).toList();
+        for (PreContractAgreement a : pending) {
+            Optional<Player> playerOpt = playerRepository.findById(a.getPlayerId());
+            if (playerOpt.isEmpty()) {
+                a.cancel();
+                agreementRepository.save(a);
+                continue;
+            }
+            Player player = playerOpt.get();
+            boolean outgoing = a.getToClubId().equals(save.getManagedClubId());
+            if (outgoing) {
+                double keep = negotiation.keepProbability(
+                        clubs.get(a.getFromClubId()).getReputation(),
+                        clubs.get(a.getToClubId()).getReputation(), player.getAge());
+                if (rng.nextDouble() < keep) {
+                    a.cancel();
+                    player.setContractYears(1 + renewalPolicy.renewYears(rng));
+                    playerRepository.save(player);
+                } else {
+                    a.lock();
+                }
+            } else {
+                a.lock();
+            }
+            agreementRepository.save(a);
+        }
+        return agreementRepository.findBySaveGameIdAndStatus(saveGameId, PreContractStatus.LOCKED)
+                .stream().collect(Collectors.toMap(PreContractAgreement::getPlayerId,
+                        Function.identity()));
+    }
+
     // ---- shared internals ----
 
     private PreContractOfferResponse agree(SaveGame save, Player player,

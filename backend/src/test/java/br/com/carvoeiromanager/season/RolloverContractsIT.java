@@ -83,7 +83,7 @@ class RolloverContractsIT {
     }
 
     @Test
-    void anAiPlayerWhoseContractExpiresIsAutoRenewedAndStays() {
+    void anUnrenewedAiPlayerWhoseContractExpiresLapsesIntoTheFreeAgentPool() {
         Career c = playToSeasonEnd();
         UUID aiClub = playerRepository.findBySaveGameId(c.id()).stream()
                 .map(Player::getClubId).filter(id -> id != null && !id.equals(c.clubId()))
@@ -91,14 +91,14 @@ class RolloverContractsIT {
         List<Player> aiSquad = playerRepository.findByClubId(aiClub);
         aiSquad.forEach(p -> p.setContractYears(5));
         Player expiring = probePlayer(aiSquad);
-        expiring.setContractYears(1);
+        expiring.setContractYears(1); // released by his club, unsigned by anyone
         playerRepository.saveAll(aiSquad);
 
         rolloverService.rollover(c.id(), c.userId());
 
         Player reloaded = playerRepository.findById(expiring.getId()).orElseThrow();
-        assertThat(reloaded.getClubId()).isEqualTo(aiClub); // stayed
-        assertThat(reloaded.getContractYears()).isBetween(2, 4); // auto-renewed
+        assertThat(reloaded.isFreeAgent()).isTrue();   // organic inflow into the real pool
+        assertThat(reloaded.getContractYears()).isZero();
     }
 
     @Test
