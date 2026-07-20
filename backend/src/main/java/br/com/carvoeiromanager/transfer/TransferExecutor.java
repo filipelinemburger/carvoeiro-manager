@@ -11,6 +11,7 @@ import br.com.carvoeiromanager.match.LineupPlayerRepository;
 import br.com.carvoeiromanager.match.LineupRepository;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
+import br.com.carvoeiromanager.watchlist.WatchlistNotifier;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -30,17 +31,20 @@ public class TransferExecutor {
     private final FinanceTransactionRepository financeTransactionRepository;
     private final LineupRepository lineupRepository;
     private final LineupPlayerRepository lineupPlayerRepository;
+    private final WatchlistNotifier watchlistNotifier;
 
     public TransferExecutor(PlayerRepository playerRepository,
                             ClubRepository clubRepository,
                             FinanceTransactionRepository financeTransactionRepository,
                             LineupRepository lineupRepository,
-                            LineupPlayerRepository lineupPlayerRepository) {
+                            LineupPlayerRepository lineupPlayerRepository,
+                            WatchlistNotifier watchlistNotifier) {
         this.playerRepository = playerRepository;
         this.clubRepository = clubRepository;
         this.financeTransactionRepository = financeTransactionRepository;
         this.lineupRepository = lineupRepository;
         this.lineupPlayerRepository = lineupPlayerRepository;
+        this.watchlistNotifier = watchlistNotifier;
     }
 
     public void execute(SaveGame saveGame, TransferOffer offer, BigDecimal fee) {
@@ -93,6 +97,14 @@ public class TransferExecutor {
                     "Venda: " + player.getName());
             // The sold player can no longer be in the managed lineup (no-cascade FK safety).
             cleanManagedLineup(saveGameId, managedClubId, player.getId());
+        }
+
+        // Watchlist: a watched rival moving to another club is the "you missed out" alert.
+        // Fire only when the destination is NOT the managed club (buying the watched player
+        // yourself is your own action, no alert).
+        if (!buyerId.equals(managedClubId)) {
+            watchlistNotifier.notifySold(saveGameId, saveGame.getCurrentDate(), player,
+                    buyer.getName(), fee);
         }
     }
 

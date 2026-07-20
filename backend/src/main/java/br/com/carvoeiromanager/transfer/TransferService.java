@@ -15,6 +15,7 @@ import br.com.carvoeiromanager.player.ListedReason;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
+import br.com.carvoeiromanager.watchlist.WatchlistNotifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,6 +57,7 @@ public class TransferService {
     private final AiListingEngine aiListingEngine;
     private final AiTransferEngine aiTransferEngine;
     private final SellerContextFactory sellerContextFactory;
+    private final WatchlistNotifier watchlistNotifier;
 
     public TransferService(SaveGameService saveGameService,
                            SaveGameRepository saveGameRepository,
@@ -70,7 +72,8 @@ public class TransferService {
                            LiveMatchRepository liveMatchRepository,
                            AiListingEngine aiListingEngine,
                            AiTransferEngine aiTransferEngine,
-                           SellerContextFactory sellerContextFactory) {
+                           SellerContextFactory sellerContextFactory,
+                           WatchlistNotifier watchlistNotifier) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.playerRepository = playerRepository;
@@ -85,6 +88,7 @@ public class TransferService {
         this.aiListingEngine = aiListingEngine;
         this.aiTransferEngine = aiTransferEngine;
         this.sellerContextFactory = sellerContextFactory;
+        this.watchlistNotifier = watchlistNotifier;
     }
 
     /** Convenience overload for callers that don't need filtering/paging (e.g. internal checks). */
@@ -334,6 +338,8 @@ public class TransferService {
                 transferOfferRepository.save(TransferOffer.create(saveGameId, player.getId(),
                         bidder.getId(), managedClubId, TransferDirection.INCOMING, bid,
                         save.getCurrentRound(), null, null));
+                watchlistNotifier.notifyOfferReceived(saveGameId, eventDate, player,
+                        bidder.getName(), bid);
                 created++;
             }
         }
