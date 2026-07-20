@@ -7,6 +7,8 @@ public final class LiveCommentary {
     }
 
     private static final String COMEBACK_GOAL_LINE = "Homens de pouca fé... homens de muita fé!";
+    private static final String HYPE_GOAL_LINE =
+            "Rapaziada eu vou dizer uma coisa pra vocês, esse Criciúma já ta me cheirando a libertadores... Creeedo coisa lindaaa!!";
     private static final String LOSING_STREAK_HALF_TIME_LINE =
             "E não adianta me ligar que eu vou mandar a merda.";
 
@@ -110,13 +112,17 @@ public final class LiveCommentary {
      * open-play goals (the assister — {@code playerInId} on the event). {@code detail} only for
      * TACTICS_CHANGE. {@code comebackGoal} true only for a goal-family type that erases a deficit
      * for the managed club — appends the signature line after the normal goal description, so
-     * the scorer and the goal itself are still described. {@code losingStreakHalfTime} true only
-     * at HALF_TIME when the managed club has lost each of its last 2 completed fixtures —
-     * overrides the normal half-time pool with the signature line (half-time has no per-event
-     * scorer/action to preserve, unlike a goal).
+     * the scorer and the goal itself are still described. {@code hypeGoal} true only for a
+     * goal-family type that is the first in the match to either arrive with the managed club
+     * already on a hot streak entering the match, or push the managed club's in-match lead to 3+
+     * goals — appends its own signature line the same way, independently of (and combinable
+     * with) {@code comebackGoal}. {@code losingStreakHalfTime} true only at HALF_TIME when the
+     * managed club has lost each of its last 2 completed fixtures — overrides the normal
+     * half-time pool with the signature line (half-time has no per-event scorer/action to
+     * preserve, unlike a goal).
      */
     public static String of(EventType type, String playerName, String inName, int minute, String detail,
-                             boolean comebackGoal, boolean losingStreakHalfTime) {
+                             boolean comebackGoal, boolean hypeGoal, boolean losingStreakHalfTime) {
         if (type == EventType.HALF_TIME && losingStreakHalfTime) {
             return LOSING_STREAK_HALF_TIME_LINE;
         }
@@ -139,7 +145,17 @@ public final class LiveCommentary {
             case FOUL -> throw new IllegalStateException(
                     "FOUL is never rendered — LiveMatchService.toState() must filter it before calling of()");
         };
-        return comebackGoal && type.isGoal() ? base + " " + COMEBACK_GOAL_LINE : base;
+        if (!type.isGoal()) {
+            return base;
+        }
+        String result = base;
+        if (comebackGoal) {
+            result += " " + COMEBACK_GOAL_LINE;
+        }
+        if (hypeGoal) {
+            result += " " + HYPE_GOAL_LINE;
+        }
+        return result;
     }
 
     /** Two-name line when the taker is known and distinct; single-name fallback otherwise. */

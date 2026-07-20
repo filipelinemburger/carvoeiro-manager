@@ -420,6 +420,7 @@ public class LiveMatchService {
                 .toList();
         Map<UUID, Player> byId = indexAll(cfg);
         boolean losingStreak = losingStreakHalfTime(lm.getSaveGameId(), save.getManagedClubId());
+        boolean enteringMatchOnStreak = hypeStreak(lm.getSaveGameId(), save.getManagedClubId());
         List<LiveEventResponse> events = revealed.stream().map(e -> new LiveEventResponse(
                 e.minute(), e.type().name(), e.home(),
                 e.playerId().toString(), nameOf(byId, e.playerId()),
@@ -428,7 +429,8 @@ public class LiveMatchService {
                 e.severity(),
                 LiveCommentary.of(e.type(), nameOf(byId, e.playerId()),
                         e.playerInId() == null ? null : nameOf(byId, e.playerInId()), e.minute(), e.detail(),
-                        isComebackGoal(revealed, e, lm.isManagedIsHome()), losingStreak))).toList();
+                        isComebackGoal(revealed, e, lm.isManagedIsHome()),
+                        isHypeGoal(revealed, e, lm.isManagedIsHome(), enteringMatchOnStreak), losingStreak))).toList();
 
         String status = statusAt(lm, timeline, minute);
         int subsUsed = (int) cfg.subSchedule().stream().filter(s -> s.home() == lm.isManagedIsHome()).count();
