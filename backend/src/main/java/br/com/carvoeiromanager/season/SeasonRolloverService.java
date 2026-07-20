@@ -30,6 +30,9 @@ import br.com.carvoeiromanager.player.PlayerAgingService;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.YouthDevelopmentService;
+import br.com.carvoeiromanager.watchlist.PlayerAlertResponse;
+import br.com.carvoeiromanager.watchlist.WatchlistEntry;
+import br.com.carvoeiromanager.watchlist.WatchlistEntryRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -82,6 +85,7 @@ public class SeasonRolloverService {
     private final br.com.carvoeiromanager.match.FixtureAppearanceRepository fixtureAppearanceRepository;
     private final PreContractService preContractService;
     private final PreContractAgreementRepository preContractAgreementRepository;
+    private final WatchlistEntryRepository watchlistEntryRepository;
 
     private static final int MAX_INTAKE_PER_SEASON = 3;
     private static final int ACADEMY_TARGET = 10;
@@ -113,7 +117,8 @@ public class SeasonRolloverService {
                                  NewsItemRepository newsItemRepository,
                                  YouthDevelopmentService youthDevelopmentService,
                                  PreContractService preContractService,
-                                 PreContractAgreementRepository preContractAgreementRepository) {
+                                 PreContractAgreementRepository preContractAgreementRepository,
+                                 WatchlistEntryRepository watchlistEntryRepository) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.competitionRepository = competitionRepository;
@@ -141,6 +146,7 @@ public class SeasonRolloverService {
         this.youthDevelopmentService = youthDevelopmentService;
         this.preContractService = preContractService;
         this.preContractAgreementRepository = preContractAgreementRepository;
+        this.watchlistEntryRepository = watchlistEntryRepository;
     }
 
     @Transactional
@@ -210,6 +216,10 @@ public class SeasonRolloverService {
         List<SquadChangeResponse> preContractDepartures = new ArrayList<>();
         List<Player> toDelete = new ArrayList<>();
         List<Player> toSave = new ArrayList<>();
+        List<PlayerAlertResponse> watchlistEvents = new ArrayList<>();
+        java.util.Set<UUID> watchedIds = watchlistEntryRepository.findBySaveGameId(saveGameId).stream()
+                .map(WatchlistEntry::getPlayerId)
+                .collect(java.util.stream.Collectors.toSet());
 
         for (Player player : players) {
             if (player.isYouthProspect()) {
@@ -284,6 +294,11 @@ public class SeasonRolloverService {
                             expiredContracts.add(new SquadChangeResponse(
                                     player.getName(), player.getPosition().name(), player.getAge()));
                         }
+                        if (watchedIds.contains(player.getId())) {
+                            watchlistEvents.add(new PlayerAlertResponse("FREE_AGENT",
+                                    player.getName(),
+                                    clubNameById.getOrDefault(player.getClubId(), "?"), null));
+                        }
                         player.setClubId(null);
                         player.setContractYears(0);
                     }
@@ -325,7 +340,8 @@ public class SeasonRolloverService {
         return new RolloverResponse(saveGame.getSeasonYear(), saveGame.getCurrentRound(),
                 List.copyOf(retirements), List.copyOf(expiredContracts),
                 List.copyOf(youthIntake), List.copyOf(youthDepartures),
-                List.copyOf(preContractArrivals), List.copyOf(preContractDepartures));
+                List.copyOf(preContractArrivals), List.copyOf(preContractDepartures),
+                List.copyOf(watchlistEvents));
     }
 
     private void archive(UUID saveGameId, UUID userId, Competition competition, int finishingYear,

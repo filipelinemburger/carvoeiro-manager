@@ -1,5 +1,7 @@
 package br.com.carvoeiromanager.season;
 
+import br.com.carvoeiromanager.watchlist.PlayerAlertResponse;
+
 import java.util.List;
 
 public record RolloverResponse(
@@ -10,5 +12,6 @@ public record RolloverResponse(
         List<SquadChangeResponse> youthIntake,
         List<SquadChangeResponse> youthDepartures,
         List<SquadChangeResponse> preContractArrivals,
-        List<SquadChangeResponse> preContractDepartures
+        List<SquadChangeResponse> preContractDepartures,
+        List<PlayerAlertResponse> watchlistEvents
 ) {}
