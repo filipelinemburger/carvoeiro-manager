@@ -66,7 +66,7 @@ takes priority over the other.
 **`LiveCommentary`** (`backend/src/main/java/br/com/carvoeiromanager/match/LiveCommentary.java`):
 
 - Add a constant:
-  `HYPE_GOAL_LINE = "Olha, eu não quero dizer nada, mas esse Criciúma já ta me cheirando a libertadores... Cruuuzisss!!"`
+  `HYPE_GOAL_LINE = "Rapaziada eu vou dizer uma coisa pra vocês, esse Criciúma já ta me cheirando a libertadores... Creeedo coisa lindaaa!!"`
 - Add a `boolean hypeGoal` parameter to `of(...)` (after `comebackGoal`, before
   `losingStreakHalfTime`). Update the existing append line
   (`return comebackGoal && type.isGoal() ? base + " " + COMEBACK_GOAL_LINE : base;`) to also
