@@ -9,6 +9,7 @@ import {
   makePreContractOffer, withdrawPreContract,
 } from '../../api/precontract'
 import { renewContract } from '../../api/career'
+import { errorMessage } from '../../api/errorMessages'
 import type { PreContractAgreement, PreContractEligible } from '../../api/types'
 import { formatBRL } from '../../lib/money'
 
@@ -70,7 +71,7 @@ export default function PreContractsPanel({ saveGameId, token, managedClubId, wi
         invalidate()
       }
     },
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => setError(errorMessage(e, 'Erro ao enviar proposta.')),
   })
 
   const acceptCounterMut = useMutation({
@@ -81,13 +82,13 @@ export default function PreContractsPanel({ saveGameId, token, managedClubId, wi
       setCounterWage(null)
       invalidate()
     },
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => setError(errorMessage(e, 'Erro ao aceitar contraproposta.')),
   })
 
   const withdrawMut = useMutation({
     mutationFn: (agreementId: string) => withdrawPreContract(saveGameId, agreementId, token),
     onSuccess: invalidate,
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => setError(errorMessage(e, 'Erro ao desistir do pré-contrato.')),
   })
 
   const defendMut = useMutation({
@@ -98,7 +99,7 @@ export default function PreContractsPanel({ saveGameId, token, managedClubId, wi
       invalidate()
       void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, managedClubId] })
     },
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => setError(errorMessage(e, 'Erro ao renovar contrato.')),
   })
 
   const threats = (agreements.data ?? []).filter(a => a.incoming)
@@ -114,7 +115,14 @@ export default function PreContractsPanel({ saveGameId, token, managedClubId, wi
         </Alert>
       )}
 
-      {threats.length > 0 && (
+      {agreements.isLoading && (
+        <Typography sx={{ mb: 2 }}>Carregando pré-contratos…</Typography>
+      )}
+      {agreements.isError && (
+        <Typography color="error" sx={{ mb: 2 }}>Erro ao carregar pré-contratos.</Typography>
+      )}
+
+      {!agreements.isLoading && !agreements.isError && threats.length > 0 && (
         <Box sx={{ mb: 3 }}>
           <Typography variant="h6" sx={{ mb: 1 }}>⚠️ Jogadores de saída</Typography>
           {threats.map(a => (
@@ -136,7 +144,7 @@ export default function PreContractsPanel({ saveGameId, token, managedClubId, wi
         </Box>
       )}
 
-      {outgoing.length > 0 && (
+      {!agreements.isLoading && !agreements.isError && outgoing.length > 0 && (
         <Box sx={{ mb: 3 }}>
           <Typography variant="h6" sx={{ mb: 1 }}>Meus acordos</Typography>
           {outgoing.map(a => (
@@ -158,10 +166,16 @@ export default function PreContractsPanel({ saveGameId, token, managedClubId, wi
       )}
 
       <Typography variant="h6" sx={{ mb: 1 }}>Jogadores em fim de contrato</Typography>
-      {windowOpen && (eligible.data?.length ?? 0) === 0 && !eligible.isLoading && (
+      {windowOpen && eligible.isLoading && (
+        <Typography>Carregando jogadores em fim de contrato…</Typography>
+      )}
+      {windowOpen && eligible.isError && (
+        <Typography color="error">Erro ao carregar jogadores em fim de contrato.</Typography>
+      )}
+      {windowOpen && !eligible.isLoading && !eligible.isError && (eligible.data?.length ?? 0) === 0 && (
         <Typography color="text.secondary">Nenhum jogador disponível para pré-contrato.</Typography>
       )}
-      {windowOpen && (eligible.data?.length ?? 0) > 0 && (
+      {windowOpen && !eligible.isLoading && !eligible.isError && (eligible.data?.length ?? 0) > 0 && (
         <Table size="small">
           <TableHead>
             <TableRow>
@@ -212,7 +226,8 @@ export default function PreContractsPanel({ saveGameId, token, managedClubId, wi
             </Alert>
           ) : (
             <TextField label="Salário semanal" type="number" fullWidth sx={{ mb: 2 }}
-                       value={wage} onChange={e => setWage(e.target.value)} />
+                       value={wage} onChange={e => setWage(e.target.value)}
+                       slotProps={{ htmlInput: { min: 1 } }} />
           )}
           <TextField label="Anos de contrato" type="number" fullWidth
                      value={years}
