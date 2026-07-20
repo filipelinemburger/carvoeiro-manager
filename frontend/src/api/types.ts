@@ -276,7 +276,7 @@ export type TrainingReportResponse = {
 }
 
 export type AdvanceResponse = {
-  type: 'MATCH' | 'TRANSFER' | 'FINISHED' | 'TRAINING_REPORT'
+  type: 'MATCH' | 'TRANSFER' | 'FINISHED' | 'TRAINING_REPORT' | 'PRECONTRACT'
   date: string | null
   competitionName: string | null
   round: number | null
@@ -295,6 +295,10 @@ export type AdvanceResponse = {
   /** The Preparador Físico's weekly digest; only on TRAINING_REPORT items, null everywhere
    * else and on payloads persisted before the feature existed — always null-guard it. */
   trainingReport?: TrainingReportResponse | null
+  /** Pre-contract agreements/renewals/pokes resolved on this TRANSFER day; only on PRECONTRACT
+   * items, null everywhere else and on payloads persisted before the feature existed —
+   * always null-guard it. */
+  preContractEvents?: PreContractEvent[] | null
 }
 
 export type TopScorerResponse = {
@@ -338,6 +342,8 @@ export type RolloverResponse = {
   expiredContracts: SquadChange[]
   youthIntake: SquadChange[]
   youthDepartures: SquadChange[]
+  preContractArrivals: SquadChange[]
+  preContractDepartures: SquadChange[]
 }
 
 export type SeasonSummary = {
@@ -463,6 +469,46 @@ export type FreeAgent = {
 export type RenewContractRequest = { wage: number; contractYears: number }
 export type SignFreeAgentRequest = { wage: number; contractYears: number }
 export type PlayerContract = { playerId: string; name: string; wage: number; contractYears: number }
+
+export type PreContractEligible = {
+  playerId: string
+  name: string
+  position: string
+  age: number
+  overall: number
+  clubName: string
+  wageDemand: number
+}
+
+export type PreContractAgreement = {
+  id: string
+  playerId: string
+  playerName: string
+  position: string
+  age: number
+  overall: number
+  fromClubName: string
+  toClubName: string
+  wage: number
+  contractYears: number
+  status: 'AGREED' | 'LOCKED' | 'CANCELLED'
+  /** true when this is a threat: an AI club is taking one of YOUR players. */
+  incoming: boolean
+}
+
+export type PreContractOfferResult = {
+  status: 'AGREED' | 'COUNTERED'
+  demandedWage: number | null
+  agreement: PreContractAgreement | null
+}
+
+export type PreContractEvent = {
+  kind: 'AGREED_OUT' | 'POACHED_IN' | 'LOCKED_OUT' | 'CANCELLED_OUT' | 'LOCKED_IN'
+  playerName: string
+  clubName: string
+  wage: number | null
+  contractYears: number | null
+}
 
 export type StaffRole = 'ASSISTENTE' | 'PREPARADOR_FISICO' | 'OLHEIRO' | 'FISIOTERAPEUTA'
 export type StaffQuality = 'REGULAR' | 'BOM' | 'EXCELENTE'

@@ -55,6 +55,8 @@ describe('SeasonSummaryPage', () => {
       expiredContracts: [],
       youthIntake: [{ playerName: 'Jovem Silva', position: 'DEF', age: 17 }],
       youthDepartures: [],
+      preContractArrivals: [],
+      preContractDepartures: [],
     })
 
     renderPage()
@@ -76,6 +78,8 @@ describe('SeasonSummaryPage', () => {
       expiredContracts: [{ playerName: 'Zé Tigre', position: 'MID', age: 31 }],
       youthIntake: [],
       youthDepartures: [],
+      preContractArrivals: [],
+      preContractDepartures: [],
     })
 
     renderPage()
@@ -89,6 +93,7 @@ describe('SeasonSummaryPage', () => {
   it('invalidates squad, youth, free agents, season history, and clubs after rolling over', async () => {
     vi.mocked(rolloverSeason).mockResolvedValue({
       seasonYear: 2027, currentRound: 0, retirements: [], expiredContracts: [], youthIntake: [], youthDepartures: [],
+      preContractArrivals: [], preContractDepartures: [],
     })
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')

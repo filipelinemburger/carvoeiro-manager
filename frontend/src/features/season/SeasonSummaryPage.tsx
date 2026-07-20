@@ -58,6 +58,9 @@ export function SeasonSummaryPage() {
       void queryClient.invalidateQueries({ queryKey: ['freeAgents', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['seasonHistory', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['clubs', saveGameId] })
+      // Rollover executes agreed pre-contract deals (arrivals/departures) — both lists go stale.
+      void queryClient.invalidateQueries({ queryKey: ['preContractEligible', saveGameId] })
+      void queryClient.invalidateQueries({ queryKey: ['preContractAgreements', saveGameId] })
     },
   })
 
