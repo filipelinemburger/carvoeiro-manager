@@ -56,6 +56,15 @@ class WatchlistNotifierTest {
         when(watchlistRepo.existsBySaveGameIdAndPlayerId(save, p.getId())).thenReturn(false);
         notifier.notifyListed(save, LocalDate.of(2026, 8, 1), p, "Rival FC", "FINANCIAL");
         verify(newsRepo, never()).save(any());
+
+        when(watchlistRepo.existsBySaveGameIdAndPlayerId(save, p.getId())).thenReturn(true);
+        when(newsRepo.countBySaveGameId(save)).thenReturn(5);
+        notifier.notifyListed(save, LocalDate.of(2026, 8, 1), p, "Rival FC", "FINANCIAL");
+
+        ArgumentCaptor<NewsItem> captor = ArgumentCaptor.forClass(NewsItem.class);
+        verify(newsRepo).save(captor.capture());
+        assertThat(captor.getValue().getType()).isEqualTo("WATCHLIST");
+        assertThat(captor.getValue().getPayload()).contains("LISTED").contains("Fulano").contains("Rival FC");
     }
 
     @Test
