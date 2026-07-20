@@ -6,9 +6,11 @@ import br.com.carvoeiromanager.player.ListedReason;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
+import br.com.carvoeiromanager.watchlist.WatchlistNotifier;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -33,29 +35,32 @@ public class AiListingEngine {
     private final PlayerRepository playerRepository;
     private final ClubFinancialHealthEvaluator financialHealthEvaluator;
     private final TransferValuation transferValuation;
+    private final WatchlistNotifier watchlistNotifier;
 
     public AiListingEngine(ClubRepository clubRepository, PlayerRepository playerRepository,
                            ClubFinancialHealthEvaluator financialHealthEvaluator,
-                           TransferValuation transferValuation) {
+                           TransferValuation transferValuation,
+                           WatchlistNotifier watchlistNotifier) {
         this.clubRepository = clubRepository;
         this.playerRepository = playerRepository;
         this.financialHealthEvaluator = financialHealthEvaluator;
         this.transferValuation = transferValuation;
+        this.watchlistNotifier = watchlistNotifier;
     }
 
     /** Refreshes transfer listings for every AI club (id-sorted, for determinism) of the save. */
     @Transactional
-    public void refreshListings(UUID saveGameId, UUID managedClubId, int currentRound) {
+    public void refreshListings(UUID saveGameId, UUID managedClubId, int currentRound, LocalDate eventDate) {
         List<Club> aiClubs = clubRepository.findBySaveGameId(saveGameId).stream()
                 .filter(club -> !club.getId().equals(managedClubId))
                 .sorted(Comparator.comparing(Club::getId))
                 .toList();
         for (Club club : aiClubs) {
-            refreshClubListings(club, currentRound);
+            refreshClubListings(club, currentRound, saveGameId, eventDate);
         }
     }
 
-    private void refreshClubListings(Club club, int currentRound) {
+    private void refreshClubListings(Club club, int currentRound, UUID saveGameId, LocalDate eventDate) {
         List<Player> squad = playerRepository.findByClubIdAndYouthProspectFalse(club.getId());
         if (squad.size() <= TransferService.MIN_SQUAD_SIZE) {
             return;
@@ -90,6 +95,7 @@ public class AiListingEngine {
             if (reason != null) {
                 p.listForTransfer(reason);
                 newlyListed.add(p);
+                watchlistNotifier.notifyListed(saveGameId, eventDate, p, club.getName(), reason.name());
             }
         }
 
@@ -108,6 +114,7 @@ public class AiListingEngine {
                 }
                 p.listForTransfer(ListedReason.FINANCIAL);
                 newlyListed.add(p);
+                watchlistNotifier.notifyListed(saveGameId, eventDate, p, club.getName(), ListedReason.FINANCIAL.name());
                 financialCount++;
             }
         }
@@ -121,6 +128,7 @@ public class AiListingEngine {
                     .ifPresent(p -> {
                         p.listForTransfer(ListedReason.SURPLUS);
                         newlyListed.add(p);
+                        watchlistNotifier.notifyListed(saveGameId, eventDate, p, club.getName(), ListedReason.SURPLUS.name());
                     });
         }
 

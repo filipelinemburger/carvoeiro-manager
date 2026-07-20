@@ -104,7 +104,7 @@ class AiListingEngineIT {
         Club club = aFloorSizedAiClub(c);
         assertThat(squad(club)).hasSize(14); // exactly MIN_SQUAD_SIZE
 
-        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0);
+        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0, LocalDate.of(2026, 1, 1));
 
         assertThat(squad(club)).noneMatch(Player::isTransferListed);
     }
@@ -123,7 +123,7 @@ class AiListingEngineIT {
         target.applyMorale(-10); // clamps to -5
         playerRepository.save(target);
 
-        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0);
+        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0, LocalDate.of(2026, 1, 1));
 
         Player reloaded = playerRepository.findById(target.getId()).orElseThrow();
         assertThat(reloaded.isTransferListed()).isTrue();
@@ -144,11 +144,11 @@ class AiListingEngineIT {
         assertThat(target.getSeasonAppearances()).isZero(); // never played
 
         // Before round 6: the guard blocks the trigger even though appearances are zero.
-        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 5);
+        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 5, LocalDate.of(2026, 1, 1));
         assertThat(playerRepository.findById(target.getId()).orElseThrow().isTransferListed()).isFalse();
 
         // At round 6: 0 * 3 < 6 -> fires.
-        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 6);
+        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 6, LocalDate.of(2026, 1, 1));
         Player reloaded = playerRepository.findById(target.getId()).orElseThrow();
         assertThat(reloaded.isTransferListed()).isTrue();
         assertThat(reloaded.getListedReason()).isEqualTo(ListedReason.UNUSED);
@@ -169,7 +169,7 @@ class AiListingEngineIT {
         target.recordAppearance(90, LocalDate.of(2026, 1, 27)); // 2 appearances: 2*3=6, not < 6
         playerRepository.save(target);
 
-        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 6);
+        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 6, LocalDate.of(2026, 1, 1));
 
         assertThat(playerRepository.findById(target.getId()).orElseThrow().isTransferListed()).isFalse();
     }
@@ -192,7 +192,7 @@ class AiListingEngineIT {
                 .map(Player::getId)
                 .toList();
 
-        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0);
+        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0, LocalDate.of(2026, 1, 1));
 
         List<Player> listed = squad(club).stream().filter(Player::isTransferListed).toList();
         assertThat(listed).hasSize(2);
@@ -215,7 +215,7 @@ class AiListingEngineIT {
                 .min(Comparator.comparingInt(Player::getOverall).thenComparing(Player::getId))
                 .orElseThrow();
 
-        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0); // round 0: no PLAYER_REQUEST/UNUSED
+        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0, LocalDate.of(2026, 1, 1)); // round 0: no PLAYER_REQUEST/UNUSED
 
         List<Player> listed = squad(club).stream().filter(Player::isTransferListed).toList();
         assertThat(listed).hasSize(1);
@@ -240,7 +240,7 @@ class AiListingEngineIT {
         candidates.forEach(p -> p.applyMorale(-10));
         playerRepository.saveAll(candidates);
 
-        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0);
+        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0, LocalDate.of(2026, 1, 1));
 
         List<Player> listed = squad(club).stream().filter(Player::isTransferListed).toList();
         assertThat(listed).hasSize(4); // capped, even though 6 players qualified
@@ -263,7 +263,7 @@ class AiListingEngineIT {
         remainingGk.applyMorale(-10); // would otherwise trigger PLAYER_REQUEST
         playerRepository.save(remainingGk);
 
-        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0);
+        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0, LocalDate.of(2026, 1, 1));
 
         assertThat(playerRepository.findById(remainingGk.getId()).orElseThrow().isTransferListed()).isFalse();
     }
@@ -279,11 +279,11 @@ class AiListingEngineIT {
         best.applyMorale(-10); // would otherwise trigger PLAYER_REQUEST
         playerRepository.save(best);
 
-        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0);
+        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0, LocalDate.of(2026, 1, 1));
         assertThat(playerRepository.findById(best.getId()).orElseThrow().isTransferListed()).isFalse();
 
         makeDesperate(club);
-        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0);
+        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0, LocalDate.of(2026, 1, 1));
         assertThat(playerRepository.findById(best.getId()).orElseThrow().isTransferListed()).isTrue();
     }
 
@@ -297,12 +297,12 @@ class AiListingEngineIT {
         // and capture that result as `before`.
         makeHealthy(club);
         clearListings(club);
-        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0);
+        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0, LocalDate.of(2026, 1, 1));
         List<UUID> before = squad(club).stream().filter(Player::isTransferListed)
                 .map(Player::getId).sorted().toList();
 
         // Re-run with nothing mutated in between: the true idempotency claim.
-        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0);
+        aiListingEngine.refreshListings(c.id(), c.managedClubId(), 0, LocalDate.of(2026, 1, 1));
 
         List<UUID> after = squad(club).stream().filter(Player::isTransferListed)
                 .map(Player::getId).sorted().toList();

@@ -289,7 +289,7 @@ public class TransferService {
         if (!transferWindow.isOpen(eventDate)) {
             return List.of();
         }
-        aiListingEngine.refreshListings(saveGameId, save.getManagedClubId(), save.getCurrentRound());
+        aiListingEngine.refreshListings(saveGameId, save.getManagedClubId(), save.getCurrentRound(), eventDate);
         List<CompletedTransferResponse> transfers = aiTransferEngine.run(save, eventDate);
         generateIncomingOffers(saveGameId, eventDate);
         return transfers;
