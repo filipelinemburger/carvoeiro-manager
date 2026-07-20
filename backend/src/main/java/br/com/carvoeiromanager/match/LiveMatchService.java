@@ -506,12 +506,59 @@ public class LiveMatchService {
         return managedGoals < opponentGoals;
     }
 
-    /** True when {@code managedClubId}'s two most recent completed fixtures were both losses. */
+    /**
+     * True only when {@code event} is the first managed-side goal in {@code events} to either
+     * (a) arrive with the managed club already on a hot streak entering the match
+     * ({@code enteringMatchOnStreak}), or (b) push the managed club's in-match lead to 3 or more
+     * goals. Once an earlier managed goal has already qualified, later goals in the same match —
+     * even ones that would also qualify — return false, so the signature line shows at most once
+     * per match.
+     */
+    static boolean isHypeGoal(List<LiveTimelineEvent> events, LiveTimelineEvent event, boolean managedIsHome,
+                               boolean enteringMatchOnStreak) {
+        if (!event.type().isGoal() || event.home() != managedIsHome) {
+            return false;
+        }
+        int managedGoals = 0;
+        int opponentGoals = 0;
+        for (LiveTimelineEvent e : events) {
+            if (e == event) {
+                break;
+            }
+            if (e.type().isGoal()) {
+                if (e.home() == managedIsHome) {
+                    managedGoals++;
+                    if (enteringMatchOnStreak || managedGoals - opponentGoals >= 3) {
+                        return false;
+                    }
+                } else {
+                    opponentGoals++;
+                }
+            }
+        }
+        managedGoals++;
+        return enteringMatchOnStreak || managedGoals - opponentGoals >= 3;
+    }
+
+    /** True only when {@code managedClubId}'s two most recent completed fixtures were both losses. */
     static boolean isLosingStreak(List<Fixture> mostRecentFirst, UUID managedClubId) {
         if (mostRecentFirst.size() < 2) {
             return false;
         }
         return mostRecentFirst.stream().limit(2).allMatch(f -> lostBy(f, managedClubId));
+    }
+
+    /**
+     * True when {@code managedClubId} enters the match on a hot streak: its 3 most recent
+     * completed fixtures were all wins, or its 5 most recent completed fixtures included no loss
+     * (a draw inside the last 5 doesn't break the unbeaten check, only the 3-win check).
+     */
+    static boolean isHypeStreak(List<Fixture> mostRecentFirst, UUID managedClubId) {
+        boolean threeWins = mostRecentFirst.size() >= 3
+                && mostRecentFirst.stream().limit(3).allMatch(f -> wonBy(f, managedClubId));
+        boolean fiveUnbeaten = mostRecentFirst.size() >= 5
+                && mostRecentFirst.stream().limit(5).noneMatch(f -> lostBy(f, managedClubId));
+        return threeWins || fiveUnbeaten;
     }
 
     private static boolean lostBy(Fixture f, UUID managedClubId) {
@@ -521,17 +568,34 @@ public class LiveMatchService {
         return managedGoals < opponentGoals;
     }
 
+    private static boolean wonBy(Fixture f, UUID managedClubId) {
+        boolean managedIsHome = f.getHomeClubId().equals(managedClubId);
+        int managedGoals = managedIsHome ? f.getHomeGoals() : f.getAwayGoals();
+        int opponentGoals = managedIsHome ? f.getAwayGoals() : f.getHomeGoals();
+        return managedGoals > opponentGoals;
+    }
+
     private boolean losingStreakHalfTime(UUID saveGameId, UUID managedClubId) {
-        // nullsFirst guards against a null matchDate (unscheduled/test fixtures) — without it,
-        // Comparator.comparing's natural ordering throws NPE the moment two such fixtures are compared.
-        List<Fixture> recent = fixtureRepository.findBySaveGameId(saveGameId).stream()
+        return isLosingStreak(recentCompletedFixtures(saveGameId, managedClubId), managedClubId);
+    }
+
+    private boolean hypeStreak(UUID saveGameId, UUID managedClubId) {
+        return isHypeStreak(recentCompletedFixtures(saveGameId, managedClubId), managedClubId);
+    }
+
+    /**
+     * {@code managedClubId}'s completed fixtures involving it, most recent first. nullsFirst
+     * guards against a null matchDate (unscheduled/test fixtures) — without it,
+     * Comparator.comparing's natural ordering throws NPE the moment two such fixtures are compared.
+     */
+    private List<Fixture> recentCompletedFixtures(UUID saveGameId, UUID managedClubId) {
+        return fixtureRepository.findBySaveGameId(saveGameId).stream()
                 .filter(Fixture::isPlayed)
                 .filter(f -> f.getHomeClubId().equals(managedClubId) || f.getAwayClubId().equals(managedClubId))
                 .sorted(java.util.Comparator.comparing(Fixture::getMatchDate,
                                 java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder()))
                         .thenComparing(Fixture::getRound).reversed())
                 .toList();
-        return isLosingStreak(recent, managedClubId);
     }
 
     private List<PlayerRating> managedRatings(LiveMatch lm, LiveMatchConfig cfg, LiveTimeline timeline, int minute) {

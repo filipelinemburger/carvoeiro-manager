@@ -80,4 +80,116 @@ class LiveMatchServiceCommentaryTest {
 
         assertThat(LiveMatchService.isLosingStreak(List.of(onlyOne), managedClubId)).isFalse();
     }
+
+    @Test
+    void threeWinsInARowTriggersTheHypeStreak() {
+        UUID managedClubId = UUID.randomUUID();
+        UUID opponentId = UUID.randomUUID();
+        Fixture win1 = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 3, managedClubId, opponentId, null);
+        win1.recordResult(2, 0);
+        Fixture win2 = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 2, opponentId, managedClubId, null);
+        win2.recordResult(0, 1);
+        Fixture win3 = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 1, managedClubId, opponentId, null);
+        win3.recordResult(3, 1);
+
+        assertThat(LiveMatchService.isHypeStreak(List.of(win1, win2, win3), managedClubId)).isTrue();
+    }
+
+    @Test
+    void aDrawMixedIntoTheLastThreeBreaksTheThreeWinCheckButNotUnbeaten() {
+        UUID managedClubId = UUID.randomUUID();
+        UUID opponentId = UUID.randomUUID();
+        Fixture win1 = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 5, managedClubId, opponentId, null);
+        win1.recordResult(2, 0);
+        Fixture draw = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 4, opponentId, managedClubId, null);
+        draw.recordResult(1, 1);
+        Fixture win2 = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 3, managedClubId, opponentId, null);
+        win2.recordResult(1, 0);
+        Fixture win3 = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 2, opponentId, managedClubId, null);
+        win3.recordResult(0, 2);
+        Fixture win4 = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 1, managedClubId, opponentId, null);
+        win4.recordResult(1, 0);
+
+        // Last 3 are win1/draw/win2 in most-recent-first order below — not 3 straight wins —
+        // but the last 5 (win1, draw, win2, win3, win4) have no loss, so unbeaten-over-5 still holds.
+        assertThat(LiveMatchService.isHypeStreak(List.of(win1, draw, win2, win3, win4), managedClubId)).isTrue();
+    }
+
+    @Test
+    void aLossInsideTheTopThreeBreaksBothChecks() {
+        UUID managedClubId = UUID.randomUUID();
+        UUID opponentId = UUID.randomUUID();
+        Fixture win1 = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 5, managedClubId, opponentId, null);
+        win1.recordResult(2, 0);
+        Fixture win2 = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 4, opponentId, managedClubId, null);
+        win2.recordResult(0, 1);
+        Fixture loss = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 3, managedClubId, opponentId, null);
+        loss.recordResult(0, 2);
+        Fixture win3 = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 2, opponentId, managedClubId, null);
+        win3.recordResult(0, 1);
+        Fixture win4 = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 1, managedClubId, opponentId, null);
+        win4.recordResult(1, 0);
+
+        // Top 3 (win1, win2, loss) breaks the 3-win check; all 5 (win1, win2, loss, win3, win4)
+        // contain a loss, breaking the unbeaten-5 check too — both legs must fail.
+        assertThat(LiveMatchService.isHypeStreak(List.of(win1, win2, loss, win3, win4), managedClubId)).isFalse();
+    }
+
+    @Test
+    void fewerThanThreePlayedFixturesNeverTriggersTheHypeStreak() {
+        UUID managedClubId = UUID.randomUUID();
+        UUID opponentId = UUID.randomUUID();
+        Fixture win1 = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 2, managedClubId, opponentId, null);
+        win1.recordResult(2, 0);
+        Fixture win2 = Fixture.create(UUID.randomUUID(), UUID.randomUUID(), 1, opponentId, managedClubId, null);
+        win2.recordResult(0, 1);
+
+        assertThat(LiveMatchService.isHypeStreak(List.of(win1, win2), managedClubId)).isFalse();
+    }
+
+    @Test
+    void aGoalThatReachesAThreeGoalMarginIsAHypeGoal() {
+        LiveTimelineEvent m1 = goal(10, true);
+        LiveTimelineEvent m2 = goal(30, true);
+        LiveTimelineEvent m3 = goal(50, true);
+        List<LiveTimelineEvent> events = List.of(m1, m2, m3);
+
+        assertThat(LiveMatchService.isHypeGoal(events, m3, true, false)).isTrue();
+    }
+
+    @Test
+    void aGoalThatExtendsAnAlreadyThreeGoalMarginIsNotAHypeGoalAgain() {
+        LiveTimelineEvent m1 = goal(10, true);
+        LiveTimelineEvent m2 = goal(30, true);
+        LiveTimelineEvent m3 = goal(50, true);
+        LiveTimelineEvent m4 = goal(70, true);
+        List<LiveTimelineEvent> events = List.of(m1, m2, m3, m4);
+
+        assertThat(LiveMatchService.isHypeGoal(events, m4, true, false)).isFalse();
+    }
+
+    @Test
+    void enteringOnAStreakMakesTheFirstManagedGoalAHypeGoalRegardlessOfMargin() {
+        LiveTimelineEvent m1 = goal(10, true);
+        List<LiveTimelineEvent> events = List.of(m1);
+
+        assertThat(LiveMatchService.isHypeGoal(events, m1, true, true)).isTrue();
+    }
+
+    @Test
+    void enteringOnAStreakOnlyTheFirstManagedGoalIsAHypeGoal() {
+        LiveTimelineEvent m1 = goal(10, true);
+        LiveTimelineEvent m2 = goal(30, true);
+        List<LiveTimelineEvent> events = List.of(m1, m2);
+
+        assertThat(LiveMatchService.isHypeGoal(events, m2, true, true)).isFalse();
+    }
+
+    @Test
+    void anOpponentGoalIsNeverAHypeGoal() {
+        LiveTimelineEvent opponentGoal = goal(10, false);
+        List<LiveTimelineEvent> events = List.of(opponentGoal);
+
+        assertThat(LiveMatchService.isHypeGoal(events, opponentGoal, true, true)).isFalse();
+    }
 }
