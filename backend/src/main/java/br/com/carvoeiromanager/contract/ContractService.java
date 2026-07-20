@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -29,17 +30,20 @@ public class ContractService {
     private final ContractValuation contractValuation;
     private final TransferWindow transferWindow;
     private final StaffEffectsService staffEffectsService;
+    private final PreContractAgreementRepository preContractAgreementRepository;
 
     public ContractService(SaveGameService saveGameService,
                            PlayerRepository playerRepository,
                            ContractValuation contractValuation,
                            TransferWindow transferWindow,
-                           StaffEffectsService staffEffectsService) {
+                           StaffEffectsService staffEffectsService,
+                           PreContractAgreementRepository preContractAgreementRepository) {
         this.saveGameService = saveGameService;
         this.playerRepository = playerRepository;
         this.contractValuation = contractValuation;
         this.transferWindow = transferWindow;
         this.staffEffectsService = staffEffectsService;
+        this.preContractAgreementRepository = preContractAgreementRepository;
     }
 
     @Transactional
@@ -47,6 +51,7 @@ public class ContractService {
                                                 BigDecimal wage, int contractYears) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         Player player = requireManagedPlayer(saveGameId, save.getManagedClubId(), playerId);
+        interceptPreContractDefense(saveGameId, save.getManagedClubId(), player, wage);
         applyTerms(player, wage, contractYears, save.getManagedClubId());
         playerRepository.save(player);
         return toResponse(player);
@@ -112,6 +117,35 @@ public class ContractService {
         }
         player.setWage(wage);
         player.setContractYears(contractYears);
+    }
+
+    /**
+     * A renewal doubles as the defense against a poacher's pre-contract: while the deal
+     * is AGREED the player stays only for at least DEFENSE_FACTOR x the agreed wage
+     * (cancelling the deal); once LOCKED the departure is binding and renewal is refused.
+     */
+    private void interceptPreContractDefense(UUID saveGameId, UUID managedClubId,
+                                             Player player, BigDecimal wage) {
+        List<PreContractAgreement> threats = preContractAgreementRepository
+                .findBySaveGameIdAndPlayerIdAndStatusIn(saveGameId, player.getId(),
+                        PreContractService.ACTIVE).stream()
+                .filter(a -> a.getFromClubId().equals(managedClubId))
+                .toList();
+        for (PreContractAgreement threat : threats) {
+            if (threat.getStatus() == PreContractStatus.LOCKED) {
+                throw new ApiException(ErrorCode.RENEWAL_BLOCKED_BY_PRE_CONTRACT,
+                        "The pre-contract is locked; the player will leave when his contract ends");
+            }
+            BigDecimal required = threat.getWage()
+                    .multiply(PreContractNegotiation.DEFENSE_FACTOR)
+                    .setScale(2, RoundingMode.CEILING);
+            if (wage == null || wage.compareTo(required) < 0) {
+                throw new ApiException(ErrorCode.RENEWAL_BLOCKED_BY_PRE_CONTRACT,
+                        "Player has agreed a pre-contract elsewhere; staying costs at least " + required);
+            }
+            threat.cancel();
+            preContractAgreementRepository.save(threat);
+        }
     }
 
     Player requireManagedPlayer(UUID saveGameId, UUID managedClubId, UUID playerId) {
