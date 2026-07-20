@@ -196,10 +196,13 @@ public class PreContractService {
                 .sorted(Comparator.comparing(Club::getReputation).reversed()
                         .thenComparing(Club::getId))
                 .toList();
+        // Fetch each AI club's squad median ONCE (one query per club) rather than once per
+        // target×club pair — the nested loop below only reads from this map.
+        Map<UUID, Integer> medianByClub = aiClubs.stream().collect(Collectors.toMap(Club::getId,
+                club -> squadMedianOverall(playerRepository.findByClubIdAndYouthProspectFalse(club.getId()))));
         for (Player target : targets) {
             for (Club club : aiClubs) {
-                List<Player> squad = playerRepository.findByClubIdAndYouthProspectFalse(club.getId());
-                if (target.getOverall() >= squadMedianOverall(squad)) {
+                if (target.getOverall() >= medianByClub.get(club.getId())) {
                     BigDecimal wage = negotiation.demand(target.getOverall(), target.getAge());
                     PreContractAgreement agreement = PreContractAgreement.create(save.getId(),
                             target.getId(), save.getManagedClubId(), club.getId(), wage,

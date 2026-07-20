@@ -140,16 +140,23 @@ class PreContractMarketDayIT {
         squad.forEach(p -> p.setContractYears(1));
         playerRepository.saveAll(squad);
 
-        // Run several stops; each may create at most one new incoming agreement.
+        // Run enough stops, on the real calendar's 10-day TRANSFER cadence, that the odds of
+        // never rolling a poach attempt (~50%/stop) are negligible: 0.5^20 ≈ 1e-6. Each stop
+        // may still create at most one new incoming agreement.
         int previous = 0;
-        for (LocalDate d : List.of(LocalDate.of(2026, 7, 15), LocalDate.of(2026, 7, 25),
-                LocalDate.of(2026, 8, 4), LocalDate.of(2026, 8, 14), LocalDate.of(2026, 8, 24))) {
-            preContractService.processMarketDay(save(c), d);
+        LocalDate stop = LocalDate.of(2026, 7, 15);
+        for (int i = 0; i < 20; i++) {
+            preContractService.processMarketDay(save(c), stop);
             int now = (int) agreementRepository.findBySaveGameId(c.id()).stream()
                     .filter(a -> a.getFromClubId().equals(c.clubId())).count();
             assertThat(now - previous).isBetween(0, 1);
             previous = now;
+            stop = stop.plusDays(10);
         }
+        // At least one poach must have actually occurred across the 20 stops — otherwise this
+        // test would trivially pass without ever exercising poach creation.
+        assertThat(agreementRepository.findBySaveGameId(c.id()).stream()
+                .filter(a -> a.getFromClubId().equals(c.clubId())).count()).isGreaterThan(0);
         // Every incoming agreement targets a managed final-year senior.
         agreementRepository.findBySaveGameId(c.id()).stream()
                 .filter(a -> a.getFromClubId().equals(c.clubId()))
