@@ -33,8 +33,13 @@ class ErrorCodeTest {
         assertThat(ErrorCode.NO_MATCH_TO_PLAY.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.NO_SUBS_REMAINING.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.PLAYER_NOT_FOUND.status()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(ErrorCode.PLAYER_NOT_PRE_CONTRACT_ELIGIBLE.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.PLAYER_REJECTS_TERMS.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(ErrorCode.PRE_CONTRACT_ALREADY_EXISTS.status()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(ErrorCode.PRE_CONTRACT_NOT_FOUND.status()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(ErrorCode.PRE_CONTRACT_WINDOW_CLOSED.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.PROSPECT_NOT_FOUND.status()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(ErrorCode.RENEWAL_BLOCKED_BY_PRE_CONTRACT.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.SAVE_GAME_NOT_FOUND.status()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(ErrorCode.SEASON_FINISHED.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.SEASON_NOT_FINISHED.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
@@ -50,7 +55,7 @@ class ErrorCodeTest {
     }
 
     @Test
-    void hasExactlyThirtyEightConstants() {
-        assertThat(ErrorCode.values()).hasSize(38);
+    void hasExactlyFortyThreeConstants() {
+        assertThat(ErrorCode.values()).hasSize(43);
     }
 }
