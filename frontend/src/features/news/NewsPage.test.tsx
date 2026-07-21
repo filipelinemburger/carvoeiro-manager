@@ -54,6 +54,23 @@ function renderPage() {
   )
 }
 
+// Variant that exposes the QueryClient so a test can drive a background refetch via
+// invalidateQueries, mirroring what onSuccess of the "Avançar" mutation does on the real
+// news list ['news', saveGameId].
+function renderPageWithClient() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const utils = render(
+    <MemoryRouter initialEntries={['/news?saveGameId=sg-1']}>
+      <AuthProvider>
+        <QueryClientProvider client={qc}>
+          <NewsPage />
+        </QueryClientProvider>
+      </AuthProvider>
+    </MemoryRouter>,
+  )
+  return { qc, ...utils }
+}
+
 describe('NewsPage (master-detail)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -123,5 +140,32 @@ describe('NewsPage (master-detail)', () => {
 
     // Exhausted (page 2 of 2): the button disappears.
     await waitFor(() => expect(screen.queryByRole('button', { name: /carregar mais/i })).not.toBeInTheDocument())
+  })
+
+  it('re-selects the newest item when a fresh one is prepended by a background refetch, even while the previous selection is still present (cached-advance path)', async () => {
+    const A: NewsFeedItem = { id: 'a1', read: false, payload: match(10) }
+    const B: NewsFeedItem = { id: 'b1', read: false, payload: transfer(5) }
+    vi.mocked(getNews)
+      .mockResolvedValueOnce({ content: [A], page: 1, size: 10, totalElements: 1, totalPages: 1 })
+      .mockResolvedValue({ content: [B, A], page: 1, size: 10, totalElements: 2, totalPages: 1 })
+
+    const { qc } = renderPageWithClient()
+
+    // A (the only item at first) is auto-selected and marked read.
+    // AdvanceEventCard's header shows `round + 1` (the completed round), so match(10) reads
+    // "Rodada 11" — see AdvanceEventCard.tsx's roundLabel.
+    await waitFor(() => expect(screen.getByText(/Série B · Rodada 11/)).toBeInTheDocument())
+    await waitFor(() => expect(markNewsRead).toHaveBeenCalledWith('sg-1', 'a1', 'test-token'))
+
+    // Simulate the "Avançar" cached-advance path: the news list query is invalidated (as
+    // advanceMutation.onSuccess does) and its background refetch resolves to [B, A] — a
+    // strictly-newer item B prepended — while the current selection A is still present.
+    await qc.invalidateQueries({ queryKey: ['news', 'sg-1'] })
+
+    // B must become the selection: its detail card renders and it gets marked read.
+    // On the old effect (which only re-selects when the current selection drops OUT of the
+    // list) this never happens, because A remains present — B is left unopened.
+    await waitFor(() => expect(screen.getByText('Janela de Transferências')).toBeInTheDocument())
+    await waitFor(() => expect(markNewsRead).toHaveBeenCalledWith('sg-1', 'b1', 'test-token'))
   })
 })

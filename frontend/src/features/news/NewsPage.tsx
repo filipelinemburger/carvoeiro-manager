@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { Box, Button, List, ListItemButton, ListItemIcon, ListItemText, Stack, Typography } from '@mui/material'
@@ -96,23 +96,28 @@ export function NewsPage() {
   })
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const lastNewestId = useRef<string | null>(null)
   const items = (data?.pages ?? []).flatMap(p => p.content)
 
-  // Auto-select the newest item once loaded, and re-select if the current selection drops
-  // out of the list. Marks the newly-selected item read if it was unread.
+  // Auto-select the newest item on landing and whenever a strictly-newer item arrives
+  // (e.g. after Avançar prepends a fresh result), or re-select when the current selection
+  // drops out of the list. Marks the newly-selected item read if it was unread.
   useEffect(() => {
     if (items.length === 0) {
+      lastNewestId.current = null
       if (selectedId !== null) setSelectedId(null)
       return
     }
-    const stillPresent = selectedId !== null && items.some(it => it.id === selectedId)
-    if (!stillPresent) {
-      const newest = items[0]
+    const newest = items[0]
+    const newestArrived = newest.id !== lastNewestId.current
+    const selectionPresent = selectedId !== null && items.some(it => it.id === selectedId)
+    if (newestArrived || !selectionPresent) {
+      lastNewestId.current = newest.id
       setSelectedId(newest.id)
       if (!newest.read) markReadMutation.mutate(newest.id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.length, selectedId])
+  }, [items.length, items[0]?.id, selectedId])
 
   if (isLoading) return <Typography>Carregando notícias…</Typography>
   if (error) return <Typography color="error">Erro ao carregar notícias.</Typography>
