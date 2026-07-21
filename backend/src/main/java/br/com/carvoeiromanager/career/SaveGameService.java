@@ -114,6 +114,7 @@ public class SaveGameService {
             Club club = Club.create(saveGame.getId(), seedClub.name(), seedClub.shortName());
             club.setCommonName(seedClub.commonName() != null ? seedClub.commonName() : seedClub.name());
             club.setNickname(seedClub.nickname());
+            club.setStadiumName(seedClub.stadium());
             club.setPrimaryColor(seedClub.primaryColor());
             club.setSecondaryColor(seedClub.secondaryColor());
             club.setDefaultFormation(seedClub.formation());

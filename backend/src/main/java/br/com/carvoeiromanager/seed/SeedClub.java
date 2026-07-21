@@ -7,6 +7,7 @@ public record SeedClub(
         String shortName,
         String commonName,
         String nickname,
+        String stadium,
         String primaryColor,
         String secondaryColor,
         String formation,

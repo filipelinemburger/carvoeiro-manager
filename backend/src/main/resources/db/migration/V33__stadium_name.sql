@@ -1,0 +1,33 @@
+ALTER TABLE clubs ADD COLUMN stadium_name VARCHAR(80);
+
+UPDATE clubs SET stadium_name = CASE name
+    WHEN 'Criciúma Esporte Clube' THEN 'Estádio Heriberto Hülse'
+    WHEN 'Avaí Futebol Clube' THEN 'Estádio Aderbal Ramos da Silva'
+    WHEN 'Figueirense Futebol Clube' THEN 'Estádio Orlando Scarpelli'
+    WHEN 'Associação Chapecoense de Futebol' THEN 'Arena Condá'
+    WHEN 'Brusque Futebol Clube' THEN 'Estádio Augusto Bauer'
+    WHEN 'Clube Náutico Marcílio Dias' THEN 'Estádio Doutor Hercílio Luz'
+    WHEN 'Associação Desportiva Barra' THEN 'Arena Barra FC'
+    WHEN 'Associação Esportiva Concórdia' THEN 'Estádio Domingos Machado de Lima'
+    WHEN 'Hercílio Luz Futebol Clube' THEN 'Estádio Aníbal Torres Costa'
+    WHEN 'Camboriú Futebol Clube' THEN 'Estádio Municipal Roberto Santos Garcia'
+    WHEN 'Goiás Esporte Clube' THEN 'Estádio Hailé Pinheiro'
+    WHEN 'Grêmio Novorizontino' THEN 'Estádio Jorge Ismael de Biasi'
+    WHEN 'Sport Club do Recife' THEN 'Estádio Ilha do Retiro'
+    WHEN 'Ceará Sporting Club' THEN 'Estádio Presidente Vargas'
+    WHEN 'Vila Nova Futebol Clube' THEN 'Estádio Onésio Brasil Alvarenga'
+    WHEN 'Operário Ferroviário Esporte Clube' THEN 'Estádio Germano Krüger'
+    WHEN 'Clube de Regatas Brasil' THEN 'Estádio Rei Pelé'
+    WHEN 'Ponte Preta Futebol Clube' THEN 'Estádio Moisés Lucarelli'
+    WHEN 'Fortaleza Esporte Clube' THEN 'Arena Castelão'
+    WHEN 'Botafogo Futebol Clube (SP)' THEN 'Estádio Santa Cruz'
+    WHEN 'América Futebol Clube' THEN 'Estádio Raimundo Sampaio'
+    WHEN 'Athletic Club' THEN 'Estádio Joaquim Portugal'
+    WHEN 'Atlético Clube Goianiense' THEN 'Estádio Antônio Accioly'
+    WHEN 'Cuiabá Esporte Clube' THEN 'Arena Pantanal'
+    WHEN 'Esporte Clube Juventude' THEN 'Estádio Alfredo Jaconi'
+    WHEN 'Londrina Esporte Clube' THEN 'Estádio do Café'
+    WHEN 'Clube Náutico Capibaribe' THEN 'Estádio dos Aflitos'
+    WHEN 'São Bernardo Futebol Clube' THEN 'Estádio Primeiro de Maio'
+    ELSE 'Estádio ' || name
+END;

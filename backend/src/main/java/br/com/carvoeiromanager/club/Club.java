@@ -35,6 +35,9 @@ public class Club {
     @Column(name = "nickname", length = 40)
     private String nickname;
 
+    @Column(name = "stadium_name", length = 80)
+    private String stadiumName;
+
     @Column(name = "primary_color", length = 9)
     private String primaryColor;
 
@@ -93,6 +96,7 @@ public class Club {
     public String getShortName() { return shortName; }
     public String getCommonName() { return commonName; }
     public String getNickname() { return nickname; }
+    public String getStadiumName() { return stadiumName; }
     public String getPrimaryColor() { return primaryColor; }
     public String getSecondaryColor() { return secondaryColor; }
     public String getDefaultFormation() { return defaultFormation; }
@@ -102,6 +106,7 @@ public class Club {
 
     public void setCommonName(String commonName) { this.commonName = commonName; }
     public void setNickname(String nickname) { this.nickname = nickname; }
+    public void setStadiumName(String stadiumName) { this.stadiumName = stadiumName; }
     public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
     public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
     public void setDefaultFormation(String defaultFormation) { this.defaultFormation = defaultFormation; }
