@@ -13,7 +13,7 @@ import { getSquad, getLineup, setLineup, setTraining, renewContract, listPlayer,
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
-import type { PlayerResponse, PlayerRole, LineupStarter, TrainableAttribute, TrainingIntensity, TrainingAssignment } from '../../api/types'
+import type { PlayerResponse, PlayerRole, LineupStarter, TrainableAttribute, TrainingIntensity, TrainingAssignment, SquadResponse } from '../../api/types'
 import { TacticsPanel } from './TacticsPanel'
 import { PlayerDetails } from './PlayerDetails'
 import { Collapsible } from '../../components/Collapsible'
@@ -174,7 +174,7 @@ export function SquadPage() {
   const [bench, setBench] = useState<(string | null)[]>([])
   const [roles, setRoles] = useState<Record<string, PlayerRole>>({})
   const [saveSuccess, setSaveSuccess] = useState(false)
-  const [detailsPlayer, setDetailsPlayer] = useState<PlayerResponse | null>(null)
+  const [detailsPlayerId, setDetailsPlayerId] = useState<string | null>(null)
   const [tab, setTab] = useState(0)
   const [trainingAssignments, setTrainingAssignments] = useState<
     Record<string, { focus: TrainableAttribute | null; intensity: TrainingIntensity }>
@@ -189,6 +189,10 @@ export function SquadPage() {
   })
 
   const players = data?.players ?? []
+
+  // Tracks the query cache (rather than a snapshot taken at click time) so the open dialog
+  // reflects updates — e.g. an optimistic contract renewal — without the user closing/reopening.
+  const detailsPlayer = players.find(p => p.id === detailsPlayerId) ?? null
 
   // Squad list ordered by position (GK → DEF → MEI → ATA), then overall within each line.
   const displayPlayers = [...players].sort(
@@ -273,7 +277,19 @@ export function SquadPage() {
   const renewMut = useMutation({
     mutationFn: (v: { playerId: string; wage: number; contractYears: number }) =>
       renewContract(saveGameId, v.playerId, { wage: v.wage, contractYears: v.contractYears }, token ?? ''),
-    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] }) },
+    onMutate: async (v) => {
+      await queryClient.cancelQueries({ queryKey: ['squad', saveGameId, clubId] })
+      const previous = queryClient.getQueryData<SquadResponse>(['squad', saveGameId, clubId])
+      // Patch the contract term immediately so the still-open details dialog (which now derives
+      // from this cache) reflects the renewal without waiting on the round-trip.
+      queryClient.setQueryData<SquadResponse>(['squad', saveGameId, clubId], (old) =>
+        old ? { ...old, players: old.players.map(p => (p.id === v.playerId ? { ...p, contractYears: v.contractYears } : p)) } : old)
+      return { previous }
+    },
+    onError: (_err, _v, context) => {
+      if (context?.previous) queryClient.setQueryData(['squad', saveGameId, clubId], context.previous)
+    },
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] }) },
   })
 
   const listMut = useMutation({
@@ -425,7 +441,7 @@ export function SquadPage() {
         type="button"
         underline="hover"
         color="inherit"
-        onClick={() => setDetailsPlayer(player)}
+        onClick={() => setDetailsPlayerId(player.id)}
         sx={{ font: 'inherit', fontWeight: 600, textAlign: 'left', verticalAlign: 'baseline', cursor: 'pointer' }}
       >
         {player.name}
@@ -756,7 +772,7 @@ export function SquadPage() {
 
       <PlayerDetails
         player={detailsPlayer}
-        onClose={() => setDetailsPlayer(null)}
+        onClose={() => setDetailsPlayerId(null)}
         saveGameId={saveGameId}
         lineupControl={isMobile && detailsPlayer && selected.includes(detailsPlayer.id)
           ? roleSelect(detailsPlayer)

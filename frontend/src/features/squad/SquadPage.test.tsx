@@ -444,6 +444,45 @@ describe('SquadPage', () => {
     await waitFor(() => expect(mockRenewContract).toHaveBeenCalled())
   })
 
+  it('optimistically shows the new contract term in the still-open dialog before the request resolves', async () => {
+    let resolveRenew!: (v: { playerId: string; name: string; wage: number; contractYears: number }) => void
+    mockRenewContract.mockReturnValue(new Promise(resolve => { resolveRenew = resolve }))
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByText('Goleiro Teste'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+    expect(within(dialog).getByText(/2 ano\(s\)/)).toBeInTheDocument()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /renovar/i }))
+
+    // Patched immediately — before the mocked request has resolved — and the same dialog
+    // instance (not a reopened one) reflects it, since it now tracks the query cache.
+    await waitFor(() => expect(within(dialog).getByText(/3 ano\(s\)/)).toBeInTheDocument())
+    expect(screen.getByRole('dialog')).toBe(dialog)
+
+    resolveRenew({ playerId: GK.id, name: 'Goleiro Teste', wage: 90000, contractYears: 3 })
+  })
+
+  it('rolls back the contract term if renewing fails', async () => {
+    let rejectRenew!: (e: Error) => void
+    mockRenewContract.mockReturnValue(new Promise((_, reject) => { rejectRenew = reject }))
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByText('Goleiro Teste'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+    expect(within(dialog).getByText(/2 ano\(s\)/)).toBeInTheDocument()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /renovar/i }))
+    await waitFor(() => expect(within(dialog).getByText(/3 ano\(s\)/)).toBeInTheDocument())
+
+    rejectRenew(new Error('network'))
+
+    // Rolled back once the rejection settles.
+    await waitFor(() => expect(within(dialog).getByText(/2 ano\(s\)/)).toBeInTheDocument())
+  })
+
   it('shows a "Listado" badge for a listed player and lets the user unlist them', async () => {
     mockUnlistPlayer.mockResolvedValue({ playerId: LISTED.id, transferListed: false, listedReason: null })
     renderWithProviders()
