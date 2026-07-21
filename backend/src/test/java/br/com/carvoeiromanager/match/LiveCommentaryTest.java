@@ -178,4 +178,23 @@ class LiveCommentaryTest {
                 "É GOOOOOOOOOOOOOOOOOOL!!! Bateu, tremeu a rede e caiu o estádio: golaço de Otero!",
                 "Joga a luva, goleirão! Otero manda uma patada e é gooooooooooool!");
     }
+
+    @Test
+    void aSecondYellowRedUsesTheDedicatedPool() {
+        assertThat(LiveCommentary.of(EventType.RED_CARD, "Otero", null, 60,
+                LiveTimelineEvent.SECOND_YELLOW_DETAIL, false, false, false)).isIn(
+                "Segundo amarelo pra Otero e consequentemente o VERMELHO! Tá expulso, vai mais cedo pro chuveiro!",
+                "Otero já tinha amarelo e fez outra! Segundo cartão amarelo, vermelho na sequência: RUA!",
+                "Não podia fazer essa falta, Otero! O juiz mostra o segundo amarelo e depois o vermelho: EXPULSO!",
+                "Bobeira de Otero! Segundo amarelo no jogo, o vermelho vem junto e o time fica com um a menos!");
+    }
+
+    @Test
+    void aStraightRedKeepsTheGenericPool() {
+        assertThat(LiveCommentary.of(EventType.RED_CARD, "Otero", null, 60, null, false, false, false)).isIn(
+                "É VERMELHOOOO! Otero está expulso e vai direto pro vestiário!",
+                "Otero recebe o vermelho e deixa o time com um a menos. Agora vai ter que suar a camisa!",
+                "Vermelho direto! Otero vai pro chuveiro mais cedo, e olha que sufoco pro time que fica reduzido!",
+                "Não teve jeito, Otero: o juiz mostrou o vermelho e a arquibancada foi à loucura!");
+    }
 }

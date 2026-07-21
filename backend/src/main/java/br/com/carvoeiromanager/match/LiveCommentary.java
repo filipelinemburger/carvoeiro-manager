@@ -42,6 +42,11 @@ public final class LiveCommentary {
             "%s recebe o vermelho e deixa o time com um a menos. Agora vai ter que suar a camisa!",
             "Vermelho direto! %s vai pro chuveiro mais cedo, e olha que sufoco pro time que fica reduzido!",
             "Não teve jeito, %s: o juiz mostrou o vermelho e a arquibancada foi à loucura!"};
+    private static final String[] SECOND_YELLOW_RED = {
+            "Segundo amarelo pra %s e consequentemente o VERMELHO! Tá expulso, vai mais cedo pro chuveiro!",
+            "%s já tinha amarelo e fez outra! Segundo cartão amarelo, vermelho na sequência: RUA!",
+            "Não podia fazer essa falta, %s! O juiz mostra o segundo amarelo e depois o vermelho: EXPULSO!",
+            "Bobeira de %s! Segundo amarelo no jogo, o vermelho vem junto e o time fica com um a menos!"};
     private static final String[] INJURY = {
             "%s cai lesionado no gramado, a maca entra e não vai dar pra ele continuar.",
             "%s sente e precisa de atendimento. Pessoal no banco de reservas se agita e demonstra preocupação",
@@ -110,7 +115,9 @@ public final class LiveCommentary {
     /**
      * {@code inName} is used for substitutions, corner goals (the corner taker), and assisted
      * open-play goals (the assister — {@code playerInId} on the event). {@code detail} only for
-     * TACTICS_CHANGE. {@code comebackGoal} true only for a goal-family type that erases a deficit
+     * TACTICS_CHANGE (AI posture name) and for a RED_CARD produced by a second yellow
+     * ({@code LiveTimelineEvent.SECOND_YELLOW_DETAIL} — picks the dedicated pool).
+     * {@code comebackGoal} true only for a goal-family type that erases a deficit
      * for the managed club — appends the signature line after the normal goal description, so
      * the scorer and the goal itself are still described. {@code hypeGoal} true only for a
      * goal-family type that is the first in the match to either arrive with the managed club
@@ -133,7 +140,9 @@ public final class LiveCommentary {
             case SET_PIECE_GOAL -> pick(SET_PIECE, playerName, minute, type);
             case CHANCE -> pick(CHANCE, playerName, minute, type);
             case YELLOW_CARD -> pick(YELLOW, playerName, minute, type);
-            case RED_CARD -> pick(RED, playerName, minute, type);
+            case RED_CARD -> LiveTimelineEvent.SECOND_YELLOW_DETAIL.equals(detail)
+                    ? pick(SECOND_YELLOW_RED, playerName, minute, type)
+                    : pick(RED, playerName, minute, type);
             case INJURY -> pick(INJURY, playerName, minute, type);
             case SUBSTITUTION -> pick2(SUBSTITUTION_LINES, inName, playerName, minute, type);
             case TACTICS_CHANGE -> tacticsChange(detail, minute);
