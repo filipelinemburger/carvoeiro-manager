@@ -86,13 +86,36 @@ describe('Layout — live match fork', () => {
     ;(deleteAccount as Mock).mockResolvedValue(undefined)
   })
 
-  it('kicks off the live match and navigates to /match when the managed club plays', async () => {
+  it('shows "Ir para o jogo" and opens a confirmation dialog instead of kicking off immediately', async () => {
+    ;(getLiveMatch as Mock).mockResolvedValue(null)
+    seedAuth()
+    renderLayout()
+    fireEvent.click(await screen.findByRole('button', { name: 'Ir para o jogo' }))
+
+    expect(screen.getByRole('heading', { name: 'Ir para o jogo' })).toBeInTheDocument()
+    expect(screen.getByText('Começar a partida contra o próximo adversário?')).toBeInTheDocument()
+    expect(kickoffLiveMatch).not.toHaveBeenCalled()
+  })
+
+  it('kicks off the live match and navigates to /match only after confirming', async () => {
     ;(getLiveMatch as Mock).mockResolvedValue(null)
     ;(kickoffLiveMatch as Mock).mockResolvedValue({ fixtureId: 'f1' } as never)
     seedAuth()
     renderLayout()
-    fireEvent.click(await screen.findByRole('button', { name: /avançar/i }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Ir para o jogo' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Começar partida' }))
     await waitFor(() => expect(kickoffLiveMatch).toHaveBeenCalledWith('sg-1', 'test-token'))
+  })
+
+  it('does not kick off when the confirmation dialog is cancelled', async () => {
+    ;(getLiveMatch as Mock).mockResolvedValue(null)
+    seedAuth()
+    renderLayout()
+    fireEvent.click(await screen.findByRole('button', { name: 'Ir para o jogo' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    expect(kickoffLiveMatch).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
   it('shows Retomar partida when a live match is in progress', async () => {

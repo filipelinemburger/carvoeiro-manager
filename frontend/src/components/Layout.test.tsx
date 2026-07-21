@@ -172,12 +172,26 @@ describe('Layout shell', () => {
   })
 
   it('shows Avançar button when save game exists', async () => {
+    // Managed club is NOT next up, so the button keeps the generic "Avançar" label
+    // (the "Ir para o jogo" relabel is covered separately below).
+    ;(getAdvancePreview as Mock).mockResolvedValue({
+      ...PREVIEW_OK,
+      managedClubPlaysNext: false,
+    } satisfies AdvancePreviewResponse)
     seedAuth('U1', 'sg-1')
     renderLayout('/dashboard')
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /avançar/i })).toBeInTheDocument()
     })
+  })
+
+  it('relabels the button "Ir para o jogo" when the managed club plays next', async () => {
+    seedAuth('U1', 'sg-1')
+    renderLayout('/dashboard')
+
+    expect(await screen.findByRole('button', { name: 'Ir para o jogo' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^avançar$/i })).not.toBeInTheDocument()
   })
 
   it('hides per-save nav links when no save game', () => {
@@ -241,7 +255,8 @@ describe('Layout shell', () => {
     seedAuth('U1', 'sg-1')
     renderLayout('/dashboard')
 
-    const avancarBtn = await screen.findByRole('button', { name: /^avançar$/i })
+    // managedClubPlaysNext is true here, so the button is relabelled "Ir para o jogo".
+    const avancarBtn = await screen.findByRole('button', { name: 'Ir para o jogo' })
     await waitFor(() => expect(avancarBtn).toBeDisabled())
     expect(screen.getByRole('status')).toHaveTextContent(/suspenso|lesionado/i)
     expect(screen.getByRole('link', { name: /ajustar escalação/i })).toBeInTheDocument()
@@ -268,7 +283,8 @@ describe('Layout shell', () => {
     seedAuth('U1', 'sg-1')
     renderLayout('/dashboard')
 
-    const avancarBtn = await screen.findByRole('button', { name: /^avançar$/i })
+    // managedClubPlaysNext is true (default PREVIEW_OK), so the button reads "Ir para o jogo".
+    const avancarBtn = await screen.findByRole('button', { name: 'Ir para o jogo' })
     await waitFor(() => expect(avancarBtn).toBeDisabled())
     expect(screen.getByRole('status')).toHaveTextContent(/escale seu time/i)
     expect(screen.getByRole('link', { name: /escalar time/i })).toBeInTheDocument()
@@ -303,7 +319,8 @@ describe('Layout shell', () => {
     seedAuth('U1', 'sg-1')
     renderLayout('/dashboard')
 
-    const avancarBtn = await screen.findByRole('button', { name: /^avançar$/i })
+    // managedClubPlaysNext is true (default PREVIEW_OK), so the button reads "Ir para o jogo".
+    const avancarBtn = await screen.findByRole('button', { name: 'Ir para o jogo' })
     // The button must remain ENABLED — low fitness never blocks advance
     await waitFor(() => expect(avancarBtn).not.toBeDisabled())
     // The warning text should be visible

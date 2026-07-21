@@ -17,6 +17,7 @@ import { getNewsUnreadCount } from '../api/news'
 import { saveGameKeyFor } from '../features/career/saveGameKey'
 import { LoadCareerDialog } from '../features/career/LoadCareerDialog'
 import { NewCareerDialog } from '../features/career/NewCareerDialog'
+import { ConfirmDialog } from './ConfirmDialog'
 import type { AdvancePreviewResponse, AdvanceResponse, LiveMatchState, SaveGameResponse } from '../api/types'
 
 interface LayoutProps {
@@ -88,6 +89,9 @@ export function Layout({ children }: LayoutProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [loadCareerOpen, setLoadCareerOpen] = useState(false)
   const [newCareerOpen, setNewCareerOpen] = useState(false)
+  // Confirms before kicking off the managed club's own match — advancing straight into a
+  // match is a bigger commitment (locks the lineup) than a routine day/round advance.
+  const [confirmKickoffOpen, setConfirmKickoffOpen] = useState(false)
 
   const advanceMutation = useMutation<AdvanceResponse>({
     mutationFn: () => advanceRound(saveGameId!, token ?? ''),
@@ -123,8 +127,13 @@ export function Layout({ children }: LayoutProps) {
 
   const handleAdvance = () => {
     if (liveMatch) { void navigate(`/match?saveGameId=${saveGameId}`); return }
-    if (preview?.managedClubPlaysNext) { kickoffMutation.mutate(); return }
+    if (preview?.managedClubPlaysNext) { setConfirmKickoffOpen(true); return }
     advanceMutation.mutate()
+  }
+
+  const handleConfirmKickoff = () => {
+    setConfirmKickoffOpen(false)
+    kickoffMutation.mutate()
   }
 
   const isDashboard = location.pathname === '/dashboard'
@@ -285,9 +294,20 @@ export function Layout({ children }: LayoutProps) {
               onClick={handleAdvance}
             >
               {liveMatch ? 'Retomar partida'
-                : advanceMutation.isPending || kickoffMutation.isPending ? 'Avançando…' : 'Avançar'}
+                : advanceMutation.isPending || kickoffMutation.isPending ? 'Avançando…'
+                  : preview?.managedClubPlaysNext ? 'Ir para o jogo'
+                    : 'Avançar'}
             </Button>
           )}
+
+          <ConfirmDialog
+            open={confirmKickoffOpen}
+            title="Ir para o jogo"
+            message="Começar a partida contra o próximo adversário?"
+            confirmLabel="Começar partida"
+            onConfirm={handleConfirmKickoff}
+            onClose={() => setConfirmKickoffOpen(false)}
+          />
 
           {/* Mobile: hamburger opens the Drawer with all sections */}
           {hasSaveGame && (
