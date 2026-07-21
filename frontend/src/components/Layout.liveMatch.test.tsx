@@ -135,4 +135,79 @@ describe('Layout — live match fork', () => {
     expect(screen.queryByRole('button', { name: /retomar partida/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /avançar/i })).not.toBeInTheDocument()
   })
+
+  it('does not double-submit kickoff when the confirm button is clicked repeatedly before the mutation settles', async () => {
+    ;(getLiveMatch as Mock).mockResolvedValue(null)
+    // Keep the mutation pending so the confirm button stays disabled across the extra clicks.
+    let resolveKickoff: (value: unknown) => void = () => {}
+    ;(kickoffLiveMatch as Mock).mockImplementation(
+      () => new Promise((resolve) => { resolveKickoff = resolve }),
+    )
+    seedAuth()
+    renderLayout()
+    fireEvent.click(await screen.findByRole('button', { name: 'Ir para o jogo' }))
+    const confirmBtn = screen.getByRole('button', { name: 'Começar partida' })
+
+    fireEvent.click(confirmBtn)
+    fireEvent.click(confirmBtn)
+    fireEvent.click(confirmBtn)
+
+    await waitFor(() => expect(kickoffLiveMatch).toHaveBeenCalledTimes(1))
+    resolveKickoff({ fixtureId: 'f1' })
+  })
+
+  it('closes the confirm dialog when navigating to the live match screen while it is still open', async () => {
+    ;(getLiveMatch as Mock).mockResolvedValue(null)
+    seedAuth()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        {/* Two history entries so the back button lands on the match screen, simulating
+            the user navigating away without confirming or cancelling the dialog. The current
+            entry can't be /dashboard — the back arrow is hidden there. */}
+        <MemoryRouter
+          initialEntries={['/match?saveGameId=sg-1', '/squad?saveGameId=sg-1&clubId=club-1']}
+          initialIndex={1}
+        >
+          <AuthProvider>
+            <Layout><div>Page content</div></Layout>
+          </AuthProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ir para o jogo' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+    // MUI marks the rest of the tree aria-hidden while the dialog is open, so the (still
+    // present) back button must be queried with `hidden: true` to find it.
+    fireEvent.click(screen.getByRole('button', { name: /voltar/i, hidden: true }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('does not kick off when a background preview refetch flips managedClubPlaysNext while the dialog is open', async () => {
+    ;(getLiveMatch as Mock).mockResolvedValue(null)
+    seedAuth()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <AuthProvider>
+            <Layout><div>Page content</div></Layout>
+          </AuthProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Ir para o jogo' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+    // Simulate a background refetch (e.g. the fixture got postponed) landing while the
+    // confirmation dialog is still open — the confirm button must re-check, not fire blindly.
+    queryClient.setQueryData(['advancePreview', 'sg-1'], { ...PREVIEW_PLAYS_NEXT, managedClubPlaysNext: false })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Começar partida' }))
+
+    expect(kickoffLiveMatch).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
 })

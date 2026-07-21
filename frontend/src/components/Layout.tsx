@@ -133,6 +133,9 @@ export function Layout({ children }: LayoutProps) {
 
   const handleConfirmKickoff = () => {
     setConfirmKickoffOpen(false)
+    // Re-validate: a background preview refetch may have flipped managedClubPlaysNext
+    // (e.g. the fixture was postponed) while the dialog was open.
+    if (!preview?.managedClubPlaysNext) return
     kickoffMutation.mutate()
   }
 
@@ -300,14 +303,17 @@ export function Layout({ children }: LayoutProps) {
             </Button>
           )}
 
-          <ConfirmDialog
-            open={confirmKickoffOpen}
-            title="Ir para o jogo"
-            message="Começar a partida contra o próximo adversário?"
-            confirmLabel="Começar partida"
-            onConfirm={handleConfirmKickoff}
-            onClose={() => setConfirmKickoffOpen(false)}
-          />
+          {hasSaveGame && !isMatchScreen && (
+            <ConfirmDialog
+              open={confirmKickoffOpen}
+              title="Ir para o jogo"
+              message="Começar a partida contra o próximo adversário?"
+              confirmLabel="Começar partida"
+              onConfirm={handleConfirmKickoff}
+              onClose={() => setConfirmKickoffOpen(false)}
+              confirmDisabled={kickoffMutation.isPending}
+            />
+          )}
 
           {/* Mobile: hamburger opens the Drawer with all sections */}
           {hasSaveGame && (

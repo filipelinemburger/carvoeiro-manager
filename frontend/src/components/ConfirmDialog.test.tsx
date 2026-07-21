@@ -56,4 +56,15 @@ describe('ConfirmDialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(onConfirm).not.toHaveBeenCalled()
   })
+
+  it('disables the confirm button when confirmDisabled is true', () => {
+    renderDialog({ confirmDisabled: true })
+    expect(screen.getByRole('button', { name: 'Começar partida' })).toBeDisabled()
+  })
+
+  it('ignores clicks on the confirm button while confirmDisabled is true', () => {
+    const { onConfirm } = renderDialog({ confirmDisabled: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Começar partida' }))
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
 })
