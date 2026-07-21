@@ -132,7 +132,7 @@ public class SeasonAdvanceService {
             saveGameRepository.save(save);
             return new AdvanceResponse("FINISHED", null, null, null,
                     List.of(), List.of(), List.of(), List.of(), null, 0, true, List.of(), List.of(), null,
-                    List.of());
+                    List.of(), List.of());
         }
 
         LocalDate eventDate = event.getEventDate();
@@ -216,7 +216,8 @@ public class SeasonAdvanceService {
         return new AdvanceResponse("MATCH", eventDate.toString(), competitionName, round,
                 List.copyOf(outcome.results()), List.copyOf(outcome.bookings()),
                 List.copyOf(outcome.newSuspensions()), List.copyOf(outcome.newInjuries()),
-                finance, 0, seasonFinished, List.copyOf(playerRatings), List.of(), null, List.of());
+                finance, 0, seasonFinished, List.copyOf(playerRatings), List.of(), null, List.of(),
+                List.of());
     }
 
     /**
@@ -274,7 +275,7 @@ public class SeasonAdvanceService {
                 preContractService.processMarketDay(save, event.getEventDate());
         return new AdvanceResponse("TRANSFER", event.getEventDate().toString(), null, null,
                 List.of(), List.of(), List.of(), List.of(), null, bidsReceived, false,
-                List.of(), transfers, null, preContractEvents);
+                List.of(), transfers, null, preContractEvents, List.of());
     }
 
     private int activeIncomingBids(UUID saveGameId) {
@@ -296,7 +297,7 @@ public class SeasonAdvanceService {
                         .toList());
         AdvanceResponse response = new AdvanceResponse("TRAINING_REPORT", eventDate.toString(),
                 null, null, List.of(), List.of(), List.of(), List.of(), null, 0, false,
-                List.of(), List.of(), dto, List.of());
+                List.of(), List.of(), dto, List.of(), List.of());
         persistNewsItem(saveGameId, eventDate, response);
     }
 

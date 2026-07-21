@@ -43,6 +43,18 @@ class NewsFeedIT {
         return new Career(user.getId(), saveGameService.createCareer(user.getId()));
     }
 
+    /**
+     * News items for {@code saveGameId}, newest-first, excluding {@code WATCHLIST} items.
+     * TRANSFER advances unconditionally write standalone WATCHLIST OFFER_RECEIVED alerts
+     * (WatchlistNotifier) alongside the advance's own item; these tests are about the
+     * one-item-per-advance invariant, not the watchlist notifier, so they filter those out.
+     */
+    private List<NewsItem> nonWatchlistItems(UUID saveGameId) {
+        return newsItemRepository.findBySaveGameIdOrderBySeqDesc(saveGameId).stream()
+                .filter(i -> !"WATCHLIST".equals(i.getType()))
+                .toList();
+    }
+
     @Test
     void advancingWritesANewsItemAndFeedIsNewestFirst() {
         // Given a fresh career
@@ -51,11 +63,11 @@ class NewsFeedIT {
         // When advancing once
         AdvanceResponse first = seasonAdvanceService.advance(c.id(), c.userId());
 
-        // Then exactly one news item is persisted
-        List<NewsItem> items = newsItemRepository.findBySaveGameIdOrderBySeqDesc(c.id());
-        assertThat(items).hasSize(1);
-        NewsItem item = items.get(0);
-        assertThat(item.getSeq()).isEqualTo(1);
+        // Then exactly one advance-owned news item is persisted (a TRANSFER advance may also
+        // write extra WATCHLIST alerts; excluded via nonWatchlistItems — see its javadoc).
+        List<NewsItem> afterFirst = nonWatchlistItems(c.id());
+        assertThat(afterFirst).hasSize(1);
+        NewsItem item = afterFirst.get(0);
         assertThat(item.getType()).isEqualTo(first.type());
         assertThat(item.getPayload()).contains("\"type\"");
         if (first.date() != null) {
@@ -65,13 +77,13 @@ class NewsFeedIT {
         // When advancing a second time
         AdvanceResponse second = seasonAdvanceService.advance(c.id(), c.userId());
 
-        // Then a second news item is appended with seq=2
-        List<NewsItem> twoItems = newsItemRepository.findBySaveGameIdOrderBySeqDesc(c.id());
-        assertThat(twoItems).hasSize(2);
-        // Most recent first: seq desc means seq=2 is at index 0
-        assertThat(twoItems.get(0).getSeq()).isEqualTo(2);
-        assertThat(twoItems.get(1).getSeq()).isEqualTo(1);
-        assertThat(twoItems.get(0).getType()).isEqualTo(second.type());
+        // Then a second advance-owned item is appended, newer than the first.
+        List<NewsItem> afterSecond = nonWatchlistItems(c.id());
+        assertThat(afterSecond).hasSize(2);
+        // Most recent first: newest advance item is at index 0.
+        assertThat(afterSecond.get(0).getType()).isEqualTo(second.type());
+        assertThat(afterSecond.get(1).getType()).isEqualTo(first.type());
+        assertThat(afterSecond.get(0).getSeq()).isGreaterThan(afterSecond.get(1).getSeq());
     }
 
     @Test
@@ -81,14 +93,21 @@ class NewsFeedIT {
         AdvanceResponse r1 = seasonAdvanceService.advance(c.id(), c.userId());
         AdvanceResponse r2 = seasonAdvanceService.advance(c.id(), c.userId());
 
-        // When querying the news items directly from the repository
+        // When querying the news items directly from the repository (may include unconditional
+        // WATCHLIST OFFER_RECEIVED alerts written during a TRANSFER advance, alongside r1/r2's
+        // own items)
         List<NewsItem> items = newsItemRepository.findBySaveGameIdOrderBySeqDesc(c.id());
-        assertThat(items).hasSize(2);
 
-        // Then each stored payload round-trips back to a fully-formed AdvanceResponse
-        // (this is exactly what AdvanceController.getNews does for the feed).
-        AdvanceResponse decoded0 = deserialize(items.get(0).getPayload());
-        AdvanceResponse decoded1 = deserialize(items.get(1).getPayload());
+        // Then every stored payload round-trips back to a fully-formed AdvanceResponse — this is
+        // exactly what AdvanceController.getNews does for the feed, and it must not throw even
+        // for WATCHLIST payloads (AdvanceResponse.playerAlerts carries their content).
+        items.forEach(i -> deserialize(i.getPayload()));
+
+        // And the two advances' own items round-trip with matching type, newest-first.
+        List<NewsItem> advanceItems = nonWatchlistItems(c.id());
+        assertThat(advanceItems).hasSize(2);
+        AdvanceResponse decoded0 = deserialize(advanceItems.get(0).getPayload());
+        AdvanceResponse decoded1 = deserialize(advanceItems.get(1).getPayload());
 
         // Most recent advance (r2) is at index 0 (seq desc), and the decoded payloads
         // match the advances that produced them.
@@ -118,20 +137,28 @@ class NewsFeedIT {
             seasonAdvanceService.advance(c.id(), c.userId());
         }
 
-        // Then 5 news items are stored
-        List<NewsItem> items = newsItemRepository.findBySaveGameIdOrderBySeqDesc(c.id());
+        // Then 5 advance-owned news items are stored. TRANSFER advances may also write
+        // unconditional WATCHLIST OFFER_RECEIVED alerts interleaved at lower seqs; exclude
+        // those (see nonWatchlistItems javadoc) since this test is about one item per advance.
+        List<NewsItem> items = nonWatchlistItems(c.id());
         assertThat(items).hasSize(5);
 
-        // Seq values are 1..5, ordered desc in the result
+        // The 5 advance items are strictly newest-first (each seq greater than the next).
         List<Integer> seqs = items.stream().map(NewsItem::getSeq).toList();
-        assertThat(seqs).containsExactly(5, 4, 3, 2, 1);
+        for (int i = 0; i < seqs.size() - 1; i++) {
+            assertThat(seqs.get(i)).isGreaterThan(seqs.get(i + 1));
+        }
     }
 
     /** Persists {@code count} minimal MATCH news items (seq 1..count) without driving a real
-     *  calendar advance — isolates the pagination math from how many events a season has. */
+     *  calendar advance — isolates the pagination math from how many events a season has.
+     *  Clears any items already on {@code saveGameId} first: career creation itself can seed
+     *  incidental unconditional WATCHLIST OFFER_RECEIVED alerts (initial AI bids on the new
+     *  squad), which would otherwise inflate the totals this test asserts on. */
     private void persistNewsItems(UUID saveGameId, int count) {
+        newsItemRepository.deleteBySaveGameId(saveGameId);
         AdvanceResponse minimal = new AdvanceResponse("MATCH", null, null, null, List.of(), List.of(),
-                List.of(), List.of(), null, 0, false, null, null, null, null);
+                List.of(), List.of(), null, 0, false, null, null, null, null, null);
         for (int seq = 1; seq <= count; seq++) {
             String payload;
             try {

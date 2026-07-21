@@ -8,6 +8,9 @@ import br.com.carvoeiromanager.match.InjuryResponse;
 import br.com.carvoeiromanager.match.PlayerRating;
 import br.com.carvoeiromanager.match.SuspensionResponse;
 import br.com.carvoeiromanager.transfer.CompletedTransferResponse;
+import br.com.carvoeiromanager.watchlist.PlayerAlertResponse;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 
 import java.util.List;
 
@@ -37,6 +40,12 @@ import java.util.List;
  * MATCH/TRANSFER/FINISHED items — callers must null-guard it.
  * {@code preContractEvents} — pre-contract happenings on a TRANSFER day; null in payloads
  * persisted before the feature existed — callers must null-guard.
+ * {@code playerAlerts} — watchlist alerts (sold/listed/free-agent/offer-received); null on
+ * payloads persisted before the feature existed; null-guard it.
+ * {@code bidsReceived} and {@code seasonFinished} default to {@code 0}/{@code false} (rather
+ * than failing deserialization) when absent from a payload, since the standalone WATCHLIST
+ * news item (see {@code WatchlistNotifier}) is a sparse {type, date, playerAlerts} map that
+ * carries neither field.
  */
 public record AdvanceResponse(
         String type,
@@ -48,10 +57,11 @@ public record AdvanceResponse(
         List<SuspensionResponse> newSuspensions,
         List<InjuryResponse> newInjuries,
         FinanceRoundResponse finance,
-        int bidsReceived,
-        boolean seasonFinished,
+        @JsonSetter(nulls = Nulls.AS_EMPTY) int bidsReceived,
+        @JsonSetter(nulls = Nulls.AS_EMPTY) boolean seasonFinished,
         List<PlayerRating> playerRatings,
         List<CompletedTransferResponse> transfers,
         TrainingReportResponse trainingReport,
-        List<PreContractEventResponse> preContractEvents) {
+        List<PreContractEventResponse> preContractEvents,
+        List<PlayerAlertResponse> playerAlerts) {
 }
