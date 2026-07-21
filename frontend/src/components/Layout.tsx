@@ -96,6 +96,8 @@ export function Layout({ children }: LayoutProps) {
       // Advancing processes TRANSFER days — renewals/locks/pokes change both pre-contract lists.
       void queryClient.invalidateQueries({ queryKey: ['preContractEligible', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['preContractAgreements', saveGameId] })
+      // Advancing can sell/list/free watched players, changing their status.
+      void queryClient.invalidateQueries({ queryKey: ['watchlist', saveGameId] })
       // The advance outcome is persisted as a news item; show it on the News tab.
       void navigate(`/news?saveGameId=${saveGameId}`)
     },

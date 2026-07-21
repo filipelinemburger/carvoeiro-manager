@@ -57,6 +57,7 @@ describe('SeasonSummaryPage', () => {
       youthDepartures: [],
       preContractArrivals: [],
       preContractDepartures: [],
+      watchlistEvents: [],
     })
 
     renderPage()
@@ -80,6 +81,7 @@ describe('SeasonSummaryPage', () => {
       youthDepartures: [],
       preContractArrivals: [],
       preContractDepartures: [],
+      watchlistEvents: [],
     })
 
     renderPage()
@@ -90,10 +92,10 @@ describe('SeasonSummaryPage', () => {
     expect(screen.getByText(/Zé Tigre/)).toBeInTheDocument()
   })
 
-  it('invalidates squad, youth, free agents, season history, and clubs after rolling over', async () => {
+  it('invalidates squad, youth, free agents, season history, clubs, and watchlist after rolling over', async () => {
     vi.mocked(rolloverSeason).mockResolvedValue({
       seasonYear: 2027, currentRound: 0, retirements: [], expiredContracts: [], youthIntake: [], youthDepartures: [],
-      preContractArrivals: [], preContractDepartures: [],
+      preContractArrivals: [], preContractDepartures: [], watchlistEvents: [],
     })
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
@@ -114,5 +116,6 @@ describe('SeasonSummaryPage', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['freeAgents', 'sg-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['seasonHistory', 'sg-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['clubs', 'sg-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['watchlist', 'sg-1'] })
   })
 })

@@ -276,7 +276,7 @@ export type TrainingReportResponse = {
 }
 
 export type AdvanceResponse = {
-  type: 'MATCH' | 'TRANSFER' | 'FINISHED' | 'TRAINING_REPORT' | 'PRECONTRACT'
+  type: 'MATCH' | 'TRANSFER' | 'FINISHED' | 'TRAINING_REPORT' | 'PRECONTRACT' | 'WATCHLIST'
   date: string | null
   competitionName: string | null
   round: number | null
@@ -299,6 +299,10 @@ export type AdvanceResponse = {
    * items, null everywhere else and on payloads persisted before the feature existed —
    * always null-guard it. */
   preContractEvents?: PreContractEvent[] | null
+  /** Watchlist alerts (sold/listed/free-agent/offer-received); only on WATCHLIST items,
+   * null everywhere else and on payloads persisted before the feature existed —
+   * always null-guard it. */
+  playerAlerts?: PlayerAlert[] | null
 }
 
 export type TopScorerResponse = {
@@ -344,6 +348,7 @@ export type RolloverResponse = {
   youthDepartures: SquadChange[]
   preContractArrivals: SquadChange[]
   preContractDepartures: SquadChange[]
+  watchlistEvents: PlayerAlert[]
 }
 
 export type SeasonSummary = {
@@ -508,6 +513,25 @@ export type PreContractEvent = {
   clubName: string
   wage: number | null
   contractYears: number | null
+}
+
+export type WatchlistPlayer = {
+  playerId: string
+  name: string
+  position: string
+  age: number
+  overall: number
+  clubName: string
+  freeAgent: boolean
+  transferListed: boolean
+  preContractEligible: boolean
+}
+
+export type PlayerAlert = {
+  kind: 'SOLD' | 'LISTED' | 'FREE_AGENT' | 'OFFER_RECEIVED'
+  playerName: string
+  clubName: string
+  detail: string | null
 }
 
 export type StaffRole = 'ASSISTENTE' | 'PREPARADOR_FISICO' | 'OLHEIRO' | 'FISIOTERAPEUTA'

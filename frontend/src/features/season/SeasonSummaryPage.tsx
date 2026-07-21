@@ -61,6 +61,8 @@ export function SeasonSummaryPage() {
       // Rollover executes agreed pre-contract deals (arrivals/departures) — both lists go stale.
       void queryClient.invalidateQueries({ queryKey: ['preContractEligible', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['preContractAgreements', saveGameId] })
+      // Rollover can also sell/list/free watched players during the off-season.
+      void queryClient.invalidateQueries({ queryKey: ['watchlist', saveGameId] })
     },
   })
 
