@@ -99,7 +99,7 @@ class NewsFeedIT {
         List<NewsItem> items = newsItemRepository.findBySaveGameIdOrderBySeqDesc(c.id());
 
         // Then every stored payload round-trips back to a fully-formed AdvanceResponse — this is
-        // exactly what AdvanceController.getNews does for the feed, and it must not throw even
+        // exactly what NewsController.getNews does for the feed, and it must not throw even
         // for WATCHLIST payloads (AdvanceResponse.playerAlerts carries their content).
         items.forEach(i -> deserialize(i.getPayload()));
 

@@ -29,6 +29,7 @@ class ErrorCodeTest {
         assertThat(ErrorCode.MANAGED_CLUB_NOT_PLAYING.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.MATCH_NOT_FINISHED.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.MATCH_OVER.status()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(ErrorCode.NEWS_ITEM_NOT_FOUND.status()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(ErrorCode.NO_GK_FOUND.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.NO_LIVE_MATCH.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.NO_MATCH_TO_PLAY.status()).isEqualTo(HttpStatus.CONFLICT);
@@ -56,7 +57,7 @@ class ErrorCodeTest {
     }
 
     @Test
-    void hasExactlyFortyFourConstants() {
-        assertThat(ErrorCode.values()).hasSize(44);
+    void hasExactlyFortyFiveConstants() {
+        assertThat(ErrorCode.values()).hasSize(45);
     }
 }

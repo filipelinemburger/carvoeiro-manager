@@ -91,4 +91,37 @@ describe('NewsPage (master-detail)', () => {
     fireEvent.click(button)
     await waitFor(() => expect(markAllNewsRead).toHaveBeenCalledWith('sg-1', 'test-token'))
   })
+
+  it('"Carregar mais" fetches the next page and hides once exhausted', async () => {
+    const page1Items: NewsFeedItem[] = [
+      { id: 'p1-1', read: false, payload: match(30) },
+      { id: 'p1-2', read: false, payload: match(29) },
+    ]
+    const page2Items: NewsFeedItem[] = [
+      { id: 'p2-1', read: false, payload: transfer(7) },
+    ]
+    vi.mocked(getNews).mockImplementation((_saveGameId, page) =>
+      Promise.resolve(
+        page === 1
+          ? { content: page1Items, page: 1, size: 10, totalElements: 3, totalPages: 2 }
+          : { content: page2Items, page: 2, size: 10, totalElements: 3, totalPages: 2 },
+      ),
+    )
+
+    renderPage()
+
+    // Page 1 headlines load first.
+    await waitFor(() => expect(screen.getByText('Rodada 31 — resultados')).toBeInTheDocument())
+    expect(screen.getByText('Rodada 30 — resultados')).toBeInTheDocument()
+
+    const loadMoreButton = await screen.findByRole('button', { name: /carregar mais/i })
+    fireEvent.click(loadMoreButton)
+
+    // Page 2's headline appears, fetched with the right page number.
+    await waitFor(() => expect(screen.getByText('Janela de transferências — 7 proposta(s)')).toBeInTheDocument())
+    expect(getNews).toHaveBeenCalledWith('sg-1', 2, 10, 'test-token')
+
+    // Exhausted (page 2 of 2): the button disappears.
+    await waitFor(() => expect(screen.queryByRole('button', { name: /carregar mais/i })).not.toBeInTheDocument())
+  })
 })

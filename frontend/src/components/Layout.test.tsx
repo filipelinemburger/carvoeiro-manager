@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -165,8 +165,10 @@ describe('Layout shell', () => {
   it('shows the unread news badge on the News nav', async () => {
     seedAuth('U1', 'sg-1')
     renderLayout()
-    // The News link renders with an unread badge showing the server count.
-    expect(await screen.findByText('3')).toBeInTheDocument()
+    // The News link renders with an unread badge showing the server count. Scoped to the
+    // News link itself so an unrelated future "3" elsewhere on the page can't false-match.
+    const newsLink = await screen.findByRole('link', { name: /news/i })
+    expect(within(newsLink).getByText('3')).toBeInTheDocument()
   })
 
   it('shows Avançar button when save game exists', async () => {
