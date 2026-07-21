@@ -8,6 +8,7 @@ import { AuthProvider } from '../auth/AuthContext'
 import { getSaveGame, advanceRound, getAdvancePreview, getLineup } from '../api/career'
 import { deleteAccount } from '../api/account'
 import { getLiveMatch } from '../api/liveMatch'
+import { getNewsUnreadCount } from '../api/news'
 import type { Mock } from 'vitest'
 import type { AdvancePreviewResponse, AdvanceResponse, SaveGameResponse } from '../api/types'
 
@@ -30,6 +31,8 @@ vi.mock('../api/liveMatch', () => ({
   substituteLiveMatch: vi.fn(),
   finishLiveMatch: vi.fn(),
 }))
+
+vi.mock('../api/news', () => ({ getNewsUnreadCount: vi.fn() }))
 
 const PREVIEW_OK: AdvancePreviewResponse = {
   nextEventType: 'MATCH',
@@ -118,6 +121,7 @@ describe('Layout shell', () => {
     ;(getLineup as Mock).mockResolvedValue({ lineupId: 'l-1', clubId: 'club-1', formation: '4-4-2', starters: [] })
     ;(deleteAccount as Mock).mockResolvedValue(undefined)
     ;(getLiveMatch as Mock).mockResolvedValue(null)
+    vi.mocked(getNewsUnreadCount).mockResolvedValue(3)
   })
 
   it('renders children inside a content panel', () => {
@@ -156,6 +160,13 @@ describe('Layout shell', () => {
     expect(screen.getByRole('link', { name: /mercado/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /histórico/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /news/i })).toBeInTheDocument()
+  })
+
+  it('shows the unread news badge on the News nav', async () => {
+    seedAuth('U1', 'sg-1')
+    renderLayout()
+    // The News link renders with an unread badge showing the server count.
+    expect(await screen.findByText('3')).toBeInTheDocument()
   })
 
   it('shows Avançar button when save game exists', async () => {

@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AppBar, Toolbar, Box, Button, IconButton, Typography, Menu, MenuItem,
-  Drawer, List, ListItemButton, ListItemText, Alert, Snackbar, Container, Paper, Divider,
+  Drawer, List, ListItemButton, ListItemText, Alert, Snackbar, Container, Paper, Divider, Badge,
 } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
 import SettingsIcon from '@mui/icons-material/Settings'
@@ -13,6 +13,7 @@ import { useAuth } from '../auth/AuthContext'
 import { advanceRound, getAdvancePreview, getLineup, getSaveGame } from '../api/career'
 import { deleteAccount } from '../api/account'
 import { getLiveMatch, kickoffLiveMatch } from '../api/liveMatch'
+import { getNewsUnreadCount } from '../api/news'
 import { saveGameKeyFor } from '../features/career/saveGameKey'
 import { LoadCareerDialog } from '../features/career/LoadCareerDialog'
 import { NewCareerDialog } from '../features/career/NewCareerDialog'
@@ -63,6 +64,14 @@ export function Layout({ children }: LayoutProps) {
     staleTime: 5_000,
   })
 
+  const { data: newsUnread = 0 } = useQuery<number>({
+    queryKey: ['newsUnreadCount', saveGameId],
+    queryFn: () => getNewsUnreadCount(saveGameId!, token ?? ''),
+    enabled: Boolean(saveGameId && token),
+    retry: false,
+    staleTime: 30_000,
+  })
+
   // Whether the managed club already has a saved line-up. Before the first game the
   // user must pick one (getLineup resolves to null when none has been saved).
   const managedClubIdForLineup = saveGame?.managedClubId
@@ -86,6 +95,7 @@ export function Layout({ children }: LayoutProps) {
       void queryClient.invalidateQueries({ queryKey: ['saveGame', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['advancePreview', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['news', saveGameId] })
+      void queryClient.invalidateQueries({ queryKey: ['newsUnreadCount', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['standings'] })
       void queryClient.invalidateQueries({ queryKey: ['finances'] })
       void queryClient.invalidateQueries({ queryKey: ['offers'] })
@@ -201,7 +211,7 @@ export function Layout({ children }: LayoutProps) {
         { to: `/staff?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Comissão Técnica' },
         { to: `/transfers?saveGameId=${sgId}&clubId=${managedClubId}`, label: 'Mercado' },
         { to: `/history?saveGameId=${sgId}`, label: 'Histórico' },
-        { to: `/news?saveGameId=${sgId}`, label: 'News' },
+        { to: `/news?saveGameId=${sgId}`, label: 'News', badge: newsUnread },
       ]
     : []
 
@@ -220,6 +230,20 @@ export function Layout({ children }: LayoutProps) {
     '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
     '&.active': { bgcolor: BAR_FG, color: BAR_BG, fontWeight: 700 },
   } as const
+
+  const renderNavLabel = (link: { label: string; badge?: number }) =>
+    link.badge ? (
+      <Badge
+        color="error"
+        badgeContent={link.badge}
+        max={99}
+        sx={{ '& .MuiBadge-badge': { position: 'static', transform: 'none', ml: 1 } }}
+      >
+        <Box component="span">{link.label}</Box>
+      </Badge>
+    ) : (
+      link.label
+    )
 
   return (
     <>
@@ -246,7 +270,7 @@ export function Layout({ children }: LayoutProps) {
           <Box component="nav" sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 0.25 }}>
             {navLinks.map(link => (
               <Box key={link.to} component={NavLink} to={link.to} sx={barLinkSx}>
-                {link.label}
+                {renderNavLabel(link)}
               </Box>
             ))}
           </Box>
@@ -315,7 +339,7 @@ export function Layout({ children }: LayoutProps) {
           <List>
             {navLinks.map(link => (
               <ListItemButton key={link.to} component={NavLink} to={link.to}>
-                <ListItemText primary={link.label} />
+                <ListItemText primary={renderNavLabel(link)} />
               </ListItemButton>
             ))}
           </List>
