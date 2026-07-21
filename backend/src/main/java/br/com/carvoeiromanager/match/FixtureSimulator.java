@@ -201,18 +201,27 @@ public class FixtureSimulator {
         Random rng = new Random(seed ^ 0x5DEECE66DL);
         Random assistRng = new Random(seed ^ 0x5A551571L);
         List<AttributedEvent> attributed = new ArrayList<>();
+        Set<UUID> booked = new HashSet<>();
+        Set<UUID> sentOff = new HashSet<>();
         for (SimulatedEvent event : match.events()) {
             List<Player> xi = event.home() ? homeXi : awayXi;
             TacticalProfile profile = event.home() ? homeProfile : awayProfile;
             UUID clubId = event.home() ? homeClubId : awayClubId;
 
+            // Sent-off players take no further part. The fallback to the full XI is practically
+            // unreachable (it would need 11 send-offs on one side) but beats an empty-pool crash.
+            List<Player> available = xi.stream().filter(p -> !sentOff.contains(p.getId())).toList();
+            if (available.isEmpty()) {
+                available = xi;
+            }
+
             Player player = switch (event.type()) {
-                case GOAL -> pickByWeight(xi, FixtureSimulator::goalWeight, rng);
-                case PENALTY_GOAL -> SetPieces.takerOrFallback(xi, profile.penaltyTakerId(), Player::getFinishing);
-                case FREE_KICK_GOAL -> SetPieces.takerOrFallback(xi, profile.freekickTakerId(),
+                case GOAL -> pickByWeight(available, FixtureSimulator::goalWeight, rng);
+                case PENALTY_GOAL -> SetPieces.takerOrFallback(available, profile.penaltyTakerId(), Player::getFinishing);
+                case FREE_KICK_GOAL -> SetPieces.takerOrFallback(available, profile.freekickTakerId(),
                         p -> p.attribute(Attribute.BOLA_PARADA));
-                case CORNER_GOAL -> pickByWeight(xi, SetPieces::headerWeight, rng);
-                case YELLOW_CARD, RED_CARD -> pickWeighted(xi, Player::getTackling, rng);
+                case CORNER_GOAL -> pickByWeight(available, SetPieces::headerWeight, rng);
+                case YELLOW_CARD, RED_CARD -> pickWeighted(available, Player::getTackling, rng);
                 case CHANCE, INJURY, SUBSTITUTION, TACTICS_CHANGE, HALF_TIME, PENALTY_MISSED, SET_PIECE_GOAL, FOUL ->
                         throw new IllegalStateException("Instant simulation does not emit " + event.type());
             };
@@ -221,10 +230,21 @@ public class FixtureSimulator {
                             player.getId(), clubId));
             attributed.add(new AttributedEvent(player.getId(), event.type(), event.home()));
 
-            Player assister = assisterFor(event, player, xi, profile, assistRng);
+            Player assister = assisterFor(event, player, available, profile, assistRng);
             if (assister != null) {
                 matchEventRepository.save(
                         MatchEvent.create(fixture.getId(), event.minute(), "ASSIST", assister.getId(), clubId));
+            }
+
+            // Second yellow to the same player = an immediate red in the same minute (real-football
+            // rule); either kind of red removes the player from all later attribution.
+            if (event.type() == EventType.YELLOW_CARD && !booked.add(player.getId())) {
+                matchEventRepository.save(MatchEvent.create(fixture.getId(), event.minute(),
+                        EventType.RED_CARD.name(), player.getId(), clubId));
+                attributed.add(new AttributedEvent(player.getId(), EventType.RED_CARD, event.home()));
+                sentOff.add(player.getId());
+            } else if (event.type() == EventType.RED_CARD) {
+                sentOff.add(player.getId());
             }
         }
         return attributed;
