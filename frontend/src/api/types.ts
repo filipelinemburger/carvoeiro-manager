@@ -305,6 +305,13 @@ export type AdvanceResponse = {
   playerAlerts?: PlayerAlert[] | null
 }
 
+/** One news-feed entry: the persisted item's id + read flag plus its full payload. */
+export type NewsFeedItem = {
+  id: string
+  read: boolean
+  payload: AdvanceResponse
+}
+
 export type TopScorerResponse = {
   playerName: string
   clubName: string
