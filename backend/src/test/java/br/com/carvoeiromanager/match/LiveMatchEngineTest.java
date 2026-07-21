@@ -348,7 +348,9 @@ class LiveMatchEngineTest {
     void nullAiHomeProducesNoAiReactions() {
         for (long seed : new long[]{1L, 7L, 42L, 99L, 1234L}) {
             LiveTimeline t = engine.simulate(config(seed, List.of(), List.of(), null));
-            assertThat(t.events()).noneMatch(e -> e.detail() != null);
+            // Scoped to TACTICS_CHANGE: a second-yellow RED_CARD also carries a non-null detail
+            // (SECOND_YELLOW_DETAIL), independent of AI reactions.
+            assertThat(t.events()).noneMatch(e -> e.type() == EventType.TACTICS_CHANGE && e.detail() != null);
         }
     }
 
@@ -456,7 +458,10 @@ class LiveMatchEngineTest {
             sawUserChange |= t.events().stream().anyMatch(e ->
                     e.type() == EventType.TACTICS_CHANGE && e.home() && e.minute() == 60
                             && e.detail() == null);
-            assertThat(t.events()).noneMatch(e -> e.home() && e.detail() != null);
+            // Scoped to TACTICS_CHANGE: a second-yellow RED_CARD on the managed (home) side also
+            // carries a non-null detail (SECOND_YELLOW_DETAIL), independent of AI reactions.
+            assertThat(t.events()).noneMatch(e ->
+                    e.home() && e.type() == EventType.TACTICS_CHANGE && e.detail() != null);
         }
         assertThat(sawUserChange).isTrue();
     }
@@ -708,6 +713,73 @@ class LiveMatchEngineTest {
             assertThat(homeSubs.get(0).minute()).isEqualTo(60);
             assertThat(homeSubs.get(0).playerId()).isEqualTo(homeOut);
             assertThat(homeSubs.get(0).playerInId()).isEqualTo(homeIn);
+        }
+    }
+
+    // ---- second yellow = red ----
+
+    @Test
+    void aSecondYellowAlwaysComesWithASameMinuteSecondYellowRedAndEndsThePlayersMatch() {
+        boolean sawSecondYellow = false;
+        for (long seed = 0; seed < 300; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            Map<UUID, List<LiveTimelineEvent>> yellowsByPlayer = new HashMap<>();
+            Map<UUID, List<LiveTimelineEvent>> redsByPlayer = new HashMap<>();
+            for (LiveTimelineEvent e : t.events()) {
+                if (e.type() == EventType.YELLOW_CARD) {
+                    yellowsByPlayer.computeIfAbsent(e.playerId(), k -> new ArrayList<>()).add(e);
+                }
+                if (e.type() == EventType.RED_CARD) {
+                    redsByPlayer.computeIfAbsent(e.playerId(), k -> new ArrayList<>()).add(e);
+                }
+            }
+            for (Map.Entry<UUID, List<LiveTimelineEvent>> en : yellowsByPlayer.entrySet()) {
+                List<LiveTimelineEvent> yellows = en.getValue();
+                assertThat(yellows.size())
+                        .as("seed %d: a player can never collect more than two yellows", seed)
+                        .isLessThanOrEqualTo(2);
+                if (yellows.size() == 2) {
+                    sawSecondYellow = true;
+                    List<LiveTimelineEvent> reds = redsByPlayer.getOrDefault(en.getKey(), List.of());
+                    assertThat(reds).as("seed %d: two yellows must carry exactly one red", seed).hasSize(1);
+                    assertThat(reds.get(0).minute())
+                            .as("seed %d: the red lands in the second yellow's minute", seed)
+                            .isEqualTo(yellows.get(1).minute());
+                    assertThat(reds.get(0).detail())
+                            .isEqualTo(LiveTimelineEvent.SECOND_YELLOW_DETAIL);
+                    assertThat(t.minutesPlayed().get(en.getKey()))
+                            .as("seed %d: the send-off ends the player's minutes", seed)
+                            .isEqualTo(reds.get(0).minute());
+                }
+            }
+            for (Map.Entry<UUID, List<LiveTimelineEvent>> en : redsByPlayer.entrySet()) {
+                assertThat(en.getValue()).as("seed %d: at most one red per player", seed).hasSize(1);
+                int redMinute = en.getValue().get(0).minute();
+                UUID sentOff = en.getKey();
+                assertThat(t.events()).as("seed %d: no involvement after a send-off", seed)
+                        .noneMatch(e -> e.minute() > redMinute
+                                && (sentOff.equals(e.playerId()) || sentOff.equals(e.playerInId())));
+            }
+        }
+        assertThat(sawSecondYellow)
+                .as("300 seeds must produce at least one second-yellow send-off")
+                .isTrue();
+    }
+
+    @Test
+    void aStraightRedCarriesNoSecondYellowDetail() {
+        for (long seed = 0; seed < 300; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            t.events().stream().filter(e -> e.type() == EventType.RED_CARD).forEach(e -> {
+                long yellows = t.events().stream()
+                        .filter(y -> y.type() == EventType.YELLOW_CARD && y.playerId().equals(e.playerId()))
+                        .count();
+                if (yellows < 2) {
+                    assertThat(e.detail()).as("straight red keeps a null detail").isNull();
+                } else {
+                    assertThat(e.detail()).isEqualTo(LiveTimelineEvent.SECOND_YELLOW_DETAIL);
+                }
+            });
         }
     }
 }

@@ -59,6 +59,7 @@ public class LiveMatchEngine {
         final Map<UUID, Integer> entryMinute = new HashMap<>();
         final Map<UUID, Integer> exitMinute = new HashMap<>();
         final Map<UUID, Boolean> hobbled = new HashMap<>();
+        final Set<UUID> booked = new LinkedHashSet<>();    // players shown a yellow this match
         boolean dirty = true;
         TacticalProfile currentProfile;                    // updated by tactics changes mid-match
         boolean redCarded = false;                         // true once this side loses a player
@@ -324,8 +325,13 @@ public class LiveMatchEngine {
             EventType t = rng.nextDouble() < RED_SHARE ? EventType.RED_CARD : EventType.YELLOW_CARD;
             // Fouls skew toward aggressive tacklers; the +1 keeps everyone eligible (unchanged formula).
             UUID booked = pickByWeight(side, p -> p.getTackling() + 1, attrRng);
+            boolean secondYellow = t == EventType.YELLOW_CARD && !side.booked.add(booked);
             events.add(new LiveTimelineEvent(minute, t, side.home, booked, null, null, null));
-            if (t == EventType.RED_CARD) {
+            if (secondYellow) {
+                events.add(new LiveTimelineEvent(minute, EventType.RED_CARD, side.home, booked, null, null,
+                        LiveTimelineEvent.SECOND_YELLOW_DETAIL));
+            }
+            if (t == EventType.RED_CARD || secondYellow) {
                 side.onPitch.remove(booked);
                 side.exitMinute.put(booked, minute);
                 side.redCarded = true;
