@@ -211,4 +211,44 @@ class MatchOutcomeApplierTest {
 
         assertThat(p.getInjuryMatches()).isZero();
     }
+
+    @Test
+    void aSecondYellowSendOffBansOneMatchWithoutCountingTheYellows() {
+        Player p = player(Position.MID);
+        p.addYellowCard(); // tally 1 from earlier matches
+        List<AttributedEvent> events = List.of(
+                new AttributedEvent(p.getId(), EventType.YELLOW_CARD, true),
+                new AttributedEvent(p.getId(), EventType.YELLOW_CARD, true),
+                new AttributedEvent(p.getId(), EventType.RED_CARD, true));
+        MatchOutcomeApplier.Summary acc = new MatchOutcomeApplier.Summary();
+
+        applier.applyFixture(events,
+                new MatchOutcomeApplier.TeamOutcome(List.of(p), 1, 1, true),
+                new MatchOutcomeApplier.TeamOutcome(List.of(), 1, 1, false), acc);
+
+        assertThat(p.getYellowCards()).isEqualTo(1);          // send-off match yellows are expunged
+        assertThat(p.getSuspensionRemaining()).isEqualTo(1);  // the red's ban only
+        assertThat(acc.newSuspensions()).hasSize(1);
+        assertThat(acc.bookings()).extracting(BookingResponse::type)
+                .containsExactly("YELLOW_CARD", "YELLOW_CARD", "RED_CARD");
+    }
+
+    @Test
+    void aStraightRedAfterOneYellowLeavesTheTallyUntouched() {
+        Player p = player(Position.DEF);
+        p.addYellowCard();
+        p.addYellowCard(); // tally 2: a counted third yellow would wrongly stack an accumulation ban
+        List<AttributedEvent> events = List.of(
+                new AttributedEvent(p.getId(), EventType.YELLOW_CARD, true),
+                new AttributedEvent(p.getId(), EventType.RED_CARD, true));
+        MatchOutcomeApplier.Summary acc = new MatchOutcomeApplier.Summary();
+
+        applier.applyFixture(events,
+                new MatchOutcomeApplier.TeamOutcome(List.of(p), 0, 2, true),
+                new MatchOutcomeApplier.TeamOutcome(List.of(), 2, 0, false), acc);
+
+        assertThat(p.getYellowCards()).isEqualTo(2);          // not counted toward 3
+        assertThat(p.getSuspensionRemaining()).isEqualTo(1);  // one ban: the red's, not accumulation
+        assertThat(acc.newSuspensions()).hasSize(1);
+    }
 }

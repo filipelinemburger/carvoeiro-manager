@@ -16,10 +16,10 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Pure player-state mutation for a simulated round: applies cards -> suspensions
- * and form to players who played, and form regression + suspension service to
- * players who did not. No repository access; the caller persists the mutated
- * Player entities. Surfaces bookings/new-suspensions for the managed club.
+ * Pure player-state mutation for a simulated round: applies cards -> suspensions (a red expunges
+ * that match's yellows from the accumulation tally) and form to players who played, and form
+ * regression + suspension service to players who did not. No repository access; the caller
+ * persists the mutated Player entities. Surfaces bookings/new-suspensions for the managed club.
  */
 @Service
 public class MatchOutcomeApplier {
@@ -69,12 +69,18 @@ public class MatchOutcomeApplier {
         boolean won = team.scored() > team.conceded();
         boolean lost = team.scored() < team.conceded();
         for (Player p : team.xi()) {
+            boolean sentOffThisMatch = reds.contains(p.getId());
             int yellowCount = yellows.getOrDefault(p.getId(), 0);
             for (int i = 0; i < yellowCount; i++) {
-                p.addYellowCard();
                 if (team.managed()) {
                     acc.bookings().add(new BookingResponse(p.getId(), p.getName(), "YELLOW_CARD"));
                 }
+                // CBF rule: a red card (straight or second-yellow) expunges this match's yellows
+                // from the accumulation tally — the send-off ban is the only punishment.
+                if (sentOffThisMatch) {
+                    continue;
+                }
+                p.addYellowCard();
                 if (p.getYellowCards() % 3 == 0) {
                     p.addSuspension(1);
                     if (team.managed()) {
