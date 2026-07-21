@@ -1,0 +1,2 @@
+ALTER TABLE news_item ADD COLUMN is_read BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE news_item SET is_read = TRUE;

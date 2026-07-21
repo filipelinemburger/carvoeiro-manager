@@ -41,6 +41,9 @@ public class NewsItem {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "is_read", nullable = false)
+    private boolean read;
+
     protected NewsItem() { }
 
     private NewsItem(UUID id, UUID saveGameId, int seq, LocalDate eventDate,
@@ -67,4 +70,8 @@ public class NewsItem {
     public String getType() { return type; }
     public String getPayload() { return payload; }
     public Instant getCreatedAt() { return createdAt; }
+
+    public boolean isRead() { return read; }
+
+    public void markRead() { this.read = true; }
 }
