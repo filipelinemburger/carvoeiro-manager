@@ -4,6 +4,9 @@ import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.common.PageResponse;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,9 +14,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -23,6 +28,8 @@ class NewsReadIT {
     @Autowired SaveGameService saveGameService;
     @Autowired UserRepository userRepository;
     @Autowired NewsItemRepository newsItemRepository;
+    @Autowired NewsService newsService;
+    @Autowired tools.jackson.databind.ObjectMapper objectMapper;
 
     private record Career(UUID userId, UUID saveGameId) { }
 
@@ -55,5 +62,83 @@ class NewsReadIT {
 
         assertThat(updated).isEqualTo(2);
         assertThat(newsItemRepository.countBySaveGameIdAndReadFalse(c.saveGameId())).isZero();
+    }
+
+    /** Persists a MATCH item carrying a real (deserializable) AdvanceResponse payload. */
+    private UUID persistMatch(UUID saveGameId, int seq, boolean read) {
+        AdvanceResponse minimal = new AdvanceResponse("MATCH", null, null, null, List.of(), List.of(),
+                List.of(), List.of(), null, 0, false, null, null, null, null, null);
+        String payload;
+        try {
+            payload = objectMapper.writeValueAsString(minimal);
+        } catch (Exception e) {
+            throw new AssertionError("Failed to serialize test payload", e);
+        }
+        NewsItem item = NewsItem.create(saveGameId, seq, null, "MATCH", payload);
+        if (read) {
+            item.markRead();
+        }
+        newsItemRepository.save(item);
+        return item.getId();
+    }
+
+    @Test
+    void getFeedReturnsWrappersCarryingIdReadFlagAndPayload() {
+        Career c = createCareer();
+        UUID unreadId = persistMatch(c.saveGameId(), 1, false);
+        UUID readId = persistMatch(c.saveGameId(), 2, true);
+
+        PageResponse<NewsFeedItemResponse> feed = newsService.getFeed(c.saveGameId(), c.userId(), 1, 10);
+
+        assertThat(feed.content()).hasSize(2);
+        // Newest-first: seq 2 (read) at index 0, seq 1 (unread) at index 1.
+        assertThat(feed.content().get(0).id()).isEqualTo(readId);
+        assertThat(feed.content().get(0).read()).isTrue();
+        assertThat(feed.content().get(1).id()).isEqualTo(unreadId);
+        assertThat(feed.content().get(1).read()).isFalse();
+        assertThat(feed.content().get(0).payload().type()).isEqualTo("MATCH");
+    }
+
+    @Test
+    void unreadCountCountsOnlyUnreadItems() {
+        Career c = createCareer();
+        persistMatch(c.saveGameId(), 1, false);
+        persistMatch(c.saveGameId(), 2, false);
+        persistMatch(c.saveGameId(), 3, true);
+
+        assertThat(newsService.unreadCount(c.saveGameId(), c.userId())).isEqualTo(2);
+    }
+
+    @Test
+    void markReadFlipsOneItemAndIsIdempotent() {
+        Career c = createCareer();
+        UUID id = persistMatch(c.saveGameId(), 1, false);
+
+        newsService.markRead(c.saveGameId(), c.userId(), id);
+        newsService.markRead(c.saveGameId(), c.userId(), id); // idempotent
+
+        assertThat(newsItemRepository.countBySaveGameIdAndReadFalse(c.saveGameId())).isZero();
+    }
+
+    @Test
+    void markReadOnAForeignItemThrowsNotFound() {
+        Career owner = createCareer();
+        Career other = createCareer();
+        UUID foreignItem = persistMatch(other.saveGameId(), 1, false);
+
+        assertThatThrownBy(() -> newsService.markRead(owner.saveGameId(), owner.userId(), foreignItem))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.NEWS_ITEM_NOT_FOUND));
+    }
+
+    @Test
+    void markAllReadViaServiceClearsUnread() {
+        Career c = createCareer();
+        persistMatch(c.saveGameId(), 1, false);
+        persistMatch(c.saveGameId(), 2, false);
+
+        newsService.markAllRead(c.saveGameId(), c.userId());
+
+        assertThat(newsService.unreadCount(c.saveGameId(), c.userId())).isZero();
     }
 }
