@@ -30,7 +30,7 @@ class NewsFeedIT {
     @Autowired SaveGameService saveGameService;
     @Autowired UserRepository userRepository;
     @Autowired NewsItemRepository newsItemRepository;
-    @Autowired AdvanceController advanceController;
+    @Autowired NewsController newsController;
     @Autowired tools.jackson.databind.ObjectMapper objectMapper;
 
     private record Career(UUID userId, SaveGameResponse save) {
@@ -175,7 +175,7 @@ class NewsFeedIT {
         Career c = createCareer();
         persistNewsItems(c.id(), 15);
 
-        PageResponse<AdvanceResponse> page = advanceController.getNews(c.id(), c.userId(), 1, 10).getBody();
+        PageResponse<NewsFeedItemResponse> page = newsController.getNews(c.id(), c.userId(), 1, 10).getBody();
 
         assertThat(page.content()).hasSize(10);
         assertThat(page.page()).isEqualTo(1);
@@ -189,7 +189,7 @@ class NewsFeedIT {
         Career c = createCareer();
         persistNewsItems(c.id(), 15);
 
-        PageResponse<AdvanceResponse> page = advanceController.getNews(c.id(), c.userId(), 2, 10).getBody();
+        PageResponse<NewsFeedItemResponse> page = newsController.getNews(c.id(), c.userId(), 2, 10).getBody();
 
         assertThat(page.content()).hasSize(5);
         assertThat(page.page()).isEqualTo(2);
@@ -202,7 +202,7 @@ class NewsFeedIT {
         Career c = createCareer();
         persistNewsItems(c.id(), 3);
 
-        PageResponse<AdvanceResponse> page = advanceController.getNews(c.id(), c.userId(), 5, 10).getBody();
+        PageResponse<NewsFeedItemResponse> page = newsController.getNews(c.id(), c.userId(), 5, 10).getBody();
 
         assertThat(page.content()).isEmpty();
         assertThat(page.totalElements()).isEqualTo(3);

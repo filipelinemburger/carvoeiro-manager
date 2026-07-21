@@ -29,6 +29,7 @@ class NewsReadIT {
     @Autowired UserRepository userRepository;
     @Autowired NewsItemRepository newsItemRepository;
     @Autowired NewsService newsService;
+    @Autowired NewsController newsController;
     @Autowired tools.jackson.databind.ObjectMapper objectMapper;
 
     private record Career(UUID userId, UUID saveGameId) { }
@@ -140,5 +141,17 @@ class NewsReadIT {
         newsService.markAllRead(c.saveGameId(), c.userId());
 
         assertThat(newsService.unreadCount(c.saveGameId(), c.userId())).isZero();
+    }
+
+    @Test
+    void newsControllerExposesUnreadCountAndMarkRead() {
+        Career c = createCareer();
+        UUID id = persistMatch(c.saveGameId(), 1, false);
+
+        assertThat(newsController.unreadCount(c.saveGameId(), c.userId()).getBody().count()).isEqualTo(1);
+
+        newsController.markRead(c.saveGameId(), id, c.userId());
+
+        assertThat(newsController.unreadCount(c.saveGameId(), c.userId()).getBody().count()).isZero();
     }
 }
