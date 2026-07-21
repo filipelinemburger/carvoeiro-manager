@@ -203,6 +203,18 @@ export function SeasonSummaryPage() {
               </List>
             </Box>
           )}
+          {((result.watchlistEvents ?? []).length > 0) && (
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>Observados que ficaram livres</Typography>
+              <List dense disablePadding>
+                {(result.watchlistEvents ?? []).map((a, i) => (
+                  <ListItem key={i} disableGutters sx={{ py: 0.25 }}>
+                    <Typography variant="body2">{a.playerName} (deixou {a.clubName})</Typography>
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
           {result.youthIntake.length > 0 && (
             <SquadChangeList title="Reforços da Base" changes={result.youthIntake} />
           )}

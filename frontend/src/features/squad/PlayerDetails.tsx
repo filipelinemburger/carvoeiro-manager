@@ -79,15 +79,19 @@ function AttrRow({ attr }: { attr: AttributeView }) {
  * (<= 1 year).
  *
  * `lineupControl` (the role selector), `contractAction` (Renovar), and `listingAction`
- * (list/unlist toggle) render when provided.
+ * (list/unlist toggle) render when provided. `watchAction` (the Observados star) renders in
+ * the title next to the name, but only when `isOwnPlayer` is not true — the caller only
+ * passes it for rival players.
  */
-export function PlayerDetails({ player, onClose, saveGameId, lineupControl, contractAction, listingAction }: {
+export function PlayerDetails({ player, onClose, saveGameId, lineupControl, contractAction, listingAction, isOwnPlayer, watchAction }: {
   player: PlayerResponse | null
   onClose: () => void
   saveGameId: string
   lineupControl?: ReactNode
   contractAction?: ReactNode
   listingAction?: ReactNode
+  isOwnPlayer?: boolean
+  watchAction?: ReactNode
 }) {
   const [tab, setTab] = useState(0)
   const { token } = useAuth()
@@ -110,6 +114,9 @@ export function PlayerDetails({ player, onClose, saveGameId, lineupControl, cont
         <>
           <DialogTitle sx={{ pr: 6, display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>{player.name}</Typography>
+            {/* Belt-and-suspenders: never show the watch star for an own-squad player even if
+                the caller's watchAction/isOwnPlayer pairing ever drifts out of sync. */}
+            {!isOwnPlayer && watchAction}
             <IconButton aria-label="Fechar" onClick={onClose} sx={{ position: 'absolute', right: 8, top: 8 }}>
               <CloseIcon />
             </IconButton>

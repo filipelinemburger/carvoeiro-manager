@@ -238,6 +238,11 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
               Pré-contrato
             </Typography>
           )}
+          {result.type === 'WATCHLIST' && (
+            <Typography sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
+              Alertas
+            </Typography>
+          )}
           {result.type === 'FINISHED' && (
             <Typography sx={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--cec-green)' }}>
               Temporada Encerrada
@@ -314,6 +319,24 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
                     )}
                     {e.kind === 'LOCKED_IN' && (
                       <>🔒 {e.playerName} vai mesmo para {e.clubName} no fim do contrato</>
+                    )}
+                  </ListItem>
+                ))}
+              </List>
+            </TimelineNode>
+          )}
+
+          {(result.playerAlerts?.length ?? 0) > 0 && (
+            <TimelineNode dot="🔭">
+              <Typography component="strong" sx={{ fontWeight: 700 }}>Alertas</Typography>
+              <List dense disablePadding sx={{ mt: 0.5 }}>
+                {result.playerAlerts!.map((a, i) => (
+                  <ListItem key={`${a.playerName}-${i}`} disablePadding>
+                    {a.kind === 'SOLD' && (<>🔁 {a.playerName} foi vendido ao {a.clubName}</>)}
+                    {a.kind === 'LISTED' && (<>📋 {a.playerName} foi listado para transferência ({a.clubName})</>)}
+                    {a.kind === 'FREE_AGENT' && (<>🆓 {a.playerName} ficou livre no mercado</>)}
+                    {a.kind === 'OFFER_RECEIVED' && (
+                      <>📥 {a.playerName} recebeu proposta do {a.clubName}{a.detail ? ` (R$ ${a.detail})` : ''}</>
                     )}
                   </ListItem>
                 ))}

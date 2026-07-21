@@ -2,18 +2,20 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Alert, Box, Button, Card, CardContent, Chip, Divider, FormControl, InputAdornment, Link,
+  Alert, Box, Button, Card, CardContent, Chip, Divider, FormControl, IconButton, InputAdornment, Link,
   NativeSelect, Pagination, Stack, Tab, Tabs, TextField, Typography,
 } from '@mui/material'
 import {
   getSaveGame, getMarket, getClubs, getOffers, getSquad, getPlayer,
   makeOffer, acceptCounter, withdrawOffer, respondToOffer,
 } from '../../api/career'
+import { getWatchlist, addToWatchlist, removeFromWatchlist } from '../../api/watchlist'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { FreeAgentsPanel } from '../contract/FreeAgentsPage'
 import PreContractsPanel from './PreContractsPanel'
+import WatchlistPanel from './WatchlistPanel'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { MoneyField } from '../../components/MoneyField'
 import { MakeOfferDialog, type OfferTarget } from './MakeOfferDialog'
@@ -29,6 +31,7 @@ import GroupsIcon from '@mui/icons-material/Groups'
 import SportsSoccerIcon from '@mui/icons-material/SportsSoccer'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import StarIcon from '@mui/icons-material/Star'
+import StarBorderIcon from '@mui/icons-material/StarBorder'
 import SortIcon from '@mui/icons-material/Sort'
 
 const MARKET_PAGE_SIZE = 20
@@ -250,6 +253,9 @@ export function TransferMarketPage() {
   // fetches it lazily via detailsPlayerId instead.
   const [detailsPlayer, setDetailsPlayer] = useState<PlayerResponse | null>(null)
   const [detailsPlayerId, setDetailsPlayerId] = useState<string | null>(null)
+  // Whether the dialog was opened from a rival list (market/free-agents/pre-contracts — the
+  // only players eligible for the watch star) vs. an incoming proposal for our own squad.
+  const [detailsIsRival, setDetailsIsRival] = useState(false)
   const detailsPlayerQuery = useQuery({
     queryKey: ['player', saveGameId, detailsPlayerId],
     queryFn: () => getPlayer(saveGameId, detailsPlayerId!, token ?? ''),
@@ -257,6 +263,16 @@ export function TransferMarketPage() {
   })
   const resolvedDetailsPlayer = detailsPlayer ?? detailsPlayerQuery.data ?? null
   const closeDetails = () => { setDetailsPlayer(null); setDetailsPlayerId(null) }
+  const openOwnPlayerDetails = (p: PlayerResponse) => {
+    setDetailsPlayer(p)
+    setDetailsPlayerId(null)
+    setDetailsIsRival(false)
+  }
+  const openRivalPlayerDetails = (playerId: string) => {
+    setDetailsPlayerId(playerId)
+    setDetailsPlayer(null)
+    setDetailsIsRival(true)
+  }
   // The market player a transfer offer is being drafted for (opens MakeOfferDialog).
   const [offerTarget, setOfferTarget] = useState<OfferTarget | null>(null)
   // The incoming offer whose inline counter-proposal form is open (one at a time).
@@ -289,6 +305,24 @@ export function TransferMarketPage() {
     queryFn: () => getOffers(saveGameId, token ?? ''),
     enabled,
     staleTime: Infinity,
+  })
+  // Backs the star toggle in PlayerDetails — kept at page level (not inside WatchlistPanel)
+  // so the same cache entry drives both the star icon and the Observados tab's list.
+  const watchlistQuery = useQuery({
+    queryKey: ['watchlist', saveGameId],
+    queryFn: () => getWatchlist(saveGameId, token ?? ''),
+    enabled,
+    staleTime: Infinity,
+  })
+  const watchedPlayerIds = new Set((watchlistQuery.data ?? []).map(p => p.playerId))
+  const invalidateWatchlist = () => void queryClient.invalidateQueries({ queryKey: ['watchlist', saveGameId] })
+  const addWatchMut = useMutation({
+    mutationFn: (playerId: string) => addToWatchlist(saveGameId, playerId, token ?? ''),
+    onSuccess: invalidateWatchlist,
+  })
+  const removeWatchMut = useMutation({
+    mutationFn: (playerId: string) => removeFromWatchlist(saveGameId, playerId, token ?? ''),
+    onSuccess: invalidateWatchlist,
   })
 
   // My squad — used to open full player details for a player another club is bidding on.
@@ -424,7 +458,7 @@ export function TransferMarketPage() {
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Mercado de Transferências</Typography>
 
-      {!windowOpen && tab !== 2 && <Alert severity="error" sx={{ mb: 2 }}>Janela de transferências fechada.</Alert>}
+      {!windowOpen && tab !== 2 && tab !== 4 && <Alert severity="error" sx={{ mb: 2 }}>Janela de transferências fechada.</Alert>}
       {last && (
         <Alert severity={last.status === 'REJECTED' ? 'error' : 'success'} sx={{ mb: 2 }}>
           {last.playerName}: {last.status === 'ACCEPTED' ? 'Proposta aceita!'
@@ -453,6 +487,7 @@ export function TransferMarketPage() {
             <option value={1}>Jogadores disponíveis</option>
             <option value={2}>Agentes livres</option>
             <option value={3}>Pré-contratos</option>
+            <option value={4}>Observados</option>
           </NativeSelect>
         </FormControl>
       ) : (
@@ -474,6 +509,7 @@ export function TransferMarketPage() {
           <Tab label="Jogadores disponíveis" />
           <Tab label="Agentes livres" />
           <Tab label="Pré-contratos" />
+          <Tab label="Observados" />
         </Tabs>
       )}
 
@@ -501,7 +537,7 @@ export function TransferMarketPage() {
                 countering={counteringId === o.id}
                 counter={counters[o.id] ?? ''}
                 onCounterChange={v => setCounters(c => ({ ...c, [o.id]: v }))}
-                onOpenDetails={() => { const p = squadById.get(o.playerId); if (p) setDetailsPlayer(p) }}
+                onOpenDetails={() => { const p = squadById.get(o.playerId); if (p) openOwnPlayerDetails(p) }}
                 onAccept={() => respondMut.mutate({ offerId: o.id, action: 'ACCEPT', counterAmount: null })}
                 onReject={() => respondMut.mutate({ offerId: o.id, action: 'REJECT', counterAmount: null })}
                 onOpenCounter={() => setCounteringId(o.id)}
@@ -686,7 +722,7 @@ export function TransferMarketPage() {
                             type="button"
                             underline="hover"
                             color="inherit"
-                            onClick={() => setDetailsPlayerId(p.playerId)}
+                            onClick={() => openRivalPlayerDetails(p.playerId)}
                             sx={{ font: 'inherit', fontWeight: 700, textAlign: 'left', cursor: 'pointer' }}
                           >
                             {p.name}
@@ -736,7 +772,7 @@ export function TransferMarketPage() {
         </>
       )}
 
-      {tab === 2 && <FreeAgentsPanel onOpenDetails={setDetailsPlayerId} />}
+      {tab === 2 && <FreeAgentsPanel onOpenDetails={openRivalPlayerDetails} />}
 
       {tab === 3 && (
         <PreContractsPanel
@@ -747,7 +783,30 @@ export function TransferMarketPage() {
         />
       )}
 
-      <PlayerDetails player={resolvedDetailsPlayer} onClose={closeDetails} saveGameId={saveGameId} />
+      {tab === 4 && <WatchlistPanel saveGameId={saveGameId} token={token ?? ''} />}
+
+      <PlayerDetails
+        player={resolvedDetailsPlayer}
+        onClose={closeDetails}
+        saveGameId={saveGameId}
+        isOwnPlayer={!detailsIsRival}
+        watchAction={detailsIsRival && resolvedDetailsPlayer ? (
+          <IconButton
+            size="small"
+            aria-label={`${watchedPlayerIds.has(resolvedDetailsPlayer.id) ? 'Remover da' : 'Adicionar à'} lista de observação de ${resolvedDetailsPlayer.name}`}
+            disabled={addWatchMut.isPending || removeWatchMut.isPending}
+            onClick={() => {
+              const id = resolvedDetailsPlayer.id
+              if (watchedPlayerIds.has(id)) removeWatchMut.mutate(id)
+              else addWatchMut.mutate(id)
+            }}
+          >
+            {watchedPlayerIds.has(resolvedDetailsPlayer.id)
+              ? <StarIcon fontSize="small" sx={{ color: 'warning.main' }} />
+              : <StarBorderIcon fontSize="small" />}
+          </IconButton>
+        ) : undefined}
+      />
 
       <MakeOfferDialog
         target={offerTarget}
