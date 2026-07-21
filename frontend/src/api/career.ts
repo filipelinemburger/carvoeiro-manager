@@ -100,16 +100,6 @@ export function advanceRound(saveGameId: string, token: string): Promise<Advance
   return apiPost<AdvanceResponse>(`/save-games/${saveGameId}/advance`, {}, token)
 }
 
-// Persisted news feed, paginated newest-first; page is 1-based.
-export function getNews(
-  saveGameId: string,
-  page: number,
-  size: number,
-  token: string,
-): Promise<PageResponse<AdvanceResponse>> {
-  return apiGet<PageResponse<AdvanceResponse>>(`/save-games/${saveGameId}/news?page=${page}&size=${size}`, token)
-}
-
 // Look-ahead at the next advance so the UI can disable "Avançar" before the click.
 export function getAdvancePreview(saveGameId: string, token: string): Promise<AdvancePreviewResponse> {
   return apiGet<AdvancePreviewResponse>(`/save-games/${saveGameId}/advance-preview`, token)

@@ -1,4 +1,12 @@
 import { apiGet, apiPost } from './client'
+import type { NewsFeedItem, PageResponse } from './types'
+
+// Persisted news feed, paginated newest-first; page is 1-based.
+export function getNews(
+  saveGameId: string, page: number, size: number, token: string,
+): Promise<PageResponse<NewsFeedItem>> {
+  return apiGet<PageResponse<NewsFeedItem>>(`/save-games/${saveGameId}/news?page=${page}&size=${size}`, token)
+}
 
 // Unread news-item count for the nav badge.
 export function getNewsUnreadCount(saveGameId: string, token: string): Promise<number> {
