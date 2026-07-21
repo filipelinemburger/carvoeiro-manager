@@ -129,6 +129,20 @@ describe('LiveMatchPage', () => {
     expect(screen.queryByText(/Criciúma Esporte Clube/)).not.toBeInTheDocument()
   })
 
+  it('shows the match date in the header', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
+    renderPage()
+    // STATE.matchDate is '2026-03-01' -> pt-BR formatted as 01/03/2026.
+    expect(await screen.findByText(/01\/03\/2026/)).toBeInTheDocument()
+  })
+
+  it('renders without the match date when matchDate is null (null-safe)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, matchDate: null } as never)
+    renderPage()
+    expect(await screen.findByText(/GOL! Camisa 9/)).toBeInTheDocument()
+    expect(screen.queryByText(/\d{2}\/\d{2}\/\d{4}/)).not.toBeInTheDocument()
+  })
+
   it('at full time, Ver resumo finishes and navigates to the news', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, minute: 90, status: 'FULL_TIME' } as never)
     vi.mocked(finishLiveMatch).mockResolvedValue({ type: 'MATCH' } as never)

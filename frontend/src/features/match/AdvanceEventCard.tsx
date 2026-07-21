@@ -3,6 +3,7 @@ import {
   Box, Button, Card, CardContent, Chip, Divider, List, ListItem, Stack, Typography,
 } from '@mui/material'
 import { formatBRL } from '../../lib/money'
+import { formatDatePtBR } from '../../utils/date'
 import type { AdvanceResponse } from '../../api/types'
 import { SEVERITY_LABEL } from '../squad/injurySeverity'
 import { PlayerRatingsList } from './PlayerRatingsList'
@@ -18,14 +19,6 @@ interface AdvanceEventCardProps {
   saveGameId: string
   competitionId: string
   managedClubId: string
-}
-
-export function formatDatePtBR(isoDate: string | null): string {
-  if (!isoDate) return ''
-  // Parse the date parts manually to avoid UTC vs local timezone offset issues.
-  // ISO date-only strings (yyyy-mm-dd) would otherwise shift a day in some timezones.
-  const [year, month, day] = isoDate.split('T')[0].split('-').map(Number)
-  return new Date(year, month - 1, day).toLocaleDateString('pt-BR')
 }
 
 /** A single timeline entry: a coloured dot/emoji marker plus its content. */

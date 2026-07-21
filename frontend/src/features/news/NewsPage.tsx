@@ -5,7 +5,8 @@ import { Box, Button, List, ListItemButton, ListItemIcon, ListItemText, Stack, T
 import { getSaveGame } from '../../api/career'
 import { getNews, markNewsRead, markAllNewsRead } from '../../api/news'
 import { useAuth } from '../../auth/AuthContext'
-import { AdvanceEventCard, formatDatePtBR } from '../match/AdvanceEventCard'
+import { AdvanceEventCard } from '../match/AdvanceEventCard'
+import { formatDatePtBR } from '../../utils/date'
 import { newsTitle, newsIcon } from './newsMeta'
 import type { NewsFeedItem, PageResponse, SaveGameResponse } from '../../api/types'
 

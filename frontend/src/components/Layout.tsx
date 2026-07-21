@@ -14,6 +14,7 @@ import { advanceRound, getAdvancePreview, getLineup, getSaveGame } from '../api/
 import { deleteAccount } from '../api/account'
 import { getLiveMatch, kickoffLiveMatch } from '../api/liveMatch'
 import { getNewsUnreadCount } from '../api/news'
+import { formatDatePtBR } from '../utils/date'
 import { saveGameKeyFor } from '../features/career/saveGameKey'
 import { LoadCareerDialog } from '../features/career/LoadCareerDialog'
 import { NewCareerDialog } from '../features/career/NewCareerDialog'
@@ -288,6 +289,18 @@ export function Layout({ children }: LayoutProps) {
           </Box>
 
           <Box sx={{ flexGrow: 1 }} />
+
+          {/* Current in-game date: always visible whenever a save game is active, so the
+              manager can see where they are in the calendar from anywhere in the app. */}
+          {hasSaveGame && saveGame?.currentDate && (
+            <Typography
+              component="span"
+              variant="caption"
+              sx={{ color: BAR_FG, opacity: 0.85, mr: 1, whiteSpace: 'nowrap' }}
+            >
+              {formatDatePtBR(saveGame.currentDate)}
+            </Typography>
+          )}
 
           {hasSaveGame && !isMatchScreen && (
             <Button

@@ -186,6 +186,14 @@ describe('Layout shell', () => {
     })
   })
 
+  it('shows the current in-game date near the Avançar button', async () => {
+    seedAuth('U1', 'sg-1')
+    renderLayout('/dashboard')
+
+    // SAVE_GAME.currentDate is '2026-04-01' -> pt-BR formatted as 01/04/2026.
+    expect(await screen.findByText('01/04/2026')).toBeInTheDocument()
+  })
+
   it('relabels the button "Ir para o jogo" when the managed club plays next', async () => {
     seedAuth('U1', 'sg-1')
     renderLayout('/dashboard')

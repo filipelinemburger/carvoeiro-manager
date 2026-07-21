@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Box, Stack, Typography, Button, Chip, Alert, LinearProgress, Tabs, Tab } from '@mui/material'
 import { useAuth } from '../../auth/AuthContext'
+import { formatDatePtBR } from '../../utils/date'
 import { getLiveMatch, advanceLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics } from '../../api/liveMatch'
 import type { LiveEvent, LiveMatchState, LiveTacticsRequest, LivePlayer, LiveKitColors } from '../../api/types'
 import { MatchActionsDialog } from './MatchActionsDialog'
@@ -175,6 +176,7 @@ export function LiveMatchPage() {
       </Stack>
       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
         {state.competitionName}{state.round !== null ? ` · Rodada ${state.round + 1}` : ''}
+        {state.matchDate ? ` · ${formatDatePtBR(state.matchDate)}` : ''}
       </Typography>
       {!fullTime && <LinearProgress variant="determinate" value={(state.minute / 90) * 100} sx={{ my: 1 }} />}
 
