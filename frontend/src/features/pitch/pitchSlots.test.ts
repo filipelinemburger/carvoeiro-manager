@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { pitchSlots, FORMATION_CODES } from './pitchSlots'
+import { pitchSlots, FORMATION_CODES, LAYOUTS } from './pitchSlots'
+import { FORMATION_SHAPE } from '../squad/SquadPage'
 
 const EXPECTED_SHAPE: Record<string, { DEF: number; MID: number; ATT: number }> = {
   '4-4-2': { DEF: 4, MID: 4, ATT: 2 }, '4-3-3': { DEF: 4, MID: 3, ATT: 3 },
@@ -42,5 +43,20 @@ describe('pitchSlots', () => {
 
   it('falls back to 4-4-2 for an unknown code', () => {
     expect(pitchSlots('9-0-1')).toEqual(pitchSlots('4-4-2'))
+  })
+
+  it('lists formation codes in ascending order (numeric-aware pt-BR compare)', () => {
+    const sorted = [...FORMATION_CODES].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }))
+    expect(FORMATION_CODES).toEqual(sorted)
+    // Sanity check on the numeric-aware ordering: 4-1-4-1 sorts before 4-4-2.
+    expect(FORMATION_CODES.indexOf('4-1-4-1')).toBeLessThan(FORMATION_CODES.indexOf('4-4-2'))
+  })
+
+  it('keeps the same set of formation codes as LAYOUTS (order is display-only)', () => {
+    expect(new Set(FORMATION_CODES)).toEqual(new Set(Object.keys(LAYOUTS)))
+  })
+
+  it('stays in sync with SquadPage FORMATION_SHAPE keys', () => {
+    expect(new Set(Object.keys(FORMATION_SHAPE))).toEqual(new Set(Object.keys(LAYOUTS)))
   })
 })

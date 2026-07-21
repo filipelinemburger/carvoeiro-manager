@@ -11,7 +11,7 @@ const DEFAULT_ROLE: Record<Line, PlayerRole> = {
 
 // Each layout lists rows from own-goal (bottom, y≈0.94) up to the opposition goal (top).
 // Multiple rows may share a line (e.g. a double pivot + an attacking-mid band are both MID).
-const LAYOUTS: Record<string, Row[]> = {
+export const LAYOUTS: Record<string, Row[]> = {
   '4-4-2': [
     { line: 'GK', y: 0.94, xs: [0.5] },
     { line: 'DEF', y: 0.79, xs: [0.16, 0.38, 0.62, 0.84] },
@@ -118,7 +118,7 @@ const LAYOUTS: Record<string, Row[]> = {
   ],
 }
 
-export const FORMATION_CODES = Object.keys(LAYOUTS)
+export const FORMATION_CODES = Object.keys(LAYOUTS).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }))
 
 export function pitchSlots(formation: string): Slot[] {
   const rows = LAYOUTS[formation] ?? LAYOUTS['4-4-2']

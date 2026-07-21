@@ -32,7 +32,7 @@ type OutfieldPosition = 'DEF' | 'MID' | 'ATT'
 // Outfield players required per line for each formation (goalkeeper is always 1).
 // Numbers collapse the deeper shapes (e.g. 4-2-3-1 → 4 DEF, 5 MID, 1 ATT) and each
 // row sums to 10, so a full XI is exactly 1 GK + these.
-const FORMATION_SHAPE: Record<string, Record<OutfieldPosition, number>> = {
+export const FORMATION_SHAPE: Record<string, Record<OutfieldPosition, number>> = {
   '4-4-2': { DEF: 4, MID: 4, ATT: 2 },
   '4-3-3': { DEF: 4, MID: 3, ATT: 3 },
   '3-5-2': { DEF: 3, MID: 5, ATT: 2 },
