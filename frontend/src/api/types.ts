@@ -237,6 +237,8 @@ export type FixtureResultResponse = {
   awayClubName: string
   awayClubShortName?: string
   awayGoals: number
+  /** Home side's stadium (real name, or a generic fallback); absent on payloads persisted before this field existed. */
+  stadium?: string | null
 }
 
 export type FinanceRoundResponse = {
@@ -627,6 +629,7 @@ export type LiveMatchState = {
   competitionName: string | null
   round: number | null
   matchDate: string | null
+  stadiumName: string
   homeClubName: string
   homeClubShortName: string
   awayClubName: string

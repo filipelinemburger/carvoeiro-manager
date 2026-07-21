@@ -16,6 +16,7 @@ import { getLiveMatch, advanceLiveMatch, finishLiveMatch, substituteLiveMatch, c
 
 const STATE = {
   fixtureId: 'f1', competitionName: 'Catarinense', round: 0, matchDate: '2026-03-01',
+  stadiumName: 'Estádio Heriberto Hülse',
   homeClubName: 'Criciúma Esporte Clube', homeClubShortName: 'Criciúma',
   awayClubName: 'Rival Futebol Clube', awayClubShortName: 'Rival', managedIsHome: true,
   minute: 12, homeGoals: 1, awayGoals: 0, status: 'IN_PROGRESS',
@@ -141,6 +142,19 @@ describe('LiveMatchPage', () => {
     renderPage()
     expect(await screen.findByText(/GOL! Camisa 9/)).toBeInTheDocument()
     expect(screen.queryByText(/\d{2}\/\d{2}\/\d{4}/)).not.toBeInTheDocument()
+  })
+
+  it('shows the stadium name before the date in the header', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
+    renderPage()
+    expect(await screen.findByText(/Estádio Heriberto Hülse · 01\/03\/2026/)).toBeInTheDocument()
+  })
+
+  it('renders the date without a stadium prefix when stadiumName is missing (null-safe)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, stadiumName: null } as never)
+    renderPage()
+    expect(await screen.findByText(/01\/03\/2026/)).toBeInTheDocument()
+    expect(screen.queryByText(/Estádio/)).not.toBeInTheDocument()
   })
 
   it('at full time, Ver resumo finishes and navigates to the news', async () => {

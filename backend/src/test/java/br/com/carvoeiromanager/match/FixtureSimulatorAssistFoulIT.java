@@ -159,4 +159,24 @@ class FixtureSimulatorAssistFoulIT {
         // 11 starters per side per fixture, no substitutions in the instant path.
         assertThat(appearances.size()).isEqualTo(aiFixtures.size() * 22);
     }
+
+    @Test
+    void simulateRoundPopulatesTheHomeClubsStadiumOnEveryResult() {
+        Competition competition = competitionRepository.findBySaveGameId(saveGameId).get(0);
+        List<Fixture> aiFixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, competition.getId())
+                .stream()
+                .filter(f -> !f.getHomeClubId().equals(managedClubId) && !f.getAwayClubId().equals(managedClubId))
+                .limit(5)
+                .toList();
+        assertThat(aiFixtures).isNotEmpty();
+        SaveGame save = saveGameRepository.findById(saveGameId).orElseThrow();
+
+        RoundOutcome outcome = fixtureSimulator.simulateRound(save, competition.getId(), aiFixtures);
+
+        assertThat(outcome.results()).hasSize(aiFixtures.size());
+        for (FixtureResultResponse result : outcome.results()) {
+            Club homeClub = clubRepository.findById(result.homeClubId()).orElseThrow();
+            assertThat(result.stadium()).isEqualTo(homeClub.resolvedStadiumName());
+        }
+    }
 }

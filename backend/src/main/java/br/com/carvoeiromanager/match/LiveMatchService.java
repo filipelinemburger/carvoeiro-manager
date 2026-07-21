@@ -327,7 +327,8 @@ public class LiveMatchService {
         FixtureResultResponse userResult = new FixtureResultResponse(
                 fixture.getId(),
                 homeClubId, clubs.get(homeClubId).getName(), shortName(clubs.get(homeClubId)), timeline.homeGoals(),
-                awayClubId, clubs.get(awayClubId).getName(), shortName(clubs.get(awayClubId)), timeline.awayGoals());
+                awayClubId, clubs.get(awayClubId).getName(), shortName(clubs.get(awayClubId)), timeline.awayGoals(),
+                clubs.get(homeClubId).resolvedStadiumName());
         Set<UUID> userPlayedIds = allPlayed.stream().map(Player::getId).collect(Collectors.toSet());
 
         List<PlayerRating> playerRatings = managedRatings(lm, cfg, timeline, MINUTES);
@@ -476,6 +477,7 @@ public class LiveMatchService {
 
         return new LiveMatchState(
                 lm.getFixtureId().toString(), competitionName, lm.getRound(), lm.getMatchDate().toString(),
+                homeClub.resolvedStadiumName(),
                 homeClub.getName(), shortName(homeClub),
                 awayClub.getName(), shortName(awayClub),
                 managedIsHome, minute, timeline.homeGoalsAt(minute), timeline.awayGoalsAt(minute),

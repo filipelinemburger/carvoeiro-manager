@@ -176,7 +176,9 @@ export function LiveMatchPage() {
       </Stack>
       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
         {state.competitionName}{state.round !== null ? ` · Rodada ${state.round + 1}` : ''}
-        {state.matchDate ? ` · ${formatDatePtBR(state.matchDate)}` : ''}
+        {state.matchDate
+          ? ` · ${state.stadiumName ? `${state.stadiumName} · ` : ''}${formatDatePtBR(state.matchDate)}`
+          : ''}
       </Typography>
       {!fullTime && <LinearProgress variant="determinate" value={(state.minute / 90) * 100} sx={{ my: 1 }} />}
 
