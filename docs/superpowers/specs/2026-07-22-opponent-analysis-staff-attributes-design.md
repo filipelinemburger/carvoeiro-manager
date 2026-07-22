@@ -32,7 +32,8 @@ staff candidate generation.
 
 ### Data layer
 
-- **Migration `V34__staff_attributes.sql`:** `staff` gains `primary_attribute` and
+- **Migration `V35__staff_attributes.sql`** (landed as V35, not the originally-planned V34,
+  because V34 was already taken by concurrent unrelated work)**:** `staff` gains `primary_attribute` and
   `secondary_attribute`, `INT NOT NULL`, range 1–20 (CHECK constraints). Backfill
   existing rows from the quality tier midpoint: `REGULAR → 10`, `BOM → 14`,
   `EXCELENTE → 17` (both columns).
