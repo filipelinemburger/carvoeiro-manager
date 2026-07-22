@@ -4,13 +4,14 @@ import {
   Box, Paper, Stack, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Typography,
 } from '@mui/material'
-import { getFixtures, getSaveGame } from '../../api/career'
+import { getClubs, getFixtures, getSaveGame } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import { formatDatePtBR } from '../../utils/date'
-import type { FixtureEntry, SaveGameResponse } from '../../api/types'
+import type { ClubSummary, FixtureEntry, SaveGameResponse } from '../../api/types'
 
 const NEXT_UNPLAYED_BG = 'rgba(0, 100, 200, 0.1)'
 const STADIUM_PREFIX = 'Estádio '
+const COMPETITION_PREFIX = 'Campeonato '
 
 /** A fixture merged with the name of the competition it belongs to. */
 type CalendarFixture = FixtureEntry & { competitionName: string }
@@ -36,11 +37,19 @@ function stadiumDisplayName(stadiumName: string): string {
   return stadiumName.startsWith(STADIUM_PREFIX) ? stadiumName.slice(STADIUM_PREFIX.length) : stadiumName
 }
 
-/** True home-vs-away matchup, e.g. "Criciúma x Chapecoense". */
-function matchupLabel(fixture: FixtureEntry, managedClubName: string): string {
+/** Strips the leading "Campeonato " prefix, e.g. "Campeonato Catarinense" -> "Catarinense". */
+function competitionDisplayName(competitionName: string): string {
+  return competitionName.startsWith(COMPETITION_PREFIX)
+    ? competitionName.slice(COMPETITION_PREFIX.length)
+    : competitionName
+}
+
+/** True home-vs-away matchup with short club names, e.g. "Criciúma x Chapecoense". */
+function matchupLabel(fixture: FixtureEntry, managedClubName: string, clubNameById: Map<string, string>): string {
+  const opponentName = clubNameById.get(fixture.opponentClubId) ?? fixture.opponentName
   return fixture.home
-    ? `${managedClubName} x ${fixture.opponentName}`
-    : `${fixture.opponentName} x ${managedClubName}`
+    ? `${managedClubName} x ${opponentName}`
+    : `${opponentName} x ${managedClubName}`
 }
 
 /** The "2x0" / "—" score cell in true home/away order, colored by the managed club's outcome. */
@@ -79,7 +88,18 @@ export function CalendarPage() {
   })
 
   const competitions = saveGame?.competitions ?? []
-  const managedClubName = saveGame?.managedClubName ?? ''
+
+  // Club list gives the short/common names ("Criciúma", "Barra") used in the matchup column;
+  // any club missing from it falls back to the full name carried by the fixture itself.
+  const { data: clubs, isLoading: isClubsLoading } = useQuery<ClubSummary[]>({
+    queryKey: ['clubs', saveGameId],
+    queryFn: () => getClubs(saveGameId, token ?? ''),
+    enabled: Boolean(saveGameId && token),
+    staleTime: Infinity,
+  })
+
+  const clubNameById = new Map((clubs ?? []).map(club => [club.id, club.commonName ?? club.name]))
+  const managedClubName = clubNameById.get(saveGame?.managedClubId ?? '') ?? saveGame?.managedClubName ?? ''
 
   // Fetch the managed club's fixtures across every competition in the save, then merge into one calendar.
   const fixtureQueries = useQueries({
@@ -100,7 +120,7 @@ export function CalendarPage() {
 
   const nextUnplayedFixtureId = fixtures.find(f => !f.played)?.fixtureId
 
-  const isLoading = isSaveGameLoading || isFixturesLoading
+  const isLoading = isSaveGameLoading || isClubsLoading || isFixturesLoading
   const error = saveGameError || fixturesError
 
   return (
@@ -144,8 +164,8 @@ export function CalendarPage() {
                     }}
                   >
                     <TableCell align="center">{formatDatePtBR(fixture.matchDate)}</TableCell>
-                    <TableCell>{fixture.competitionName}</TableCell>
-                    <TableCell>{matchupLabel(fixture, managedClubName)}</TableCell>
+                    <TableCell>{competitionDisplayName(fixture.competitionName)}</TableCell>
+                    <TableCell>{matchupLabel(fixture, managedClubName, clubNameById)}</TableCell>
                     <TableCell>{stadiumDisplayName(fixture.stadiumName)}</TableCell>
                     <ScoreCell fixture={fixture} />
                   </TableRow>

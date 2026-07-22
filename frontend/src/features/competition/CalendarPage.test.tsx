@@ -4,15 +4,17 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { CalendarPage } from './CalendarPage'
 import { AuthProvider } from '../../auth/AuthContext'
-import type { FixtureEntry, SaveGameResponse } from '../../api/types'
+import type { ClubSummary, FixtureEntry, SaveGameResponse } from '../../api/types'
 
 vi.mock('../../api/career', () => ({
+  getClubs: vi.fn(),
   getFixtures: vi.fn(),
   getSaveGame: vi.fn(),
 }))
 
-import { getFixtures, getSaveGame } from '../../api/career'
+import { getClubs, getFixtures, getSaveGame } from '../../api/career'
 
+const mockGetClubs = vi.mocked(getClubs)
 const mockGetFixtures = vi.mocked(getFixtures)
 const mockGetSaveGame = vi.mocked(getSaveGame)
 
@@ -20,16 +22,32 @@ const saveGame: SaveGameResponse = {
   id: 'sg-1',
   seasonYear: 2026,
   competitionId: 'comp-1',
-  competitionName: 'Catarinense',
+  competitionName: 'Campeonato Catarinense',
   managedClubId: 'club-cri',
-  managedClubName: 'Criciúma',
+  managedClubName: 'Criciúma Esporte Clube',
   currentRound: 4,
   totalRounds: 10,
   competitions: [
-    { id: 'comp-1', name: 'Catarinense', type: 'LEAGUE', seasonYear: 2026, totalRounds: 10 },
+    { id: 'comp-1', name: 'Campeonato Catarinense', type: 'LEAGUE', seasonYear: 2026, totalRounds: 10 },
     { id: 'comp-2', name: 'Copa SC', type: 'CUP', seasonYear: 2026, totalRounds: 4 },
   ],
 }
+
+function clubSummary(id: string, name: string, commonName: string | null): ClubSummary {
+  return {
+    id, name, commonName, shortName: id.slice(-3).toUpperCase(),
+    primaryColor: null, secondaryColor: null, reputation: 50, squadSize: 25,
+  }
+}
+
+// club-joi is intentionally absent: its matchup must fall back to the fixture's full opponentName.
+const clubs: ClubSummary[] = [
+  clubSummary('club-cri', 'Criciúma Esporte Clube', 'Criciúma'),
+  clubSummary('club-avi', 'Avaí Futebol Clube', 'Avaí'),
+  clubSummary('club-cha', 'Associação Chapecoense de Futebol', 'Chapecoense'),
+  clubSummary('club-brs', 'Brusque Futebol Clube', 'Brusque'),
+  clubSummary('club-flo', 'Figueirense Futebol Clube', 'Figueirense'),
+]
 
 // Catarinense fixtures — all home for the managed club (Criciúma).
 const catarinenseFixtures: FixtureEntry[] = [
@@ -125,6 +143,7 @@ describe('CalendarPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetSaveGame.mockResolvedValue(saveGame)
+    mockGetClubs.mockResolvedValue(clubs)
     mockGetFixtures.mockImplementation((_saveGameId, competitionId) => {
       if (competitionId === 'comp-1') return Promise.resolve(catarinenseFixtures)
       if (competitionId === 'comp-2') return Promise.resolve(copaScFixtures)
@@ -156,20 +175,35 @@ describe('CalendarPage', () => {
     expect(screen.getAllByText('Copa SC').length).toBeGreaterThan(0)
   })
 
-  it('renders a HOME fixture as "{managed} x {opponent}" with score "hg x ag"', async () => {
+  it('renders a HOME fixture as "{managed} x {opponent}" using short club names, with score "hg x ag"', async () => {
     renderWithProviders()
     await waitFor(() =>
-      expect(screen.getByText('Criciúma x Avaí Futebol Clube')).toBeInTheDocument(),
+      expect(screen.getByText('Criciúma x Avaí')).toBeInTheDocument(),
     )
     expect(screen.getByText('3x1')).toBeInTheDocument()
+    expect(screen.queryByText('Criciúma x Avaí Futebol Clube')).not.toBeInTheDocument()
   })
 
-  it('renders an AWAY fixture as "{opponent} x {managed}" with score "ag x hg"', async () => {
+  it('renders an AWAY fixture as "{opponent} x {managed}" using short club names, with score "ag x hg"', async () => {
     renderWithProviders()
     await waitFor(() =>
-      expect(screen.getByText('Figueirense Futebol Clube x Criciúma')).toBeInTheDocument(),
+      expect(screen.getByText('Figueirense x Criciúma')).toBeInTheDocument(),
     )
     expect(screen.getByText('2x0')).toBeInTheDocument()
+  })
+
+  it('falls back to the fixture opponentName when the club is missing from the clubs list', async () => {
+    renderWithProviders()
+    await waitFor(() =>
+      expect(screen.getByText('Joinville Esporte Clube x Criciúma')).toBeInTheDocument(),
+    )
+  })
+
+  it('strips the leading "Campeonato " prefix from competition names', async () => {
+    renderWithProviders()
+    await waitFor(() => expect(screen.getAllByText('Catarinense').length).toBe(3))
+    expect(screen.getAllByText('Copa SC').length).toBe(2)
+    expect(screen.queryByText('Campeonato Catarinense')).not.toBeInTheDocument()
   })
 
   it('strips the leading "Estádio " prefix from the stadium name', async () => {
