@@ -601,6 +601,8 @@ export type StaffMember = {
   name: string
   quality: StaffQuality
   wage: number
+  primaryAttribute: number
+  secondaryAttribute: number
 }
 
 export type StaffRoster = {
@@ -615,6 +617,8 @@ export type StaffCandidate = {
   name: string
   quality: StaffQuality
   wage: number
+  primaryAttribute: number
+  secondaryAttribute: number
 }
 
 export type MakeOfferRequest = { playerId: string; amount: number; wage: number; contractYears: number }

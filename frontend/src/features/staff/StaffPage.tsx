@@ -24,6 +24,30 @@ const QUALITY_LABEL: Record<StaffQuality, string> = {
   EXCELENTE: 'Excelente',
 }
 
+const ATTRIBUTE_LABELS: Record<StaffRole, [string, string]> = {
+  ASSISTENTE: ['Conhecimento Tático', 'Avaliação de Jogadores'],
+  PREPARADOR_FISICO: ['Preparação Física', 'Ciência Esportiva'],
+  OLHEIRO: ['Conhecimento do Mercado', 'Negociação'],
+  FISIOTERAPEUTA: ['Prevenção de Lesões', 'Reabilitação'],
+}
+
+/** Color tier for a 1-20 staff attribute: >=16 gold, >=12 green, else grey (mirrors OVR tiers). */
+function attributeChipSx(value: number) {
+  if (value >= 16) return { bgcolor: 'var(--cec-yellow)', color: '#111', fontWeight: 700 }
+  if (value >= 12) return { bgcolor: 'rgba(16,185,129,0.16)', color: '#10B981', fontWeight: 700 }
+  return { bgcolor: 'rgba(255,255,255,0.08)', color: 'text.secondary', fontWeight: 600 }
+}
+
+function AttributeChips({ role, primary, secondary }: { role: StaffRole; primary: number; secondary: number }) {
+  const [primaryLabel, secondaryLabel] = ATTRIBUTE_LABELS[role]
+  return (
+    <Stack direction="row" spacing={1} sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 0.5 }}>
+      <Chip size="small" label={`${primaryLabel}: ${primary}`} sx={attributeChipSx(primary)} />
+      <Chip size="small" label={`${secondaryLabel}: ${secondary}`} sx={attributeChipSx(secondary)} />
+    </Stack>
+  )
+}
+
 const ROLES: StaffRole[] = ['ASSISTENTE', 'PREPARADOR_FISICO', 'OLHEIRO', 'FISIOTERAPEUTA']
 
 export function StaffPage() {
@@ -83,11 +107,14 @@ export function StaffPage() {
                   <Box>
                     <Typography variant="overline" color="text.secondary">{ROLE_LABEL[role]}</Typography>
                     {holder ? (
-                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5 }}>
-                        <Typography sx={{ fontWeight: 600 }}>{holder.name}</Typography>
-                        <Chip size="small" label={QUALITY_LABEL[holder.quality]} />
-                        <Typography variant="body2" color="text.secondary">{formatBRL(holder.wage)}/mês</Typography>
-                      </Stack>
+                      <Box>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5 }}>
+                          <Typography sx={{ fontWeight: 600 }}>{holder.name}</Typography>
+                          <Chip size="small" label={QUALITY_LABEL[holder.quality]} />
+                          <Typography variant="body2" color="text.secondary">{formatBRL(holder.wage)}/mês</Typography>
+                        </Stack>
+                        <AttributeChips role={role} primary={holder.primaryAttribute} secondary={holder.secondaryAttribute} />
+                      </Box>
                     ) : (
                       <Typography color="text.secondary" sx={{ mt: 0.5 }}>Vaga em aberto</Typography>
                     )}
@@ -124,7 +151,14 @@ export function StaffPage() {
               >
                 <ListItemText
                   primary={c.name}
-                  secondary={`${QUALITY_LABEL[c.quality]} · ${formatBRL(c.wage)}/mês`}
+                  secondary={
+                    <Box component="div">
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                        {QUALITY_LABEL[c.quality]} · {formatBRL(c.wage)}/mês
+                      </Typography>
+                      <AttributeChips role={browsingRole!} primary={c.primaryAttribute} secondary={c.secondaryAttribute} />
+                    </Box>
+                  }
                 />
               </ListItemButton>
             ))}

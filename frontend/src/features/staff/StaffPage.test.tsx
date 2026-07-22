@@ -37,9 +37,9 @@ describe('StaffPage', () => {
       assistente: null, preparadorFisico: null, olheiro: null, fisioterapeuta: null,
     })
     mockGetStaffCandidates.mockResolvedValue([
-      { index: 0, name: 'Carlos Andrade', quality: 'REGULAR', wage: 20000 },
-      { index: 1, name: 'Marcos Vieira', quality: 'BOM', wage: 45000 },
-      { index: 2, name: 'Roberto Lima', quality: 'EXCELENTE', wage: 80000 },
+      { index: 0, name: 'Carlos Andrade', quality: 'REGULAR', wage: 20000, primaryAttribute: 10, secondaryAttribute: 9 },
+      { index: 1, name: 'Marcos Vieira', quality: 'BOM', wage: 45000, primaryAttribute: 14, secondaryAttribute: 13 },
+      { index: 2, name: 'Roberto Lima', quality: 'EXCELENTE', wage: 80000, primaryAttribute: 17, secondaryAttribute: 16 },
     ])
     localStorage.setItem('carvoeiro_manager_token', 'test-token')
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
@@ -48,7 +48,7 @@ describe('StaffPage', () => {
   it('shows an empty slot for each unfilled role, then hires a browsed candidate', async () => {
     mockHireStaff.mockResolvedValue({
       assistente: null, preparadorFisico: null,
-      olheiro: { name: 'Roberto Lima', quality: 'EXCELENTE', wage: 80000 },
+      olheiro: { name: 'Roberto Lima', quality: 'EXCELENTE', wage: 80000, primaryAttribute: 17, secondaryAttribute: 16 },
       fisioterapeuta: null,
     })
     renderPage()
@@ -99,5 +99,17 @@ describe('StaffPage', () => {
     await waitFor(() => screen.getByText('Roberto Lima'))
     expect(mockGetStaffRoster).toHaveBeenCalledTimes(1)
     expect(mockGetStaffCandidates).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the two labeled attributes of a hired staff member', async () => {
+    mockGetStaffRoster.mockResolvedValue({
+      assistente: { name: 'Cléber Xavier', quality: 'EXCELENTE', wage: 80000, primaryAttribute: 17, secondaryAttribute: 16 },
+      preparadorFisico: null,
+      olheiro: null,
+      fisioterapeuta: null,
+    })
+    renderPage()
+    expect(await screen.findByText(/Conhecimento Tático: 17/)).toBeInTheDocument()
+    expect(screen.getByText(/Avaliação de Jogadores: 16/)).toBeInTheDocument()
   })
 })
