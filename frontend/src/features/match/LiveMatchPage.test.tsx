@@ -441,6 +441,54 @@ describe('LiveMatchPage', () => {
     expect(advanceLiveMatch).not.toHaveBeenCalled()
   })
 
+  it('does not race the per-minute advance when handleApply auto-resumes while a skip is in flight (regression: resume() must honor its in-flight guard from the handleApply auto-resume call site, not just from disabled buttons)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS', minute: 60,
+      onPitch: [{ playerId: 'p1', name: 'Titular', position: 'MID', overall: 75, fitness: 40, hobbled: false, onPitch: true, used: false, eligible: true }],
+      bench: [{ playerId: 'b1', name: 'Reserva', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true }],
+      subsRemaining: 5,
+    } as never)
+    // Never resolves — the skip (advanceToMut) stays in flight for the whole test, exactly
+    // like the "Avançar até o fim" regression tests above.
+    vi.mocked(advanceToLiveMatch).mockImplementation(() => new Promise(() => {}))
+    // The sub resolves to PAUSED_INJURY, one of the statuses that makes handleApply call
+    // resume() automatically (see the comment above that call in LiveMatchPage.tsx).
+    vi.mocked(substituteLiveMatch).mockResolvedValue({
+      ...STATE, status: 'PAUSED_INJURY', minute: 60, subsRemaining: 4,
+    } as never)
+
+    renderPage()
+
+    // Start a skip — advanceToMut is now in flight (and stays that way: the mock never resolves).
+    fireEvent.click(await screen.findByRole('button', { name: /avançar até o fim/i }))
+    await waitFor(() => expect(advanceToLiveMatch).toHaveBeenCalledWith('sg-1', 'FULL_TIME', 'test-token'))
+
+    // The substitution controls aren't gated on the skip's in-flight state, so the actions
+    // dialog can still be opened and a sub applied while the skip is pending — this is the
+    // real-world path that reaches handleApply's programmatic (non-button) resume() call, e.g.
+    // the manager kicks off "Avançar até o fim" then reopens the dialog to make a sub before it
+    // resolves.
+    fireEvent.click(await screen.findByRole('button', { name: /substituir/i }))
+    const outSection = (await screen.findByText(/selecionar quem sai do campo/i)).closest('div') as HTMLElement
+    fireEvent.click(within(outSection).getByText(/Titular/))
+    await screen.findByText(/Substituições Pendentes/i)
+    const inSection = screen.getByText(/selecionar quem entra no jogo/i).closest('div') as HTMLElement
+    fireEvent.click(within(inSection).getByText('Reserva'))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /continuar/i }))
+
+    await waitFor(() => expect(substituteLiveMatch).toHaveBeenCalledTimes(1))
+    // The returned PAUSED_INJURY state has rendered — proves handleApply's setState() and the
+    // synchronous auto-resume resume() call right underneath it have both already run.
+    await screen.findByText(/Lesão! Faça uma substituição ou continue\./i)
+
+    // resume()'s own guard (skipping || advanceToMut.isPending || advanceMut.isPending) must
+    // have short-circuited the auto-resume, because the skip from "Avançar até o fim" is still
+    // pending — advanceLiveMatch must never fire here.
+    expect(advanceLiveMatch).not.toHaveBeenCalled()
+    expect(advanceToLiveMatch).toHaveBeenCalledTimes(1)
+  })
+
   it('hides "Avançar até o intervalo" once minute reaches 45, but keeps "Avançar até o fim" until full time', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', minute: 46 } as never)
     renderPage()
