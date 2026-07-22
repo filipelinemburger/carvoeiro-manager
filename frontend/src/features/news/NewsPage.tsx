@@ -155,7 +155,17 @@ export function NewsPage() {
         </Typography>
       ) : (
         <>
-          <List sx={{ border: '1px solid rgba(255,255,255,0.12)', borderRadius: 2, p: 0, mb: 2 }}>
+          <List
+            sx={{
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: 2,
+              p: 0,
+              mb: 2,
+              // Keep the inbox compact: show ~3 rows and scroll the rest so it doesn't eat the screen.
+              maxHeight: 216,
+              overflowY: 'auto',
+            }}
+          >
             {items.map(item => {
               const isSelected = item.id === selected?.id
               return (
