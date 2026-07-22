@@ -1,8 +1,7 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Box, NativeSelect, Paper, Stack, Table, TableBody, TableCell,
+  Box, Paper, Stack, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Typography,
 } from '@mui/material'
 import { getFixtures, getSaveGame } from '../../api/career'
@@ -11,6 +10,10 @@ import { formatDatePtBR } from '../../utils/date'
 import type { FixtureEntry, SaveGameResponse } from '../../api/types'
 
 const NEXT_UNPLAYED_BG = 'rgba(0, 100, 200, 0.1)'
+const STADIUM_PREFIX = 'Estádio '
+
+/** A fixture merged with the name of the competition it belongs to. */
+type CalendarFixture = FixtureEntry & { competitionName: string }
 
 /** Managed-club outcome derived from the goals-for/against already oriented by the backend. */
 type Result = 'WIN' | 'DRAW' | 'LOSS'
@@ -28,12 +31,27 @@ const RESULT_COLOR: Record<Result, string> = {
   DRAW: 'text.primary',
 }
 
-/** The "3–1" / "—" result cell, colored by the managed club's outcome. */
-function ResultCell({ fixture }: { fixture: FixtureEntry }) {
+/** Strips the leading "Estádio " prefix for a more compact display. */
+function stadiumDisplayName(stadiumName: string): string {
+  return stadiumName.startsWith(STADIUM_PREFIX) ? stadiumName.slice(STADIUM_PREFIX.length) : stadiumName
+}
+
+/** True home-vs-away matchup, e.g. "Criciúma x Chapecoense". */
+function matchupLabel(fixture: FixtureEntry, managedClubName: string): string {
+  return fixture.home
+    ? `${managedClubName} x ${fixture.opponentName}`
+    : `${fixture.opponentName} x ${managedClubName}`
+}
+
+/** The "2x0" / "—" score cell in true home/away order, colored by the managed club's outcome. */
+function ScoreCell({ fixture }: { fixture: FixtureEntry }) {
   const result = resultOf(fixture)
-  if (!result) {
+  if (!result || fixture.goalsFor == null || fixture.goalsAgainst == null) {
     return <TableCell align="center">—</TableCell>
   }
+  const [homeGoals, awayGoals] = fixture.home
+    ? [fixture.goalsFor, fixture.goalsAgainst]
+    : [fixture.goalsAgainst, fixture.goalsFor]
   return (
     <TableCell align="center">
       <Typography
@@ -41,7 +59,7 @@ function ResultCell({ fixture }: { fixture: FixtureEntry }) {
         data-result={result}
         sx={{ color: RESULT_COLOR[result], fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
       >
-        {fixture.goalsFor}–{fixture.goalsAgainst}
+        {homeGoals}x{awayGoals}
       </Typography>
     </TableCell>
   )
@@ -52,29 +70,38 @@ export function CalendarPage() {
   const [searchParams] = useSearchParams()
 
   const saveGameId = searchParams.get('saveGameId') ?? ''
-  const paramCompetitionId = searchParams.get('competitionId') ?? ''
 
-  // The competition can be switched in the UI; it starts at the one the nav linked to.
-  const [selectedCompetitionId, setSelectedCompetitionId] = useState(paramCompetitionId)
-  const competitionId = selectedCompetitionId || paramCompetitionId
-
-  const { data: saveGame } = useQuery<SaveGameResponse>({
+  const { data: saveGame, isLoading: isSaveGameLoading, error: saveGameError } = useQuery<SaveGameResponse>({
     queryKey: ['saveGame', saveGameId],
     queryFn: () => getSaveGame(saveGameId, token ?? ''),
     enabled: Boolean(saveGameId && token),
     staleTime: 30_000,
   })
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['fixtures', saveGameId, competitionId],
-    queryFn: () => getFixtures(saveGameId, competitionId, token ?? ''),
-    enabled: Boolean(saveGameId && competitionId && token),
-    staleTime: Infinity,
+  const competitions = saveGame?.competitions ?? []
+  const managedClubName = saveGame?.managedClubName ?? ''
+
+  // Fetch the managed club's fixtures across every competition in the save, then merge into one calendar.
+  const fixtureQueries = useQueries({
+    queries: competitions.map(competition => ({
+      queryKey: ['fixtures', saveGameId, competition.id],
+      queryFn: () => getFixtures(saveGameId, competition.id, token ?? ''),
+      enabled: Boolean(saveGameId && competition.id && token),
+      staleTime: Infinity,
+    })),
   })
 
-  const competitions = saveGame?.competitions ?? []
-  const fixtures = data ?? []
+  const isFixturesLoading = fixtureQueries.some(q => q.isLoading)
+  const fixturesError = fixtureQueries.find(q => q.error)?.error
+
+  const fixtures: CalendarFixture[] = fixtureQueries
+    .flatMap((q, index) => (q.data ?? []).map(fixture => ({ ...fixture, competitionName: competitions[index].name })))
+    .sort((a, b) => a.matchDate.localeCompare(b.matchDate))
+
   const nextUnplayedFixtureId = fixtures.find(f => !f.played)?.fixtureId
+
+  const isLoading = isSaveGameLoading || isFixturesLoading
+  const error = saveGameError || fixturesError
 
   return (
     <Box>
@@ -87,35 +114,21 @@ export function CalendarPage() {
         <Typography variant="h5" component="h2" sx={{ fontWeight: 700 }}>
           Calendário
         </Typography>
-        {competitions.length > 1 && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-            <Typography component="span" variant="body2">Campeonato:</Typography>
-            <NativeSelect
-              value={competitionId}
-              onChange={e => setSelectedCompetitionId(e.target.value)}
-              inputProps={{ 'aria-label': 'Campeonato' }}
-            >
-              {competitions.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </NativeSelect>
-          </Box>
-        )}
       </Stack>
 
       {isLoading && <Typography sx={{ mt: 2 }}>Carregando calendário…</Typography>}
-      {error && <Typography sx={{ mt: 2 }} color="error">Erro ao carregar calendário.</Typography>}
+      {error != null && <Typography sx={{ mt: 2 }} color="error">Erro ao carregar calendário.</Typography>}
 
-      {!isLoading && !error && (
+      {!isLoading && error == null && (
         <TableContainer component={Paper} variant="outlined" sx={{ mt: 2, overflowX: 'auto' }}>
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell align="center">RODADA</TableCell>
                 <TableCell align="center">DATA</TableCell>
-                <TableCell>ADVERSÁRIO</TableCell>
+                <TableCell>CAMPEONATO</TableCell>
+                <TableCell>JOGO</TableCell>
                 <TableCell>ESTÁDIO</TableCell>
-                <TableCell align="center">RESULTADO</TableCell>
+                <TableCell align="center">PLACAR</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -130,11 +143,11 @@ export function CalendarPage() {
                       '& td': { fontWeight: isNextUnplayed ? 700 : undefined },
                     }}
                   >
-                    <TableCell align="center">{fixture.round}</TableCell>
                     <TableCell align="center">{formatDatePtBR(fixture.matchDate)}</TableCell>
-                    <TableCell>{fixture.opponentShortName} {fixture.home ? '(C)' : '(F)'}</TableCell>
-                    <TableCell>{fixture.stadiumName}</TableCell>
-                    <ResultCell fixture={fixture} />
+                    <TableCell>{fixture.competitionName}</TableCell>
+                    <TableCell>{matchupLabel(fixture, managedClubName)}</TableCell>
+                    <TableCell>{stadiumDisplayName(fixture.stadiumName)}</TableCell>
+                    <ScoreCell fixture={fixture} />
                   </TableRow>
                 )
               })}
