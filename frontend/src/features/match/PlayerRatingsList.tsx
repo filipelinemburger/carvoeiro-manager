@@ -1,4 +1,4 @@
-import { Box, Stack, Typography } from '@mui/material'
+import { Box, Link, Stack, Typography } from '@mui/material'
 import type { PlayerRating } from '../../api/types'
 
 export const POSITION_LABEL: Record<string, string> = { GK: 'GOL', DEF: 'DEF', MID: 'MEI', ATT: 'ATA' }
@@ -16,8 +16,17 @@ export function ratingColor(rating: number): string {
  * screen and the persisted post-match news summary so both render identically. When
  * `onPitchIds` is provided, any rated player NOT in that set (subbed off, or sent off) renders
  * dimmed — omit it (as the persisted news card does) to render every row at full opacity.
+ *
+ * `onPlayerClick`, when provided, turns each name into a button that opens the read-only player
+ * details modal (owned by the caller) — passed the player's id and `isOwnPlayer` (every row in
+ * one call to this list belongs to the same side, so it's a single flag, not per-row).
  */
-export function PlayerRatingsList({ ratings, onPitchIds }: { ratings: PlayerRating[]; onPitchIds?: Set<string> }) {
+export function PlayerRatingsList({ ratings, onPitchIds, isOwnPlayer, onPlayerClick }: {
+  ratings: PlayerRating[]
+  onPitchIds?: Set<string>
+  isOwnPlayer?: boolean
+  onPlayerClick?: (playerId: string, isOwnPlayer: boolean) => void
+}) {
   const sorted = [...ratings].sort((a, b) => b.rating - a.rating)
   return (
     <Stack spacing={0.5} sx={{ mt: 0.5 }}>
@@ -42,7 +51,23 @@ export function PlayerRatingsList({ ratings, onPitchIds }: { ratings: PlayerRati
             <Typography sx={{ minWidth: 30, color: 'text.secondary', fontSize: '0.8rem' }}>
               {POSITION_LABEL[r.position] ?? r.position}
             </Typography>
-            <Typography sx={{ flex: 1, minWidth: 0 }} noWrap>{r.name}</Typography>
+            {onPlayerClick ? (
+              <Link
+                component="button"
+                type="button"
+                underline="hover"
+                color="inherit"
+                onClick={() => onPlayerClick(r.playerId, Boolean(isOwnPlayer))}
+                sx={{
+                  flex: 1, minWidth: 0, font: 'inherit', textAlign: 'left', cursor: 'pointer',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}
+              >
+                {r.name}
+              </Link>
+            ) : (
+              <Typography sx={{ flex: 1, minWidth: 0 }} noWrap>{r.name}</Typography>
+            )}
             {subbedOff && (
               <Typography component="span" title="Substituído" aria-label="Substituído" sx={{ color: 'text.secondary' }}>
                 ↩

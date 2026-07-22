@@ -14,6 +14,25 @@ vi.mock('../../api/liveMatch', () => ({
 }))
 import { getLiveMatch, advanceLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics } from '../../api/liveMatch'
 
+vi.mock('../../api/career', () => ({ getPlayer: vi.fn() }))
+import { getPlayer } from '../../api/career'
+
+// WatchStar (mounted for opponent-side players in the read-only PlayerDetails modal) owns the
+// watchlist query itself — stub it out here so the modal tests don't need a real watchlist.
+vi.mock('../../api/watchlist', () => ({
+  getWatchlist: vi.fn(),
+  addToWatchlist: vi.fn(),
+  removeFromWatchlist: vi.fn(),
+}))
+import { getWatchlist } from '../../api/watchlist'
+
+const MOCK_PLAYER = {
+  id: 'p1', name: 'Camisa 9', position: 'ATT', age: 24, overall: 78, pace: 70, finishing: 80,
+  passing: 65, tackling: 30, goalkeeping: 5, stamina: 75, form: 1, morale: 80, yellowCards: 0,
+  suspensionRemaining: 0, injuryMatches: 0, eligible: true, role: null, contractYears: 2,
+  value: 1_000_000, wageDemand: 20_000, fitness: 90, injurySeverity: 'NONE', attributes: [],
+}
+
 const STATE = {
   fixtureId: 'f1', competitionName: 'Catarinense', round: 0, matchDate: '2026-03-01',
   stadiumName: 'Estádio Heriberto Hülse',
@@ -52,6 +71,7 @@ describe('LiveMatchPage', () => {
     localStorage.setItem('carvoeiro_manager_token', 'test-token')
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
     vi.mocked(advanceLiveMatch).mockResolvedValue({ ...STATE, minute: 13, status: 'IN_PROGRESS' } as never)
+    vi.mocked(getWatchlist).mockResolvedValue([])
   })
 
   it('shows both starting lineups at kickoff (minute 0) instead of the empty feed', async () => {
@@ -509,5 +529,87 @@ describe('LiveMatchPage', () => {
         'test-token',
       )
     )
+  })
+
+  it('clicking a ratings-row name for an own player opens read-only details with no watch star', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS',
+      playerRatings: [
+        { playerId: 'p1', name: 'Camisa 9', position: 'ATT', minutesPlayed: 20, goals: 0, rating: 6.7 },
+      ],
+    } as never)
+    vi.mocked(getPlayer).mockResolvedValue(MOCK_PLAYER as never)
+
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
+    fireEvent.click(await screen.findByText('Camisa 9'))
+
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(getPlayer).toHaveBeenCalledWith('sg-1', 'p1', 'test-token'))
+    // Full player details render (attributes tab is the default), and no watch star for an
+    // own-squad player.
+    expect(within(dialog).getByText('Pos')).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Observar jogador' })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Remover da observação' })).not.toBeInTheDocument()
+  })
+
+  it('clicking a ratings-row name for an opponent player opens details with a watch star', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS',
+      opponentRatings: [
+        { playerId: 'o1', name: 'Rival Camisa 10', position: 'MID', minutesPlayed: 12, goals: 0, rating: 6.2 },
+      ],
+    } as never)
+    vi.mocked(getPlayer).mockResolvedValue({ ...MOCK_PLAYER, id: 'o1', name: 'Rival Camisa 10' } as never)
+
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
+    fireEvent.click(await screen.findByText('Rival Camisa 10'))
+
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(getPlayer).toHaveBeenCalledWith('sg-1', 'o1', 'test-token'))
+    expect(await within(dialog).findByRole('button', { name: 'Observar jogador' })).toBeInTheDocument()
+  })
+
+  it('clicking a pre-match lineup name for the opponent side opens details with a watch star', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE,
+      minute: 0,
+      onPitch: [
+        { playerId: 'h1', name: 'Goleiro Casa', position: 'GK', overall: 60, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+      ],
+      opponentOnPitch: [
+        { playerId: 'a1', name: 'Goleiro Fora', position: 'GK', overall: 58, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+      ],
+    } as never)
+    vi.mocked(getPlayer).mockResolvedValue({ ...MOCK_PLAYER, id: 'a1', name: 'Goleiro Fora', position: 'GK' } as never)
+
+    renderPage()
+    fireEvent.click(await screen.findByText('Goleiro Fora'))
+
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(getPlayer).toHaveBeenCalledWith('sg-1', 'a1', 'test-token'))
+    expect(await within(dialog).findByRole('button', { name: 'Observar jogador' })).toBeInTheDocument()
+  })
+
+  it('clicking a pre-match lineup name for the managed side opens details with no watch star', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE,
+      minute: 0,
+      onPitch: [
+        { playerId: 'h1', name: 'Goleiro Casa', position: 'GK', overall: 60, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+      ],
+      opponentOnPitch: [
+        { playerId: 'a1', name: 'Goleiro Fora', position: 'GK', overall: 58, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+      ],
+    } as never)
+    vi.mocked(getPlayer).mockResolvedValue({ ...MOCK_PLAYER, id: 'h1', name: 'Goleiro Casa', position: 'GK' } as never)
+
+    renderPage()
+    fireEvent.click(await screen.findByText('Goleiro Casa'))
+
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(getPlayer).toHaveBeenCalledWith('sg-1', 'h1', 'test-token'))
+    expect(within(dialog).queryByRole('button', { name: 'Observar jogador' })).not.toBeInTheDocument()
   })
 })
