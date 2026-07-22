@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -8,11 +8,14 @@ import { AuthProvider } from '../../auth/AuthContext'
 vi.mock('../../api/liveMatch', () => ({
   getLiveMatch: vi.fn(),
   advanceLiveMatch: vi.fn(),
+  advanceToLiveMatch: vi.fn(),
   finishLiveMatch: vi.fn(),
   substituteLiveMatch: vi.fn(),
   changeTactics: vi.fn(),
 }))
-import { getLiveMatch, advanceLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics } from '../../api/liveMatch'
+import {
+  getLiveMatch, advanceLiveMatch, advanceToLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics,
+} from '../../api/liveMatch'
 
 vi.mock('../../api/career', () => ({ getPlayer: vi.fn() }))
 import { getPlayer } from '../../api/career'
@@ -320,6 +323,85 @@ describe('LiveMatchPage', () => {
     // The session is gone on the server; the cached ['liveMatch'] must be cleared to null,
     // otherwise Layout keeps rendering "Retomar partida" from stale cache.
     await waitFor(() => expect(qc.getQueryData(['liveMatch', 'sg-1'])).toBeNull())
+  })
+
+  it('clicking "Avançar até o fim" calls advanceToLiveMatch once with FULL_TIME, blocks the per-minute clock while in flight, and renders the returned state', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', minute: 60 } as never)
+    let resolveAdvanceTo: (state: never) => void = () => {}
+    vi.mocked(advanceToLiveMatch).mockImplementation(
+      () => new Promise(resolve => { resolveAdvanceTo = resolve }),
+    )
+    renderPage()
+
+    const button = await screen.findByRole('button', { name: /avançar até o fim/i })
+    fireEvent.click(button)
+
+    await waitFor(() => expect(advanceToLiveMatch).toHaveBeenCalledWith('sg-1', 'FULL_TIME', 'test-token'))
+    // A second click while the skip is in flight must not double-fire the request.
+    fireEvent.click(button)
+
+    // The skip is still pending (mock promise unresolved). The client-owned clock ticks every
+    // 1.5s — wait past that to prove it does NOT sneak in a per-minute advance meanwhile.
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    expect(advanceLiveMatch).not.toHaveBeenCalled()
+    expect(advanceToLiveMatch).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveAdvanceTo({ ...STATE, status: 'FULL_TIME', minute: 90 } as never)
+      await Promise.resolve()
+    })
+
+    // The finish flow ("Continuar") takes over at FULL_TIME instead of auto-finishing.
+    expect(await screen.findByRole('button', { name: /^continuar$/i })).toBeInTheDocument()
+    expect(finishLiveMatch).not.toHaveBeenCalled()
+    expect(advanceLiveMatch).not.toHaveBeenCalled()
+  }, 10_000)
+
+  it('clicking "Avançar até o intervalo" calls advanceToLiveMatch once with HALF_TIME, blocks the per-minute clock while in flight, and hands off to the half-time flow', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', minute: 10 } as never)
+    let resolveAdvanceTo: (state: never) => void = () => {}
+    vi.mocked(advanceToLiveMatch).mockImplementation(
+      () => new Promise(resolve => { resolveAdvanceTo = resolve }),
+    )
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: /avançar até o intervalo/i }))
+
+    await waitFor(() => expect(advanceToLiveMatch).toHaveBeenCalledWith('sg-1', 'HALF_TIME', 'test-token'))
+
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    expect(advanceLiveMatch).not.toHaveBeenCalled()
+    expect(advanceToLiveMatch).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveAdvanceTo({ ...STATE, status: 'HALF_TIME', minute: 45 } as never)
+      await Promise.resolve()
+    })
+
+    // The existing half-time flow takes over: banner + auto-opened tactics dialog (same
+    // assertions as the pre-existing "at half-time" test — the dialog covers the background
+    // "Iniciar 2º tempo" button, so it isn't independently queryable here).
+    expect(await screen.findByText(/intervalo/i)).toBeInTheDocument()
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(await screen.findByRole('combobox', { name: /mentalidade/i })).toBeInTheDocument()
+    expect(advanceLiveMatch).not.toHaveBeenCalled()
+  }, 10_000)
+
+  it('hides "Avançar até o intervalo" once minute reaches 45, but keeps "Avançar até o fim" until full time', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', minute: 46 } as never)
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: /avançar até o fim/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /avançar até o intervalo/i })).not.toBeInTheDocument()
+  })
+
+  it('hides both skip buttons at full time', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'FULL_TIME', minute: 90 } as never)
+    renderPage()
+
+    await screen.findByRole('button', { name: /^continuar$/i })
+    expect(screen.queryByRole('button', { name: /avançar até o fim/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /avançar até o intervalo/i })).not.toBeInTheDocument()
   })
 
   it('opens the Tática dialog, changes mentality, clicks Continuar, and calls changeTactics', async () => {

@@ -14,6 +14,14 @@ export function advanceLiveMatch(saveGameId: string, token: string): Promise<Liv
   return apiPost<LiveMatchState>(`/save-games/${saveGameId}/live-match/advance`, {}, token)
 }
 
+// Skips ahead server-side (auto-continuing through PAUSED_* pauses) to the given target,
+// stopping at HALF_TIME (only if targeted) or FULL_TIME. Idempotent if already past the target.
+export function advanceToLiveMatch(
+  saveGameId: string, target: 'HALF_TIME' | 'FULL_TIME', token: string,
+): Promise<LiveMatchState> {
+  return apiPost<LiveMatchState>(`/save-games/${saveGameId}/live-match/advance-to`, { target }, token)
+}
+
 export function substituteLiveMatch(
   saveGameId: string, req: SubstituteBatchRequest, token: string,
 ): Promise<LiveMatchState> {

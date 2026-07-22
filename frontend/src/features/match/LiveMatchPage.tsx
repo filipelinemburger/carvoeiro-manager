@@ -4,7 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Box, Stack, Typography, Button, Chip, Alert, LinearProgress, Tabs, Tab } from '@mui/material'
 import { useAuth } from '../../auth/AuthContext'
 import { formatDatePtBR } from '../../utils/date'
-import { getLiveMatch, advanceLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics } from '../../api/liveMatch'
+import {
+  getLiveMatch, advanceLiveMatch, advanceToLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics,
+} from '../../api/liveMatch'
 import { getPlayer } from '../../api/career'
 import type { LiveEvent, LiveMatchState, LiveTacticsRequest, LivePlayer, LiveKitColors } from '../../api/types'
 import { MatchActionsDialog } from './MatchActionsDialog'
@@ -53,6 +55,9 @@ export function LiveMatchPage() {
   const [feedTab, setFeedTab] = useState<0 | 1 | 2>(0)   // 0 = Lances, 1 = Atuações, 2 = Campo
   const [applyPending, setApplyPending] = useState(false)
   const [subError, setSubError] = useState<string | null>(null)
+  // True while an "advance-to" skip request is in flight. Gates the per-minute client clock
+  // (see the tick effect below) so it can't race a stale setTimeout against the server-side skip.
+  const [skipping, setSkipping] = useState(false)
   // The player whose read-only details modal is open, if any — clicked from a lineup or
   // ratings-row name. `selectedPlayerIsOwn` decides whether the modal shows the watch star
   // (opponents only) and is captured at click time from the side the name was rendered in.
@@ -84,6 +89,12 @@ export function LiveMatchPage() {
   const advanceMut = useMutation({
     mutationKey: ['liveMatch'],
     mutationFn: () => advanceLiveMatch(saveGameId, token ?? ''),
+    onSuccess: setState,
+  })
+
+  const advanceToMut = useMutation({
+    mutationKey: ['liveMatch'],
+    mutationFn: (target: 'HALF_TIME' | 'FULL_TIME') => advanceToLiveMatch(saveGameId, target, token ?? ''),
     onSuccess: setState,
   })
 
@@ -147,11 +158,29 @@ export function LiveMatchPage() {
   useEffect(() => {
     if (!state) return
     const openPlay = state.status === 'IN_PROGRESS' && state.minute < 90
-    if (playing && openPlay && !advanceMut.isPending && !actionsOpen) {
+    if (playing && openPlay && !advanceMut.isPending && !actionsOpen && !skipping) {
       timer.current = setTimeout(() => advanceMut.mutate(), ADVANCE_MS)
       return () => { if (timer.current) clearTimeout(timer.current) }
     }
-  }, [state, playing, advanceMut.isPending, actionsOpen])
+  }, [state, playing, advanceMut.isPending, actionsOpen, skipping])
+
+  // "Avançar até o intervalo/fim" — skip ahead server-side to the given target. Stops the
+  // pending per-minute tick immediately (both the queued setTimeout and, via `skipping`, any
+  // new one the tick effect would otherwise schedule while this request is in flight) so the
+  // two advance paths never race each other.
+  async function skipTo(target: 'HALF_TIME' | 'FULL_TIME') {
+    if (skipping || advanceToMut.isPending) return
+    if (timer.current) { clearTimeout(timer.current); timer.current = null }
+    setSkipping(true)
+    setSubError(null)
+    try {
+      await advanceToMut.mutateAsync(target)
+    } catch (err) {
+      setSubError(err instanceof Error ? err.message : 'Erro ao avançar a partida.')
+    } finally {
+      setSkipping(false)
+    }
+  }
 
   // At half-time, auto-open the tactics tab once so the manager can adjust before the 2nd half.
   const halftimeOpenedRef = useRef(false)
@@ -225,6 +254,24 @@ export function LiveMatchPage() {
         )}
         {!fullTime && halftime && (
           <Button variant="contained" onClick={resume}>Iniciar 2º tempo</Button>
+        )}
+        {!fullTime && !halftime && state.minute < 45 && (
+          <Button
+            variant="outlined"
+            disabled={skipping || advanceToMut.isPending}
+            onClick={() => skipTo('HALF_TIME')}
+          >
+            Avançar até o intervalo
+          </Button>
+        )}
+        {!fullTime && (
+          <Button
+            variant="outlined"
+            disabled={skipping || advanceToMut.isPending}
+            onClick={() => skipTo('FULL_TIME')}
+          >
+            Avançar até o fim
+          </Button>
         )}
         {!fullTime && (
           <Button variant="outlined" color="secondary" disabled={state.subsRemaining <= 0}
