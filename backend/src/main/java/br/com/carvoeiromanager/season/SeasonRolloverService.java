@@ -86,6 +86,7 @@ public class SeasonRolloverService {
     private final PreContractService preContractService;
     private final PreContractAgreementRepository preContractAgreementRepository;
     private final WatchlistEntryRepository watchlistEntryRepository;
+    private final MatchPreviewService matchPreviewService;
 
     private static final int MAX_INTAKE_PER_SEASON = 3;
     private static final int ACADEMY_TARGET = 10;
@@ -118,7 +119,8 @@ public class SeasonRolloverService {
                                  YouthDevelopmentService youthDevelopmentService,
                                  PreContractService preContractService,
                                  PreContractAgreementRepository preContractAgreementRepository,
-                                 WatchlistEntryRepository watchlistEntryRepository) {
+                                 WatchlistEntryRepository watchlistEntryRepository,
+                                 MatchPreviewService matchPreviewService) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.competitionRepository = competitionRepository;
@@ -147,6 +149,7 @@ public class SeasonRolloverService {
         this.preContractService = preContractService;
         this.preContractAgreementRepository = preContractAgreementRepository;
         this.watchlistEntryRepository = watchlistEntryRepository;
+        this.matchPreviewService = matchPreviewService;
     }
 
     @Transactional
@@ -336,6 +339,9 @@ public class SeasonRolloverService {
         // 5. Advance the save into the new season.
         saveGame.advanceToNextSeason();
         saveGameRepository.save(saveGame);
+
+        // Round 1 of the new season gets its opponent analysis right away (staff carries over).
+        matchPreviewService.maybePersistPreview(saveGameId);
 
         return new RolloverResponse(saveGame.getSeasonYear(), saveGame.getCurrentRound(),
                 List.copyOf(retirements), List.copyOf(expiredContracts),

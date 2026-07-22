@@ -6,6 +6,7 @@ import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.season.MatchPreviewService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,13 +25,16 @@ public class StaffService {
     private final StaffRepository staffRepository;
     private final StaffCandidateGenerator staffCandidateGenerator;
     private final ClubRepository clubRepository;
+    private final MatchPreviewService matchPreviewService;
 
     public StaffService(SaveGameService saveGameService, StaffRepository staffRepository,
-                        StaffCandidateGenerator staffCandidateGenerator, ClubRepository clubRepository) {
+                        StaffCandidateGenerator staffCandidateGenerator, ClubRepository clubRepository,
+                        MatchPreviewService matchPreviewService) {
         this.saveGameService = saveGameService;
         this.staffRepository = staffRepository;
         this.staffCandidateGenerator = staffCandidateGenerator;
         this.clubRepository = clubRepository;
+        this.matchPreviewService = matchPreviewService;
     }
 
     public StaffRosterResponse getRoster(UUID saveGameId, UUID clubId, UUID userId) {
@@ -83,6 +87,12 @@ public class StaffService {
         // requireClubInSave here would just repeat the same two checks for no benefit.
         Map<StaffRole, Staff> byRole = staffRepository.findByClubId(clubId).stream()
                 .collect(Collectors.toMap(Staff::getRole, s -> s));
+
+        if (role == StaffRole.ASSISTENTE) {
+            // A newly hired auxiliar immediately delivers the pending pre-match analysis.
+            matchPreviewService.maybePersistPreview(saveGameId);
+        }
+
         return toRosterResponse(byRole);
     }
 

@@ -84,6 +84,7 @@ public class SeasonAdvanceService {
     private final ObjectMapper objectMapper;
     private final TrainingService trainingService;
     private final PreContractService preContractService;
+    private final MatchPreviewService matchPreviewService;
 
     public SeasonAdvanceService(SaveGameService saveGameService,
                                 SaveGameRepository saveGameRepository,
@@ -98,7 +99,8 @@ public class SeasonAdvanceService {
                                 LiveMatchRepository liveMatchRepository,
                                 ObjectMapper objectMapper,
                                 TrainingService trainingService,
-                                PreContractService preContractService) {
+                                PreContractService preContractService,
+                                MatchPreviewService matchPreviewService) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.seasonEventRepository = seasonEventRepository;
@@ -113,6 +115,7 @@ public class SeasonAdvanceService {
         this.objectMapper = objectMapper;
         this.trainingService = trainingService;
         this.preContractService = preContractService;
+        this.matchPreviewService = matchPreviewService;
     }
 
     @Transactional
@@ -162,6 +165,10 @@ public class SeasonAdvanceService {
 
         // Persist the advance outcome as a news item so the feed survives reloads.
         persistNewsItem(saveGameId, event.getEventDate(), response);
+
+        // The next managed fixture's opponent analysis lands right after each advance,
+        // dated the eve of that match (self-guarding: assistant + idempotency inside).
+        matchPreviewService.maybePersistPreview(saveGameId);
 
         return response;
     }
@@ -271,6 +278,11 @@ public class SeasonAdvanceService {
         seasonEventRepository.save(event);
         saveGameRepository.save(save);
         persistNewsItem(saveGameId, eventDate, response);
+
+        // The next managed fixture's opponent analysis lands right after each advance,
+        // dated the eve of that match (self-guarding: assistant + idempotency inside).
+        matchPreviewService.maybePersistPreview(saveGameId);
+
         return response;
     }
 
