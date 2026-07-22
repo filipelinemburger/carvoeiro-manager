@@ -229,6 +229,22 @@ export type StandingRow = {
   points: number
 }
 
+/** One fixture on the managed club's season calendar; goals are oriented to the managed club
+ * (goalsFor/goalsAgainst), and both are null until the fixture is played. */
+export type FixtureEntry = {
+  fixtureId: string
+  round: number
+  matchDate: string
+  home: boolean
+  opponentClubId: string
+  opponentName: string
+  opponentShortName: string
+  stadiumName: string
+  played: boolean
+  goalsFor: number | null
+  goalsAgainst: number | null
+}
+
 export type FixtureResultResponse = {
   fixtureId: string
   homeClubId: string

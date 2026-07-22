@@ -5,6 +5,7 @@ import { DashboardPage } from './features/career/DashboardPage'
 import { SquadPage } from './features/squad/SquadPage'
 import { BasePage } from './features/base/BasePage'
 import { TablePage } from './features/competition/TablePage'
+import { CalendarPage } from './features/competition/CalendarPage'
 import { ClubsPage } from './features/club/ClubsPage'
 import { ClubViewPage } from './features/club/ClubViewPage'
 import { SeasonSummaryPage } from './features/season/SeasonSummaryPage'
@@ -65,6 +66,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <TablePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/calendar"
+        element={
+          <ProtectedRoute>
+            <CalendarPage />
           </ProtectedRoute>
         }
       />

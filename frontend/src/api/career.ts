@@ -10,6 +10,7 @@ import type {
   AdvanceResponse,
   AdvancePreviewResponse,
   StandingRow,
+  FixtureEntry,
   TacticsRequest,
   TacticsResponse,
   TopScorerResponse,
@@ -112,6 +113,18 @@ export function getStandings(
 ): Promise<StandingRow[]> {
   return apiGet<StandingRow[]>(
     `/save-games/${saveGameId}/competitions/${competitionId}/standings`,
+    token,
+  )
+}
+
+// The managed club's fixtures for a competition, ordered by round — powers the Calendário tab.
+export function getFixtures(
+  saveGameId: string,
+  competitionId: string,
+  token: string,
+): Promise<FixtureEntry[]> {
+  return apiGet<FixtureEntry[]>(
+    `/save-games/${saveGameId}/fixtures?competitionId=${competitionId}`,
     token,
   )
 }
