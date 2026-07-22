@@ -59,6 +59,16 @@ public class LiveMatch {
     @Column(name = "tactics_schedule", nullable = false, columnDefinition = "TEXT")
     private String tacticsSchedule;
 
+    /**
+     * JSON snapshot of the round's OTHER fixtures, pre-simulated at kickoff (see
+     * {@code LiveMatchService#kickoff}) so {@code finish} can replay them instead of
+     * re-simulating — keeping the persisted results identical either way. Null for matches
+     * created before this column existed; that in-flight case falls back to the legacy
+     * recompute-at-finish path.
+     */
+    @Column(name = "parallel_scores", columnDefinition = "TEXT")
+    private String parallelScores;
+
     protected LiveMatch() {
     }
 
@@ -106,8 +116,10 @@ public class LiveMatch {
     public String getSubSchedule() { return subSchedule; }
 
     public String getTacticsSchedule() { return tacticsSchedule; }
+    public String getParallelScores() { return parallelScores; }
 
     public void setCommittedMinute(int committedMinute) { this.committedMinute = committedMinute; }
     public void setSubSchedule(String subSchedule) { this.subSchedule = subSchedule; }
     public void setTacticsSchedule(String tacticsSchedule) { this.tacticsSchedule = tacticsSchedule; }
+    public void setParallelScores(String parallelScores) { this.parallelScores = parallelScores; }
 }

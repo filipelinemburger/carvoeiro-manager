@@ -19,6 +19,7 @@ import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.match.MatchOutcomeApplier;
 import br.com.carvoeiromanager.match.PlayerRating;
 import br.com.carvoeiromanager.match.RoundOutcome;
+import br.com.carvoeiromanager.match.SimulatedMatch;
 import br.com.carvoeiromanager.player.TrainingService;
 import br.com.carvoeiromanager.player.TrainingWeekReport;
 import br.com.carvoeiromanager.transfer.CompletedTransferResponse;
@@ -35,6 +36,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -224,12 +226,20 @@ public class SeasonAdvanceService {
      * Called by the live-match finish: the user's fixture is already simulated (result + summary +
      * played ids); this simulates the rest of the round, merges, finalises, marks the event
      * processed and persists the news item.
+     *
+     * @param precomputedOthers the round's other fixtures' results, pre-simulated at live-match
+     *                          kickoff ({@code LiveMatchService#kickoff}); REPLAYED here rather
+     *                          than re-simulated, keeping results identical to what the manager
+     *                          saw while the match was in progress. Empty for in-flight matches
+     *                          created before this existed, which falls back to the legacy
+     *                          recompute-at-finish path inside {@link FixtureSimulator}.
      */
     @Transactional
     public AdvanceResponse completeUserMatch(SaveGame save, FixtureResultResponse userResult,
                                              MatchOutcomeApplier.Summary userSummary,
                                              UUID userFixtureId, Set<UUID> userPlayedIds,
-                                             List<PlayerRating> playerRatings) {
+                                             List<PlayerRating> playerRatings,
+                                             Map<UUID, SimulatedMatch> precomputedOthers) {
         final UUID saveGameId = save.getId();
         SeasonEvent event = seasonEventRepository
                 .findFirstBySaveGameIdAndProcessedFalseOrderByEventDateAscSequenceAsc(saveGameId);
@@ -242,7 +252,7 @@ public class SeasonAdvanceService {
                 .findBySaveGameIdAndCompetitionIdAndRound(saveGameId, event.getCompetitionId(), event.getRound());
         List<Fixture> others = fixtures.stream().filter(f -> !f.getId().equals(userFixtureId)).toList();
         RoundOutcome othersOutcome = fixtureSimulator.simulateRound(save, event.getCompetitionId(),
-                others, userPlayedIds);
+                others, userPlayedIds, precomputedOthers);
 
         List<FixtureResultResponse> results = new ArrayList<>();
         results.add(userResult);

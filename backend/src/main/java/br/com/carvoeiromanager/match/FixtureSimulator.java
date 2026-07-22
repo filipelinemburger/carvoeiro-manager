@@ -91,11 +91,25 @@ public class FixtureSimulator {
      * @param fixtures      the fixtures to simulate
      */
     public RoundOutcome simulateRound(SaveGame save, UUID competitionId, List<Fixture> fixtures) {
-        return simulateRound(save, competitionId, fixtures, Set.of());
+        return simulateRound(save, competitionId, fixtures, Set.of(), Map.of());
     }
 
     public RoundOutcome simulateRound(SaveGame save, UUID competitionId, List<Fixture> fixtures,
                                       Set<UUID> alreadyPlayedElsewhere) {
+        return simulateRound(save, competitionId, fixtures, alreadyPlayedElsewhere, Map.of());
+    }
+
+    /**
+     * Simulates {@code fixtures} as above, but for any fixture present in {@code precomputed}
+     * REPLAYS the stored {@link SimulatedMatch} instead of calling {@link MatchSimulationService}
+     * again — used at live-match finish to replay the round's other fixtures from the scores
+     * pre-simulated at kickoff (see {@code LiveMatchService}), so results stay byte-identical
+     * regardless of when they were computed. Everything downstream (attribution, persistence) is
+     * unchanged — each fixture's attribution RNG streams are seeded independently. An empty or
+     * missing entry falls back to simulating that fixture normally (the legacy path).
+     */
+    public RoundOutcome simulateRound(SaveGame save, UUID competitionId, List<Fixture> fixtures,
+                                      Set<UUID> alreadyPlayedElsewhere, Map<UUID, SimulatedMatch> precomputed) {
         final UUID saveGameId = save.getId();
         final UUID managedClubId = save.getManagedClubId();
 
@@ -107,7 +121,7 @@ public class FixtureSimulator {
         List<Player> toPersist = new ArrayList<>();
 
         for (Fixture fixture : fixtures) {
-            FixtureSim sim = simulateFixture(fixture, saveGameId, managedClubId, clubById);
+            FixtureSim sim = simulateFixture(fixture, saveGameId, managedClubId, clubById, precomputed);
             results.add(sim.response());
 
             boolean homeManaged = sim.homeXi().stream().anyMatch(p -> p.getClubId().equals(managedClubId));
@@ -144,8 +158,47 @@ public class FixtureSimulator {
                 List.copyOf(summary.newInjuries()));
     }
 
+    /**
+     * The pure half of fixture simulation: resolves the XI/tactics/team-strength inputs and runs
+     * the seeded engine. Performs NO writes — {@link #resolveXi} only reads through
+     * {@code LineupService} (saved lineup or best-XI selection), and {@link TacticsService#profileFor}
+     * only reads persisted lineup/club tactics. Used to pre-simulate the round's other fixtures at
+     * live-match kickoff (see {@code LiveMatchService}) so they can be replayed — not re-simulated —
+     * at finish via the {@link #simulateRound(SaveGame, UUID, List, Set, Map)} precomputed overload.
+     */
+    SimulatedMatch simulatePure(Fixture fixture, UUID saveGameId, UUID managedClubId) {
+        final UUID homeClubId = fixture.getHomeClubId();
+        final UUID awayClubId = fixture.getAwayClubId();
+        final LocalDate matchDate = fixture.getMatchDate();
+
+        List<Player> homeXi = resolveXi(saveGameId, homeClubId, managedClubId, matchDate);
+        List<Player> awayXi = resolveXi(saveGameId, awayClubId, managedClubId, matchDate);
+
+        TacticalProfile homeProfile = tacticsService.profileFor(saveGameId, homeClubId, homeXi);
+        TacticalProfile awayProfile = tacticsService.profileFor(saveGameId, awayClubId, awayXi);
+
+        Map<UUID, Integer> homeFitness = effectiveFitness(homeXi, matchDate);
+        Map<UUID, Integer> awayFitness = effectiveFitness(awayXi, matchDate);
+
+        TeamMatchInput homeInput = teamStrengthCalculator.compute(homeXi, homeProfile, fitnessMult(homeFitness));
+        TeamMatchInput awayInput = teamStrengthCalculator.compute(awayXi, awayProfile, fitnessMult(awayFitness));
+
+        return matchSimulationService.simulate(homeInput, awayInput, seedFor(saveGameId, fixture));
+    }
+
+    /**
+     * Match seed: {@code saveGameId.msb ^ fixtureId.msb ^ fixture.getRound()}. Keying on the round
+     * (rather than a "next round" counter) keeps the seed identical to the original round-based path
+     * for all fixtures sharing a round, and safe for multi-round date-driven advances.
+     */
+    private static long seedFor(UUID saveGameId, Fixture fixture) {
+        return saveGameId.getMostSignificantBits()
+                ^ fixture.getId().getMostSignificantBits()
+                ^ (long) fixture.getRound();
+    }
+
     private FixtureSim simulateFixture(Fixture fixture, UUID saveGameId, UUID managedClubId,
-                                       Map<UUID, Club> clubById) {
+                                       Map<UUID, Club> clubById, Map<UUID, SimulatedMatch> precomputed) {
         final UUID homeClubId = fixture.getHomeClubId();
         final UUID awayClubId = fixture.getAwayClubId();
 
@@ -159,16 +212,17 @@ public class FixtureSimulator {
         Map<UUID, Integer> homeFitness = effectiveFitness(homeXi, matchDate);
         Map<UUID, Integer> awayFitness = effectiveFitness(awayXi, matchDate);
 
-        TeamMatchInput homeInput = teamStrengthCalculator.compute(homeXi, homeProfile, fitnessMult(homeFitness));
-        TeamMatchInput awayInput = teamStrengthCalculator.compute(awayXi, awayProfile, fitnessMult(awayFitness));
+        long seed = seedFor(saveGameId, fixture);
 
-        // Seed uses fixture.getRound() — identical to the old path's nextRound for
-        // all fixtures in a single-round advance, and safe for multi-round date-driven advances.
-        long seed = saveGameId.getMostSignificantBits()
-                ^ fixture.getId().getMostSignificantBits()
-                ^ (long) fixture.getRound();
-
-        SimulatedMatch match = matchSimulationService.simulate(homeInput, awayInput, seed);
+        SimulatedMatch precomputedMatch = precomputed.get(fixture.getId());
+        SimulatedMatch match;
+        if (precomputedMatch != null) {
+            match = precomputedMatch;
+        } else {
+            TeamMatchInput homeInput = teamStrengthCalculator.compute(homeXi, homeProfile, fitnessMult(homeFitness));
+            TeamMatchInput awayInput = teamStrengthCalculator.compute(awayXi, awayProfile, fitnessMult(awayFitness));
+            match = matchSimulationService.simulate(homeInput, awayInput, seed);
+        }
 
         fixture.recordResult(match.homeGoals(), match.awayGoals());
         fixtureRepository.save(fixture);

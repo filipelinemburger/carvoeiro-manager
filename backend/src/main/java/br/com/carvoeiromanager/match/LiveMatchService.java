@@ -50,6 +50,7 @@ public class LiveMatchService {
     private final TacticsService tacticsService;
     private final FitnessCalculator fitnessCalculator;
     private final LiveMatchEngine liveMatchEngine;
+    private final FixtureSimulator fixtureSimulator;
     private final PlayerRatingCalculator playerRatingCalculator;
     private final LiveMatchRepository liveMatchRepository;
     private final SeasonEventRepository seasonEventRepository;
@@ -65,7 +66,8 @@ public class LiveMatchService {
 
     public LiveMatchService(SaveGameService saveGameService, LineupService lineupService,
                             TacticsService tacticsService, FitnessCalculator fitnessCalculator,
-                            LiveMatchEngine liveMatchEngine, PlayerRatingCalculator playerRatingCalculator,
+                            LiveMatchEngine liveMatchEngine, FixtureSimulator fixtureSimulator,
+                            PlayerRatingCalculator playerRatingCalculator,
                             LiveMatchRepository liveMatchRepository,
                             SeasonEventRepository seasonEventRepository, FixtureRepository fixtureRepository,
                             CompetitionRepository competitionRepository, ClubRepository clubRepository,
@@ -78,6 +80,7 @@ public class LiveMatchService {
         this.tacticsService = tacticsService;
         this.fitnessCalculator = fitnessCalculator;
         this.liveMatchEngine = liveMatchEngine;
+        this.fixtureSimulator = fixtureSimulator;
         this.playerRatingCalculator = playerRatingCalculator;
         this.liveMatchRepository = liveMatchRepository;
         this.seasonEventRepository = seasonEventRepository;
@@ -136,8 +139,30 @@ public class LiveMatchService {
         LiveMatch lm = LiveMatch.create(saveGameId, fixture.getId(), next.getCompetitionId(),
                 next.getRound(), matchDate, seed, managedIsHome,
                 ids(homeXi), ids(awayXi), ids(homeBench), ids(awayBench), "[]");
+        lm.setParallelScores(serialize(preSimulateOthers(fixtures, fixture, saveGameId, managedClubId)));
         liveMatchRepository.save(lm);
         return toState(lm, save);
+    }
+
+    /**
+     * Pre-simulates every OTHER fixture of the round (deterministically, via
+     * {@link FixtureSimulator#simulatePure}) at kickoff, so {@link #finish} can replay the exact
+     * same results instead of re-simulating them — avoiding any risk of divergence between what
+     * the manager sees while the live match is in progress and what actually gets persisted.
+     */
+    private List<ParallelFixtureScore> preSimulateOthers(List<Fixture> roundFixtures, Fixture userFixture,
+                                                          UUID saveGameId, UUID managedClubId) {
+        Map<UUID, Club> clubs = clubRepository.findBySaveGameId(saveGameId).stream()
+                .collect(Collectors.toMap(Club::getId, c -> c));
+        return roundFixtures.stream()
+                .filter(f -> !f.getId().equals(userFixture.getId()))
+                .map(f -> {
+                    SimulatedMatch match = fixtureSimulator.simulatePure(f, saveGameId, managedClubId);
+                    return new ParallelFixtureScore(f.getId(),
+                            shortName(clubs.get(f.getHomeClubId())), shortName(clubs.get(f.getAwayClubId())),
+                            match.homeGoals(), match.awayGoals(), match.events());
+                })
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -383,10 +408,31 @@ public class LiveMatchService {
         Set<UUID> userPlayedIds = allPlayed.stream().map(Player::getId).collect(Collectors.toSet());
 
         List<PlayerRating> playerRatings = managedRatings(lm, cfg, timeline, MINUTES);
+        Map<UUID, SimulatedMatch> precomputedOthers = deserializeParallelScores(lm.getParallelScores());
         AdvanceResponse response = seasonAdvanceService.completeUserMatch(
-                save, userResult, summary, fixture.getId(), userPlayedIds, playerRatings);
+                save, userResult, summary, fixture.getId(), userPlayedIds, playerRatings, precomputedOthers);
         liveMatchRepository.deleteBySaveGameId(saveGameId);
         return response;
+    }
+
+    /**
+     * Reconstructs the round's other fixtures' {@link SimulatedMatch}es from the JSON stored at
+     * kickoff, so {@code finish} REPLAYS them instead of re-simulating. Null (in-flight matches
+     * created before {@code parallel_scores} existed) yields an empty map, which routes
+     * {@code FixtureSimulator} back to its legacy recompute-at-finish behaviour.
+     */
+    private Map<UUID, SimulatedMatch> deserializeParallelScores(String json) {
+        if (json == null) {
+            return Map.of();
+        }
+        try {
+            List<ParallelFixtureScore> scores =
+                    objectMapper.readValue(json, new TypeReference<List<ParallelFixtureScore>>() { });
+            return scores.stream().collect(Collectors.toMap(ParallelFixtureScore::fixtureId,
+                    s -> new SimulatedMatch(s.homeGoals(), s.awayGoals(), s.events())));
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to read parallel scores", e);
+        }
     }
 
     private boolean isCardOrGoal(EventType t) {
