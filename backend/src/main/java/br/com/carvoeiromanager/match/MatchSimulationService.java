@@ -46,6 +46,10 @@ public class MatchSimulationService {
             double awayChance = MatchMath.perMinuteScoreChance(away.attack() * awayFf,
                     home.defense() * homeFf, false) * tempoFactor;
 
+            MatchupModifiers.ChanceMults chanceMults = MatchupModifiers.chanceMults(home, away);
+            homeChance *= chanceMults.home();
+            awayChance *= chanceMults.away();
+
             if (rng.nextDouble() < homeChance) {
                 if (rng.nextDouble() < homeSetPiece) {
                     SetPieces.Kind kind = SetPieces.roll(home.cornerThreat(), home.freeKickThreat(), rng);

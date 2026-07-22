@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.Mentality;
 import org.junit.jupiter.api.Test;
 
 import java.util.EnumSet;
@@ -11,9 +12,9 @@ class MatchSimulationServiceTest {
 
     private final MatchSimulationService engine = new MatchSimulationService();
 
-    // attack, defense, tempo, aggression, cornerThreat, freeKickThreat, penaltyConversion, fitnessDecay
+    // attack, defense, tempo, aggression, cornerThreat, freeKickThreat, penaltyConversion, fitnessDecay, mentality
     private TeamMatchInput input(double attack, double defense) {
-        return new TeamMatchInput(attack, defense, 1.0, 1.0, 0.5, 0.5, 0.82, 0.15);
+        return new TeamMatchInput(attack, defense, 1.0, 1.0, 0.5, 0.5, 0.82, 0.15, Mentality.BALANCED);
     }
 
     private TeamMatchInput input() {
@@ -76,8 +77,8 @@ class MatchSimulationServiceTest {
     @Test
     void highDecayTeamScoresLargerShareOfGoalsInFirstHalf() {
         // Two evenly-matched teams; the "home" side has high fitness decay.
-        TeamMatchInput tired = new TeamMatchInput(70, 65, 1.0, 1.0, 0.5, 0.5, 0.82, 0.40);
-        TeamMatchInput fresh = new TeamMatchInput(70, 65, 1.0, 1.0, 0.5, 0.5, 0.82, 0.05);
+        TeamMatchInput tired = new TeamMatchInput(70, 65, 1.0, 1.0, 0.5, 0.5, 0.82, 0.40, Mentality.BALANCED);
+        TeamMatchInput fresh = new TeamMatchInput(70, 65, 1.0, 1.0, 0.5, 0.5, 0.82, 0.05, Mentality.BALANCED);
         int firstHalf = 0;
         int secondHalf = 0;
         for (long seed = 0; seed < 400; seed++) {
@@ -93,8 +94,8 @@ class MatchSimulationServiceTest {
 
     @Test
     void higherAggressionProducesMoreCardsOverManySeeds() {
-        TeamMatchInput calm = new TeamMatchInput(70, 65, 1.0, 1.0, 0.5, 0.5, 0.82, 0.15);
-        TeamMatchInput fiery = new TeamMatchInput(70, 65, 1.0, 2.0, 0.5, 0.5, 0.82, 0.15);
+        TeamMatchInput calm = new TeamMatchInput(70, 65, 1.0, 1.0, 0.5, 0.5, 0.82, 0.15, Mentality.BALANCED);
+        TeamMatchInput fiery = new TeamMatchInput(70, 65, 1.0, 2.0, 0.5, 0.5, 0.82, 0.15, Mentality.BALANCED);
         long calmCards = countCards(calm);
         long fieryCards = countCards(fiery);
         assertThat(fieryCards).isGreaterThan(calmCards);
@@ -102,7 +103,7 @@ class MatchSimulationServiceTest {
 
     private long countCards(TeamMatchInput side) {
         long total = 0;
-        TeamMatchInput opp = new TeamMatchInput(70, 65, 1.0, 1.0, 0.5, 0.5, 0.82, 0.15);
+        TeamMatchInput opp = new TeamMatchInput(70, 65, 1.0, 1.0, 0.5, 0.5, 0.82, 0.15, Mentality.BALANCED);
         for (long seed = 0; seed < 200; seed++) {
             SimulatedMatch m = engine.simulate(side, opp, seed);
             total += m.events().stream()

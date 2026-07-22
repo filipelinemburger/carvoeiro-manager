@@ -125,6 +125,10 @@ public class LiveMatchEngine {
             double awayChance = MatchMath.perMinuteScoreChance(awayInput.attack() * awayFf,
                     homeInput.defense() * homeFf, false) * tempo;
 
+            MatchupModifiers.ChanceMults chanceMults = MatchupModifiers.chanceMults(homeInput, awayInput);
+            homeChance *= chanceMults.home();
+            awayChance *= chanceMults.away();
+
             if (rng.nextDouble() < homeChance) {
                 if (resolveScoringEvent(minute, home, homeInput, rng, attrRng, assistRng, events)) homeGoals++;
             }

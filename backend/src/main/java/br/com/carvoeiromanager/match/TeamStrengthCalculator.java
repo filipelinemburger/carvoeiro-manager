@@ -71,7 +71,7 @@ public class TeamStrengthCalculator {
                         .attribute(Attribute.BOLA_PARADA));
 
         return new TeamMatchInput(attack, defense, tempo, aggression,
-                cornerThreat, freeKickThreat, penaltyConversion, fitnessDecay);
+                cornerThreat, freeKickThreat, penaltyConversion, fitnessDecay, profile.mentality());
     }
 
     private PlayerRole resolveRole(TacticalProfile profile, Player p) {
