@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -104,12 +105,18 @@ public class FixtureSimulator {
      * REPLAYS the stored {@link SimulatedMatch} instead of calling {@link MatchSimulationService}
      * again — used at live-match finish to replay the round's other fixtures from the scores
      * pre-simulated at kickoff (see {@code LiveMatchService}), so results stay byte-identical
-     * regardless of when they were computed. Everything downstream (attribution, persistence) is
-     * unchanged — each fixture's attribution RNG streams are seeded independently. An empty or
-     * missing entry falls back to simulating that fixture normally (the legacy path).
+     * regardless of when they were computed. When the precomputed entry also carries
+     * {@code homeXiIds}/{@code awayXiIds} (see {@link PrecomputedFixture}), attribution replays
+     * that EXACT XI by id lookup instead of re-resolving via {@code bestXi} — required because
+     * player state (training evolutions/injuries) can legitimately change between kickoff and
+     * finish, which would otherwise make {@code bestXi} pick a different player than it picked at
+     * kickoff and misattribute the pre-simulated goals. Everything else downstream (attribution,
+     * persistence) is unchanged — each fixture's attribution RNG streams are seeded independently.
+     * An empty/missing entry, or one without stored XI ids (older pre-existing serialized data),
+     * falls back to the legacy resolve-fresh-XI behaviour.
      */
     public RoundOutcome simulateRound(SaveGame save, UUID competitionId, List<Fixture> fixtures,
-                                      Set<UUID> alreadyPlayedElsewhere, Map<UUID, SimulatedMatch> precomputed) {
+                                      Set<UUID> alreadyPlayedElsewhere, Map<UUID, PrecomputedFixture> precomputed) {
         final UUID saveGameId = save.getId();
         final UUID managedClubId = save.getManagedClubId();
 
@@ -167,6 +174,17 @@ public class FixtureSimulator {
      * at finish via the {@link #simulateRound(SaveGame, UUID, List, Set, Map)} precomputed overload.
      */
     SimulatedMatch simulatePure(Fixture fixture, UUID saveGameId, UUID managedClubId) {
+        return simulatePureWithXi(fixture, saveGameId, managedClubId).match();
+    }
+
+    /**
+     * Same pipeline as {@link #simulatePure}, but also returns the resolved home/away XI (player
+     * ids, in {@code bestXi} pick order) so the caller can capture them into
+     * {@link PrecomputedFixture}/{@link ParallelFixtureScore} at kickoff. See
+     * {@link PrecomputedFixture}'s javadoc for why finish-time attribution MUST replay these exact
+     * ids rather than re-resolving via {@code bestXi}.
+     */
+    PrecomputedFixture simulatePureWithXi(Fixture fixture, UUID saveGameId, UUID managedClubId) {
         final UUID homeClubId = fixture.getHomeClubId();
         final UUID awayClubId = fixture.getAwayClubId();
         final LocalDate matchDate = fixture.getMatchDate();
@@ -183,7 +201,12 @@ public class FixtureSimulator {
         TeamMatchInput homeInput = teamStrengthCalculator.compute(homeXi, homeProfile, fitnessMult(homeFitness));
         TeamMatchInput awayInput = teamStrengthCalculator.compute(awayXi, awayProfile, fitnessMult(awayFitness));
 
-        return matchSimulationService.simulate(homeInput, awayInput, seedFor(saveGameId, fixture));
+        SimulatedMatch match = matchSimulationService.simulate(homeInput, awayInput, seedFor(saveGameId, fixture));
+        return new PrecomputedFixture(match, playerIds(homeXi), playerIds(awayXi));
+    }
+
+    private static List<UUID> playerIds(List<Player> players) {
+        return players.stream().map(Player::getId).toList();
     }
 
     /**
@@ -198,31 +221,48 @@ public class FixtureSimulator {
     }
 
     private FixtureSim simulateFixture(Fixture fixture, UUID saveGameId, UUID managedClubId,
-                                       Map<UUID, Club> clubById, Map<UUID, SimulatedMatch> precomputed) {
+                                       Map<UUID, Club> clubById, Map<UUID, PrecomputedFixture> precomputed) {
         final UUID homeClubId = fixture.getHomeClubId();
         final UUID awayClubId = fixture.getAwayClubId();
+        final LocalDate matchDate = fixture.getMatchDate();
 
-        List<Player> homeXi = resolveXi(saveGameId, homeClubId, managedClubId, fixture.getMatchDate());
-        List<Player> awayXi = resolveXi(saveGameId, awayClubId, managedClubId, fixture.getMatchDate());
+        PrecomputedFixture precomputedFixture = precomputed.get(fixture.getId());
+        boolean replayStoredXi = precomputedFixture != null
+                && precomputedFixture.homeXiIds() != null && precomputedFixture.awayXiIds() != null;
+
+        List<Player> homeXi;
+        List<Player> awayXi;
+        SimulatedMatch match;
+        if (replayStoredXi) {
+            // Robust path (see PrecomputedFixture javadoc): replay the EXACT XI captured at
+            // kickoff pre-sim by id lookup, NOT a fresh resolveXi call — player state (training
+            // evolutions/injuries, applied earlier in SeasonAdvanceService.completeUserMatch) may
+            // have changed since kickoff, which would otherwise make resolveXi/bestXi legitimately
+            // pick a different player than it picked at kickoff and misattribute the stored goals.
+            homeXi = playersByIds(precomputedFixture.homeXiIds());
+            awayXi = playersByIds(precomputedFixture.awayXiIds());
+            match = precomputedFixture.match();
+        } else {
+            // Legacy path: no stored XI to replay (either nothing was precomputed for this fixture
+            // — an in-flight match from before Task 19 — or it was precomputed before XI ids were
+            // captured — an in-flight match from before this fix). resolveXi is deterministic
+            // (see LineupService.bestXi's id tie-break) given UNCHANGED player state, so a single
+            // fresh resolution here is used both for attribution and, when nothing was precomputed,
+            // to feed simulatePure below — same untouched state, read moments apart.
+            homeXi = resolveXi(saveGameId, homeClubId, managedClubId, matchDate);
+            awayXi = resolveXi(saveGameId, awayClubId, managedClubId, matchDate);
+            match = precomputedFixture != null
+                    ? precomputedFixture.match()
+                    : simulatePure(fixture, saveGameId, managedClubId);
+        }
 
         TacticalProfile homeProfile = tacticsService.profileFor(saveGameId, homeClubId, homeXi);
         TacticalProfile awayProfile = tacticsService.profileFor(saveGameId, awayClubId, awayXi);
 
-        final LocalDate matchDate = fixture.getMatchDate();
         Map<UUID, Integer> homeFitness = effectiveFitness(homeXi, matchDate);
         Map<UUID, Integer> awayFitness = effectiveFitness(awayXi, matchDate);
 
         long seed = seedFor(saveGameId, fixture);
-
-        SimulatedMatch precomputedMatch = precomputed.get(fixture.getId());
-        SimulatedMatch match;
-        if (precomputedMatch != null) {
-            match = precomputedMatch;
-        } else {
-            TeamMatchInput homeInput = teamStrengthCalculator.compute(homeXi, homeProfile, fitnessMult(homeFitness));
-            TeamMatchInput awayInput = teamStrengthCalculator.compute(awayXi, awayProfile, fitnessMult(awayFitness));
-            match = matchSimulationService.simulate(homeInput, awayInput, seed);
-        }
 
         fixture.recordResult(match.homeGoals(), match.awayGoals());
         fixtureRepository.save(fixture);
@@ -486,6 +526,19 @@ public class FixtureSimulator {
             return lineupService.startingXi(saveGameId, clubId);
         }
         return lineupService.bestXi(clubId, matchDate);
+    }
+
+    /**
+     * Loads the exact players captured in a {@link PrecomputedFixture}, by id, preserving the
+     * stored pick order (needed for byte-identical weighted attribution — see
+     * {@link #pickByWeight}/{@link #pickWeighted}, which pick by cumulative order). A stored id
+     * that no longer resolves (players are not deleted mid-season; defensive only) is skipped
+     * rather than failing the whole round.
+     */
+    private List<Player> playersByIds(List<UUID> ids) {
+        Map<UUID, Player> byId = playerRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Player::getId, Function.identity()));
+        return ids.stream().map(byId::get).filter(Objects::nonNull).toList();
     }
 
     private Map<UUID, Club> buildClubMap(UUID saveGameId) {

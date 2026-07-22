@@ -325,8 +325,14 @@ public class LineupService {
 
         // Ascending comparator: .max(byRating) yields the highest-rated player,
         // and .sorted(byRating.reversed()) yields best-first (top 10 outfield).
+        // Secondary tie-break on id (a deterministic total order) so that rating ties near
+        // the XI/bench cutoff resolve identically across repeated calls regardless of the
+        // DB row order (findByClubIdAndYouthProspectFalse has no ORDER BY) — required because
+        // this method is now called twice for the same fixture (parallel pre-simulation at
+        // kickoff, then attribution at finish) and both calls must select the identical XI.
         Comparator<Player> byRating =
-                Comparator.comparingDouble((Player p) -> rating(p, onDate));
+                Comparator.comparingDouble((Player p) -> rating(p, onDate))
+                        .thenComparing(Player::getId);
 
         // Try to find an eligible GK; fall back to any GK if none are eligible.
         Player bestGk = eligible.stream()
@@ -384,14 +390,17 @@ public class LineupService {
                 .filter(p -> !xiIds.contains(p.getId()))
                 .toList();
 
+        // Same deterministic id tie-break as bestXi's byRating comparator (see there for why).
+        Comparator<Player> byOverall = Comparator.comparingInt(Player::getOverall).thenComparing(Player::getId);
+
         List<Player> bench = new ArrayList<>();
         candidates.stream()
                 .filter(p -> p.getPosition() == Position.GK)
-                .max(Comparator.comparingInt(Player::getOverall))
+                .max(byOverall)
                 .ifPresent(bench::add);
         candidates.stream()
                 .filter(p -> bench.stream().noneMatch(b -> b.getId().equals(p.getId())))
-                .sorted(Comparator.comparingInt(Player::getOverall).reversed())
+                .sorted(byOverall.reversed())
                 .limit(BENCH_SIZE - bench.size())
                 .forEach(bench::add);
         return bench;

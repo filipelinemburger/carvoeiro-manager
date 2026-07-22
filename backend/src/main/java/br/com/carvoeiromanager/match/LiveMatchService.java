@@ -157,10 +157,12 @@ public class LiveMatchService {
         return roundFixtures.stream()
                 .filter(f -> !f.getId().equals(userFixture.getId()))
                 .map(f -> {
-                    SimulatedMatch match = fixtureSimulator.simulatePure(f, saveGameId, managedClubId);
+                    PrecomputedFixture precomputed = fixtureSimulator.simulatePureWithXi(f, saveGameId, managedClubId);
+                    SimulatedMatch match = precomputed.match();
                     return new ParallelFixtureScore(f.getId(),
                             shortName(clubs.get(f.getHomeClubId())), shortName(clubs.get(f.getAwayClubId())),
-                            match.homeGoals(), match.awayGoals(), match.events());
+                            match.homeGoals(), match.awayGoals(), match.events(),
+                            precomputed.homeXiIds(), precomputed.awayXiIds());
                 })
                 .toList();
     }
@@ -408,7 +410,7 @@ public class LiveMatchService {
         Set<UUID> userPlayedIds = allPlayed.stream().map(Player::getId).collect(Collectors.toSet());
 
         List<PlayerRating> playerRatings = managedRatings(lm, cfg, timeline, MINUTES);
-        Map<UUID, SimulatedMatch> precomputedOthers = deserializeParallelScores(lm.getParallelScores());
+        Map<UUID, PrecomputedFixture> precomputedOthers = deserializeParallelScores(lm.getParallelScores());
         AdvanceResponse response = seasonAdvanceService.completeUserMatch(
                 save, userResult, summary, fixture.getId(), userPlayedIds, playerRatings, precomputedOthers);
         liveMatchRepository.deleteBySaveGameId(saveGameId);
@@ -416,12 +418,15 @@ public class LiveMatchService {
     }
 
     /**
-     * Reconstructs the round's other fixtures' {@link SimulatedMatch}es from the JSON stored at
-     * kickoff, so {@code finish} REPLAYS them instead of re-simulating. Null (in-flight matches
-     * created before {@code parallel_scores} existed) yields an empty map, which routes
-     * {@code FixtureSimulator} back to its legacy recompute-at-finish behaviour.
+     * Reconstructs the round's other fixtures' {@link PrecomputedFixture}s (score + events + the
+     * captured XI ids) from the JSON stored at kickoff, so {@code finish} REPLAYS them instead of
+     * re-simulating. Null (in-flight matches created before {@code parallel_scores} existed)
+     * yields an empty map, which routes {@code FixtureSimulator} back to its legacy
+     * recompute-at-finish behaviour. Entries serialized before XI ids existed carry null
+     * {@code homeXiIds}/{@code awayXiIds} — {@code FixtureSimulator} falls back to a fresh
+     * {@code resolveXi} for those, exactly as before this fix.
      */
-    private Map<UUID, SimulatedMatch> deserializeParallelScores(String json) {
+    private Map<UUID, PrecomputedFixture> deserializeParallelScores(String json) {
         if (json == null) {
             return Map.of();
         }
@@ -429,7 +434,8 @@ public class LiveMatchService {
             List<ParallelFixtureScore> scores =
                     objectMapper.readValue(json, new TypeReference<List<ParallelFixtureScore>>() { });
             return scores.stream().collect(Collectors.toMap(ParallelFixtureScore::fixtureId,
-                    s -> new SimulatedMatch(s.homeGoals(), s.awayGoals(), s.events())));
+                    s -> new PrecomputedFixture(new SimulatedMatch(s.homeGoals(), s.awayGoals(), s.events()),
+                            s.homeXiIds(), s.awayXiIds())));
         } catch (Exception e) {
             throw new RuntimeException("Failed to read parallel scores", e);
         }

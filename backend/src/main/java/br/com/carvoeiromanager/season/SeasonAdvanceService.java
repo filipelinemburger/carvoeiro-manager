@@ -18,8 +18,8 @@ import br.com.carvoeiromanager.match.FixtureSimulator;
 import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.match.MatchOutcomeApplier;
 import br.com.carvoeiromanager.match.PlayerRating;
+import br.com.carvoeiromanager.match.PrecomputedFixture;
 import br.com.carvoeiromanager.match.RoundOutcome;
-import br.com.carvoeiromanager.match.SimulatedMatch;
 import br.com.carvoeiromanager.player.TrainingService;
 import br.com.carvoeiromanager.player.TrainingWeekReport;
 import br.com.carvoeiromanager.transfer.CompletedTransferResponse;
@@ -227,19 +227,22 @@ public class SeasonAdvanceService {
      * played ids); this simulates the rest of the round, merges, finalises, marks the event
      * processed and persists the news item.
      *
-     * @param precomputedOthers the round's other fixtures' results, pre-simulated at live-match
-     *                          kickoff ({@code LiveMatchService#kickoff}); REPLAYED here rather
-     *                          than re-simulated, keeping results identical to what the manager
-     *                          saw while the match was in progress. Empty for in-flight matches
-     *                          created before this existed, which falls back to the legacy
-     *                          recompute-at-finish path inside {@link FixtureSimulator}.
+     * @param precomputedOthers the round's other fixtures' results (plus the exact XI captured at
+     *                          kickoff — see {@link PrecomputedFixture}), pre-simulated at
+     *                          live-match kickoff ({@code LiveMatchService#kickoff}); REPLAYED here
+     *                          rather than re-simulated, keeping results (and attribution) identical
+     *                          to what the manager saw while the match was in progress — including
+     *                          across any player-state mutation (e.g. this method's own weekly
+     *                          training tick, below) that happens between kickoff and finish. Empty
+     *                          for in-flight matches created before this existed, which falls back
+     *                          to the legacy recompute-at-finish path inside {@link FixtureSimulator}.
      */
     @Transactional
     public AdvanceResponse completeUserMatch(SaveGame save, FixtureResultResponse userResult,
                                              MatchOutcomeApplier.Summary userSummary,
                                              UUID userFixtureId, Set<UUID> userPlayedIds,
                                              List<PlayerRating> playerRatings,
-                                             Map<UUID, SimulatedMatch> precomputedOthers) {
+                                             Map<UUID, PrecomputedFixture> precomputedOthers) {
         final UUID saveGameId = save.getId();
         SeasonEvent event = seasonEventRepository
                 .findFirstBySaveGameIdAndProcessedFalseOrderByEventDateAscSequenceAsc(saveGameId);
