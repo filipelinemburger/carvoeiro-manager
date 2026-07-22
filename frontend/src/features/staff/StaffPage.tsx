@@ -152,13 +152,14 @@ export function StaffPage() {
                 <ListItemText
                   primary={c.name}
                   secondary={
-                    <Box component="div">
+                    <>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
                         {QUALITY_LABEL[c.quality]} · {formatBRL(c.wage)}/mês
                       </Typography>
                       <AttributeChips role={browsingRole!} primary={c.primaryAttribute} secondary={c.secondaryAttribute} />
-                    </Box>
+                    </>
                   }
+                  slotProps={{ secondary: { component: 'div' } }}
                 />
               </ListItemButton>
             ))}
