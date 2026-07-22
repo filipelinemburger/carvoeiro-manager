@@ -99,6 +99,12 @@ const TRAINABLE_ATTRIBUTE_LABEL: Record<TrainableAttribute, string> = {
   DESARME: 'Desarme',
   REFLEXOS: 'Reflexos',
   FOLEGO: 'Fôlego',
+  CABECEIO: 'Cabeceio',
+  CRUZAMENTO: 'Cruzamento',
+  MARCACAO: 'Marcação',
+  DRIBLE: 'Drible',
+  VISAO: 'Visão de jogo',
+  FORCA: 'Força',
 }
 
 const INTENSITY_LABEL: Record<TrainingIntensity, string> = {

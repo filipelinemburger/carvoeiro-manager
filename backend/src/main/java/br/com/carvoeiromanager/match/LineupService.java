@@ -157,7 +157,9 @@ public class LineupService {
 
     private static final Set<Attribute> TRAINABLE_ATTRIBUTES = Set.of(
             Attribute.VELOCIDADE, Attribute.FINALIZACAO, Attribute.PASSE,
-            Attribute.DESARME, Attribute.REFLEXOS, Attribute.FOLEGO);
+            Attribute.DESARME, Attribute.REFLEXOS, Attribute.FOLEGO,
+            Attribute.CABECEIO, Attribute.CRUZAMENTO, Attribute.MARCACAO,
+            Attribute.DRIBLE, Attribute.VISAO, Attribute.FORCA);
 
     /**
      * Bulk-sets each listed player's training focus + intensity for the club within a save game.

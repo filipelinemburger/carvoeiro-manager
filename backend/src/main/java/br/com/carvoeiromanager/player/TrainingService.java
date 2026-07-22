@@ -222,37 +222,40 @@ public class TrainingService {
                 : name + " não tem mais o que evoluir em " + focus.label() + " — considere trocar o foco.";
     }
 
+    /** Works for every trainable focus: the six legacy getters are just {@code Attributes} views. */
     private static int anchorValue(Player p, Attribute focus) {
-        return switch (focus) {
-            case VELOCIDADE -> p.getPace();
-            case FINALIZACAO -> p.getFinishing();
-            case PASSE -> p.getPassing();
-            case DESARME -> p.getTackling();
-            case REFLEXOS -> p.getGoalkeeping();
-            case FOLEGO -> p.getStamina();
-            default -> throw new IllegalArgumentException("Attribute is not trainable: " + focus);
-        };
+        return p.attribute(focus);
     }
 
+    /**
+     * The six legacy anchors recompute overall via {@link OverallCalculator} (unchanged
+     * behavior). The other six focuses just overwrite their own attribute — overall is
+     * anchor-based by design and never moves for them.
+     */
     private void applyAnchor(Player p, Attribute focus, int value) {
-        int pace = p.getPace();
-        int finishing = p.getFinishing();
-        int passing = p.getPassing();
-        int tackling = p.getTackling();
-        int goalkeeping = p.getGoalkeeping();
-        int stamina = p.getStamina();
         switch (focus) {
-            case VELOCIDADE -> pace = value;
-            case FINALIZACAO -> finishing = value;
-            case PASSE -> passing = value;
-            case DESARME -> tackling = value;
-            case REFLEXOS -> goalkeeping = value;
-            case FOLEGO -> stamina = value;
-            default -> throw new IllegalArgumentException("Attribute is not trainable: " + focus);
+            case VELOCIDADE, FINALIZACAO, PASSE, DESARME, REFLEXOS, FOLEGO -> {
+                int pace = p.getPace();
+                int finishing = p.getFinishing();
+                int passing = p.getPassing();
+                int tackling = p.getTackling();
+                int goalkeeping = p.getGoalkeeping();
+                int stamina = p.getStamina();
+                switch (focus) {
+                    case VELOCIDADE -> pace = value;
+                    case FINALIZACAO -> finishing = value;
+                    case PASSE -> passing = value;
+                    case DESARME -> tackling = value;
+                    case REFLEXOS -> goalkeeping = value;
+                    case FOLEGO -> stamina = value;
+                    default -> throw new IllegalStateException("unreachable");
+                }
+                int overall = overallCalculator.compute(p.getPosition(),
+                        pace, finishing, passing, tackling, goalkeeping, stamina);
+                p.evolveAttributes(pace, finishing, passing, tackling, goalkeeping, stamina, overall);
+            }
+            default -> p.setAttribute(focus, value);
         }
-        int overall = overallCalculator.compute(p.getPosition(),
-                pace, finishing, passing, tackling, goalkeeping, stamina);
-        p.evolveAttributes(pace, finishing, passing, tackling, goalkeeping, stamina, overall);
     }
 
 }

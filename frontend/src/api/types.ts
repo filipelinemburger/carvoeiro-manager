@@ -133,7 +133,9 @@ export type SquadResponse = {
   secondaryColor: string
 }
 
-export type TrainableAttribute = 'VELOCIDADE' | 'FINALIZACAO' | 'PASSE' | 'DESARME' | 'REFLEXOS' | 'FOLEGO'
+export type TrainableAttribute =
+  | 'VELOCIDADE' | 'FINALIZACAO' | 'PASSE' | 'DESARME' | 'REFLEXOS' | 'FOLEGO'
+  | 'CABECEIO' | 'CRUZAMENTO' | 'MARCACAO' | 'DRIBLE' | 'VISAO' | 'FORCA'
 export type TrainingIntensity = 'LEVE' | 'NORMAL' | 'INTENSA'
 
 export type TrainingAssignment = {

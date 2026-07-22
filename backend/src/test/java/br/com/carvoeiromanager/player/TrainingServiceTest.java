@@ -407,6 +407,44 @@ class TrainingServiceTest {
                 assertThat(e.message()).endsWith("evoluiu nos treinos."));
     }
 
+    // ---- the six new (non-anchor) focuses ----
+
+    @Test
+    void aNewFocusAttributeTicksUpWithOverallUnchanged() {
+        // Given a player training CABECEIO (one of the 6 new focuses, not an overall anchor)
+        stubSave(saveGameId);
+        Player p = managedPlayer(50);
+        p.setAttribute(Attribute.CABECEIO, 50);
+        p.setTrainingAssignment(Attribute.CABECEIO, TrainingIntensity.NORMAL);
+        p.setTrainingProgress(39);
+        stubPlayers(p);
+        int overallBefore = p.getOverall();
+
+        training.processWeek(saveGameId, WEEK_12);
+
+        // Then Cabeceio ticked +1 but overall — anchor-based by design — did not move
+        assertThat(p.attribute(Attribute.CABECEIO)).isEqualTo(51);
+        assertThat(p.getOverall()).isEqualTo(overallBefore);
+        // And the legacy anchors carried over untouched
+        assertThat(p.getPace()).isEqualTo(50);
+        assertThat(p.getFinishing()).isEqualTo(50);
+    }
+
+    @Test
+    void aNewFocusAttributeIsAlsoClampedAtNinetyNine() {
+        stubSave(saveGameId);
+        Player p = managedPlayer(50);
+        p.setAttribute(Attribute.FORCA, 99);
+        p.setTrainingAssignment(Attribute.FORCA, TrainingIntensity.NORMAL);
+        p.setTrainingProgress(39);
+        stubPlayers(p);
+
+        training.processWeek(saveGameId, WEEK_12);
+
+        assertThat(p.attribute(Attribute.FORCA)).isEqualTo(99);
+        assertThat(p.getTrainingProgress()).isEqualTo(1);
+    }
+
     // ---- heuristic (unchanged) ----
 
     @Test

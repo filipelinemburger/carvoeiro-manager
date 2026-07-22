@@ -242,6 +242,21 @@ describe('SquadPage', () => {
     )
   })
 
+  it('offers all twelve trainable attributes plus Nenhum as training focus options', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Treino' }))
+
+    const select = screen.getByRole('combobox', { name: `Foco de treino de ${GK.name}` })
+    const options = within(select).getAllByRole('option').map(o => o.textContent)
+    expect(options).toEqual([
+      'Nenhum',
+      'Velocidade', 'Finalização', 'Passe', 'Desarme', 'Reflexos', 'Fôlego',
+      'Cabeceio', 'Cruzamento', 'Marcação', 'Drible', 'Visão de jogo', 'Força',
+    ])
+  })
+
   it('shows tactics controls above the pitch in the Táticas de jogo tab', async () => {
     renderWithProviders()
     fireEvent.click(await screen.findByRole('tab', { name: 'Táticas de jogo' }))

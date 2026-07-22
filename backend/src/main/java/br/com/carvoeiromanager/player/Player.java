@@ -181,6 +181,15 @@ public class Player {
     public Attributes attributes() { return attributes; }
     public int attribute(Attribute a) { return attributes.get(a); }
 
+    /**
+     * Replaces a single attribute (clamped to [0, 99] by {@link Attributes#with}), leaving every
+     * other attribute — including {@link #overall} — untouched. Used by {@link TrainingService}
+     * to train the non-anchor focuses, whose overall is anchor-based by design and never moves.
+     */
+    public void setAttribute(Attribute a, int value) {
+        this.attributes = this.attributes.with(a, value);
+    }
+
     public void setClubId(UUID clubId) { this.clubId = clubId; }
     public void setAge(int age) { this.age = age; }
     public void setOverall(int overall) { this.overall = overall; }

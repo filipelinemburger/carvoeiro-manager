@@ -591,15 +591,39 @@ class LineupServiceIT {
     }
 
     @Test
+    void settingOneOfTheSixNewAttributeFocusesIsAccepted() {
+        // Given
+        Career career = createCareer();
+        UUID saveGameId = career.id();
+        UUID clubId = career.managedClubId();
+        UUID userId = career.userId();
+        Player target = playerRepository.findByClubIdAndYouthProspectFalse(clubId).get(0);
+
+        // When
+        SquadResponse response = lineupService.setTraining(saveGameId, clubId,
+                new SetTrainingRequest(List.of(new TrainingAssignment(target.getId(), "CABECEIO", "NORMAL"))),
+                userId);
+
+        // Then it's accepted, returned and persisted like any other focus
+        PlayerResponse updated = response.players().stream()
+                .filter(p -> p.id().equals(target.getId())).findFirst().orElseThrow();
+        assertThat(updated.trainingFocus()).isEqualTo("CABECEIO");
+
+        Player persisted = playerRepository.findById(target.getId()).orElseThrow();
+        assertThat(persisted.getTrainingFocus()).isEqualTo(Attribute.CABECEIO);
+    }
+
+    @Test
     void settingAnUntrainableAttributeAsFocusIsRejected() {
         // Given
         Career career = createCareer();
         Player target = playerRepository.findByClubIdAndYouthProspectFalse(career.managedClubId()).get(0);
 
-        // When setting a non-anchor attribute (DRIBLE is not one of the 6 trainable anchors)
+        // When setting an attribute outside the 12 trainable focuses (POSICIONAMENTO is a mental
+        // attribute with no training-focus support)
         // Then a 422 INVALID_TRAINING_FOCUS is thrown
         assertThatThrownBy(() -> lineupService.setTraining(career.id(), career.managedClubId(),
-                new SetTrainingRequest(List.of(new TrainingAssignment(target.getId(), "DRIBLE", "NORMAL"))),
+                new SetTrainingRequest(List.of(new TrainingAssignment(target.getId(), "POSICIONAMENTO", "NORMAL"))),
                 career.userId()))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
