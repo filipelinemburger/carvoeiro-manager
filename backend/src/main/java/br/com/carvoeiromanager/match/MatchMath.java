@@ -14,11 +14,11 @@ final class MatchMath {
     static final double BASE = 50.0;
     static final double FITNESS_FLOOR = 0.75;
 
-    // --- Recalibrated scoring curve (initial estimates; finalised by MatchCalibrationTest) ---
-    static final double GAIN = 2.2;         // talent-spread multiplier (1.0 == legacy)
-    static final double ANCHOR = 1.15;      // xG of an average (d == REF) matchup, home bonus excluded
-    static final double REF = -24.0;        // average-matchup differential across seeded squads
-    static final double HOME_XG = 0.15;     // home-edge xG bonus (home +, away -)
+    // --- Recalibrated scoring curve (calibrated against the target bands by MatchCalibrationTest) ---
+    static final double GAIN = 2.0;         // talent-spread multiplier (1.0 == legacy)
+    static final double ANCHOR = 1.35;      // xG of an average (d == REF) matchup, home bonus excluded
+    static final double REF = -6.68;        // average-matchup differential across seeded squads
+    static final double HOME_XG = 0.20;     // home-edge xG bonus (home +, away -)
     static final double XG_FLOOR = 0.2;     // lower clamp (unchanged)
     static final double XG_CEILING = 3.5;   // upper clamp (new; guards extreme mismatches)
 
