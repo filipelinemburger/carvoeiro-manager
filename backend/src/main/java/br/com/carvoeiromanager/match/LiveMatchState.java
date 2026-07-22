@@ -27,5 +27,7 @@ public record LiveMatchState(
         LiveTactics opponentTactics,
         List<PlayerRating> opponentRatings,
         KitColors homeClubColors,
-        KitColors awayClubColors) {
+        KitColors awayClubColors,
+        String competitionId,
+        List<ParallelScore> parallelScores) {
 }

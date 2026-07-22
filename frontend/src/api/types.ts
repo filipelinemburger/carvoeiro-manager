@@ -679,6 +679,15 @@ export type PlayerRating = {
 
 export type LiveKitColors = { primary: string; secondary: string }
 
+/** One other fixture's score in the same round, as it stands at the live match's committed minute. */
+export type ParallelScore = {
+  fixtureId: string
+  homeShort: string
+  awayShort: string
+  homeGoals: number
+  awayGoals: number
+}
+
 export type LiveMatchState = {
   fixtureId: string
   competitionName: string | null
@@ -706,6 +715,8 @@ export type LiveMatchState = {
   opponentRatings: PlayerRating[]
   homeClubColors: LiveKitColors
   awayClubColors: LiveKitColors
+  competitionId: string
+  parallelScores: ParallelScore[]
 }
 
 export type SubstituteRequest = { outPlayerId: string; inPlayerId: string }

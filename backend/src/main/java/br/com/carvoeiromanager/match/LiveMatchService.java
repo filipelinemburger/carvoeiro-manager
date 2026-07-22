@@ -21,6 +21,8 @@ import br.com.carvoeiromanager.season.SeasonAdvanceService;
 import br.com.carvoeiromanager.season.SeasonEvent;
 import br.com.carvoeiromanager.season.SeasonEventRepository;
 import br.com.carvoeiromanager.season.SeasonEventType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
@@ -41,6 +43,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class LiveMatchService {
+
+    private static final Logger log = LoggerFactory.getLogger(LiveMatchService.class);
 
     static final int MAX_SUBS = 5;
     static final int MINUTES = 90;
@@ -593,7 +597,44 @@ public class LiveMatchService {
                 awayClub.getName(), shortName(awayClub),
                 managedIsHome, minute, timeline.homeGoalsAt(minute), timeline.awayGoalsAt(minute),
                 status, events, onPitch, bench, MAX_SUBS - subsUsed, currentTactics, playerRatings,
-                opponentOnPitch, opponentTactics, opponentPlayerRatings, homeClubColors, awayClubColors);
+                opponentOnPitch, opponentTactics, opponentPlayerRatings, homeClubColors, awayClubColors,
+                lm.getCompetitionId().toString(), parallelScoresAsOf(lm, minute));
+    }
+
+    /**
+     * The round's OTHER fixtures' scores as they stand at {@code minute} (the currently-committed
+     * minute) — a read-only projection over the JSON pre-simulated at kickoff, counting only goal
+     * events with {@code minute <= committedMinute} so the display ticks up in step with the match
+     * being played (at full time it equals each {@link ParallelFixtureScore}'s stored final score).
+     * Null/blank (in-flight matches created before {@code parallel_scores} existed) yields an empty
+     * list. A parse failure also yields an empty list: this is a display-only projection and must
+     * never break {@code getLive}; genuine JSON corruption still surfaces loudly at {@code finish}.
+     */
+    private List<ParallelScore> parallelScoresAsOf(LiveMatch lm, int minute) {
+        String json = lm.getParallelScores();
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            List<ParallelFixtureScore> scores =
+                    objectMapper.readValue(json, new TypeReference<List<ParallelFixtureScore>>() { });
+            return scores.stream()
+                    .map(pfs -> new ParallelScore(pfs.fixtureId(), pfs.homeShort(), pfs.awayShort(),
+                            goalsAsOf(pfs, minute, true), goalsAsOf(pfs, minute, false)))
+                    .toList();
+        } catch (Exception e) {
+            // Display-only projection: a corrupt snapshot must never break getLive. Log so the
+            // corruption is observable — genuine JSON corruption still surfaces loudly at finish().
+            log.warn("Failed to parse parallel_scores for live match {}, showing no parallel scores",
+                    lm.getFixtureId(), e);
+            return List.of();
+        }
+    }
+
+    private int goalsAsOf(ParallelFixtureScore pfs, int minute, boolean home) {
+        return (int) pfs.events().stream()
+                .filter(e -> e.type().isGoal() && e.home() == home && e.minute() <= minute)
+                .count();
     }
 
     /**
