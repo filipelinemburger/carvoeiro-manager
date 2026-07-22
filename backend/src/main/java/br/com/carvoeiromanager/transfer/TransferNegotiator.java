@@ -14,14 +14,16 @@ import java.math.RoundingMode;
 @Component
 public class TransferNegotiator {
 
-    private static final BigDecimal ACCEPT_THRESHOLD = new BigDecimal("0.95");
-    private static final BigDecimal NEGOTIABLE_FLOOR = new BigDecimal("0.70");
-    private static final BigDecimal COUNTER_FACTOR = new BigDecimal("1.10");
+    private static final BigDecimal ACCEPT_RATIO_DEFAULT = new BigDecimal("0.95");
+    private static final BigDecimal ACCEPT_RATIO_LISTED = new BigDecimal("0.88");
+    private static final BigDecimal COUNTER_MIN_RATIO_DEFAULT = new BigDecimal("0.70");
+    private static final BigDecimal COUNTER_MIN_RATIO_LISTED = new BigDecimal("0.60");
+    private static final BigDecimal COUNTER_MARKUP = new BigDecimal("1.10");
     private static final BigDecimal SELL_COUNTER_MAX = new BigDecimal("1.15");
     private static final BigDecimal BID_FACTOR = new BigDecimal("0.90");
     private static final BigDecimal LISTED_BID_FACTOR = new BigDecimal("0.95");
 
-    private static final BigDecimal LISTED_ASK_FACTOR = new BigDecimal("0.85");
+    private static final BigDecimal LISTED_ASK_FACTOR = new BigDecimal("0.75");
     private static final BigDecimal UNLISTED_BASE_ASK_FACTOR = BigDecimal.ONE;
     private static final BigDecimal KEY_PLAYER_PREMIUM = new BigDecimal("0.20");
     private static final BigDecimal NO_COVER_PREMIUM = new BigDecimal("0.15");
@@ -33,17 +35,19 @@ public class TransferNegotiator {
 
     public NegotiationResult respondToBuy(BigDecimal value, BigDecimal offer, SellerContext context) {
         BigDecimal effective = scaled(value, askFactor(context));
-        if (offer.compareTo(scaled(effective, ACCEPT_THRESHOLD)) >= 0) {
+        BigDecimal acceptRatio = context.listed() ? ACCEPT_RATIO_LISTED : ACCEPT_RATIO_DEFAULT;
+        BigDecimal counterMinRatio = context.listed() ? COUNTER_MIN_RATIO_LISTED : COUNTER_MIN_RATIO_DEFAULT;
+        if (offer.compareTo(scaled(effective, acceptRatio)) >= 0) {
             return new NegotiationResult(NegotiationDecision.ACCEPT, null);
         }
-        if (offer.compareTo(scaled(effective, NEGOTIABLE_FLOOR)) >= 0) {
-            return new NegotiationResult(NegotiationDecision.COUNTER, scaled(effective, COUNTER_FACTOR));
+        if (offer.compareTo(scaled(effective, counterMinRatio)) >= 0) {
+            return new NegotiationResult(NegotiationDecision.COUNTER, scaled(effective, COUNTER_MARKUP));
         }
         return new NegotiationResult(NegotiationDecision.REJECT, null);
     }
 
     /**
-     * Listed players are priced to move (0.85). Unlisted players start at 1.00 and get pricier
+     * Listed players are priced to move (0.75). Unlisted players start at 1.00 and get pricier
      * the more the seller values them: +0.20 if they're a key player (top-11 overall in their
      * squad), +0.15 if their position has no cover. The whole thing is scaled by the seller's
      * financial health (desperate clubs sell cheap) and clamped to [0.65, 1.50].

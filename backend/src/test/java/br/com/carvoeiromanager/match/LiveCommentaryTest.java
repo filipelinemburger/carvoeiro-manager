@@ -2,9 +2,169 @@ package br.com.carvoeiromanager.match;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class LiveCommentaryTest {
+
+    // Maps every private String[] pool field in LiveCommentary to the number of arguments its
+    // call site passes via .formatted(...). Lines may use fewer placeholders than that (extra
+    // args are silently ignored by String.format) but never more (that throws
+    // MissingFormatArgumentException) — see everyPoolLinesPlaceholderCountNeverExceedsItsCallArity.
+    private static final Map<String, Integer> ARITY_BY_POOL_FIELD = Map.ofEntries(
+            Map.entry("GOAL", 1),
+            Map.entry("GOAL_ASSISTED", 2),
+            Map.entry("SET_PIECE", 1),
+            Map.entry("CHANCE", 1),
+            Map.entry("YELLOW", 1),
+            Map.entry("RED", 1),
+            Map.entry("SECOND_YELLOW_RED", 1),
+            Map.entry("INJURY", 1),
+            Map.entry("PENALTY_GOAL_LINES", 1),
+            Map.entry("PENALTY_MISS_LINES", 1),
+            Map.entry("FREE_KICK_LINES", 1),
+            Map.entry("CORNER_TWO_NAME", 2),
+            Map.entry("CORNER_ONE_NAME", 1),
+            Map.entry("SUBSTITUTION_LINES", 2),
+            Map.entry("HALF_TIME_LINES", 0),
+            Map.entry("TACTICS_USER_LINES", 0),
+            Map.entry("TACTICS_PUSH", 0),
+            Map.entry("TACTICS_ALL_OUT", 0),
+            Map.entry("TACTICS_PROTECT", 0),
+            Map.entry("TACTICS_PARK_THE_BUS", 0),
+            Map.entry("TACTICS_NORMAL", 0),
+            Map.entry("OPP_GOAL", 2),
+            Map.entry("OPP_GOAL_ASSISTED", 3),
+            Map.entry("OPP_PENALTY_GOAL", 2),
+            Map.entry("OPP_FREE_KICK_GOAL", 2),
+            Map.entry("OPP_CORNER_GOAL", 2));
+
+    @Test
+    void arityMapCoversExactlyEveryPoolFieldInTheClass() {
+        Set<String> actualPoolFields = Arrays.stream(LiveCommentary.class.getDeclaredFields())
+                .filter(f -> f.getType().equals(String[].class))
+                .map(Field::getName)
+                .collect(Collectors.toSet());
+        assertThat(ARITY_BY_POOL_FIELD.keySet()).containsExactlyInAnyOrderElementsOf(actualPoolFields);
+    }
+
+    @Test
+    void everyPoolLinesPlaceholderCountNeverExceedsItsCallArity() throws Exception {
+        for (Map.Entry<String, Integer> entry : ARITY_BY_POOL_FIELD.entrySet()) {
+            Field field = LiveCommentary.class.getDeclaredField(entry.getKey());
+            field.setAccessible(true);
+            String[] lines = (String[]) field.get(null);
+            int arity = entry.getValue();
+            assertThat(lines).as("pool %s must have at least one line", entry.getKey()).isNotEmpty();
+            for (String line : lines) {
+                int placeholders = line.split("%s", -1).length - 1;
+                assertThat(placeholders)
+                        .as("pool %s line [%s] has %d '%%s' placeholders but its call site passes %d args",
+                                entry.getKey(), line, placeholders, arity)
+                        .isLessThanOrEqualTo(arity);
+            }
+        }
+    }
+
+    @Test
+    void theFiveNewOpponentPoolsEachHaveAtLeastFourLines() throws Exception {
+        for (String field : Set.of("OPP_GOAL", "OPP_GOAL_ASSISTED", "OPP_PENALTY_GOAL",
+                "OPP_FREE_KICK_GOAL", "OPP_CORNER_GOAL")) {
+            Field f = LiveCommentary.class.getDeclaredField(field);
+            f.setAccessible(true);
+            String[] lines = (String[]) f.get(null);
+            assertThat(lines.length).as("pool %s should have 4+ lines", field).isGreaterThanOrEqualTo(4);
+        }
+    }
+
+    @Test
+    void anOpponentGoalWithoutAnAssistUsesTheSadOppGoalPoolAndNamesTheScorer() {
+        String result = LiveCommentary.of(EventType.GOAL, "Rival", null, 60, null,
+                false, false, false, true, "Avaí");
+        assertThat(result).contains("Rival");
+        assertThat(result).isIn(
+                "Gol deles... a zaga bate cabeça e o Rival aproveita.",
+                "Rival marca para o Avaí e o estádio fica em silêncio.",
+                "Vazou atrás! Rival aparece livre e balança as redes contra nós.",
+                "Golpe duro... Rival marca pelo Avaí e a torcida baixa a cabeça.",
+                "Que baque, torcida... Rival não perdoa e é gol do adversário.",
+                "Doeu... Rival decreta o gol do Avaí e o silêncio toma conta da arquibancada.");
+    }
+
+    @Test
+    void anOpponentGoalWithAnAssistUsesTheSadOppGoalAssistedPool() {
+        String result = LiveCommentary.of(EventType.GOAL, "Rival", "Companheiro", 60, null,
+                false, false, false, true, "Avaí");
+        assertThat(result).contains("Rival").contains("Companheiro");
+        assertThat(result).isIn(
+                "Bola alçada na área... Companheiro cruza, Rival cabeceia e é gol deles.",
+                "Assistência amarga: Companheiro serve Rival, que não perdoa contra nós.",
+                "Companheiro enxergou o espaço, tocou pra Rival do Avaí, e é gol do adversário.",
+                "Jogada coletiva deles: Companheiro cruza, Rival empurra pro gol do Avaí.");
+    }
+
+    @Test
+    void anOpponentPenaltyGoalUsesTheSadOppPenaltyPool() {
+        String result = LiveCommentary.of(EventType.PENALTY_GOAL, "Rival", null, 60, null,
+                false, false, false, true, "Avaí");
+        assertThat(result).isIn(
+                "Pênalti pra eles... Rival não desperdiça.",
+                "É pênalti a favor do adversário... Rival bate e marca. Que sufoco.",
+                "Vai pra bola... Rival converte o pênalti pelo Avaí e complica nossa vida.",
+                "Doeu... Rival cobra com categoria e amplia o placar do Avaí.");
+    }
+
+    @Test
+    void anOpponentFreeKickGoalUsesTheSadOppFreeKickPool() {
+        String result = LiveCommentary.of(EventType.FREE_KICK_GOAL, "Rival", null, 60, null,
+                false, false, false, true, "Avaí");
+        assertThat(result).isIn(
+                "Falta perigosa... Rival bate e balança as redes contra nós.",
+                "Cobrança certeira do adversário: Rival acerta o ângulo e marca pelo Avaí.",
+                "A barreira nem pulou... Rival manda uma bomba e é gol deles.",
+                "Que pontaria... Rival cobra a falta e decreta mais um gol do Avaí.");
+    }
+
+    @Test
+    void anOpponentCornerGoalUsesTheSadOppCornerPool() {
+        String result = LiveCommentary.of(EventType.CORNER_GOAL, "Rival", "Batedor", 60, null,
+                false, false, false, true, "Avaí");
+        assertThat(result).isIn(
+                "Escanteio cobrado, Rival sobe mais alto e cabeceia pra dentro. Gol deles.",
+                "Bola na área, Rival testa e amplia o placar do Avaí.",
+                "Subiu sozinho... Rival cabeceia e balança as redes contra nós.",
+                "Que falha na marcação... Rival aproveita o escanteio e marca pelo Avaí.");
+    }
+
+    @Test
+    void theExistingSignatureDelegatesToTheOverloadWithOpponentGoalFalse() {
+        String viaOldSignature = LiveCommentary.of(EventType.GOAL, "Otero", null, 60, null, false, false, false);
+        String viaNewSignatureFalse = LiveCommentary.of(EventType.GOAL, "Otero", null, 60, null,
+                false, false, false, false, null);
+        assertThat(viaOldSignature).isEqualTo(viaNewSignatureFalse);
+    }
+
+    @Test
+    void managedGoalCommentaryIsByteForByteUnchangedRegardlessOfTheNewOverload() {
+        // Regression: the managed (non-opponent) path must keep producing the exact same lines —
+        // membership in the original GOAL pool, never anything from OPP_GOAL.
+        for (int minute = 1; minute <= 90; minute++) {
+            String result = LiveCommentary.of(EventType.GOAL, "Otero", null, minute, null,
+                    false, false, false, false, null);
+            assertThat(result).isIn(
+                    "GOOOOOOOOOOOOOOOOOOL! Otero balança as redes!",
+                    "Otero marca! É GOOOOOOOOOOOOOOOOOOL!!! E que golaaaaçoooo!",
+                    "Otero aparece na área e não perdoa! É GOOOOOOOOOOOOOOOOOOL!!!",
+                    "GOOOOL! Otero! Eu tô emocionado, gente, que golaço impressionante!",
+                    "É GOOOOOOOOOOOOOOOOOOL!!! Bateu, tremeu a rede e caiu o estádio: golaço de Otero!",
+                    "Joga a luva, goleirão! Otero manda uma patada e é gooooooooooool!");
+        }
+    }
 
     // Variant index = minute + type.ordinal() mod array length; every assertion below checks
     // membership in the full current pool rather than a fixed index or exact string, so

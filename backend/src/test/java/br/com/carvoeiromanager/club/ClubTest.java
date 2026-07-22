@@ -25,4 +25,19 @@ class ClubTest {
         assertThat(club.getDefaultPressing()).isEqualTo("HIGH");
         assertThat(club.getDefaultMarking()).isEqualTo("MAN_TIGHT");
     }
+
+    @Test
+    void resolvedStadiumNameReturnsTheSeededNameWhenPresent() {
+        Club club = Club.create(java.util.UUID.randomUUID(), "Test FC", "TST");
+        club.setStadiumName("Arena Real");
+
+        assertThat(club.resolvedStadiumName()).isEqualTo("Arena Real");
+    }
+
+    @Test
+    void resolvedStadiumNameFallsBackToAGenericNameWhenUnset() {
+        Club club = Club.create(java.util.UUID.randomUUID(), "Test FC", "TST");
+
+        assertThat(club.resolvedStadiumName()).isEqualTo("Estádio Test FC");
+    }
 }

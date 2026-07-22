@@ -12,10 +12,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Table-driven coverage of {@link TransferNegotiator#respondToBuy}'s ask-factor math:
- * listed -> 0.85; unlisted -> 1.00 + 0.20 keyPlayer + 0.15 noCover; x health multiplier
- * (DESPERATE 0.75 / TIGHT 0.90 / HEALTHY 1.00); clamped to [0.65, 1.50]. Every case below
- * derives its expected effective value/accept/counter figures from that formula so the
- * assertions double as documentation of the game balance.
+ * listed -> 0.75; unlisted -> 1.00 + 0.20 keyPlayer + 0.15 noCover; x health multiplier
+ * (DESPERATE 0.75 / TIGHT 0.90 / HEALTHY 1.00); clamped to [0.65, 1.50]. Listed players are
+ * also easier to close: accept at 0.88 x effective (vs 0.95 unlisted) and stay negotiable down
+ * to 0.60 x effective (vs 0.70 unlisted). Every case below derives its expected effective
+ * value/accept/counter figures from that formula so the assertions double as documentation of
+ * the game balance.
  */
 class TransferNegotiatorTest {
 
@@ -31,27 +33,35 @@ class TransferNegotiatorTest {
         return base.multiply(new BigDecimal(factor)).setScale(2, RoundingMode.HALF_UP);
     }
 
-    // ---- listed players: flat 0.85 ask factor, scaled by health ----
+    // ---- listed players: flat 0.75 ask factor, scaled by health; looser accept/counter bands ----
 
     @Test
-    void listedHealthySellerAsksEightyFivePercentOfValue() {
+    void listedHealthySellerAsksSeventyFivePercentOfValue() {
         SellerContext context = ctx(true, false, false, HEALTHY);
-        BigDecimal effective = pct(value, "0.85"); // 850000.00
-        BigDecimal accept = pct(effective, "0.95"); // 807500.00 (~0.81 x value)
+        BigDecimal effective = pct(value, "0.75"); // 750000.00
+        BigDecimal accept = pct(effective, "0.88"); // 660000.00 (~0.66 x value)
 
         NegotiationResult atAccept = negotiator.respondToBuy(value, accept, context);
         assertThat(atAccept.decision()).isEqualTo(NegotiationDecision.ACCEPT);
 
         NegotiationResult justBelow = negotiator.respondToBuy(value, accept.subtract(new BigDecimal("0.01")), context);
         assertThat(justBelow.decision()).isEqualTo(NegotiationDecision.COUNTER);
-        assertThat(justBelow.counterAmount()).isEqualByComparingTo(pct(effective, "1.10")); // 935000.00
+        assertThat(justBelow.counterAmount()).isEqualByComparingTo(pct(effective, "1.10")); // 825000.00
+
+        BigDecimal floor = pct(effective, "0.60"); // 450000.00
+        NegotiationResult atFloor = negotiator.respondToBuy(value, floor, context);
+        assertThat(atFloor.decision()).isEqualTo(NegotiationDecision.COUNTER);
+        assertThat(atFloor.counterAmount()).isEqualByComparingTo(pct(effective, "1.10"));
+
+        NegotiationResult belowFloor = negotiator.respondToBuy(value, floor.subtract(new BigDecimal("0.01")), context);
+        assertThat(belowFloor.decision()).isEqualTo(NegotiationDecision.REJECT);
     }
 
     @Test
-    void listedTightSellerAsksEightyFivePercentTimesNinetyPercent() {
+    void listedTightSellerAsksSeventyFivePercentTimesNinetyPercent() {
         SellerContext context = ctx(true, false, false, TIGHT);
-        BigDecimal effective = pct(pct(value, "0.85"), "0.90"); // 765000.00
-        BigDecimal accept = pct(effective, "0.95"); // 726750.00
+        BigDecimal effective = pct(pct(value, "0.75"), "0.90"); // 675000.00
+        BigDecimal accept = pct(effective, "0.88"); // 594000.00
 
         NegotiationResult r = negotiator.respondToBuy(value, accept, context);
         assertThat(r.decision()).isEqualTo(NegotiationDecision.ACCEPT);
@@ -59,17 +69,17 @@ class TransferNegotiatorTest {
 
     @Test
     void listedDesperateSellerAskFactorClampsAtSixtyFivePercentFloor() {
-        // 0.85 * 0.75 = 0.6375, below the 0.65 floor -> clamps to 0.65.
+        // 0.75 * 0.75 = 0.5625, below the 0.65 floor -> clamps to 0.65.
         SellerContext context = ctx(true, false, false, DESPERATE);
         BigDecimal clampedEffective = pct(value, "0.65"); // 650000.00
-        BigDecimal accept = pct(clampedEffective, "0.95"); // 617500.00
+        BigDecimal accept = pct(clampedEffective, "0.88"); // 572000.00
 
         NegotiationResult atClampedAccept = negotiator.respondToBuy(value, accept, context);
         assertThat(atClampedAccept.decision()).isEqualTo(NegotiationDecision.ACCEPT);
 
-        // An offer priced against the unclamped 0.6375 factor would fall short of the real
+        // An offer priced against the unclamped 0.5625 factor would fall short of the real
         // (clamped) accept threshold, proving the clamp actually kicked in.
-        BigDecimal unclampedAccept = pct(pct(pct(value, "0.85"), "0.75"), "0.95"); // 605625.00
+        BigDecimal unclampedAccept = pct(pct(pct(value, "0.75"), "0.75"), "0.88"); // 495000.00
         NegotiationResult belowClampedFloor = negotiator.respondToBuy(value, unclampedAccept, context);
         assertThat(belowClampedFloor.decision()).isEqualTo(NegotiationDecision.COUNTER);
     }

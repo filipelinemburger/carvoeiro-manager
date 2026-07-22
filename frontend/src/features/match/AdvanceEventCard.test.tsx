@@ -220,6 +220,23 @@ describe('AdvanceEventCard', () => {
       expect(screen.queryByText(/Criciúma Esporte Clube/)).not.toBeInTheDocument()
       expect(screen.queryByText(/Figueirense Futebol Clube/)).not.toBeInTheDocument()
     })
+
+    it('renders the home stadium as a caption under each result row', () => {
+      renderCard({
+        ...MATCH_RESULT,
+        results: [
+          { fixtureId: 'f1', homeClubId: 'c1', homeClubName: 'Criciúma', homeGoals: 2, awayClubId: 'c2', awayClubName: 'Figueirense', awayGoals: 1, stadium: 'Estádio Heriberto Hülse' },
+          { fixtureId: 'f2', homeClubId: 'c3', homeClubName: 'Avaí', homeGoals: 0, awayClubId: 'c4', awayClubName: 'Joinville', awayGoals: 0, stadium: 'Estádio da Ressacada' },
+        ],
+      })
+      expect(screen.getByText('Estádio Heriberto Hülse')).toBeInTheDocument()
+      expect(screen.getByText('Estádio da Ressacada')).toBeInTheDocument()
+    })
+
+    it('does not render a stadium caption for older news payloads without the field (null-safe)', () => {
+      renderCard(MATCH_RESULT)
+      expect(screen.queryByText(/Estádio/)).not.toBeInTheDocument()
+    })
   })
 
   describe('TRANSFER type', () => {

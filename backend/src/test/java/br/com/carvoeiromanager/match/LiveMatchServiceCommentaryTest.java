@@ -15,6 +15,32 @@ class LiveMatchServiceCommentaryTest {
     }
 
     @Test
+    void anOpponentSideGoalIsAnOpponentGoal() {
+        LiveTimelineEvent opponentGoal = goal(10, false);
+        assertThat(LiveMatchService.isOpponentGoal(opponentGoal, true)).isTrue();
+    }
+
+    @Test
+    void aManagedSideGoalIsNeverAnOpponentGoal() {
+        LiveTimelineEvent managedGoal = goal(10, true);
+        assertThat(LiveMatchService.isOpponentGoal(managedGoal, true)).isFalse();
+    }
+
+    @Test
+    void isOpponentGoalFollowsWhicheverSideIsManaged() {
+        LiveTimelineEvent homeGoal = goal(10, true);
+        // Same event, but now the away side is managed — the home scorer becomes the opponent.
+        assertThat(LiveMatchService.isOpponentGoal(homeGoal, false)).isTrue();
+        assertThat(LiveMatchService.isOpponentGoal(homeGoal, true)).isFalse();
+    }
+
+    @Test
+    void aNonGoalEventIsNeverAnOpponentGoal() {
+        LiveTimelineEvent card = new LiveTimelineEvent(10, EventType.YELLOW_CARD, false, UUID.randomUUID(), null, null, null);
+        assertThat(LiveMatchService.isOpponentGoal(card, true)).isFalse();
+    }
+
+    @Test
     void aGoalThatErasesADeficitForTheManagedSideIsAComeback() {
         LiveTimelineEvent opponentGoal = goal(10, false);
         LiveTimelineEvent managedEqualizer = goal(30, true);

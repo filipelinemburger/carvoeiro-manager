@@ -2,14 +2,13 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Alert, Box, Button, Card, CardContent, Chip, Divider, FormControl, IconButton, InputAdornment, Link,
+  Alert, Box, Button, Card, CardContent, Chip, Divider, FormControl, InputAdornment, Link,
   NativeSelect, Pagination, Stack, Tab, Tabs, TextField, Typography,
 } from '@mui/material'
 import {
   getSaveGame, getMarket, getClubs, getOffers, getSquad, getPlayer,
   makeOffer, acceptCounter, withdrawOffer, respondToOffer,
 } from '../../api/career'
-import { getWatchlist, addToWatchlist, removeFromWatchlist } from '../../api/watchlist'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
@@ -17,6 +16,7 @@ import { FreeAgentsPanel } from '../contract/FreeAgentsPage'
 import PreContractsPanel from './PreContractsPanel'
 import WatchlistPanel from './WatchlistPanel'
 import { PlayerDetails } from '../squad/PlayerDetails'
+import { WatchStar } from '../players/WatchStar'
 import { MoneyField } from '../../components/MoneyField'
 import { MakeOfferDialog, type OfferTarget } from './MakeOfferDialog'
 import { LISTED_REASON_LABEL } from '../squad/listedReason'
@@ -31,7 +31,6 @@ import GroupsIcon from '@mui/icons-material/Groups'
 import SportsSoccerIcon from '@mui/icons-material/SportsSoccer'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import StarIcon from '@mui/icons-material/Star'
-import StarBorderIcon from '@mui/icons-material/StarBorder'
 import SortIcon from '@mui/icons-material/Sort'
 
 const MARKET_PAGE_SIZE = 20
@@ -305,24 +304,6 @@ export function TransferMarketPage() {
     queryFn: () => getOffers(saveGameId, token ?? ''),
     enabled,
     staleTime: Infinity,
-  })
-  // Backs the star toggle in PlayerDetails — kept at page level (not inside WatchlistPanel)
-  // so the same cache entry drives both the star icon and the Observados tab's list.
-  const watchlistQuery = useQuery({
-    queryKey: ['watchlist', saveGameId],
-    queryFn: () => getWatchlist(saveGameId, token ?? ''),
-    enabled,
-    staleTime: Infinity,
-  })
-  const watchedPlayerIds = new Set((watchlistQuery.data ?? []).map(p => p.playerId))
-  const invalidateWatchlist = () => void queryClient.invalidateQueries({ queryKey: ['watchlist', saveGameId] })
-  const addWatchMut = useMutation({
-    mutationFn: (playerId: string) => addToWatchlist(saveGameId, playerId, token ?? ''),
-    onSuccess: invalidateWatchlist,
-  })
-  const removeWatchMut = useMutation({
-    mutationFn: (playerId: string) => removeFromWatchlist(saveGameId, playerId, token ?? ''),
-    onSuccess: invalidateWatchlist,
   })
 
   // My squad — used to open full player details for a player another club is bidding on.
@@ -791,20 +772,7 @@ export function TransferMarketPage() {
         saveGameId={saveGameId}
         isOwnPlayer={!detailsIsRival}
         watchAction={detailsIsRival && resolvedDetailsPlayer ? (
-          <IconButton
-            size="small"
-            aria-label={`${watchedPlayerIds.has(resolvedDetailsPlayer.id) ? 'Remover da' : 'Adicionar à'} lista de observação de ${resolvedDetailsPlayer.name}`}
-            disabled={addWatchMut.isPending || removeWatchMut.isPending}
-            onClick={() => {
-              const id = resolvedDetailsPlayer.id
-              if (watchedPlayerIds.has(id)) removeWatchMut.mutate(id)
-              else addWatchMut.mutate(id)
-            }}
-          >
-            {watchedPlayerIds.has(resolvedDetailsPlayer.id)
-              ? <StarIcon fontSize="small" sx={{ color: 'warning.main' }} />
-              : <StarBorderIcon fontSize="small" />}
-          </IconButton>
+          <WatchStar saveGameId={saveGameId} playerId={resolvedDetailsPlayer.id} />
         ) : undefined}
       />
 

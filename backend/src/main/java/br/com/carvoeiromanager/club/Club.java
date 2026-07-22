@@ -97,6 +97,11 @@ public class Club {
     public String getCommonName() { return commonName; }
     public String getNickname() { return nickname; }
     public String getStadiumName() { return stadiumName; }
+
+    /** Resolved stadium name for display: the real seeded name, or a generic fallback. */
+    public String resolvedStadiumName() {
+        return stadiumName != null ? stadiumName : "Estádio " + name;
+    }
     public String getPrimaryColor() { return primaryColor; }
     public String getSecondaryColor() { return secondaryColor; }
     public String getDefaultFormation() { return defaultFormation; }

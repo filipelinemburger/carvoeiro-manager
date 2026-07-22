@@ -260,8 +260,8 @@ class TransferServiceBuyingIT {
         target.listForTransfer(br.com.carvoeiromanager.player.ListedReason.SURPLUS);
         playerRepository.save(target);
         BigDecimal value = transferValuation.marketValue(target.getOverall(), target.getAge());
-        // askFactor = 0.85 (listed) x 1.00 (healthy) = 0.85; a lowball 85% of value clears the
-        // 0.95 x effective (0.8075 x value) accept bar even though it's well under full value.
+        // askFactor = 0.75 (listed) x 1.00 (healthy) = 0.75; a lowball 85% of value clears the
+        // 0.88 x effective (0.66 x value) accept bar even though it's well under full value.
         BigDecimal lowball = pct(value, "0.85");
 
         TransferOfferResponse r = transferService.makeOffer(

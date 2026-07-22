@@ -11,6 +11,7 @@ public record FixtureResultResponse(
         UUID awayClubId,
         String awayClubName,
         String awayClubShortName,
-        int awayGoals
+        int awayGoals,
+        String stadium
 ) {
 }

@@ -11,6 +11,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { formatBRL } from '../../lib/money'
 import { PlayerDetails } from '../squad/PlayerDetails'
+import { WatchStar } from '../players/WatchStar'
 import { MakeOfferDialog, type OfferTarget } from '../transfer/MakeOfferDialog'
 import type { PlayerResponse, TransferOffer } from '../../api/types'
 
@@ -203,7 +204,15 @@ export function ClubViewPage() {
         )
       )}
 
-      <PlayerDetails player={detailsPlayer} onClose={() => setDetailsPlayer(null)} saveGameId={saveGameId} />
+      <PlayerDetails
+        player={detailsPlayer}
+        onClose={() => setDetailsPlayer(null)}
+        saveGameId={saveGameId}
+        isOwnPlayer={isManagedClub}
+        watchAction={!isManagedClub && detailsPlayer ? (
+          <WatchStar saveGameId={saveGameId} playerId={detailsPlayer.id} />
+        ) : undefined}
+      />
 
       <MakeOfferDialog
         target={offerTarget}

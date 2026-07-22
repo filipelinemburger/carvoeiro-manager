@@ -7,6 +7,7 @@ public record LiveMatchState(
         String competitionName,
         Integer round,
         String matchDate,
+        String stadiumName,
         String homeClubName,
         String homeClubShortName,
         String awayClubName,

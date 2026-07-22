@@ -5,12 +5,15 @@ import { Box, Stack, Typography, Button, Chip, Alert, LinearProgress, Tabs, Tab 
 import { useAuth } from '../../auth/AuthContext'
 import { formatDatePtBR } from '../../utils/date'
 import { getLiveMatch, advanceLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics } from '../../api/liveMatch'
+import { getPlayer } from '../../api/career'
 import type { LiveEvent, LiveMatchState, LiveTacticsRequest, LivePlayer, LiveKitColors } from '../../api/types'
 import { MatchActionsDialog } from './MatchActionsDialog'
 import type { SubPair } from './MatchActionsDialog'
 import { PlayerRatingsList } from './PlayerRatingsList'
 import { PreMatchLineups } from './PreMatchLineups'
 import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
+import { PlayerDetails } from '../squad/PlayerDetails'
+import { WatchStar } from '../players/WatchStar'
 
 /** Builds one side's pitch view-model from its live on-pitch roster. Module-scope (no
  * component state) so it's freely reusable for either side without a closure. */
@@ -50,12 +53,28 @@ export function LiveMatchPage() {
   const [feedTab, setFeedTab] = useState<0 | 1 | 2>(0)   // 0 = Lances, 1 = Atuações, 2 = Campo
   const [applyPending, setApplyPending] = useState(false)
   const [subError, setSubError] = useState<string | null>(null)
+  // The player whose read-only details modal is open, if any — clicked from a lineup or
+  // ratings-row name. `selectedPlayerIsOwn` decides whether the modal shows the watch star
+  // (opponents only) and is captured at click time from the side the name was rendered in.
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
+  const [selectedPlayerIsOwn, setSelectedPlayerIsOwn] = useState(true)
 
   const { data: state } = useQuery<LiveMatchState | null>({
     queryKey: ['liveMatch', saveGameId],
     queryFn: () => getLiveMatch(saveGameId, token ?? ''),
     enabled: Boolean(saveGameId && token),
     retry: false,
+  })
+
+  const openPlayerDetails = (playerId: string, isOwnPlayer: boolean) => {
+    setSelectedPlayerId(playerId)
+    setSelectedPlayerIsOwn(isOwnPlayer)
+  }
+
+  const selectedPlayerQuery = useQuery({
+    queryKey: ['player', saveGameId, selectedPlayerId],
+    queryFn: () => getPlayer(saveGameId, selectedPlayerId!, token ?? ''),
+    enabled: Boolean(saveGameId && token && selectedPlayerId),
   })
 
   const setState = (s: LiveMatchState) => queryClient.setQueryData(['liveMatch', saveGameId], s)
@@ -176,7 +195,9 @@ export function LiveMatchPage() {
       </Stack>
       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
         {state.competitionName}{state.round !== null ? ` · Rodada ${state.round + 1}` : ''}
-        {state.matchDate ? ` · ${formatDatePtBR(state.matchDate)}` : ''}
+        {state.matchDate
+          ? ` · ${state.stadiumName ? `${state.stadiumName} · ` : ''}${formatDatePtBR(state.matchDate)}`
+          : ''}
       </Typography>
       {!fullTime && <LinearProgress variant="determinate" value={(state.minute / 90) * 100} sx={{ my: 1 }} />}
 
@@ -236,12 +257,15 @@ export function LiveMatchPage() {
               clubName: state.homeClubShortName,
               formation: state.managedIsHome ? state.currentTactics.formation : state.opponentTactics.formation,
               players: state.managedIsHome ? state.onPitch : state.opponentOnPitch,
+              isOwnSide: state.managedIsHome,
             }}
             away={{
               clubName: state.awayClubShortName,
               formation: state.managedIsHome ? state.opponentTactics.formation : state.currentTactics.formation,
               players: state.managedIsHome ? state.opponentOnPitch : state.onPitch,
+              isOwnSide: !state.managedIsHome,
             }}
+            onPlayerClick={openPlayerDetails}
           />
         ) : (
           <Stack spacing={0.5} sx={{ mt: 1 }}>
@@ -263,6 +287,8 @@ export function LiveMatchPage() {
               <PlayerRatingsList
                 ratings={state.playerRatings}
                 onPitchIds={new Set(state.onPitch.map(p => p.playerId))}
+                isOwnPlayer
+                onPlayerClick={openPlayerDetails}
               />
             ) : (
               <Typography sx={{ color: 'text.secondary' }}>
@@ -276,6 +302,8 @@ export function LiveMatchPage() {
               <PlayerRatingsList
                 ratings={state.opponentRatings}
                 onPitchIds={new Set(state.opponentOnPitch.map(p => p.playerId))}
+                isOwnPlayer={false}
+                onPlayerClick={openPlayerDetails}
               />
             ) : (
               <Typography sx={{ color: 'text.secondary' }}>
@@ -314,6 +342,20 @@ export function LiveMatchPage() {
         pending={applyPending}
         onApply={handleApply}
         currentTactics={state.currentTactics}
+      />
+
+      {/* Read-only player details, opened from a lineup or ratings-row name. No
+          lineupControl/contractAction/listingAction here — those only make sense on the squad
+          management screens. The watch star only renders for opponent-side players, and only
+          once getPlayer resolves (WatchStar is never mounted with an unknown id). */}
+      <PlayerDetails
+        player={selectedPlayerQuery.data ?? null}
+        onClose={() => setSelectedPlayerId(null)}
+        saveGameId={saveGameId}
+        isOwnPlayer={selectedPlayerIsOwn}
+        watchAction={!selectedPlayerIsOwn && selectedPlayerQuery.data ? (
+          <WatchStar saveGameId={saveGameId} playerId={selectedPlayerQuery.data.id} />
+        ) : undefined}
       />
     </Box>
   )

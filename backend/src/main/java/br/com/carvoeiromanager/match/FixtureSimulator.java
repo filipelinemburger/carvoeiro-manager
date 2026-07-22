@@ -184,7 +184,8 @@ public class FixtureSimulator {
                 homeClubId, homeClub != null ? homeClub.getName() : "", shortName(homeClub),
                 match.homeGoals(),
                 awayClubId, awayClub != null ? awayClub.getName() : "", shortName(awayClub),
-                match.awayGoals());
+                match.awayGoals(),
+                homeClub != null ? homeClub.resolvedStadiumName() : null);
         return new FixtureSim(response, homeXi, awayXi, match.homeGoals(), match.awayGoals(), attributed,
                 homeFitness, awayFitness);
     }

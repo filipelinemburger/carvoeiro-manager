@@ -93,6 +93,16 @@ function MatchTimeline({ result, saveGameId, competitionId, managedClubId }: {
                 {' — '}
                 <strong>{r.awayGoals}</strong> {r.awayClubShortName ?? r.awayClubName}
               </Typography>
+              {/* Old news payloads persisted before this field existed have no stadium — omit the line. */}
+              {r.stadium && (
+                <Typography
+                  variant="caption"
+                  component="div"
+                  sx={{ color: 'text.secondary', mt: '2px' }}
+                >
+                  {r.stadium}
+                </Typography>
+              )}
             </TimelineNode>
           )
         })}

@@ -4,6 +4,8 @@ import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.club.Club;
+import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.player.Player;
@@ -52,6 +54,9 @@ class LiveMatchServiceKickoffIT {
 
     @Autowired
     FixtureRepository fixtureRepository;
+
+    @Autowired
+    ClubRepository clubRepository;
 
     private UUID saveGameId;
     private UUID userId;
@@ -150,5 +155,15 @@ class LiveMatchServiceKickoffIT {
         LiveMatchState state = liveMatchService.kickoff(saveGameId, userId);
         assertThat(state.homeClubShortName()).isNotBlank();
         assertThat(state.awayClubShortName()).isNotBlank();
+    }
+
+    @Test
+    void kickoffPopulatesTheHomeClubsStadiumName() {
+        LiveMatchState state = liveMatchService.kickoff(saveGameId, userId);
+        Fixture fixture = fixtureRepository.findById(UUID.fromString(state.fixtureId())).orElseThrow();
+        Club homeClub = clubRepository.findById(fixture.getHomeClubId()).orElseThrow();
+
+        assertThat(state.stadiumName()).isNotBlank();
+        assertThat(state.stadiumName()).isEqualTo(homeClub.resolvedStadiumName());
     }
 }
