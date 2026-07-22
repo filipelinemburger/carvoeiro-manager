@@ -1,5 +1,7 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.common.security.CurrentUser;
 import br.com.carvoeiromanager.season.AdvanceResponse;
 import jakarta.validation.Valid;
@@ -44,6 +46,22 @@ public class LiveMatchController {
             @PathVariable UUID saveGameId,
             @CurrentUser UUID userId) {
         return ResponseEntity.ok(liveMatchService.advance(saveGameId, userId));
+    }
+
+    @PostMapping("/advance-to")
+    public ResponseEntity<LiveMatchState> advanceTo(
+            @PathVariable UUID saveGameId,
+            @Valid @RequestBody AdvanceToRequest request,
+            @CurrentUser UUID userId) {
+        return ResponseEntity.ok(liveMatchService.advanceTo(saveGameId, userId, parseTarget(request.target())));
+    }
+
+    private AdvanceTarget parseTarget(String value) {
+        try {
+            return AdvanceTarget.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, "Unknown advance target: " + value);
+        }
     }
 
     @PostMapping("/substitutions")

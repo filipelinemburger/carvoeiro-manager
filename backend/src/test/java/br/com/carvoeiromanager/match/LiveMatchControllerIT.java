@@ -146,6 +146,34 @@ class LiveMatchControllerIT {
                 .andExpect(status().isNoContent());
     }
 
+    @Test
+    void advanceToFullTimeOverHttpReachesFullTimeInOneCall() throws Exception {
+        mockMvc.perform(post("/api/v1/save-games/{s}/live-match/kickoff", saveGameId)
+                        .header("Authorization", bearer))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/save-games/{s}/live-match/advance-to", saveGameId)
+                        .header("Authorization", bearer)
+                        .contentType("application/json")
+                        .content("{\"target\":\"FULL_TIME\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("FULL_TIME"))
+                .andExpect(jsonPath("$.minute").value(90));
+    }
+
+    @Test
+    void advanceToWithAnUnknownTargetIsRejectedWith400() throws Exception {
+        mockMvc.perform(post("/api/v1/save-games/{s}/live-match/kickoff", saveGameId)
+                        .header("Authorization", bearer))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/save-games/{s}/live-match/advance-to", saveGameId)
+                        .header("Authorization", bearer)
+                        .contentType("application/json")
+                        .content("{\"target\":\"NOT_A_REAL_TARGET\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
     // --- helpers ---
 
     private String defaultRole(String position) {

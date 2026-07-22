@@ -249,13 +249,64 @@ public class LiveMatchService {
         if (lm.getCommittedMinute() >= MINUTES) {
             return toState(lm, save);   // already at full time — no-op
         }
-        // Resolve the lineup and simulate once, then reuse both for building the state below —
-        // this is the per-event hot path, so avoid a second configFor()+simulate() in toState().
+        StepResult step = advanceOneStep(lm);
+        liveMatchRepository.save(lm);
+        return toState(lm, save, step.cfg(), step.timeline());
+    }
+
+    /**
+     * Skips the live match forward, server-side, to {@code HALF_TIME} or {@code FULL_TIME} —
+     * looping the SAME single-step advance {@link #advanceOneStep} uses so scheduled subs/tactics
+     * apply identically and the RNG is consumed in the exact same order as calling {@link #advance}
+     * repeatedly. PAUSED_INJURY/PAUSED_RED never halt the loop (skipping = play on); only the
+     * requested checkpoint (or full time, always) does. Idempotent: if the match is already at or
+     * past the target, returns the current state unchanged without stepping.
+     */
+    @Transactional
+    public LiveMatchState advanceTo(UUID saveGameId, UUID userId, AdvanceTarget target) {
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        LiveMatch lm = requireLive(saveGameId);
+
+        int targetMinute = target == AdvanceTarget.HALF_TIME ? MINUTES / 2 : MINUTES;
+        if (lm.getCommittedMinute() >= targetMinute) {
+            return toState(lm, save);   // already at/past the target — idempotent no-op
+        }
+
+        StepResult step = null;
+        while (lm.getCommittedMinute() < MINUTES) {
+            step = advanceOneStep(lm);
+            String status = statusAt(lm, step.timeline(), lm.getCommittedMinute());
+            if (isAdvanceToStopStatus(target, status)) {
+                break;
+            }
+        }
+        liveMatchRepository.save(lm);
+        return toState(lm, save, step.cfg(), step.timeline());
+    }
+
+    /** Single-step advance: the ONLY place committedMinute moves, shared by {@link #advance} and
+     * {@link #advanceTo} so both consume the RNG in the exact same order for a given seed. */
+    private StepResult advanceOneStep(LiveMatch lm) {
         LiveMatchConfig cfg = configFor(lm);
         LiveTimeline timeline = liveMatchEngine.simulate(cfg);
         lm.setCommittedMinute(timeline.nextEventMinute(lm.getCommittedMinute()));
-        liveMatchRepository.save(lm);
-        return toState(lm, save, cfg, timeline);
+        return new StepResult(cfg, timeline);
+    }
+
+    private record StepResult(LiveMatchConfig cfg, LiveTimeline timeline) {
+    }
+
+    /**
+     * True when a loop skipping toward {@code target} must halt after landing on {@code status}.
+     * FULL_TIME always halts (there is nothing further to skip); HALF_TIME halts only an
+     * HALF_TIME-targeted skip; PAUSED_INJURY/PAUSED_RED never halt — advance-to auto-continues
+     * through them.
+     */
+    static boolean isAdvanceToStopStatus(AdvanceTarget target, String status) {
+        if ("FULL_TIME".equals(status)) {
+            return true;
+        }
+        return target == AdvanceTarget.HALF_TIME && "HALF_TIME".equals(status);
     }
 
     @Transactional
