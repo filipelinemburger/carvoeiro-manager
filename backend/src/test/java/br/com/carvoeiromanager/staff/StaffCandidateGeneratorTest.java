@@ -76,4 +76,18 @@ class StaffCandidateGeneratorTest {
             }
         });
     }
+
+    @Test
+    void candidateAttributesFallInsideTheTierBand() {
+        UUID saveId = UUID.randomUUID();
+        UUID clubId = UUID.randomUUID();
+        List<StaffCandidate> candidates = generator.generate(saveId, clubId,
+                StaffRole.PREPARADOR_FISICO, LocalDate.of(2026, 3, 1), 50);
+        for (StaffCandidate c : candidates) {
+            int lo = switch (c.quality()) { case REGULAR -> 8; case BOM -> 12; case EXCELENTE -> 15; };
+            int hi = switch (c.quality()) { case REGULAR -> 12; case BOM -> 16; case EXCELENTE -> 19; };
+            assertThat(c.primaryAttribute()).isBetween(lo, hi);
+            assertThat(c.secondaryAttribute()).isBetween(lo, hi);
+        }
+    }
 }

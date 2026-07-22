@@ -51,7 +51,7 @@ class FinanceServiceStaffIT {
         Career c = createCareer();
         Club club = clubRepository.findById(c.clubId()).orElseThrow();
         staffRepository.save(Staff.create(c.id(), c.clubId(), StaffRole.ASSISTENTE,
-                StaffQuality.EXCELENTE, "Roberto Lima", new BigDecimal("80000.00")));
+                StaffQuality.EXCELENTE, "Roberto Lima", new BigDecimal("80000.00"), 17, 17));
 
         financeService.processMonth(c.id(), LocalDate.of(2026, 3, 1));
 

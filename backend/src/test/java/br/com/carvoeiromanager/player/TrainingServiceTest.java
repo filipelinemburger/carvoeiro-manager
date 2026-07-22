@@ -58,9 +58,14 @@ class TrainingServiceTest {
     }
 
     private void hirePhysio(StaffQuality quality) {
+        int attr = switch (quality) {
+            case REGULAR -> 10;
+            case BOM -> 14;
+            case EXCELENTE -> 17;
+        };
         Mockito.when(staffRepository.findByClubIdAndRole(managedClubId, StaffRole.PREPARADOR_FISICO))
                 .thenReturn(Optional.of(Staff.create(saveGameId, managedClubId,
-                        StaffRole.PREPARADOR_FISICO, quality, "Preparador Teste", new BigDecimal("45000"))));
+                        StaffRole.PREPARADOR_FISICO, quality, "Preparador Teste", new BigDecimal("45000"), attr, attr)));
     }
 
     // ---- weekly guard ----

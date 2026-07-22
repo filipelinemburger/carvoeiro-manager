@@ -56,7 +56,7 @@ class ContractServiceStaffIT {
         Player target = freeAgent(c.id());
         playerRepository.save(target);
         staffRepository.save(Staff.create(c.id(), c.clubId(), StaffRole.OLHEIRO,
-                StaffQuality.EXCELENTE, "Marcos Vieira", new BigDecimal("80000.00")));
+                StaffQuality.EXCELENTE, "Marcos Vieira", new BigDecimal("80000.00"), 17, 17));
 
         // For a 60-overall, 26-year-old (prime) player: weeklyWage = 60*60*20*1.00 = 72 000.00;
         // undiscounted demand = 72 000.00 * 1.15 = 82 800.00; Excelente's x0.9 scout discount

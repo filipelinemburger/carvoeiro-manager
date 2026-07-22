@@ -59,7 +59,7 @@ class TrainingReportNewsIT {
         // unit from evolving: LEVE(+1) + coach(+2) pushes 39 → 42, guaranteeing an evolution.
         Career c = createCareer();
         staffRepository.save(Staff.create(c.id(), c.clubId(), StaffRole.PREPARADOR_FISICO,
-                StaffQuality.EXCELENTE, "Preparador Teste", new BigDecimal("80000")));
+                StaffQuality.EXCELENTE, "Preparador Teste", new BigDecimal("80000"), 17, 17));
         Player trainee = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).get(0);
         trainee.setTrainingAssignment(Attribute.PASSE, TrainingIntensity.LEVE);
         trainee.setTrainingProgress(39);

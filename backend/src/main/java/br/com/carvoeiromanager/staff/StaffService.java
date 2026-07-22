@@ -69,7 +69,7 @@ public class StaffService {
         staffRepository.deleteByClubIdAndRole(clubId, role);
         staffRepository.flush();
         staffRepository.save(Staff.create(saveGameId, clubId, role, chosen.quality(),
-                chosen.name(), chosen.wage()));
+                chosen.name(), chosen.wage(), chosen.primaryAttribute(), chosen.secondaryAttribute()));
 
         // Build the response directly rather than calling getRoster(...) again: ownership and
         // save-game membership were already established above, so re-running requireOwned/
@@ -103,14 +103,16 @@ public class StaffService {
 
     private StaffResponse toStaffResponse(Staff staff) {
         return staff == null ? null
-                : new StaffResponse(staff.getName(), staff.getQuality().name(), staff.getWage());
+                : new StaffResponse(staff.getName(), staff.getQuality().name(), staff.getWage(),
+                        staff.getPrimaryAttribute(), staff.getSecondaryAttribute());
     }
 
     private List<StaffCandidateResponse> toCandidateResponses(List<StaffCandidate> candidates) {
         return java.util.stream.IntStream.range(0, candidates.size())
                 .mapToObj(i -> {
                     StaffCandidate c = candidates.get(i);
-                    return new StaffCandidateResponse(i, c.name(), c.quality().name(), c.wage());
+                    return new StaffCandidateResponse(i, c.name(), c.quality().name(), c.wage(),
+                            c.primaryAttribute(), c.secondaryAttribute());
                 })
                 .toList();
     }

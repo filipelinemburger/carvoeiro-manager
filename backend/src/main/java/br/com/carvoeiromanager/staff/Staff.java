@@ -42,12 +42,18 @@ public class Staff {
     @Column(name = "wage", nullable = false)
     private BigDecimal wage;
 
+    @Column(name = "primary_attribute", nullable = false)
+    private int primaryAttribute;
+
+    @Column(name = "secondary_attribute", nullable = false)
+    private int secondaryAttribute;
+
     protected Staff() {
         // for JPA
     }
 
     private Staff(UUID id, UUID saveGameId, UUID clubId, StaffRole role, StaffQuality quality,
-                  String name, BigDecimal wage) {
+                  String name, BigDecimal wage, int primaryAttribute, int secondaryAttribute) {
         this.id = id;
         this.saveGameId = saveGameId;
         this.clubId = clubId;
@@ -55,11 +61,14 @@ public class Staff {
         this.quality = quality;
         this.name = name;
         this.wage = wage;
+        this.primaryAttribute = primaryAttribute;
+        this.secondaryAttribute = secondaryAttribute;
     }
 
     public static Staff create(UUID saveGameId, UUID clubId, StaffRole role, StaffQuality quality,
-                               String name, BigDecimal wage) {
-        return new Staff(UUID.randomUUID(), saveGameId, clubId, role, quality, name, wage);
+                               String name, BigDecimal wage, int primaryAttribute, int secondaryAttribute) {
+        return new Staff(UUID.randomUUID(), saveGameId, clubId, role, quality, name, wage,
+                primaryAttribute, secondaryAttribute);
     }
 
     public UUID getId() { return id; }
@@ -69,4 +78,9 @@ public class Staff {
     public StaffQuality getQuality() { return quality; }
     public String getName() { return name; }
     public BigDecimal getWage() { return wage; }
+    public int getPrimaryAttribute() { return primaryAttribute; }
+    public int getSecondaryAttribute() { return secondaryAttribute; }
+
+    /** The single number the continuous staff effects are computed from. */
+    public double attributeAverage() { return (primaryAttribute + secondaryAttribute) / 2.0; }
 }

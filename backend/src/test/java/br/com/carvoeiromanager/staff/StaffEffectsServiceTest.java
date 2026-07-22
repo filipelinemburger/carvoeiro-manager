@@ -17,7 +17,12 @@ class StaffEffectsServiceTest {
     private final StaffEffectsService effects = new StaffEffectsService(staffRepository);
 
     private Staff staff(StaffRole role, StaffQuality quality) {
-        return Staff.create(UUID.randomUUID(), UUID.randomUUID(), role, quality, "Fulano", BigDecimal.TEN);
+        int attr = switch (quality) {
+            case REGULAR -> 10;
+            case BOM -> 14;
+            case EXCELENTE -> 17;
+        };
+        return Staff.create(UUID.randomUUID(), UUID.randomUUID(), role, quality, "Fulano", BigDecimal.TEN, attr, attr);
     }
 
     @Test
