@@ -137,12 +137,16 @@ export function LiveMatchPage() {
       setActionsOpen(false)
       // Resume if the match is still force-paused or at half-time after applying changes
       // (e.g. a sub made during an injury pause resolves the pause).
+      // Routed through resume() (declared below in this component) rather than calling
+      // advanceMut.mutate() directly: resume() carries the in-flight guard, so this auto-resume
+      // can't race a skip (advanceToMut) that started while the actions dialog was open — e.g.
+      // the user kicks off "Avançar até o fim", then reopens the dialog and applies a sub before
+      // the skip resolves.
       if (
         latest &&
         (latest.status === 'PAUSED_INJURY' || latest.status === 'PAUSED_RED' || latest.status === 'HALF_TIME')
       ) {
-        setPlaying(true)
-        advanceMut.mutate()
+        resume()
       }
     } catch (err) {
       // Keep any partial state from successful operations so far
@@ -211,7 +215,14 @@ export function LiveMatchPage() {
   const fullTime = state.status === 'FULL_TIME'
   const feed = [...state.events].reverse()
   // Resume from a forced pause / half-time by advancing past it, then let the clock run.
-  const resume = () => { setPlaying(true); advanceMut.mutate() }
+  // Guarded at the source (mirroring skipTo's guard) so EVERY caller — "Continuar assim
+  // mesmo", "Iniciar 2º tempo", and the auto-resume in handleApply — is protected against
+  // racing an in-flight skip (advanceToMut), regardless of that caller's own disabled state.
+  const resume = () => {
+    if (skipping || advanceToMut.isPending || advanceMut.isPending) return
+    setPlaying(true)
+    advanceMut.mutate()
+  }
 
   return (
     <Box>
@@ -259,7 +270,13 @@ export function LiveMatchPage() {
           </Button>
         )}
         {!fullTime && halftime && (
-          <Button variant="contained" onClick={resume}>Iniciar 2º tempo</Button>
+          <Button
+            variant="contained"
+            disabled={skipping || advanceToMut.isPending || advanceMut.isPending}
+            onClick={resume}
+          >
+            Iniciar 2º tempo
+          </Button>
         )}
         {!fullTime && !halftime && state.minute < 45 && (
           <Button

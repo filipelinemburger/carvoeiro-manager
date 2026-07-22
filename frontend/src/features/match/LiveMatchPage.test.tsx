@@ -412,6 +412,35 @@ describe('LiveMatchPage', () => {
     expect(advanceLiveMatch).toHaveBeenCalledTimes(1)
   })
 
+  it('guards "Iniciar 2º tempo" against an in-flight skip (regression: resume() was unguarded at the source)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'HALF_TIME', minute: 45 } as never)
+    // Never resolves — simulates the "Avançar até o fim" skip staying in flight for the whole test.
+    vi.mocked(advanceToLiveMatch).mockImplementation(() => new Promise(() => {}))
+    renderPage()
+
+    // The tactics dialog auto-opens at half-time, covering the background buttons. Dismiss it via
+    // its own "Cancelar" button (same as a manager closing it before starting the 2nd half) so
+    // "Iniciar 2º tempo" and "Avançar até o fim" become reachable — a real, non-fiddly path to the
+    // exact scenario described in the bug: both buttons exposed at HALF_TIME with the dialog closed.
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /cancelar/i }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    // Start a skip while at half-time — advanceToMut is now in flight.
+    fireEvent.click(await screen.findByRole('button', { name: /avançar até o fim/i }))
+    await waitFor(() => expect(advanceToLiveMatch).toHaveBeenCalledWith('sg-1', 'FULL_TIME', 'test-token'))
+
+    // "Iniciar 2º tempo" (onClick={resume}) must now be disabled...
+    const resumeButton = await screen.findByRole('button', { name: /iniciar 2º tempo/i })
+    await waitFor(() => expect(resumeButton).toBeDisabled())
+
+    // ...and even a direct click (bypassing the disabled attribute, as fireEvent does) must not
+    // sneak an advanceLiveMatch call through — this is what proves resume() itself is guarded,
+    // not just the button's `disabled` prop, and is the part that fails pre-fix.
+    fireEvent.click(resumeButton)
+    expect(advanceLiveMatch).not.toHaveBeenCalled()
+  })
+
   it('hides "Avançar até o intervalo" once minute reaches 45, but keeps "Avançar até o fim" until full time', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', minute: 46 } as never)
     renderPage()
