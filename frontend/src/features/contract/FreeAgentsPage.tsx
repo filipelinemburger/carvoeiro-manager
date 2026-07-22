@@ -10,6 +10,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { formatBRL, formatThousandsBR, parseMoneyInput } from '../../lib/money'
 import { CARBON } from '../../muiTheme'
 import { PlayerDetails } from '../squad/PlayerDetails'
+import { WatchStar } from '../players/WatchStar'
 
 /** A small "LABEL / value" stat used in the player identity zone. */
 function Stat({ label, value }: { label: string; value: ReactNode }) {
@@ -183,6 +184,10 @@ export function FreeAgentsPage() {
         player={detailsPlayerQuery.data ?? null}
         onClose={() => setDetailsPlayerId(null)}
         saveGameId={saveGameId}
+        isOwnPlayer={false}
+        watchAction={detailsPlayerQuery.data ? (
+          <WatchStar saveGameId={saveGameId} playerId={detailsPlayerQuery.data.id} />
+        ) : undefined}
       />
     </Box>
   )

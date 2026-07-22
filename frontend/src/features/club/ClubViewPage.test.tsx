@@ -14,7 +14,14 @@ vi.mock('../../api/career', () => ({
   makeOffer: vi.fn(),
 }))
 
+vi.mock('../../api/watchlist', () => ({
+  getWatchlist: vi.fn(),
+  addToWatchlist: vi.fn(),
+  removeFromWatchlist: vi.fn(),
+}))
+
 import { getSaveGame, getClubs, getSquad, makeOffer } from '../../api/career'
+import { getWatchlist } from '../../api/watchlist'
 
 const MANAGED_CLUB_ID = 'club-1'
 const OTHER_CLUB_ID = 'club-9'
@@ -65,6 +72,7 @@ describe('ClubViewPage', () => {
     vi.mocked(getSquad).mockResolvedValue({
       players: [player()], primaryColor: '#aa0000', secondaryColor: '#ffffff',
     })
+    vi.mocked(getWatchlist).mockResolvedValue([])
   })
 
   it('renders the roster with market value and wage demand', async () => {
@@ -93,6 +101,32 @@ describe('ClubViewPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Alvo Um' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByLabelText(/OVR 80/)).toBeInTheDocument()
+  })
+
+  it('shows a watch star for a rival player and lets the manager star them', async () => {
+    const { addToWatchlist } = await import('../../api/watchlist')
+    vi.mocked(addToWatchlist).mockResolvedValue(undefined)
+
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Alvo Um' }))
+    const dialog = await screen.findByRole('dialog')
+
+    const star = await within(dialog).findByRole('button', { name: 'Observar jogador' })
+    fireEvent.click(star)
+
+    await waitFor(() => expect(addToWatchlist).toHaveBeenCalledWith('sg-1', 'p1', 'test-token'))
+  })
+
+  it('hides the watch star when viewing the managed club (own player)', async () => {
+    vi.mocked(getSquad).mockResolvedValue({
+      players: [player({ id: 'mp1', name: 'Meu Jogador' })], primaryColor: '#f7d417', secondaryColor: '#111111',
+    })
+    renderPage(MANAGED_CLUB_ID)
+    await waitFor(() => expect(screen.getByText('Meu Jogador')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Meu Jogador' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByRole('button', { name: 'Observar jogador' })).not.toBeInTheDocument()
   })
 
   it('opens the offer dialog and fires makeOffer with the drafted terms', async () => {
