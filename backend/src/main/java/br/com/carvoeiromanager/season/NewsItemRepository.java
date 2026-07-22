@@ -17,6 +17,8 @@ public interface NewsItemRepository extends JpaRepository<NewsItem, UUID> {
 
     int countBySaveGameIdAndReadFalse(UUID saveGameId);
 
+    NewsItem findFirstBySaveGameIdAndTypeOrderBySeqDesc(UUID saveGameId, String type);
+
     @Modifying
     @Transactional
     @Query("update NewsItem n set n.read = true where n.saveGameId = :saveGameId and n.read = false")

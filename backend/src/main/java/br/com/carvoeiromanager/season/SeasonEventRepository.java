@@ -8,6 +8,8 @@ import java.util.UUID;
 
 public interface SeasonEventRepository extends JpaRepository<SeasonEvent, UUID> {
     SeasonEvent findFirstBySaveGameIdAndProcessedFalseOrderByEventDateAscSequenceAsc(UUID saveGameId);
+    SeasonEvent findFirstBySaveGameIdAndProcessedFalseAndTypeOrderByEventDateAscSequenceAsc(
+            UUID saveGameId, SeasonEventType type);
     List<SeasonEvent> findBySaveGameIdAndProcessedFalse(UUID saveGameId);
     List<SeasonEvent> findBySaveGameId(UUID saveGameId);
 
