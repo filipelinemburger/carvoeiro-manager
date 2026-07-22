@@ -2,14 +2,16 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
+  Link, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
 } from '@mui/material'
 import {
   acceptPreContractCounter, getPreContractAgreements, getPreContractEligible,
   makePreContractOffer, withdrawPreContract,
 } from '../../api/precontract'
-import { renewContract } from '../../api/career'
+import { getPlayer, renewContract } from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
+import { PlayerDetails } from '../squad/PlayerDetails'
+import { WatchStar } from '../players/WatchStar'
 import type { PreContractAgreement, PreContractEligible } from '../../api/types'
 import { formatBRL } from '../../lib/money'
 
@@ -39,8 +41,15 @@ export default function PreContractsPanel({ saveGameId, token, managedClubId, wi
   const [years, setYears] = useState(3)
   const [counterWage, setCounterWage] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // The eligible player whose read-only details (+ watch star) are open, if any.
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
 
   const enabled = Boolean(saveGameId && token)
+  const selectedPlayer = useQuery({
+    queryKey: ['player', saveGameId, selectedPlayerId],
+    queryFn: () => getPlayer(saveGameId, selectedPlayerId!, token),
+    enabled: enabled && Boolean(selectedPlayerId),
+  })
   const eligible = useQuery({
     queryKey: ['preContractEligible', saveGameId],
     queryFn: () => getPreContractEligible(saveGameId, token),
@@ -191,7 +200,18 @@ export default function PreContractsPanel({ saveGameId, token, managedClubId, wi
           <TableBody>
             {eligible.data!.map(p => (
               <TableRow key={p.playerId} hover>
-                <TableCell>{p.name}</TableCell>
+                <TableCell>
+                  <Link
+                    component="button"
+                    type="button"
+                    underline="hover"
+                    color="inherit"
+                    onClick={() => setSelectedPlayerId(p.playerId)}
+                    sx={{ font: 'inherit', textAlign: 'left', cursor: 'pointer' }}
+                  >
+                    {p.name}
+                  </Link>
+                </TableCell>
                 <TableCell>{p.position}</TableCell>
                 <TableCell align="right">{p.age}</TableCell>
                 <TableCell align="right">{p.overall}</TableCell>
@@ -249,6 +269,16 @@ export default function PreContractsPanel({ saveGameId, token, managedClubId, wi
           )}
         </DialogActions>
       </Dialog>
+
+      <PlayerDetails
+        player={selectedPlayer.data ?? null}
+        onClose={() => setSelectedPlayerId(null)}
+        saveGameId={saveGameId}
+        isOwnPlayer={false}
+        watchAction={selectedPlayer.data ? (
+          <WatchStar saveGameId={saveGameId} playerId={selectedPlayer.data.id} />
+        ) : undefined}
+      />
     </Box>
   )
 }

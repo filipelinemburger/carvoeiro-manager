@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, Box, Button, Chip, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography,
+  Alert, Box, Button, Chip, Link, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography,
 } from '@mui/material'
 import { getWatchlist, removeFromWatchlist } from '../../api/watchlist'
+import { getPlayer } from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
+import { PlayerDetails } from '../squad/PlayerDetails'
+import { WatchStar } from '../players/WatchStar'
 
 type Props = {
   saveGameId: string
@@ -18,6 +21,8 @@ type Props = {
 export default function WatchlistPanel({ saveGameId, token }: Props) {
   const queryClient = useQueryClient()
   const [error, setError] = useState<string | null>(null)
+  // The watched player whose full read-only details (+ watch star) are open, if any.
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
   const enabled = Boolean(saveGameId && token)
 
   const watchlist = useQuery({
@@ -25,6 +30,12 @@ export default function WatchlistPanel({ saveGameId, token }: Props) {
     queryFn: () => getWatchlist(saveGameId, token),
     enabled,
     staleTime: Infinity,
+  })
+
+  const selectedPlayer = useQuery({
+    queryKey: ['player', saveGameId, selectedPlayerId],
+    queryFn: () => getPlayer(saveGameId, selectedPlayerId!, token),
+    enabled: enabled && Boolean(selectedPlayerId),
   })
 
   const unwatchMut = useMutation({
@@ -59,9 +70,25 @@ export default function WatchlistPanel({ saveGameId, token }: Props) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {rows.map(p => (
+            {rows
+              // Guard against a transient optimistic placeholder row: WatchStar (mounted
+              // elsewhere) writes `{ playerId }` into this same cache while an add is in
+              // flight, before onSettled's invalidation replaces it with the full row.
+              .filter(p => Boolean(p.name))
+              .map(p => (
               <TableRow key={p.playerId} hover>
-                <TableCell>{p.name}</TableCell>
+                <TableCell>
+                  <Link
+                    component="button"
+                    type="button"
+                    underline="hover"
+                    color="inherit"
+                    onClick={() => setSelectedPlayerId(p.playerId)}
+                    sx={{ font: 'inherit', textAlign: 'left', cursor: 'pointer' }}
+                  >
+                    {p.name}
+                  </Link>
+                </TableCell>
                 <TableCell>{p.position}</TableCell>
                 <TableCell align="right">{p.age}</TableCell>
                 <TableCell align="right">{p.overall}</TableCell>
@@ -83,6 +110,16 @@ export default function WatchlistPanel({ saveGameId, token }: Props) {
           </TableBody>
         </Table>
       )}
+
+      <PlayerDetails
+        player={selectedPlayer.data ?? null}
+        onClose={() => setSelectedPlayerId(null)}
+        saveGameId={saveGameId}
+        isOwnPlayer={false}
+        watchAction={selectedPlayer.data ? (
+          <WatchStar saveGameId={saveGameId} playerId={selectedPlayer.data.id} />
+        ) : undefined}
+      />
     </Box>
   )
 }

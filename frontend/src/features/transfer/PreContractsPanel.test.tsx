@@ -14,12 +14,22 @@ vi.mock('../../api/precontract', () => ({
 
 vi.mock('../../api/career', () => ({
   renewContract: vi.fn(),
+  getPlayer: vi.fn(),
 }))
+
+vi.mock('../../api/watchlist', () => ({
+  getWatchlist: vi.fn(),
+  addToWatchlist: vi.fn(),
+  removeFromWatchlist: vi.fn(),
+}))
+
+vi.mock('../../auth/AuthContext', () => ({ useAuth: () => ({ token: 'test-token' }) }))
 
 import {
   getPreContractEligible, getPreContractAgreements, makePreContractOffer, acceptPreContractCounter,
 } from '../../api/precontract'
-import { renewContract } from '../../api/career'
+import { renewContract, getPlayer } from '../../api/career'
+import { getWatchlist, addToWatchlist } from '../../api/watchlist'
 
 const ELIGIBLE_UM: PreContractEligible = {
   playerId: 'p1', name: 'Jogador Um', position: 'ATT', age: 27, overall: 78,
@@ -51,6 +61,7 @@ describe('PreContractsPanel', () => {
     vi.clearAllMocks()
     vi.mocked(getPreContractEligible).mockResolvedValue([])
     vi.mocked(getPreContractAgreements).mockResolvedValue([])
+    vi.mocked(getWatchlist).mockResolvedValue([])
   })
 
   it('renders eligible players with club name and demand, and the Propor button', async () => {
@@ -61,6 +72,28 @@ describe('PreContractsPanel', () => {
     await screen.findByText('Jogador Um')
     expect(screen.getByText('Rival FC')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Propor' })).toBeInTheDocument()
+  })
+
+  it('opens read-only player details with a watch star when the eligible player name is clicked', async () => {
+    vi.mocked(getPreContractEligible).mockResolvedValue([ELIGIBLE_UM])
+    vi.mocked(getPlayer).mockResolvedValue({
+      id: 'p1', name: 'Jogador Um', position: 'ATT', age: 27, overall: 78, pace: 60, finishing: 60,
+      passing: 60, tackling: 60, goalkeeping: 10, stamina: 70, form: 0, morale: 70, yellowCards: 0,
+      suspensionRemaining: 0, injuryMatches: 0, eligible: true, role: null, contractYears: 1,
+      value: 0, wageDemand: 90000, fitness: 100, injurySeverity: 'NONE', attributes: [],
+    } as never)
+    vi.mocked(addToWatchlist).mockResolvedValue(undefined)
+
+    renderPanel()
+    fireEvent.click(await screen.findByText('Jogador Um'))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(getPlayer).toHaveBeenCalledWith('sg-1', 'p1', 'test-token')
+
+    const star = await within(dialog).findByRole('button', { name: 'Observar jogador' })
+    fireEvent.click(star)
+
+    await waitFor(() => expect(addToWatchlist).toHaveBeenCalledWith('sg-1', 'p1', 'test-token'))
   })
 
   it('shows the counter offer and accepts it', async () => {
