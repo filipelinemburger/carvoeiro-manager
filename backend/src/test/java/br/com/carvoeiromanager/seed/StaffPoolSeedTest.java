@@ -4,6 +4,7 @@ import br.com.carvoeiromanager.staff.StaffRole;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -31,5 +32,12 @@ class StaffPoolSeedTest {
     void namesAreUniqueAndNonBlank() {
         assertThat(pool).allSatisfy(s -> assertThat(s.name()).isNotBlank());
         assertThat(pool.stream().map(SeedStaff::name).distinct().count()).isEqualTo(pool.size());
+    }
+
+    @Test
+    void everyRoleHasAtLeastTwelveEntries() {
+        Map<StaffRole, Long> byRole = pool.stream()
+                .collect(Collectors.groupingBy(SeedStaff::role, Collectors.counting()));
+        assertThat(byRole).allSatisfy((role, n) -> assertThat(n).isGreaterThanOrEqualTo(12L));
     }
 }

@@ -3,8 +3,10 @@ package br.com.carvoeiromanager.staff;
 import br.com.carvoeiromanager.seed.SeedLoader;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -92,21 +94,59 @@ class StaffCandidateGeneratorTest {
         }
     }
 
+    /**
+     * The researched ASSISTENTE pool (staff-pool.json) — name to authored
+     * [primaryAttribute, secondaryAttribute]. Used to verify pool precedence and
+     * tier/wage derivation without pinning a specific pair picked by the seeded shuffle.
+     */
+    private static final Map<String, int[]> ASSISTENTE_POOL = Map.ofEntries(
+            Map.entry("Anderson Valiñas", new int[] {13, 12}),
+            Map.entry("Leonardo Cherede", new int[] {13, 12}),
+            Map.entry("Rodrigo Vicenzi Casarin", new int[] {14, 13}),
+            Map.entry("Celso Martins", new int[] {14, 12}),
+            Map.entry("Henrique Lima", new int[] {11, 11}),
+            Map.entry("Denis Iwamura", new int[] {15, 13}),
+            Map.entry("Leandro Campos", new int[] {12, 12}),
+            Map.entry("Willians Alves", new int[] {12, 12}),
+            Map.entry("Gabriel Remedio", new int[] {12, 12}),
+            Map.entry("Edson Boaro", new int[] {13, 11}),
+            Map.entry("Warley", new int[] {10, 12}),
+            Map.entry("Rafael Santiago", new int[] {11, 10}),
+            Map.entry("Rafael Prerniska", new int[] {11, 11}),
+            Map.entry("Bruno Lazaroni", new int[] {18, 16}),
+            Map.entry("Márcio Goiano", new int[] {13, 12}));
+
     @Test
     void poolMembersAreOfferedFirstWithDerivedTierAndTierWage() {
         UUID SAVE_ID = UUID.randomUUID();
         UUID CLUB_ID = UUID.randomUUID();
         List<StaffCandidate> candidates = generator.generate(SAVE_ID, CLUB_ID,
                 StaffRole.ASSISTENTE, LocalDate.of(2026, 3, 1), 2, Set.of());
-        // The starter pool has exactly 2 ASSISTENTE entries, so both slots come from the pool.
+
+        // The pool has 15 ASSISTENTE entries (far more than requested), so both slots must
+        // come from the pool rather than a generated newgen name.
+        assertThat(candidates).hasSize(2);
         assertThat(candidates).extracting(StaffCandidate::name)
-                .containsExactlyInAnyOrder("Cléber Xavier", "Matheus Bachi");
-        StaffCandidate cleber = candidates.stream()
-                .filter(c -> c.name().equals("Cléber Xavier")).findFirst().orElseThrow();
-        assertThat(cleber.primaryAttribute()).isEqualTo(17);
-        assertThat(cleber.secondaryAttribute()).isEqualTo(16);
-        assertThat(cleber.quality()).isEqualTo(StaffQuality.EXCELENTE); // avg 16.5 >= 15
-        assertThat(cleber.wage()).isEqualByComparingTo("80000.00");
+                .doesNotHaveDuplicates()
+                .allMatch(ASSISTENTE_POOL::containsKey);
+
+        for (StaffCandidate c : candidates) {
+            int[] authored = ASSISTENTE_POOL.get(c.name());
+            assertThat(c.primaryAttribute()).isEqualTo(authored[0]);
+            assertThat(c.secondaryAttribute()).isEqualTo(authored[1]);
+
+            double average = (authored[0] + authored[1]) / 2.0;
+            StaffQuality expectedQuality = average >= 15.0 ? StaffQuality.EXCELENTE
+                    : average >= 12.0 ? StaffQuality.BOM : StaffQuality.REGULAR;
+            assertThat(c.quality()).isEqualTo(expectedQuality);
+
+            BigDecimal expectedWage = switch (expectedQuality) {
+                case REGULAR -> new BigDecimal("20000.00");
+                case BOM -> new BigDecimal("45000.00");
+                case EXCELENTE -> new BigDecimal("80000.00");
+            };
+            assertThat(c.wage()).isEqualByComparingTo(expectedWage);
+        }
     }
 
     @Test
@@ -114,11 +154,10 @@ class StaffCandidateGeneratorTest {
         UUID SAVE_ID = UUID.randomUUID();
         UUID CLUB_ID = UUID.randomUUID();
         List<StaffCandidate> candidates = generator.generate(SAVE_ID, CLUB_ID,
-                StaffRole.ASSISTENTE, LocalDate.of(2026, 3, 1), 3,
-                Set.of("Cléber Xavier", "Matheus Bachi"));
-        assertThat(candidates).hasSize(3);
+                StaffRole.ASSISTENTE, LocalDate.of(2026, 3, 1), 20, Set.of(ASSISTENTE_POOL.keySet().toArray(new String[0])));
+        assertThat(candidates).hasSize(20);
         assertThat(candidates).extracting(StaffCandidate::name)
-                .doesNotContain("Cléber Xavier", "Matheus Bachi");
+                .doesNotContainAnyElementsOf(ASSISTENTE_POOL.keySet());
     }
 
     @Test
