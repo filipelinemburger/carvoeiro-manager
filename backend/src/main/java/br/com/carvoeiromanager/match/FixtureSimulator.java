@@ -242,18 +242,27 @@ public class FixtureSimulator {
             homeXi = playersByIds(precomputedFixture.homeXiIds());
             awayXi = playersByIds(precomputedFixture.awayXiIds());
             match = precomputedFixture.match();
-        } else {
-            // Legacy path: no stored XI to replay (either nothing was precomputed for this fixture
-            // — an in-flight match from before Task 19 — or it was precomputed before XI ids were
-            // captured — an in-flight match from before this fix). resolveXi is deterministic
-            // (see LineupService.bestXi's id tie-break) given UNCHANGED player state, so a single
-            // fresh resolution here is used both for attribution and, when nothing was precomputed,
-            // to feed simulatePure below — same untouched state, read moments apart.
+        } else if (precomputedFixture != null) {
+            // Precomputed before XI ids were captured (in-flight match from before this fix) —
+            // the match is already simulated, so only the XI needs resolving for attribution.
+            // resolveXi is deterministic (see LineupService.bestXi's id tie-break) given
+            // UNCHANGED player state, so this fresh resolution matches the one implicitly used
+            // to build the stored match.
             homeXi = resolveXi(saveGameId, homeClubId, managedClubId, matchDate);
             awayXi = resolveXi(saveGameId, awayClubId, managedClubId, matchDate);
-            match = precomputedFixture != null
-                    ? precomputedFixture.match()
-                    : simulatePure(fixture, saveGameId, managedClubId);
+            match = precomputedFixture.match();
+        } else {
+            // Legacy path: nothing was precomputed for this fixture (the common case for every
+            // AI-only fixture in an instant-advance round). A single simulatePureWithXi call
+            // resolves the XI, runs the seeded engine, and returns the resolved XI ids alongside
+            // the match — reused here via playersByIds for attribution, the same pattern as the
+            // replayStoredXi branch above. This avoids resolving the XI (and recomputing tactics/
+            // fitness/team-strength) a second time, which a separate resolveXi + simulatePure call
+            // used to do.
+            PrecomputedFixture computed = simulatePureWithXi(fixture, saveGameId, managedClubId);
+            homeXi = playersByIds(computed.homeXiIds());
+            awayXi = playersByIds(computed.awayXiIds());
+            match = computed.match();
         }
 
         TacticalProfile homeProfile = tacticsService.profileFor(saveGameId, homeClubId, homeXi);
