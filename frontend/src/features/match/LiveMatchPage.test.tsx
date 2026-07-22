@@ -387,6 +387,31 @@ describe('LiveMatchPage', () => {
     expect(advanceLiveMatch).not.toHaveBeenCalled()
   }, 10_000)
 
+  it('guards against a per-minute advance racing an in-flight skip (regression: both write the same cache key)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'PAUSED_INJURY', minute: 60 } as never)
+    // Never resolves — simulates the per-minute advance staying in flight for the whole test.
+    vi.mocked(advanceLiveMatch).mockImplementation(() => new Promise(() => {}))
+    renderPage()
+
+    const resumeButton = await screen.findByRole('button', { name: /continuar assim mesmo/i })
+    fireEvent.click(resumeButton)
+    await waitFor(() => expect(advanceLiveMatch).toHaveBeenCalledTimes(1))
+
+    // While the per-minute advance is in flight, both the "Continuar assim mesmo" button
+    // (which would fire another advanceLiveMatch) and the skip button (which would fire
+    // advanceToLiveMatch against the same ['liveMatch', saveGameId] cache key) must be disabled.
+    const skipButton = await screen.findByRole('button', { name: /avançar até o fim/i })
+    await waitFor(() => expect(skipButton).toBeDisabled())
+    expect(resumeButton).toBeDisabled()
+
+    // Attempting to click the (disabled) skip button must not sneak an advanceToLiveMatch call
+    // through while advanceMut is still pending — skipTo's own guard also checks
+    // advanceMut.isPending, so this holds even if the disabled attribute were ever dropped.
+    fireEvent.click(skipButton)
+    expect(advanceToLiveMatch).not.toHaveBeenCalled()
+    expect(advanceLiveMatch).toHaveBeenCalledTimes(1)
+  })
+
   it('hides "Avançar até o intervalo" once minute reaches 45, but keeps "Avançar até o fim" until full time', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', minute: 46 } as never)
     renderPage()

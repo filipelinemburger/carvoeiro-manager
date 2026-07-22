@@ -169,7 +169,7 @@ export function LiveMatchPage() {
   // new one the tick effect would otherwise schedule while this request is in flight) so the
   // two advance paths never race each other.
   async function skipTo(target: 'HALF_TIME' | 'FULL_TIME') {
-    if (skipping || advanceToMut.isPending) return
+    if (skipping || advanceToMut.isPending || advanceMut.isPending) return
     if (timer.current) { clearTimeout(timer.current); timer.current = null }
     setSkipping(true)
     setSubError(null)
@@ -250,7 +250,13 @@ export function LiveMatchPage() {
           </Button>
         )}
         {!fullTime && paused && (
-          <Button variant="outlined" onClick={resume}>Continuar assim mesmo</Button>
+          <Button
+            variant="outlined"
+            disabled={skipping || advanceToMut.isPending || advanceMut.isPending}
+            onClick={resume}
+          >
+            Continuar assim mesmo
+          </Button>
         )}
         {!fullTime && halftime && (
           <Button variant="contained" onClick={resume}>Iniciar 2º tempo</Button>
@@ -258,7 +264,7 @@ export function LiveMatchPage() {
         {!fullTime && !halftime && state.minute < 45 && (
           <Button
             variant="outlined"
-            disabled={skipping || advanceToMut.isPending}
+            disabled={skipping || advanceToMut.isPending || advanceMut.isPending}
             onClick={() => skipTo('HALF_TIME')}
           >
             Avançar até o intervalo
@@ -267,7 +273,7 @@ export function LiveMatchPage() {
         {!fullTime && (
           <Button
             variant="outlined"
-            disabled={skipping || advanceToMut.isPending}
+            disabled={skipping || advanceToMut.isPending || advanceMut.isPending}
             onClick={() => skipTo('FULL_TIME')}
           >
             Avançar até o fim
