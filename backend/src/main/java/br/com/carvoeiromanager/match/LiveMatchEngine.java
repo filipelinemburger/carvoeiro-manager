@@ -29,10 +29,6 @@ import java.util.function.ToIntFunction;
 @Service
 public class LiveMatchEngine {
 
-    private static final int MINUTES = 90;
-    private static final double HOME_ADVANTAGE = 5.0;
-    private static final double BASE = 50.0;
-    private static final double FITNESS_FLOOR = 0.75;
     private static final double BASE_CARD_RATE = 0.02;
     private static final double RED_SHARE = 0.06;
     private static final double CHANCE_RATE = 0.12;   // flavor near-miss/save rate per side per minute
@@ -107,7 +103,7 @@ public class LiveMatchEngine {
         int homeGoals = 0;
         int awayGoals = 0;
 
-        for (int minute = 1; minute <= MINUTES; minute++) {
+        for (int minute = 1; minute <= MatchMath.MINUTES; minute++) {
             applyTacticChanges(cfg, minute, home, events);
             applyTacticChanges(cfg, minute, away, events);
             applySubs(cfg, minute, home, events);
@@ -121,13 +117,13 @@ public class LiveMatchEngine {
             if (away.dirty) { awayInput = strength(away, away.currentProfile, cfg); away.dirty = false; }
 
             double tempo = (homeInput.tempo() + awayInput.tempo()) / 2.0;
-            double homeFf = fitnessFactor(homeInput.fitnessDecay(), minute);
-            double awayFf = fitnessFactor(awayInput.fitnessDecay(), minute);
+            double homeFf = MatchMath.fitnessFactor(homeInput.fitnessDecay(), minute);
+            double awayFf = MatchMath.fitnessFactor(awayInput.fitnessDecay(), minute);
 
-            double homeChance = perMinuteScoreChance(homeInput.attack() * homeFf + HOME_ADVANTAGE,
+            double homeChance = MatchMath.perMinuteScoreChance(homeInput.attack() * homeFf + MatchMath.HOME_ADVANTAGE,
                     awayInput.defense() * awayFf) * tempo;
-            double awayChance = perMinuteScoreChance(awayInput.attack() * awayFf,
-                    homeInput.defense() * homeFf + HOME_ADVANTAGE) * tempo;
+            double awayChance = MatchMath.perMinuteScoreChance(awayInput.attack() * awayFf,
+                    homeInput.defense() * homeFf + MatchMath.HOME_ADVANTAGE) * tempo;
 
             if (rng.nextDouble() < homeChance) {
                 if (resolveScoringEvent(minute, home, homeInput, rng, attrRng, assistRng, events)) homeGoals++;
@@ -185,13 +181,13 @@ public class LiveMatchEngine {
 
     private void finalizeMinutes(Side s) {
         for (UUID id : s.entryMinute.keySet()) {
-            s.exitMinute.putIfAbsent(id, MINUTES);
+            s.exitMinute.putIfAbsent(id, MatchMath.MINUTES);
         }
     }
 
     private void putMinutes(Side s, Map<UUID, Integer> out) {
         for (UUID id : s.entryMinute.keySet()) {
-            int played = Math.max(0, s.exitMinute.getOrDefault(id, MINUTES) - s.entryMinute.get(id));
+            int played = Math.max(0, s.exitMinute.getOrDefault(id, MatchMath.MINUTES) - s.entryMinute.get(id));
             out.put(id, played);
         }
     }
@@ -463,7 +459,7 @@ public class LiveMatchEngine {
             teamChance += fitnessCalculator.injuryChance(cfg.fitness().getOrDefault(id, 100), p.getAge())
                     * riskMultiplier;
         }
-        teamChance /= MINUTES;
+        teamChance /= MatchMath.MINUTES;
         if (injuryRng.nextDouble() >= teamChance) return;
 
         UUID victim = pickInjured(side, cfg, injuryRng, riskMultiplier);
@@ -525,20 +521,7 @@ public class LiveMatchEngine {
         return positionFactor * (p.getFinishing() + 10);
     }
 
-    // ---- math mirrored from MatchSimulationService ----
-
     private static boolean isGoal(EventType t) {
         return t.isGoal();
-    }
-
-    private double fitnessFactor(double decay, int minute) {
-        double frac = minute / (double) MINUTES;
-        return Math.max(FITNESS_FLOOR, 1.0 - decay * frac * frac);
-    }
-
-    private double perMinuteScoreChance(double attack, double defense) {
-        double diff = (attack - defense) / BASE;
-        double expectedGoals = Math.max(0.2, 1.4 + diff);
-        return expectedGoals / MINUTES;
     }
 }

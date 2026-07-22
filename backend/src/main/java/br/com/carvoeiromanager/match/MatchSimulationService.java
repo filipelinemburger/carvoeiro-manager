@@ -22,10 +22,6 @@ import java.util.Random;
 @Service
 public class MatchSimulationService {
 
-    private static final int MINUTES = 90;
-    private static final double HOME_ADVANTAGE = 5.0;
-    private static final double BASE = 50.0;
-    private static final double FITNESS_FLOOR = 0.75;
     private static final double BASE_CARD_RATE = 0.02;
     private static final double RED_SHARE = 0.06;
 
@@ -41,14 +37,14 @@ public class MatchSimulationService {
         int homeGoals = 0;
         int awayGoals = 0;
 
-        for (int minute = 1; minute <= MINUTES; minute++) {
-            double homeFf = fitnessFactor(home.fitnessDecay(), minute);
-            double awayFf = fitnessFactor(away.fitnessDecay(), minute);
+        for (int minute = 1; minute <= MatchMath.MINUTES; minute++) {
+            double homeFf = MatchMath.fitnessFactor(home.fitnessDecay(), minute);
+            double awayFf = MatchMath.fitnessFactor(away.fitnessDecay(), minute);
 
-            double homeChance = perMinuteScoreChance(home.attack() * homeFf + HOME_ADVANTAGE,
+            double homeChance = MatchMath.perMinuteScoreChance(home.attack() * homeFf + MatchMath.HOME_ADVANTAGE,
                     away.defense() * awayFf) * tempoFactor;
-            double awayChance = perMinuteScoreChance(away.attack() * awayFf,
-                    home.defense() * homeFf + HOME_ADVANTAGE) * tempoFactor;
+            double awayChance = MatchMath.perMinuteScoreChance(away.attack() * awayFf,
+                    home.defense() * homeFf + MatchMath.HOME_ADVANTAGE) * tempoFactor;
 
             if (rng.nextDouble() < homeChance) {
                 if (rng.nextDouble() < homeSetPiece) {
@@ -102,16 +98,5 @@ public class MatchSimulationService {
             }
         }
         return new SimulatedMatch(homeGoals, awayGoals, List.copyOf(events));
-    }
-
-    private double fitnessFactor(double decay, int minute) {
-        double frac = minute / (double) MINUTES;
-        return Math.max(FITNESS_FLOOR, 1.0 - decay * frac * frac);
-    }
-
-    private double perMinuteScoreChance(double attack, double defense) {
-        double diff = (attack - defense) / BASE;
-        double expectedGoals = Math.max(0.2, 1.4 + diff);
-        return expectedGoals / MINUTES;
     }
 }
