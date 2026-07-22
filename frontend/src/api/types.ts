@@ -295,8 +295,38 @@ export type TrainingReportResponse = {
   entries: TrainingReportEntry[]
 }
 
+export type PreviewStandingSnapshot = {
+  position: number
+  points: number
+  played: number
+  won: number
+  drawn: number
+  lost: number
+  goalsFor: number
+  goalsAgainst: number
+}
+
+export type MatchPreviewData = {
+  fixtureId: string
+  round: number
+  matchDate: string
+  home: boolean
+  stadiumName: string | null
+  opponentClubId: string
+  opponentName: string
+  opponentShortName: string | null
+  assistantName: string
+  opponentStanding: PreviewStandingSnapshot | null
+  managedStanding: PreviewStandingSnapshot | null
+  form: string[]
+  bestPlayers: { name: string; position: string; overall: number }[]
+  topScorer: { name: string; goals: number } | null
+  tacticalRead: { formation: string; mentality: string; pressing: string; marking: string } | null
+  insights: string[] | null
+}
+
 export type AdvanceResponse = {
-  type: 'MATCH' | 'TRANSFER' | 'FINISHED' | 'TRAINING_REPORT' | 'PRECONTRACT' | 'WATCHLIST'
+  type: 'MATCH' | 'TRANSFER' | 'FINISHED' | 'TRAINING_REPORT' | 'PRECONTRACT' | 'WATCHLIST' | 'MATCH_PREVIEW'
   date: string | null
   competitionName: string | null
   round: number | null
@@ -323,6 +353,9 @@ export type AdvanceResponse = {
    * null everywhere else and on payloads persisted before the feature existed —
    * always null-guard it. */
   playerAlerts?: PlayerAlert[] | null
+  /** The Auxiliar Técnico's opponent analysis; only on MATCH_PREVIEW items, null everywhere
+   * else and on payloads persisted before the feature existed — always null-guard it. */
+  matchPreview?: MatchPreviewData | null
 }
 
 /** One news-feed entry: the persisted item's id + read flag plus its full payload. */

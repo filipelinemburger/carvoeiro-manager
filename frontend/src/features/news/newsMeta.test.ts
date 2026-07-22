@@ -31,4 +31,9 @@ describe('newsTitle', () => {
     expect(newsTitle(payload({ type: 'FINISHED' }))).toBe('Temporada encerrada')
     expect(newsTitle(payload({ type: 'PRECONTRACT' }))).toBe('Pré-contratos')
   })
+
+  it('titles a match preview with the opponent name', () => {
+    const payload = { type: 'MATCH_PREVIEW', matchPreview: { opponentName: 'Avaí' } } as AdvanceResponse
+    expect(newsTitle(payload)).toBe('Análise do adversário — Avaí')
+  })
 })

@@ -6,6 +6,7 @@ import FitnessCenterIcon from '@mui/icons-material/FitnessCenter'
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents'
 import EditIcon from '@mui/icons-material/Edit'
 import ArticleIcon from '@mui/icons-material/Article'
+import QueryStatsIcon from '@mui/icons-material/QueryStats'
 import type { AdvanceResponse } from '../../api/types'
 
 /** Short headline for a news list row, derived from the payload type. */
@@ -23,6 +24,8 @@ export function newsTitle(payload: AdvanceResponse): string {
       return 'Relatório de treino'
     case 'FINISHED':
       return 'Temporada encerrada'
+    case 'MATCH_PREVIEW':
+      return `Análise do adversário — ${payload.matchPreview?.opponentName ?? ''}`
     default:
       return 'Notícia'
   }
@@ -37,6 +40,7 @@ export function newsIcon(type: AdvanceResponse['type']): ReactNode {
     case 'TRAINING_REPORT': return <FitnessCenterIcon fontSize="small" />
     case 'FINISHED': return <EmojiEventsIcon fontSize="small" />
     case 'PRECONTRACT': return <EditIcon fontSize="small" />
+    case 'MATCH_PREVIEW': return <QueryStatsIcon fontSize="small" />
     default: return <ArticleIcon fontSize="small" />
   }
 }

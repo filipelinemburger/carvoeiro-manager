@@ -82,6 +82,25 @@ const TRAINING_REPORT_RESULT: AdvanceResponse = {
   },
 }
 
+const previewResult: AdvanceResponse = {
+  ...MATCH_RESULT,
+  type: 'MATCH_PREVIEW',
+  date: '2026-03-04',
+  matchPreview: {
+    fixtureId: 'fx-1', round: 4, matchDate: '2026-03-05', home: true,
+    stadiumName: 'Heriberto Hülse',
+    opponentClubId: 'club-2', opponentName: 'Avaí', opponentShortName: 'AVA',
+    assistantName: 'Cléber Xavier',
+    opponentStanding: { position: 3, points: 7, played: 3, won: 2, drawn: 1, lost: 0, goalsFor: 6, goalsAgainst: 2 },
+    managedStanding: { position: 5, points: 5, played: 3, won: 1, drawn: 2, lost: 0, goalsFor: 4, goalsAgainst: 3 },
+    form: ['V', 'E', 'V'],
+    bestPlayers: [{ name: 'Marquinhos Gabriel', position: 'MID', overall: 74 }],
+    topScorer: { name: 'Gaspar', goals: 4 },
+    tacticalRead: { formation: '4-3-3', mentality: 'ATTACKING', pressing: 'HIGH', marking: 'ZONAL' },
+    insights: ['Eles pressionam a saída de bola — bolas longas nas costas da linha de defesa podem render boas chances.'],
+  },
+}
+
 function renderCard(result: AdvanceResponse) {
   return render(
     <MemoryRouter>
@@ -316,6 +335,26 @@ describe('AdvanceEventCard', () => {
       renderCard({ ...TRAINING_REPORT_RESULT, trainingReport: null })
       expect(screen.getByText('Relatório de Treino')).toBeInTheDocument()
       expect(screen.queryByText(/Preparador Físico/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('MATCH_PREVIEW type', () => {
+    it('renders the opponent analysis with byline, standings, form and insights', () => {
+      renderCard(previewResult)
+      expect(screen.getByText('Análise do Adversário')).toBeInTheDocument()
+      expect(screen.getByText(/por Cléber Xavier, Auxiliar Técnico/)).toBeInTheDocument()
+      expect(screen.getByText('Avaí')).toBeInTheDocument()
+      expect(screen.getByText('Marquinhos Gabriel')).toBeInTheDocument()
+      expect(screen.getByText(/Gaspar/)).toBeInTheDocument()
+      expect(screen.getByText(/4-3-3/)).toBeInTheDocument()
+      expect(screen.getByText(/bolas longas nas costas/)).toBeInTheDocument()
+    })
+
+    it('renders a gated (basic) preview without the absent sections', () => {
+      const basic = { ...previewResult, matchPreview: { ...previewResult.matchPreview!,
+        topScorer: null, tacticalRead: null, insights: null } }
+      renderCard(basic)
+      expect(screen.queryByText(/4-3-3/)).not.toBeInTheDocument()
     })
   })
 })

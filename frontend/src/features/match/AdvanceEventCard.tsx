@@ -1,11 +1,13 @@
 import { Link } from 'react-router-dom'
 import {
-  Box, Button, Card, CardContent, Chip, Divider, List, ListItem, Stack, Typography,
+  Box, Button, Card, CardContent, Chip, Divider, List, ListItem, Stack,
+  Table, TableBody, TableCell, TableHead, TableRow, Typography,
 } from '@mui/material'
 import { formatBRL } from '../../lib/money'
 import { formatDatePtBR } from '../../utils/date'
-import type { AdvanceResponse } from '../../api/types'
+import type { AdvanceResponse, Mentality, Pressing, Marking } from '../../api/types'
 import { SEVERITY_LABEL } from '../squad/injurySeverity'
+import { MENTALITY_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
 import { PlayerRatingsList } from './PlayerRatingsList'
 
 const QUALITY_LABEL: Record<string, string> = {
@@ -256,6 +258,11 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
               Relatório de Treino
             </Typography>
           )}
+          {result.type === 'MATCH_PREVIEW' && (
+            <Typography sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
+              Análise do Adversário
+            </Typography>
+          )}
         </Box>
         <Divider sx={{ mb: 2, borderBottomWidth: 2, borderColor: 'var(--cec-yellow)' }} />
 
@@ -372,6 +379,106 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
               </List>
             </TimelineNode>
           )}
+
+          {result.type === 'MATCH_PREVIEW' && result.matchPreview && (() => {
+            const p = result.matchPreview
+            const formColor = (r: string) =>
+              r === 'V' ? 'var(--cec-green)' : r === 'D' ? '#EF4444' : '#9CA3AF'
+            return (
+              <TimelineNode dot="🔎">
+                <Typography component="strong" sx={{ fontWeight: 700 }}>
+                  {p.opponentName}
+                  {' — '}
+                  {p.home ? 'em casa' : 'fora'}
+                  {p.stadiumName ? ` · ${p.stadiumName}` : ''}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+                  por {p.assistantName}, Auxiliar Técnico
+                </Typography>
+
+                {(p.opponentStanding || p.managedStanding) && (
+                  <Table size="small" sx={{ maxWidth: 420, mb: 1 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Clube</TableCell>
+                        <TableCell align="right">Pos</TableCell>
+                        <TableCell align="right">Pts</TableCell>
+                        <TableCell align="right">J</TableCell>
+                        <TableCell align="right">SG</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {p.opponentStanding && (
+                        <TableRow>
+                          <TableCell>{p.opponentName}</TableCell>
+                          <TableCell align="right">{p.opponentStanding.position}º</TableCell>
+                          <TableCell align="right">{p.opponentStanding.points}</TableCell>
+                          <TableCell align="right">{p.opponentStanding.played}</TableCell>
+                          <TableCell align="right">{p.opponentStanding.goalsFor - p.opponentStanding.goalsAgainst}</TableCell>
+                        </TableRow>
+                      )}
+                      {p.managedStanding && (
+                        <TableRow>
+                          <TableCell>Nós</TableCell>
+                          <TableCell align="right">{p.managedStanding.position}º</TableCell>
+                          <TableCell align="right">{p.managedStanding.points}</TableCell>
+                          <TableCell align="right">{p.managedStanding.played}</TableCell>
+                          <TableCell align="right">{p.managedStanding.goalsFor - p.managedStanding.goalsAgainst}</TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                )}
+
+                {p.form.length > 0 && (
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', mb: 1 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', mr: 0.5 }}>Forma:</Typography>
+                    {p.form.map((r, i) => (
+                      <Chip key={i} label={r} size="small"
+                        sx={{ fontWeight: 700, color: '#111', bgcolor: formColor(r), height: 20 }} />
+                    ))}
+                  </Stack>
+                )}
+
+                {p.bestPlayers.length > 0 && (
+                  <Box sx={{ mb: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>Destaques</Typography>
+                    <List dense disablePadding>
+                      {p.bestPlayers.map(pl => (
+                        <ListItem key={pl.name} disablePadding>
+                          <strong>{pl.name}</strong> · {pl.position} · OVR {pl.overall}
+                        </ListItem>
+                      ))}
+                      {p.topScorer && (
+                        <ListItem disablePadding>
+                          ⚽ Artilheiro: {p.topScorer.name} ({p.topScorer.goals} gol{p.topScorer.goals === 1 ? '' : 's'})
+                        </ListItem>
+                      )}
+                    </List>
+                  </Box>
+                )}
+
+                {p.tacticalRead && (
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    Costumam jogar no <strong>{p.tacticalRead.formation}</strong>
+                    {' · '}{MENTALITY_LABEL[p.tacticalRead.mentality as Mentality] ?? p.tacticalRead.mentality}
+                    {' · pressão '}{(PRESSING_LABEL[p.tacticalRead.pressing as Pressing] ?? p.tacticalRead.pressing).toLowerCase()}
+                    {' · marcação '}{(MARKING_LABEL[p.tacticalRead.marking as Marking] ?? p.tacticalRead.marking).toLowerCase()}
+                  </Typography>
+                )}
+
+                {(p.insights?.length ?? 0) > 0 && (
+                  <Box sx={{ borderLeft: '3px solid var(--cec-yellow)', pl: 1.5 }}>
+                    {p.insights!.map((s, i) => (
+                      <Typography key={i} variant="body2" sx={{ fontStyle: 'italic', mb: 0.5 }}>
+                        “{s}”
+                      </Typography>
+                    ))}
+                  </Box>
+                )}
+              </TimelineNode>
+            )
+          })()}
         </Box>
       </CardContent>
     </Card>
