@@ -39,4 +39,14 @@ public class SeedLoader {
             throw new IllegalStateException("Failed to load free-agent seed", e);
         }
     }
+
+    /** The real, hand-authored technical-staff hiring pool; candidates draw from it before
+     *  falling back to generated names. */
+    public List<SeedStaff> loadStaffPool() {
+        try (InputStream in = new ClassPathResource("seed/staff-pool.json").getInputStream()) {
+            return mapper.readValue(in, new TypeReference<List<SeedStaff>>() {});
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to load staff pool seed", e);
+        }
+    }
 }

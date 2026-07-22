@@ -1,0 +1,10 @@
+[
+  { "name": "Cléber Xavier", "role": "ASSISTENTE", "primaryAttribute": 17, "secondaryAttribute": 16 },
+  { "name": "Matheus Bachi", "role": "ASSISTENTE", "primaryAttribute": 14, "secondaryAttribute": 14 },
+  { "name": "Fábio Mahseredjian", "role": "PREPARADOR_FISICO", "primaryAttribute": 17, "secondaryAttribute": 16 },
+  { "name": "Anselmo Sbragia", "role": "PREPARADOR_FISICO", "primaryAttribute": 13, "secondaryAttribute": 13 },
+  { "name": "Rodrigo Pastana", "role": "OLHEIRO", "primaryAttribute": 15, "secondaryAttribute": 14 },
+  { "name": "Marcelo Segurado", "role": "OLHEIRO", "primaryAttribute": 12, "secondaryAttribute": 13 },
+  { "name": "Luiz Rosan", "role": "FISIOTERAPEUTA", "primaryAttribute": 14, "secondaryAttribute": 15 },
+  { "name": "Evandro Rogério", "role": "FISIOTERAPEUTA", "primaryAttribute": 12, "secondaryAttribute": 12 }
+]

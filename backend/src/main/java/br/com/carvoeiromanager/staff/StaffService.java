@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -44,8 +45,11 @@ public class StaffService {
                                                        UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         requireClubInSave(saveGameId, clubId);
+        Set<String> hiredNames = staffRepository.findBySaveGameId(saveGameId).stream()
+                .map(Staff::getName)
+                .collect(Collectors.toSet());
         List<StaffCandidate> candidates = staffCandidateGenerator.generate(
-                saveGameId, clubId, role, save.getCurrentDate(), CANDIDATE_COUNT);
+                saveGameId, clubId, role, save.getCurrentDate(), CANDIDATE_COUNT, hiredNames);
         return toCandidateResponses(candidates);
     }
 
@@ -54,8 +58,11 @@ public class StaffService {
                                     UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         requireClubInSave(saveGameId, clubId);
+        Set<String> hiredNames = staffRepository.findBySaveGameId(saveGameId).stream()
+                .map(Staff::getName)
+                .collect(Collectors.toSet());
         List<StaffCandidate> candidates = staffCandidateGenerator.generate(
-                saveGameId, clubId, role, save.getCurrentDate(), CANDIDATE_COUNT);
+                saveGameId, clubId, role, save.getCurrentDate(), CANDIDATE_COUNT, hiredNames);
         if (candidateIndex < 0 || candidateIndex >= candidates.size()) {
             throw new ApiException(ErrorCode.VALIDATION_ERROR,
                     "candidateIndex must be between 0 and " + (candidates.size() - 1));
