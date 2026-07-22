@@ -541,15 +541,33 @@ class LiveMatchEngineTest {
             LiveMatchConfig cfg = new LiveMatchConfig(seed, attHomeXi, attAwayXi, List.of(), List.of(),
                     homeProfile, awayProfile, fitness, List.of(), List.of(), null);
             LiveTimeline t = engine.simulate(cfg);
+            // A designated taker who is sent off (RED_CARD, incl. a second yellow) leaves the pitch,
+            // and SetPieces.takerOrFallback then deliberately picks the best available substitute — so
+            // only assert taker-equality while the designated taker is still on the pitch at the
+            // event's minute (a same-minute send-off is applied *after* that minute's set piece).
+            Map<UUID, Integer> homeSendOffMinute = new HashMap<>();
+            t.events().stream()
+                    .filter(e -> e.home() && e.type() == EventType.RED_CARD)
+                    .forEach(e -> homeSendOffMinute.merge(e.playerId(), e.minute(), Math::min));
             for (LiveTimelineEvent e : t.events()) {
                 if (!e.home()) continue;
                 switch (e.type()) {
-                    case FREE_KICK_GOAL -> assertThat(e.playerId()).isEqualTo(freekickTaker.getId());
+                    case FREE_KICK_GOAL -> {
+                        if (e.minute() <= homeSendOffMinute.getOrDefault(freekickTaker.getId(), Integer.MAX_VALUE)) {
+                            assertThat(e.playerId()).isEqualTo(freekickTaker.getId());
+                        }
+                    }
                     case CORNER_GOAL -> {
-                        assertThat(e.playerInId()).isEqualTo(cornerTaker.getId());
+                        if (e.minute() <= homeSendOffMinute.getOrDefault(cornerTaker.getId(), Integer.MAX_VALUE)) {
+                            assertThat(e.playerInId()).isEqualTo(cornerTaker.getId());
+                        }
                         assertThat(byId.get(e.playerId()).getPosition()).isNotEqualTo(Position.GK);
                     }
-                    case PENALTY_GOAL, PENALTY_MISSED -> assertThat(e.playerId()).isEqualTo(penaltyTaker.getId());
+                    case PENALTY_GOAL, PENALTY_MISSED -> {
+                        if (e.minute() <= homeSendOffMinute.getOrDefault(penaltyTaker.getId(), Integer.MAX_VALUE)) {
+                            assertThat(e.playerId()).isEqualTo(penaltyTaker.getId());
+                        }
+                    }
                     default -> { }
                 }
             }

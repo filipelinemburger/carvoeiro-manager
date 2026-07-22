@@ -41,10 +41,10 @@ public class MatchSimulationService {
             double homeFf = MatchMath.fitnessFactor(home.fitnessDecay(), minute);
             double awayFf = MatchMath.fitnessFactor(away.fitnessDecay(), minute);
 
-            double homeChance = MatchMath.perMinuteScoreChance(home.attack() * homeFf + MatchMath.HOME_ADVANTAGE,
-                    away.defense() * awayFf) * tempoFactor;
+            double homeChance = MatchMath.perMinuteScoreChance(home.attack() * homeFf,
+                    away.defense() * awayFf, true) * tempoFactor;
             double awayChance = MatchMath.perMinuteScoreChance(away.attack() * awayFf,
-                    home.defense() * homeFf + MatchMath.HOME_ADVANTAGE) * tempoFactor;
+                    home.defense() * homeFf, false) * tempoFactor;
 
             if (rng.nextDouble() < homeChance) {
                 if (rng.nextDouble() < homeSetPiece) {

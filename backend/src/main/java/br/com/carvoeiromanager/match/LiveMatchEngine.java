@@ -120,10 +120,10 @@ public class LiveMatchEngine {
             double homeFf = MatchMath.fitnessFactor(homeInput.fitnessDecay(), minute);
             double awayFf = MatchMath.fitnessFactor(awayInput.fitnessDecay(), minute);
 
-            double homeChance = MatchMath.perMinuteScoreChance(homeInput.attack() * homeFf + MatchMath.HOME_ADVANTAGE,
-                    awayInput.defense() * awayFf) * tempo;
+            double homeChance = MatchMath.perMinuteScoreChance(homeInput.attack() * homeFf,
+                    awayInput.defense() * awayFf, true) * tempo;
             double awayChance = MatchMath.perMinuteScoreChance(awayInput.attack() * awayFf,
-                    homeInput.defense() * homeFf + MatchMath.HOME_ADVANTAGE) * tempo;
+                    homeInput.defense() * homeFf, false) * tempo;
 
             if (rng.nextDouble() < homeChance) {
                 if (resolveScoringEvent(minute, home, homeInput, rng, attrRng, assistRng, events)) homeGoals++;
