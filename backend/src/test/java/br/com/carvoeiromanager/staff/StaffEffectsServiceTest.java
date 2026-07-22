@@ -8,91 +8,91 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class StaffEffectsServiceTest {
 
+    private final UUID CLUB_ID = UUID.randomUUID();
+    private final UUID SAVE_ID = UUID.randomUUID();
+
     private final StaffRepository staffRepository = Mockito.mock(StaffRepository.class);
-    private final StaffEffectsService effects = new StaffEffectsService(staffRepository);
+    private final StaffEffectsService service = new StaffEffectsService(staffRepository);
 
-    private Staff staff(StaffRole role, StaffQuality quality) {
-        int attr = switch (quality) {
-            case REGULAR -> 10;
-            case BOM -> 14;
-            case EXCELENTE -> 17;
-        };
-        return Staff.create(UUID.randomUUID(), UUID.randomUUID(), role, quality, "Fulano", BigDecimal.TEN, attr, attr);
+    private Staff staffWith(StaffRole role, int primary, int secondary) {
+        return Staff.create(SAVE_ID, CLUB_ID, role, StaffQuality.forAverage((primary + secondary) / 2.0),
+                "Profissional Teste", new BigDecimal("45000.00"), primary, secondary);
     }
 
     @Test
-    void trainingBonusIsZeroWhenManagedClubHasNoCoachHired() {
-        UUID clubId = UUID.randomUUID();
-        when(staffRepository.findByClubIdAndRole(clubId, StaffRole.PREPARADOR_FISICO))
-                .thenReturn(Optional.empty());
+    void anchorAverageTenReproducesRegularValues() {
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.ASSISTENTE))
+                .thenReturn(Optional.of(staffWith(StaffRole.ASSISTENTE, 10, 10)));
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.PREPARADOR_FISICO))
+                .thenReturn(Optional.of(staffWith(StaffRole.PREPARADOR_FISICO, 10, 10)));
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.FISIOTERAPEUTA))
+                .thenReturn(Optional.of(staffWith(StaffRole.FISIOTERAPEUTA, 10, 10)));
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.OLHEIRO))
+                .thenReturn(Optional.of(staffWith(StaffRole.OLHEIRO, 10, 10)));
 
-        assertThat(effects.trainingBonusFor(clubId, true)).isZero();
+        assertThat(service.sponsorshipMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
+        assertThat(service.trainingBonusFor(CLUB_ID, true)).isEqualTo(0);
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
+        assertThat(service.wageDemandMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
     }
 
     @Test
-    void trainingBonusMatchesTheHiredCoachsQualityTier() {
-        UUID clubId = UUID.randomUUID();
-        when(staffRepository.findByClubIdAndRole(clubId, StaffRole.PREPARADOR_FISICO))
-                .thenReturn(Optional.of(staff(StaffRole.PREPARADOR_FISICO, StaffQuality.EXCELENTE)));
+    void anchorAverageSeventeenReproducesExcelenteValues() {
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.ASSISTENTE))
+                .thenReturn(Optional.of(staffWith(StaffRole.ASSISTENTE, 17, 17)));
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.PREPARADOR_FISICO))
+                .thenReturn(Optional.of(staffWith(StaffRole.PREPARADOR_FISICO, 17, 17)));
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.FISIOTERAPEUTA))
+                .thenReturn(Optional.of(staffWith(StaffRole.FISIOTERAPEUTA, 17, 17)));
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.OLHEIRO))
+                .thenReturn(Optional.of(staffWith(StaffRole.OLHEIRO, 17, 17)));
 
-        assertThat(effects.trainingBonusFor(clubId, true)).isEqualTo(2);
+        assertThat(service.sponsorshipMultiplierFor(CLUB_ID, true)).isCloseTo(1.10, within(1e-9));
+        assertThat(service.trainingBonusFor(CLUB_ID, true)).isEqualTo(2);
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, true)).isCloseTo(0.70, within(1e-9));
+        assertThat(service.wageDemandMultiplierFor(CLUB_ID, true)).isCloseTo(0.90, within(1e-9));
     }
 
     @Test
-    void trainingBonusIsTheFixedAiBaselineForANonManagedClubRegardlessOfRepository() {
-        UUID clubId = UUID.randomUUID();
+    void eliteAveragesAreClampedAtTheCeilings() {
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.ASSISTENTE))
+                .thenReturn(Optional.of(staffWith(StaffRole.ASSISTENTE, 19, 19)));
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.PREPARADOR_FISICO))
+                .thenReturn(Optional.of(staffWith(StaffRole.PREPARADOR_FISICO, 19, 19)));
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.FISIOTERAPEUTA))
+                .thenReturn(Optional.of(staffWith(StaffRole.FISIOTERAPEUTA, 19, 19)));
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.OLHEIRO))
+                .thenReturn(Optional.of(staffWith(StaffRole.OLHEIRO, 19, 19)));
 
-        assertThat(effects.trainingBonusFor(clubId, false)).isEqualTo(1);
-        Mockito.verifyNoInteractions(staffRepository);
+        assertThat(service.sponsorshipMultiplierFor(CLUB_ID, true)).isCloseTo(1.12, within(1e-9));
+        assertThat(service.trainingBonusFor(CLUB_ID, true)).isEqualTo(2);
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, true)).isCloseTo(0.65, within(1e-9));
+        assertThat(service.wageDemandMultiplierFor(CLUB_ID, true)).isCloseTo(0.88, within(1e-9));
     }
 
     @Test
-    void injuryRiskMultiplierMatchesTheHiredPhysiosQualityTier() {
-        UUID clubId = UUID.randomUUID();
-        when(staffRepository.findByClubIdAndRole(clubId, StaffRole.FISIOTERAPEUTA))
-                .thenReturn(Optional.of(staff(StaffRole.FISIOTERAPEUTA, StaffQuality.BOM)));
-
-        assertThat(effects.injuryRiskMultiplierFor(clubId, true)).isEqualTo(0.85);
+    void aiClubsUseTheFixedBaselineAverageFourteen() {
+        assertThat(service.sponsorshipMultiplierFor(CLUB_ID, false)).isCloseTo(1.0 + 0.10 * 4 / 7.0, within(1e-9));
+        assertThat(service.trainingBonusFor(CLUB_ID, false)).isEqualTo(1);
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, false)).isCloseTo(1.0 - 0.30 * 4 / 7.0, within(1e-9));
+        assertThat(service.wageDemandMultiplierFor(CLUB_ID, false)).isCloseTo(1.0 - 0.10 * 4 / 7.0, within(1e-9));
+        verifyNoInteractions(staffRepository);
     }
 
     @Test
-    void injuryRiskMultiplierIsNeutralWhenManagedClubHasNoPhysioHired() {
-        UUID clubId = UUID.randomUUID();
-        when(staffRepository.findByClubIdAndRole(any(), any())).thenReturn(Optional.empty());
-
-        assertThat(effects.injuryRiskMultiplierFor(clubId, true)).isEqualTo(1.0);
-    }
-
-    @Test
-    void injuryRiskMultiplierIsTheFixedAiBaselineForANonManagedClub() {
-        assertThat(effects.injuryRiskMultiplierFor(UUID.randomUUID(), false)).isEqualTo(0.85);
-    }
-
-    @Test
-    void wageDemandMultiplierMatchesTheHiredScoutsQualityTier() {
-        UUID clubId = UUID.randomUUID();
-        when(staffRepository.findByClubIdAndRole(clubId, StaffRole.OLHEIRO))
-                .thenReturn(Optional.of(staff(StaffRole.OLHEIRO, StaffQuality.EXCELENTE)));
-
-        assertThat(effects.wageDemandMultiplierFor(clubId, true)).isEqualTo(0.9);
-    }
-
-    @Test
-    void sponsorshipMultiplierMatchesTheHiredAssistantsQualityTier() {
-        UUID clubId = UUID.randomUUID();
-        when(staffRepository.findByClubIdAndRole(clubId, StaffRole.ASSISTENTE))
-                .thenReturn(Optional.of(staff(StaffRole.ASSISTENTE, StaffQuality.BOM)));
-
-        assertThat(effects.sponsorshipMultiplierFor(clubId, true)).isEqualTo(1.05);
-    }
-
-    @Test
-    void sponsorshipMultiplierIsTheFixedAiBaselineForANonManagedClub() {
-        assertThat(effects.sponsorshipMultiplierFor(UUID.randomUUID(), false)).isEqualTo(1.05);
+    void managedClubWithoutTheRoleGetsNeutralEffects() {
+        when(staffRepository.findByClubIdAndRole(eq(CLUB_ID), any())).thenReturn(Optional.empty());
+        assertThat(service.sponsorshipMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
+        assertThat(service.trainingBonusFor(CLUB_ID, true)).isEqualTo(0);
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
+        assertThat(service.wageDemandMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
     }
 }
