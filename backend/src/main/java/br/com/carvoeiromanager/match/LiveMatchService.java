@@ -422,25 +422,35 @@ public class LiveMatchService {
         Map<UUID, Player> byId = indexAll(cfg);
         boolean losingStreak = losingStreakHalfTime(lm.getSaveGameId(), save.getManagedClubId());
         boolean enteringMatchOnStreak = hypeStreak(lm.getSaveGameId(), save.getManagedClubId());
-        List<LiveEventResponse> events = revealed.stream().map(e -> new LiveEventResponse(
-                e.minute(), e.type().name(), e.home(),
-                e.playerId().toString(), nameOf(byId, e.playerId()),
-                e.playerInId() == null ? null : e.playerInId().toString(),
-                e.playerInId() == null ? null : nameOf(byId, e.playerInId()),
-                e.severity(),
-                LiveCommentary.of(e.type(), nameOf(byId, e.playerId()),
-                        e.playerInId() == null ? null : nameOf(byId, e.playerInId()), e.minute(), e.detail(),
-                        isComebackGoal(revealed, e, lm.isManagedIsHome()),
-                        isHypeGoal(revealed, e, lm.isManagedIsHome(), enteringMatchOnStreak), losingStreak))).toList();
 
-        String status = statusAt(lm, timeline, minute);
-        int subsUsed = (int) cfg.subSchedule().stream().filter(s -> s.home() == lm.isManagedIsHome()).count();
-
+        // Resolved ahead of the events map below: an opponent-side goal needs the scoring club's
+        // name for the sad OPP_* commentary pools (LiveCommentary.of's opponentClubName arg).
         Fixture fixture = fixtureRepository.findById(lm.getFixtureId()).orElseThrow();
         Map<UUID, Club> clubs = clubRepository.findBySaveGameId(lm.getSaveGameId()).stream()
                 .collect(java.util.stream.Collectors.toMap(Club::getId, c -> c));
         String competitionName = competitionRepository.findById(lm.getCompetitionId())
                 .map(c -> c.getName()).orElse(null);
+        Club homeClub = clubs.get(fixture.getHomeClubId());
+        Club awayClub = clubs.get(fixture.getAwayClubId());
+
+        List<LiveEventResponse> events = revealed.stream().map(e -> {
+            boolean opponentGoal = isOpponentGoal(e, lm.isManagedIsHome());
+            String opponentClubName = opponentGoal ? (e.home() ? homeClub.getName() : awayClub.getName()) : null;
+            return new LiveEventResponse(
+                    e.minute(), e.type().name(), e.home(),
+                    e.playerId().toString(), nameOf(byId, e.playerId()),
+                    e.playerInId() == null ? null : e.playerInId().toString(),
+                    e.playerInId() == null ? null : nameOf(byId, e.playerInId()),
+                    e.severity(),
+                    LiveCommentary.of(e.type(), nameOf(byId, e.playerId()),
+                            e.playerInId() == null ? null : nameOf(byId, e.playerInId()), e.minute(), e.detail(),
+                            isComebackGoal(revealed, e, lm.isManagedIsHome()),
+                            isHypeGoal(revealed, e, lm.isManagedIsHome(), enteringMatchOnStreak), losingStreak,
+                            opponentGoal, opponentClubName));
+        }).toList();
+
+        String status = statusAt(lm, timeline, minute);
+        int subsUsed = (int) cfg.subSchedule().stream().filter(s -> s.home() == lm.isManagedIsHome()).count();
 
         boolean managedIsHome = lm.isManagedIsHome();
         TacticalProfile managedProfile = managedIsHome ? cfg.homeProfile() : cfg.awayProfile();
@@ -470,8 +480,6 @@ public class LiveMatchService {
         List<PlayerRating> playerRatings = managedRatings(lm, cfg, timeline, minute);
         List<PlayerRating> opponentPlayerRatings = opponentRatings(lm, cfg, timeline, minute);
 
-        Club homeClub = clubs.get(fixture.getHomeClubId());
-        Club awayClub = clubs.get(fixture.getAwayClubId());
         KitColors homeClubColors = new KitColors(homeClub.getPrimaryColor(), homeClub.getSecondaryColor());
         KitColors awayClubColors = new KitColors(awayClub.getPrimaryColor(), awayClub.getSecondaryColor());
 
@@ -483,6 +491,14 @@ public class LiveMatchService {
                 managedIsHome, minute, timeline.homeGoalsAt(minute), timeline.awayGoalsAt(minute),
                 status, events, onPitch, bench, MAX_SUBS - subsUsed, currentTactics, playerRatings,
                 opponentOnPitch, opponentTactics, opponentPlayerRatings, homeClubColors, awayClubColors);
+    }
+
+    /**
+     * True only when {@code event} is a goal-family event for the side the user does not manage —
+     * drives the sad OPP_* commentary pools in {@link LiveCommentary}.
+     */
+    static boolean isOpponentGoal(LiveTimelineEvent event, boolean managedIsHome) {
+        return event.type().isGoal() && event.home() != managedIsHome;
     }
 
     /**

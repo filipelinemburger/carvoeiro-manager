@@ -112,6 +112,37 @@ public final class LiveCommentary {
             "O adversário reorganiza a equipe. Postura mais equilibrada agora",
             "Reorganização no adversário, buscando equilíbrio dentro de campo."};
 
+    // Sad PT-BR mirrors of the goal-family pools above, used when the scoring side is the
+    // opponent rather than the managed club. Lines take the scorer (%s) and, where the wording
+    // calls for it, the opponent club name (second %s) — see pickOpp/pickOpp3.
+    private static final String[] OPP_GOAL = {
+            "Gol deles... a zaga bate cabeça e o %s aproveita.",
+            "%s marca para o %s e o estádio fica em silêncio.",
+            "Vazou atrás! %s aparece livre e balança as redes contra nós.",
+            "Golpe duro... %s marca pelo %s e a torcida baixa a cabeça.",
+            "Que baque, torcida... %s não perdoa e é gol do adversário.",
+            "Doeu... %s decreta o gol do %s e o silêncio toma conta da arquibancada."};
+    private static final String[] OPP_GOAL_ASSISTED = {
+            "Bola alçada na área... %s cruza, %s cabeceia e é gol deles.",
+            "Assistência amarga: %s serve %s, que não perdoa contra nós.",
+            "%s enxergou o espaço, tocou pra %s do %s, e é gol do adversário.",
+            "Jogada coletiva deles: %s cruza, %s empurra pro gol do %s."};
+    private static final String[] OPP_PENALTY_GOAL = {
+            "Pênalti pra eles... %s não desperdiça.",
+            "É pênalti a favor do adversário... %s bate e marca. Que sufoco.",
+            "Vai pra bola... %s converte o pênalti pelo %s e complica nossa vida.",
+            "Doeu... %s cobra com categoria e amplia o placar do %s."};
+    private static final String[] OPP_FREE_KICK_GOAL = {
+            "Falta perigosa... %s bate e balança as redes contra nós.",
+            "Cobrança certeira do adversário: %s acerta o ângulo e marca pelo %s.",
+            "A barreira nem pulou... %s manda uma bomba e é gol deles.",
+            "Que pontaria... %s cobra a falta e decreta mais um gol do %s."};
+    private static final String[] OPP_CORNER_GOAL = {
+            "Escanteio cobrado, %s sobe mais alto e cabeceia pra dentro. Gol deles.",
+            "Bola na área, %s testa e amplia o placar do %s.",
+            "Subiu sozinho... %s cabeceia e balança as redes contra nós.",
+            "Que falha na marcação... %s aproveita o escanteio e marca pelo %s."};
+
     /**
      * {@code inName} is used for substitutions, corner goals (the corner taker), and assisted
      * open-play goals (the assister — {@code playerInId} on the event). {@code detail} only for
@@ -130,13 +161,35 @@ public final class LiveCommentary {
      */
     public static String of(EventType type, String playerName, String inName, int minute, String detail,
                              boolean comebackGoal, boolean hypeGoal, boolean losingStreakHalfTime) {
+        return of(type, playerName, inName, minute, detail, comebackGoal, hypeGoal, losingStreakHalfTime,
+                false, null);
+    }
+
+    /**
+     * Overload adding {@code opponentGoal}/{@code opponentClubName}: when {@code opponentGoal} is
+     * true and {@code type} is a goal-family type with a dedicated sad pool (GOAL, PENALTY_GOAL,
+     * FREE_KICK_GOAL, CORNER_GOAL), the line comes from the corresponding OPP_* pool instead,
+     * naming the scorer and — where the line has a second {@code %s} — {@code opponentClubName}.
+     * {@code comebackGoal}/{@code hypeGoal} are expected false for opponent goals (the caller
+     * gates both on the managed side), but this overload does not re-enforce that — it simply
+     * appends whatever the caller passes, same as the original signature. SET_PIECE_GOAL is
+     * legacy (no longer emitted) and has no opponent pool: it always uses the neutral SET_PIECE
+     * pool regardless of {@code opponentGoal}.
+     */
+    public static String of(EventType type, String playerName, String inName, int minute, String detail,
+                             boolean comebackGoal, boolean hypeGoal, boolean losingStreakHalfTime,
+                             boolean opponentGoal, String opponentClubName) {
         if (type == EventType.HALF_TIME && losingStreakHalfTime) {
             return LOSING_STREAK_HALF_TIME_LINE;
         }
         String base = switch (type) {
-            case GOAL -> inName != null
-                    ? pick2(GOAL_ASSISTED, inName, playerName, minute, type)
-                    : pick(GOAL, playerName, minute, type);
+            case GOAL -> opponentGoal
+                    ? (inName != null
+                            ? pickOpp3(OPP_GOAL_ASSISTED, inName, playerName, opponentClubName, minute, type)
+                            : pickOpp(OPP_GOAL, playerName, opponentClubName, minute, type))
+                    : (inName != null
+                            ? pick2(GOAL_ASSISTED, inName, playerName, minute, type)
+                            : pick(GOAL, playerName, minute, type));
             case SET_PIECE_GOAL -> pick(SET_PIECE, playerName, minute, type);
             case CHANCE -> pick(CHANCE, playerName, minute, type);
             case YELLOW_CARD -> pick(YELLOW, playerName, minute, type);
@@ -147,10 +200,16 @@ public final class LiveCommentary {
             case SUBSTITUTION -> pick2(SUBSTITUTION_LINES, inName, playerName, minute, type);
             case TACTICS_CHANGE -> tacticsChange(detail, minute);
             case HALF_TIME -> pick0(HALF_TIME_LINES, minute, type);
-            case PENALTY_GOAL -> pick(PENALTY_GOAL_LINES, playerName, minute, type);
+            case PENALTY_GOAL -> opponentGoal
+                    ? pickOpp(OPP_PENALTY_GOAL, playerName, opponentClubName, minute, type)
+                    : pick(PENALTY_GOAL_LINES, playerName, minute, type);
             case PENALTY_MISSED -> pick(PENALTY_MISS_LINES, playerName, minute, type);
-            case FREE_KICK_GOAL -> pick(FREE_KICK_LINES, playerName, minute, type);
-            case CORNER_GOAL -> corner(playerName, inName, minute);
+            case FREE_KICK_GOAL -> opponentGoal
+                    ? pickOpp(OPP_FREE_KICK_GOAL, playerName, opponentClubName, minute, type)
+                    : pick(FREE_KICK_LINES, playerName, minute, type);
+            case CORNER_GOAL -> opponentGoal
+                    ? pickOpp(OPP_CORNER_GOAL, playerName, opponentClubName, minute, type)
+                    : corner(playerName, inName, minute);
             case FOUL -> throw new IllegalStateException(
                     "FOUL is never rendered — LiveMatchService.toState() must filter it before calling of()");
         };
@@ -197,5 +256,22 @@ public final class LiveCommentary {
 
     private static String pick0(String[] lines, int minute, EventType type) {
         return lines[Math.floorMod(minute + type.ordinal(), lines.length)];
+    }
+
+    /**
+     * Same deterministic index as {@link #pick}/{@link #pick2}, but always formats with
+     * (scorer, opponentClubName): lines with a single {@code %s} simply ignore the unused second
+     * argument (String.format only throws on too few args, never on extra ones).
+     */
+    private static String pickOpp(String[] lines, String scorer, String opponentClubName, int minute,
+                                   EventType type) {
+        return lines[Math.floorMod(minute + type.ordinal(), lines.length)].formatted(scorer, opponentClubName);
+    }
+
+    /** Three-argument variant of {@link #pickOpp} for OPP_GOAL_ASSISTED (assister, scorer, club). */
+    private static String pickOpp3(String[] lines, String assister, String scorer, String opponentClubName,
+                                    int minute, EventType type) {
+        return lines[Math.floorMod(minute + type.ordinal(), lines.length)]
+                .formatted(assister, scorer, opponentClubName);
     }
 }
