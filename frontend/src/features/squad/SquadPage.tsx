@@ -16,7 +16,6 @@ import { useIsMobile } from '../../lib/useIsMobile'
 import type { PlayerResponse, PlayerRole, LineupStarter, TrainableAttribute, TrainingIntensity, TrainingAssignment, SquadResponse } from '../../api/types'
 import { TacticsPanel } from './TacticsPanel'
 import { PlayerDetails } from './PlayerDetails'
-import { Collapsible } from '../../components/Collapsible'
 import { FitnessBar } from './FitnessBar'
 import { MoodChip } from './MoodChip'
 import { teamMorale } from './morale'
@@ -716,21 +715,24 @@ export function SquadPage() {
       </Box>
 
       <Box role="tabpanel" hidden={tab !== 1} id="squad-tabpanel-1" aria-labelledby="squad-tab-1">
-        <Collapsible title="Instruções da equipe">
-          <TacticsPanel
-            saveGameId={saveGameId}
-            clubId={clubId}
-            starters={selected.map(id => {
-              const p = players.find(pp => pp.id === id)!
-              return { id, name: p.name }
-            })}
-          />
-        </Collapsible>
-        {pitchTeam && (
-          <Box sx={{ mb: 2 }}>
-            <Pitch home={pitchTeam} />
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, alignItems: 'flex-start' }}>
+          <Box sx={{ width: { md: 380 }, flexShrink: 0 }}>
+            <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', mb: 1.5 }}>Instruções da equipe</Typography>
+            <TacticsPanel
+              saveGameId={saveGameId}
+              clubId={clubId}
+              starters={selected.map(id => {
+                const p = players.find(pp => pp.id === id)!
+                return { id, name: p.name }
+              })}
+            />
           </Box>
-        )}
+          {pitchTeam && (
+            <Box sx={{ flex: 1, minWidth: 0, mb: 2 }}>
+              <Pitch home={pitchTeam} />
+            </Box>
+          )}
+        </Box>
       </Box>
 
       <Box role="tabpanel" hidden={tab !== 2} id="squad-tabpanel-2" aria-labelledby="squad-tab-2">

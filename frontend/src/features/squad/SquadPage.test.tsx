@@ -257,18 +257,16 @@ describe('SquadPage', () => {
     ])
   })
 
-  it('shows tactics controls above the pitch in the Táticas de jogo tab', async () => {
+  it('shows tactics controls side by side with the pitch in the Táticas de jogo tab', async () => {
     renderWithProviders()
     fireEvent.click(await screen.findByRole('tab', { name: 'Táticas de jogo' }))
     const panel = screen.getByRole('tabpanel', { name: 'Táticas de jogo' })
     expect(panel).toBeVisible()
-    const instrucoes = within(panel).getByRole('button', { name: /Instruções da equipe/ })
-    expect(instrucoes).toHaveAttribute('aria-expanded', 'true')
+    // The instructions panel is permanently visible now (no collapse/expand toggle).
+    expect(within(panel).queryByRole('button', { name: /Instruções da equipe/ })).not.toBeInTheDocument()
+    expect(within(panel).getByText('Instruções da equipe')).toBeInTheDocument()
     expect(await within(panel).findByLabelText('Mentalidade')).toBeInTheDocument()
-    // Tactics section renders before (above) the pitch in the DOM.
-    const salvarTatica = within(panel).getByRole('button', { name: /Salvar tática/ })
-    expect(salvarTatica.compareDocumentPosition(within(panel).getByTestId('pitch'))
-      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(panel).getByTestId('pitch')).toBeInTheDocument()
   })
 
   it('preserves an unsaved lineup selection across tab switches', async () => {
