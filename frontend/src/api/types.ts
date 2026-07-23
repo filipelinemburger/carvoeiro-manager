@@ -83,10 +83,26 @@ export type PlayerInstruction =
   | 'INFILTRAR_NA_AREA' | 'CHUTAR_DE_LONGE' | 'CRUZAR_MAIS'
   | 'SEGURAR_POSICAO' | 'MARCACAO_DURA' | 'DRIBLAR_MAIS'
 
+/** Fine-grained playing position, refining the coarse `position`; mirrors the backend enum. */
+export type DetailedPosition =
+  | 'GOLEIRO'
+  | 'ZAGUEIRO'
+  | 'LATERAL_ESQUERDO'
+  | 'LATERAL_DIREITO'
+  | 'VOLANTE'
+  | 'MEIA_ARMADOR'
+  | 'PONTA'
+  | 'FALSO_9'
+  | 'ATACANTE'
+
 export type PlayerResponse = {
   id: string
   name: string
   position: 'GK' | 'DEF' | 'MID' | 'ATT'
+  /** Fine-grained position sent by the API; null on legacy payloads persisted before it existed. */
+  detailedPosition: DetailedPosition | null
+  /** PT-BR label for `detailedPosition` (e.g. "Lateral esquerdo"); null when the enum is null. */
+  detailedPositionLabel: string | null
   age: number
   overall: number
   pace: number

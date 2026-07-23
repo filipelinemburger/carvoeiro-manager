@@ -41,7 +41,8 @@ const clubs: ClubSummary[] = [
 
 function player(overrides: Partial<PlayerResponse> = {}): PlayerResponse {
   return {
-    id: 'p1', name: 'Alvo Um', position: 'ATT', age: 24, overall: 80, pace: 80, finishing: 78,
+    id: 'p1', name: 'Alvo Um', position: 'ATT', detailedPosition: null, detailedPositionLabel: null,
+    age: 24, overall: 80, pace: 80, finishing: 78,
     passing: 65, tackling: 30, goalkeeping: 10, stamina: 75, form: 0, morale: 70, yellowCards: 0,
     suspensionRemaining: 0, injuryMatches: 0, eligible: true, role: null, contractYears: 3,
     value: 2688000, wageDemand: 60000, fitness: 100, injurySeverity: 'NONE', attributes: [],

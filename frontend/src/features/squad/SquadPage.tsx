@@ -22,6 +22,7 @@ import { teamMorale } from './morale'
 import { SEVERITY_LABEL } from './injurySeverity'
 import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
 import { FORMATION_CODES } from '../pitch/pitchSlots'
+import { positionShort } from '../players/positionLabels'
 import { CARBON, ovrBadgeSx } from '../../muiTheme'
 
 const FORMATIONS = FORMATION_CODES
@@ -41,7 +42,8 @@ export const FORMATION_SHAPE: Record<string, Record<OutfieldPosition, number>> =
   '4-1-4-1': { DEF: 4, MID: 5, ATT: 1 },
   '4-3-2-1': { DEF: 4, MID: 5, ATT: 1 },
   '3-4-3': { DEF: 3, MID: 4, ATT: 3 },
-  '4-4-1-1': { DEF: 4, MID: 4, ATT: 2 },
+  // Mirrors the backend FormationSlots: the withdrawn forward is an advanced playmaker (MID), not an ATT.
+  '4-4-1-1': { DEF: 4, MID: 5, ATT: 1 },
   '5-4-1': { DEF: 5, MID: 4, ATT: 1 },
   '4-2-4': { DEF: 4, MID: 2, ATT: 4 },
   '3-4-2-1': { DEF: 3, MID: 6, ATT: 1 },
@@ -129,8 +131,12 @@ const POS_ABBR: Record<PlayerResponse['position'], string> = { GK: 'GK', DEF: 'D
 // Criciúma yellow — every starter's selection button.
 const CRICIUMA_YELLOW = '#f7d417'
 
-function positionLabel(pos: PlayerResponse['position']): string {
-  return { GK: 'GK', DEF: 'DEF', MID: 'MEI', ATT: 'ATA' }[pos]
+// Coarse fallbacks when a player has no detailed position (legacy payloads).
+const COARSE_POS_SHORT: Record<PlayerResponse['position'], string> = { GK: 'GK', DEF: 'DEF', MID: 'MEI', ATT: 'ATA' }
+
+/** Short position abbr for a squad-table cell: detailed when present, else coarse. */
+function positionLabel(player: PlayerResponse): string {
+  return positionShort(player, COARSE_POS_SHORT)
 }
 
 function formLabel(form: number): string {
@@ -342,7 +348,7 @@ export function SquadPage() {
     players: selected
       .map(id => players.find(p => p.id === id))
       .filter((p): p is PlayerResponse => Boolean(p))
-      .map((p): PlacedPlayer => ({ id: p.id, surname: p.name, position: p.position, fitness: p.fitness })),
+      .map((p): PlacedPlayer => ({ id: p.id, surname: p.name, position: p.position, detailedPosition: p.detailedPosition, fitness: p.fitness })),
   } : null
 
   // A position band is full once it holds as many starters as the formation allows.
@@ -523,7 +529,7 @@ export function SquadPage() {
       return (
         <Button size="small" variant="contained" onClick={() => cyclePlayer(player)} aria-label={`Escalar ${player.name}`}
           sx={{ ...base, bgcolor: CRICIUMA_YELLOW, color: '#111', '&:hover': { bgcolor: '#e3c200' } }}>
-          {POS_ABBR[player.position]}
+          {positionShort(player, POS_ABBR)}
         </Button>
       )
     }
@@ -731,7 +737,7 @@ export function SquadPage() {
                             {availabilityBadge(player)}
                             {listedBadge(player)}
                           </TableCell>
-                          <TableCell align="center">{positionLabel(player.position)}</TableCell>
+                          <TableCell align="center">{positionLabel(player)}</TableCell>
                           <TableCell align="center">
                             <Box component="span" sx={{ display: 'inline-block', minWidth: 30, px: 1, py: 0.25, borderRadius: 1, ...ovrBadgeSx(player.overall) }}>
                               {player.overall}
@@ -803,7 +809,7 @@ export function SquadPage() {
                   {displayPlayers.map(player => (
                     <TableRow key={player.id}>
                       <TableCell>{playerNameButton(player)}</TableCell>
-                      <TableCell align="center">{positionLabel(player.position)}</TableCell>
+                      <TableCell align="center">{positionLabel(player)}</TableCell>
                       <TableCell align="center">{trainingFocusSelect(player)}</TableCell>
                       <TableCell align="center">{trainingIntensitySelect(player)}</TableCell>
                     </TableRow>
@@ -933,7 +939,7 @@ function MobileSquadRow({ player, statusButton, playerNameButton, availabilityBa
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 1, flexWrap: 'wrap' }}>
             {availabilityBadge(player)}
             {listedBadge(player)}
-            <Chip size="small" label={positionLabel(player.position)} />
+            <Chip size="small" label={positionLabel(player)} />
             <Chip size="small" label={`OVR ${player.overall}`} sx={ovrBadgeSx(player.overall)} />
             <Box sx={{ width: 84 }}><FitnessBar fitness={player.fitness} /></Box>
           </Stack>

@@ -33,7 +33,7 @@ const mockSetTraining = vi.mocked(setTraining)
 
 // `as const` narrows injurySeverity to the literal 'NONE' so it satisfies
 // PlayerResponse's union type (not widened to string) when spread into fixtures.
-const STATE = { form: 0, morale: 0, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0, injurySeverity: 'NONE' as const, eligible: true, role: null, contractYears: 2, value: 1500000, wageDemand: 90000, fitness: 100, attributes: [
+const STATE = { detailedPosition: null, detailedPositionLabel: null, form: 0, morale: 0, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0, injurySeverity: 'NONE' as const, eligible: true, role: null, contractYears: 2, value: 1500000, wageDemand: 90000, fitness: 100, attributes: [
   { key: 'FINALIZACAO', label: 'Finalização', group: 'TECNICO' as const, value: 55 },
   { key: 'VISAO', label: 'Visão de jogo', group: 'MENTAL' as const, value: 50 },
   { key: 'VELOCIDADE', label: 'Velocidade', group: 'FISICO' as const, value: 60 },
@@ -71,6 +71,9 @@ const makeOutfield = (id: string, name: string, pos: 'DEF' | 'MID' | 'ATT'): Pla
 })
 
 const DEF1 = makeOutfield('p-d1', 'Defensor Um', 'DEF')
+// DEF1 carries a detailed position so the squad table can show its short abbr ("LE").
+DEF1.detailedPosition = 'LATERAL_ESQUERDO'
+DEF1.detailedPositionLabel = 'Lateral esquerdo'
 const DEF2 = makeOutfield('p-d2', 'Defensor Dois', 'DEF')
 const DEF3 = makeOutfield('p-d3', 'Defensor Tres', 'DEF')
 const DEF4 = makeOutfield('p-d4', 'Defensor Quatro', 'DEF')
@@ -177,6 +180,14 @@ describe('SquadPage', () => {
 
     expect(await screen.findByText('OVR 72')).toBeInTheDocument()
     expect(screen.getByText('GK')).toBeInTheDocument()
+  })
+
+  it('shows the detailed position short abbr in the squad table, coarse fallback otherwise', async () => {
+    renderWithProviders()
+    // DEF1 has detailedPosition LATERAL_ESQUERDO → "LE"; other defenders fall back to coarse "DEF".
+    expect(await screen.findByText('Defensor Um')).toBeInTheDocument()
+    expect(screen.getAllByText('LE').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('DEF').length).toBeGreaterThan(0)
   })
 
   it('renders the formation pitch with the selected XI', async () => {
@@ -554,7 +565,10 @@ describe('SquadPage', () => {
     // Once the saved lineup resolves, the formation select reflects it (not the 4-3-3 default).
     await waitFor(() => expect(screen.getByLabelText(/formação/i)).toHaveValue('4-4-2'))
     expect(pickBtn('goleiro teste')).toHaveTextContent('GK')
-    expect(pickBtn('defensor um')).toHaveTextContent('DC')
+    // DEF1 carries a detailed position (LATERAL_ESQUERDO) → its slot button shows the detailed "LE".
+    expect(pickBtn('defensor um')).toHaveTextContent('LE')
+    // A defender without a detailed position falls back to the coarse slot abbr "DC".
+    expect(pickBtn('defensor dois')).toHaveTextContent('DC')
     // A complete, all-eligible XI → saving is enabled.
     expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
   })

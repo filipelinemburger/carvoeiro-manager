@@ -14,12 +14,17 @@ import { PlayerDetails } from '../squad/PlayerDetails'
 import { WatchStar } from '../players/WatchStar'
 import { MakeOfferDialog, type OfferTarget } from '../transfer/MakeOfferDialog'
 import type { PlayerResponse, TransferOffer } from '../../api/types'
+import { positionShort } from '../players/positionLabels'
 
 // Display order for the roster: goalkeepers, then defenders, midfielders, attackers.
 const POSITION_ORDER: Record<PlayerResponse['position'], number> = { GK: 0, DEF: 1, MID: 2, ATT: 3 }
 
-function positionLabel(pos: PlayerResponse['position']): string {
-  return { GK: 'GK', DEF: 'DEF', MID: 'MEI', ATT: 'ATA' }[pos]
+// Coarse fallbacks when a player has no detailed position (legacy payloads).
+const COARSE_POS_SHORT: Record<PlayerResponse['position'], string> = { GK: 'GK', DEF: 'DEF', MID: 'MEI', ATT: 'ATA' }
+
+/** Short position abbr: detailed when present, else coarse. */
+function positionLabel(player: PlayerResponse): string {
+  return positionShort(player, COARSE_POS_SHORT)
 }
 
 /**
@@ -155,7 +160,7 @@ export function ClubViewPage() {
                         {player.age} anos · Valor {formatBRL(player.value)}
                       </Typography>
                     </Box>
-                    <Chip size="small" label={positionLabel(player.position)} />
+                    <Chip size="small" label={positionLabel(player)} />
                     <Chip size="small" color="primary" label={`OVR ${player.overall}`} />
                   </Stack>
                   {!isManagedClub && (
@@ -190,7 +195,7 @@ export function ClubViewPage() {
                         <Chip size="small" color="warning" label="Listado" sx={{ ml: 0.75, height: 20 }} />
                       )}
                     </TableCell>
-                    <TableCell align="center">{positionLabel(player.position)}</TableCell>
+                    <TableCell align="center">{positionLabel(player)}</TableCell>
                     <TableCell align="center">{player.age}</TableCell>
                     <TableCell align="center">{player.overall}</TableCell>
                     <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>{formatBRL(player.value)}</TableCell>

@@ -2,11 +2,15 @@ import { Box } from '@mui/material'
 import { pitchSlots, type Slot, type Line } from './pitchSlots'
 import { PlayerToken, type TokenBadges } from './PlayerToken'
 import { tokenColors, type Kit } from './kit'
+import { DETAILED_POSITION_SHORT } from '../players/positionLabels'
+import type { DetailedPosition } from '../../api/types'
 
 export type PlacedPlayer = {
   id: string
   surname: string
   position: 'GK' | 'DEF' | 'MID' | 'ATT'
+  /** Fine-grained position; when set and not accepted by the slot, the token gets a warn tint. */
+  detailedPosition?: DetailedPosition | null
   fitness: number
   badges?: TokenBadges
 }
@@ -41,6 +45,10 @@ function TeamLayer({ team, mirror }: { team: TeamOnPitch; mirror: boolean }) {
       {assign(team).map(({ slot, number, player }) => {
         const yPct = (mirror ? 1 - slot.y : slot.y) * 100
         const xPct = (mirror ? 1 - slot.x : slot.x) * 100
+        // The slot's primary accepted position labels the token; a player whose detailed position
+        // isn't in the slot's accepted set gets the out-of-position warn tint.
+        const posLabel = DETAILED_POSITION_SHORT[slot.accepted[0]]
+        const outOfPosition = !!player?.detailedPosition && !slot.accepted.includes(player.detailedPosition)
         return (
           <Box
             key={player?.id ?? `slot-${number}`}
@@ -54,9 +62,11 @@ function TeamLayer({ team, mirror }: { team: TeamOnPitch; mirror: boolean }) {
                 text={colors.text}
                 fitness={player.fitness}
                 badges={player.badges}
+                posLabel={posLabel}
+                outOfPosition={outOfPosition}
               />
             ) : (
-              <PlayerToken number={number} empty fill={colors.fill} text={colors.text} fitness={0} />
+              <PlayerToken number={number} empty fill={colors.fill} text={colors.text} fitness={0} posLabel={posLabel} />
             )}
           </Box>
         )

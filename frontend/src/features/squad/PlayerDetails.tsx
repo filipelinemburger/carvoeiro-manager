@@ -12,6 +12,7 @@ import { moraleMood } from './morale'
 import { LISTED_REASON_LABEL } from './listedReason'
 import { CARBON, ovrBadgeSx } from '../../muiTheme'
 import type { PlayerResponse, AttributeView } from '../../api/types'
+import { positionLabel } from '../players/positionLabels'
 
 const POSITION_LABEL: Record<PlayerResponse['position'], string> = {
   GK: 'Goleiro', DEF: 'Defensor', MID: 'Meio-campo', ATT: 'Atacante',
@@ -124,7 +125,7 @@ export function PlayerDetails({ player, onClose, saveGameId, lineupControl, inst
           </DialogTitle>
           <DialogContent dividers sx={{ pt: 1.5, borderColor: CARBON.bg700 }}>
             <Stack direction="row" spacing={3} useFlexGap sx={{ flexWrap: 'wrap', mb: 1.5 }}>
-              <Stat label="Pos" value={POSITION_LABEL[player.position]} />
+              <Stat label="Pos" value={positionLabel(player, POSITION_LABEL)} />
               <Box aria-label={`OVR ${player.overall}`}>
                 <Typography variant="caption" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'text.secondary' }}>OVR</Typography>
                 <Box component="span" sx={{ display: 'inline-block', mt: 0.25, minWidth: 34, textAlign: 'center', px: 1, py: 0.25, borderRadius: 1, fontWeight: 800, ...ovrBadgeSx(player.overall) }}>

@@ -8,6 +8,9 @@ function ringColor(fitness: number): string {
   return '#2e7d32'
 }
 
+// Amber warning tint for a player fielded outside the positions their slot accepts.
+const OUT_OF_POSITION_AMBER = '#ffb300'
+
 export function PlayerToken(props: {
   number: number
   surname?: string
@@ -16,13 +19,22 @@ export function PlayerToken(props: {
   fitness: number
   badges?: TokenBadges
   empty?: boolean
+  /** Short label of the slot this token occupies (e.g. "ZAG"); shown as an accessible title. */
+  posLabel?: string
+  /** True when the player's detailed position is not accepted by the slot — draws the warn tint. */
+  outOfPosition?: boolean
 }) {
-  const { number, surname, fill, text, fitness, badges, empty } = props
+  const { number, surname, fill, text, fitness, badges, empty, posLabel, outOfPosition } = props
   const ring = ringColor(Math.max(0, Math.min(100, fitness)))
+  const warn = !empty && !!outOfPosition
+  const title = empty ? undefined : warn ? 'Fora de posição' : posLabel
   return (
     <Box
       data-testid="player-token"
       data-empty={empty ? 'true' : undefined}
+      data-out-of-position={warn ? 'true' : undefined}
+      title={title}
+      aria-label={title}
       sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 46, userSelect: 'none' }}
     >
       <Box sx={{ position: 'relative', width: 30, height: 30 }}>
@@ -30,10 +42,10 @@ export function PlayerToken(props: {
           data-role="disc"
           sx={{
             width: 30, height: 30, borderRadius: '50%', backgroundColor: fill,
-            border: empty ? '2px dashed rgba(255,255,255,0.85)' : `2px solid ${ring}`,
+            border: empty ? '2px dashed rgba(255,255,255,0.85)' : `2px solid ${warn ? OUT_OF_POSITION_AMBER : ring}`,
             opacity: empty ? 0.4 : 1,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: empty ? 'none' : '0 1px 2px rgba(0,0,0,0.4)',
+            boxShadow: empty ? 'none' : warn ? `0 0 0 2px ${OUT_OF_POSITION_AMBER}66, 0 1px 2px rgba(0,0,0,0.4)` : '0 1px 2px rgba(0,0,0,0.4)',
           }}
         >
           <Typography sx={{ color: text, fontSize: 13, fontWeight: 800, lineHeight: 1 }}>{number}</Typography>

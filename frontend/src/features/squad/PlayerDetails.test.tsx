@@ -9,23 +9,48 @@ vi.mock('../../api/playerStats', () => ({ getPlayerStats: vi.fn() }))
 import { getPlayerStats } from '../../api/playerStats'
 
 const PLAYER: PlayerResponse = {
-  id: 'p1', name: 'Jogador Um', position: 'ATT', age: 24, overall: 70,
+  id: 'p1', name: 'Jogador Um', position: 'DEF', age: 24, overall: 70,
+  detailedPosition: 'LATERAL_ESQUERDO', detailedPositionLabel: 'Lateral esquerdo',
   pace: 70, finishing: 70, passing: 60, tackling: 40, goalkeeping: 10, stamina: 70,
   form: 0, morale: 70, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0,
   eligible: true, role: null, contractYears: 2, value: 1000000, wageDemand: 5000,
   fitness: 100, injurySeverity: 'NONE', attributes: [], transferListed: false, listedReason: null,
 }
 
-function renderDetails() {
+function renderDetails(player: PlayerResponse = PLAYER) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <AuthProvider>
       <QueryClientProvider client={qc}>
-        <PlayerDetails player={PLAYER} onClose={() => {}} saveGameId="sg-1" />
+        <PlayerDetails player={player} onClose={() => {}} saveGameId="sg-1" />
       </QueryClientProvider>
     </AuthProvider>,
   )
 }
+
+describe('PlayerDetails — position label', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.setItem('carvoeiro_manager_token', 'test-token')
+    localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
+    vi.mocked(getPlayerStats).mockResolvedValue({
+      seasons: [], totals: { seasonYear: 0, competitionName: 'Total', matchesPlayed: 0, minutesPlayed: 0,
+        goals: 0, assists: 0, fouls: 0, yellowCards: 0, redCards: 0 },
+    })
+  })
+
+  it('shows the detailed position label when present', async () => {
+    renderDetails()
+    expect(await screen.findByText('Lateral esquerdo')).toBeInTheDocument()
+  })
+
+  it('falls back to the coarse label when detailedPosition is null', async () => {
+    renderDetails({ ...PLAYER, detailedPosition: null, detailedPositionLabel: null })
+    // DEF coarse label in PlayerDetails is "Defensor"
+    expect(await screen.findByText('Defensor')).toBeInTheDocument()
+    expect(screen.queryByText('Lateral esquerdo')).not.toBeInTheDocument()
+  })
+})
 
 describe('PlayerDetails — Estatísticas tab', () => {
   beforeEach(() => {
