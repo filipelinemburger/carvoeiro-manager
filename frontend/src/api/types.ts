@@ -78,6 +78,11 @@ export type PlayerRole =
   | 'HOLDING_MID' | 'BOX_TO_BOX' | 'PLAYMAKER'
   | 'POACHER' | 'TARGET_MAN' | 'WINGER'
 
+/** Optional per-player "instrução pessoal" layered on top of the tactical role. */
+export type PlayerInstruction =
+  | 'INFILTRAR_NA_AREA' | 'CHUTAR_DE_LONGE' | 'CRUZAR_MAIS'
+  | 'SEGURAR_POSICAO' | 'MARCACAO_DURA' | 'DRIBLAR_MAIS'
+
 export type PlayerResponse = {
   id: string
   name: string
@@ -127,6 +132,8 @@ export type AttributeView = {
 export type LineupStarter = {
   playerId: string
   role: PlayerRole
+  /** Optional per-player instruction; null (or omitted) means none. */
+  instruction: PlayerInstruction | null
 }
 
 export type SquadResponse = {

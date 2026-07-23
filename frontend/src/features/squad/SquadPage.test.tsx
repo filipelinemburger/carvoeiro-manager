@@ -183,12 +183,12 @@ describe('SquadPage', () => {
     mockGetLineup.mockResolvedValue({
       lineupId: 'l-1', clubId: 'club-1', formation: '4-4-2',
       starters: [
-        { playerId: GK.id, role: 'GOALKEEPER' },
-        { playerId: DEF1.id, role: 'FULL_BACK' }, { playerId: DEF2.id, role: 'FULL_BACK' },
-        { playerId: DEF3.id, role: 'FULL_BACK' }, { playerId: DEF4.id, role: 'FULL_BACK' },
-        { playerId: MID1.id, role: 'BOX_TO_BOX' }, { playerId: MID2.id, role: 'BOX_TO_BOX' },
-        { playerId: MID3.id, role: 'BOX_TO_BOX' }, { playerId: MID4.id, role: 'BOX_TO_BOX' },
-        { playerId: ATT1.id, role: 'POACHER' }, { playerId: ATT2.id, role: 'POACHER' },
+        { playerId: GK.id, role: 'GOALKEEPER', instruction: null },
+        { playerId: DEF1.id, role: 'FULL_BACK', instruction: null }, { playerId: DEF2.id, role: 'FULL_BACK', instruction: null },
+        { playerId: DEF3.id, role: 'FULL_BACK', instruction: null }, { playerId: DEF4.id, role: 'FULL_BACK', instruction: null },
+        { playerId: MID1.id, role: 'BOX_TO_BOX', instruction: null }, { playerId: MID2.id, role: 'BOX_TO_BOX', instruction: null },
+        { playerId: MID3.id, role: 'BOX_TO_BOX', instruction: null }, { playerId: MID4.id, role: 'BOX_TO_BOX', instruction: null },
+        { playerId: ATT1.id, role: 'POACHER', instruction: null }, { playerId: ATT2.id, role: 'POACHER', instruction: null },
       ],
       bench: [],
     })
@@ -310,7 +310,7 @@ describe('SquadPage', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     mockSetLineup.mockResolvedValue({
       lineupId: 'l-2', clubId: 'club-1', formation: '4-3-3',
-      starters: [{ playerId: GK.id, role: 'GOALKEEPER' }], bench: [],
+      starters: [{ playerId: GK.id, role: 'GOALKEEPER', instruction: null }], bench: [],
     })
     render(
       <MemoryRouter initialEntries={['/squad?saveGameId=sg-1&clubId=club-1']}>
@@ -536,17 +536,17 @@ describe('SquadPage', () => {
     mockGetLineup.mockResolvedValue({
       lineupId: 'l-1', clubId: 'club-1', formation: '4-4-2',
       starters: [
-        { playerId: GK.id, role: 'GOALKEEPER' },
-        { playerId: DEF1.id, role: 'FULL_BACK' },
-        { playerId: DEF2.id, role: 'FULL_BACK' },
-        { playerId: DEF3.id, role: 'FULL_BACK' },
-        { playerId: DEF4.id, role: 'FULL_BACK' },
-        { playerId: MID1.id, role: 'BOX_TO_BOX' },
-        { playerId: MID2.id, role: 'BOX_TO_BOX' },
-        { playerId: MID3.id, role: 'BOX_TO_BOX' },
-        { playerId: MID4.id, role: 'BOX_TO_BOX' },
-        { playerId: ATT1.id, role: 'POACHER' },
-        { playerId: ATT2.id, role: 'POACHER' },
+        { playerId: GK.id, role: 'GOALKEEPER', instruction: null },
+        { playerId: DEF1.id, role: 'FULL_BACK', instruction: null },
+        { playerId: DEF2.id, role: 'FULL_BACK', instruction: null },
+        { playerId: DEF3.id, role: 'FULL_BACK', instruction: null },
+        { playerId: DEF4.id, role: 'FULL_BACK', instruction: null },
+        { playerId: MID1.id, role: 'BOX_TO_BOX', instruction: null },
+        { playerId: MID2.id, role: 'BOX_TO_BOX', instruction: null },
+        { playerId: MID3.id, role: 'BOX_TO_BOX', instruction: null },
+        { playerId: MID4.id, role: 'BOX_TO_BOX', instruction: null },
+        { playerId: ATT1.id, role: 'POACHER', instruction: null },
+        { playerId: ATT2.id, role: 'POACHER', instruction: null },
       ],
       bench: [],
     })
@@ -563,17 +563,17 @@ describe('SquadPage', () => {
     mockGetLineup.mockResolvedValue({
       lineupId: 'l-2', clubId: 'club-1', formation: '4-3-3',
       starters: [
-        { playerId: GK.id, role: 'GOALKEEPER' },
-        { playerId: DEF1.id, role: 'FULL_BACK' },
-        { playerId: DEF2.id, role: 'FULL_BACK' },
-        { playerId: DEF3.id, role: 'FULL_BACK' },
-        { playerId: DEF4.id, role: 'FULL_BACK' },
-        { playerId: MID1.id, role: 'BOX_TO_BOX' },
-        { playerId: MID2.id, role: 'BOX_TO_BOX' },
-        { playerId: SUSPENDED.id, role: 'BOX_TO_BOX' },
-        { playerId: ATT1.id, role: 'POACHER' },
-        { playerId: ATT2.id, role: 'POACHER' },
-        { playerId: ATT3.id, role: 'POACHER' },
+        { playerId: GK.id, role: 'GOALKEEPER', instruction: null },
+        { playerId: DEF1.id, role: 'FULL_BACK', instruction: null },
+        { playerId: DEF2.id, role: 'FULL_BACK', instruction: null },
+        { playerId: DEF3.id, role: 'FULL_BACK', instruction: null },
+        { playerId: DEF4.id, role: 'FULL_BACK', instruction: null },
+        { playerId: MID1.id, role: 'BOX_TO_BOX', instruction: null },
+        { playerId: MID2.id, role: 'BOX_TO_BOX', instruction: null },
+        { playerId: SUSPENDED.id, role: 'BOX_TO_BOX', instruction: null },
+        { playerId: ATT1.id, role: 'POACHER', instruction: null },
+        { playerId: ATT2.id, role: 'POACHER', instruction: null },
+        { playerId: ATT3.id, role: 'POACHER', instruction: null },
       ],
       bench: [],
     })
@@ -713,19 +713,19 @@ describe('SquadPage', () => {
     mockGetLineup.mockResolvedValue({
       lineupId: 'l-bench', clubId: 'club-1', formation: '4-3-3',
       starters: [
-        { playerId: GK.id, role: 'GOALKEEPER' },
-        { playerId: DEF1.id, role: 'FULL_BACK' },
-        { playerId: DEF2.id, role: 'FULL_BACK' },
-        { playerId: DEF3.id, role: 'FULL_BACK' },
-        { playerId: DEF4.id, role: 'FULL_BACK' },
-        { playerId: MID1.id, role: 'BOX_TO_BOX' },
-        { playerId: MID2.id, role: 'BOX_TO_BOX' },
-        { playerId: MID3.id, role: 'BOX_TO_BOX' },
-        { playerId: ATT1.id, role: 'POACHER' },
-        { playerId: ATT2.id, role: 'POACHER' },
-        { playerId: ATT3.id, role: 'POACHER' },
+        { playerId: GK.id, role: 'GOALKEEPER', instruction: null },
+        { playerId: DEF1.id, role: 'FULL_BACK', instruction: null },
+        { playerId: DEF2.id, role: 'FULL_BACK', instruction: null },
+        { playerId: DEF3.id, role: 'FULL_BACK', instruction: null },
+        { playerId: DEF4.id, role: 'FULL_BACK', instruction: null },
+        { playerId: MID1.id, role: 'BOX_TO_BOX', instruction: null },
+        { playerId: MID2.id, role: 'BOX_TO_BOX', instruction: null },
+        { playerId: MID3.id, role: 'BOX_TO_BOX', instruction: null },
+        { playerId: ATT1.id, role: 'POACHER', instruction: null },
+        { playerId: ATT2.id, role: 'POACHER', instruction: null },
+        { playerId: ATT3.id, role: 'POACHER', instruction: null },
       ],
-      bench: [{ playerId: MID4.id, role: 'BOX_TO_BOX' }],
+      bench: [{ playerId: MID4.id, role: 'BOX_TO_BOX', instruction: null }],
     })
 
     renderWithProviders()
@@ -755,5 +755,77 @@ describe('SquadPage', () => {
     // No player in the XI should also appear in the bench — mutual-exclusion invariant.
     const overlap = starterIds.filter((id: string) => benchIds.includes(id))
     expect(overlap).toHaveLength(0)
+  })
+
+  it('shows the personal-instruction select with Nenhuma + 6 options for a selected outfield player (mobile)', async () => {
+    vi.mocked(useIsMobile).mockReturnValue(true)
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Defensor Um'))
+    // Select the player so the dialog carries its lineup controls…
+    fireEvent.click(pickBtn('defensor um'))
+    // …then open the details dialog via the player's name button. (Query by button role, not
+    // getByText: the name now also appears in the Táticas tab's mounted-but-hidden taker selects.)
+    fireEvent.click(screen.getByRole('button', { name: 'Defensor Um' }))
+    const dialog = await screen.findByRole('dialog')
+
+    const select = within(dialog).getByRole('combobox', { name: /instrução pessoal de defensor um/i })
+    const options = within(select).getAllByRole('option').map(o => o.textContent)
+    expect(options).toEqual([
+      'Nenhuma',
+      'Infiltrar na área', 'Chutar de longe', 'Cruzar mais',
+      'Segurar posição', 'Marcação dura', 'Driblar mais',
+    ])
+  })
+
+  it('hides the personal-instruction select for a goalkeeper (mobile)', async () => {
+    vi.mocked(useIsMobile).mockReturnValue(true)
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(pickBtn('goleiro teste'))
+    fireEvent.click(screen.getByRole('button', { name: 'Goleiro Teste' }))
+    const dialog = await screen.findByRole('dialog')
+
+    // The role selector still shows (a GK has a role), but no personal-instruction selector.
+    expect(within(dialog).getByRole('combobox', { name: /função de goleiro teste/i })).toBeInTheDocument()
+    expect(within(dialog).queryByRole('combobox', { name: /instrução pessoal de/i })).not.toBeInTheDocument()
+  })
+
+  it('includes the chosen personal instruction in the setLineup payload (mobile)', async () => {
+    vi.mocked(useIsMobile).mockReturnValue(true)
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Defensor Um'))
+
+    // Build a valid 4-3-3 XI so saving is enabled.
+    const xi = [GK, DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
+    for (const player of xi) {
+      fireEvent.click(pickBtn(player.name))
+    }
+
+    // Assign an instruction to Defensor Um via the details dialog.
+    fireEvent.click(screen.getByRole('button', { name: 'Defensor Um' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(
+      within(dialog).getByRole('combobox', { name: /instrução pessoal de defensor um/i }),
+      { target: { value: 'MARCACAO_DURA' } },
+    )
+    // Close the dialog, then save. findByRole waits out the dialog's exit transition, which
+    // otherwise keeps the app root aria-hidden and the save button momentarily inaccessible.
+    fireEvent.click(within(dialog).getByRole('button', { name: /fechar/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /salvar escalação/i }))
+
+    await waitFor(() =>
+      expect(mockSetLineup).toHaveBeenCalledWith(
+        'sg-1', 'club-1',
+        expect.objectContaining({
+          starters: expect.arrayContaining([
+            expect.objectContaining({ playerId: DEF1.id, instruction: 'MARCACAO_DURA' }),
+          ]),
+        }),
+        'test-token',
+      ),
+    )
+    // Every other selected player carries a null instruction (none chosen).
+    const payload = mockSetLineup.mock.calls[0][2] as { starters: { playerId: string; instruction: string | null }[] }
+    expect(payload.starters.find(s => s.playerId === GK.id)?.instruction).toBeNull()
   })
 })

@@ -78,16 +78,17 @@ function AttrRow({ attr }: { attr: AttributeView }) {
  * only once that tab is opened). A red dot marks the Contrato tab when the deal is running out
  * (<= 1 year).
  *
- * `lineupControl` (the role selector), `contractAction` (Renovar), and `listingAction`
- * (list/unlist toggle) render when provided. `watchAction` (the Observados star) renders in
- * the title next to the name, but only when `isOwnPlayer` is not true — the caller only
- * passes it for rival players.
+ * `lineupControl` (the role selector), `instructionControl` (the personal-instruction selector),
+ * `contractAction` (Renovar), and `listingAction` (list/unlist toggle) render when provided.
+ * `watchAction` (the Observados star) renders in the title next to the name, but only when
+ * `isOwnPlayer` is not true — the caller only passes it for rival players.
  */
-export function PlayerDetails({ player, onClose, saveGameId, lineupControl, contractAction, listingAction, isOwnPlayer, watchAction }: {
+export function PlayerDetails({ player, onClose, saveGameId, lineupControl, instructionControl, contractAction, listingAction, isOwnPlayer, watchAction }: {
   player: PlayerResponse | null
   onClose: () => void
   saveGameId: string
   lineupControl?: ReactNode
+  instructionControl?: ReactNode
   contractAction?: ReactNode
   listingAction?: ReactNode
   isOwnPlayer?: boolean
@@ -161,6 +162,13 @@ export function PlayerDetails({ player, onClose, saveGameId, lineupControl, cont
               <Box sx={{ mb: 1.5 }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.25 }}>Função</Typography>
                 {lineupControl}
+              </Box>
+            )}
+
+            {instructionControl && (
+              <Box sx={{ mb: 1.5 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.25 }}>Instrução pessoal</Typography>
+                {instructionControl}
               </Box>
             )}
 

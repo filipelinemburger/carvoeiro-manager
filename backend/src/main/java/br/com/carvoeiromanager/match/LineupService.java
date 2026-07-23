@@ -132,6 +132,11 @@ public class LineupService {
         validateNoIneligible(benchIds, clubPlayers);
         Map<UUID, PlayerRole> starterRoles = validateAndParseRoles(starters, clubPlayers);
         Map<UUID, PlayerRole> benchRoles = validateAndParseRoles(bench, clubPlayers);
+        // Parse + validate personal instructions BEFORE any delete/save, mirroring the roles above,
+        // so a bad instruction (unknown value, or one on a GK) rejects the whole request without
+        // partially mutating the persisted lineup.
+        Map<UUID, PlayerInstruction> starterInstructions = validateAndParseInstructions(starters, clubPlayers);
+        Map<UUID, PlayerInstruction> benchInstructions = validateAndParseInstructions(bench, clubPlayers);
 
         Lineup lineup = lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId).orElse(null);
 
@@ -147,12 +152,14 @@ public class LineupService {
         final UUID lineupId = lineup.getId();
         // starters is guaranteed non-null and size == 11 here: validatePlayerCount threw earlier if not
         for (LineupStarter starter : starters) {
-            lineupPlayerRepository.save(
-                    LineupPlayer.create(lineupId, starter.playerId(), true, starterRoles.get(starter.playerId())));
+            LineupPlayer lp = LineupPlayer.create(lineupId, starter.playerId(), true, starterRoles.get(starter.playerId()));
+            lp.setInstruction(starterInstructions.get(starter.playerId()));
+            lineupPlayerRepository.save(lp);
         }
         for (LineupStarter sub : bench) {
-            lineupPlayerRepository.save(
-                    LineupPlayer.create(lineupId, sub.playerId(), false, benchRoles.get(sub.playerId())));
+            LineupPlayer lp = LineupPlayer.create(lineupId, sub.playerId(), false, benchRoles.get(sub.playerId()));
+            lp.setInstruction(benchInstructions.get(sub.playerId()));
+            lineupPlayerRepository.save(lp);
         }
 
         return new LineupResponse(lineupId, clubId, req.formation(), List.copyOf(starters), List.copyOf(bench));
@@ -224,11 +231,11 @@ public class LineupService {
                     List<LineupPlayer> rows = lineupPlayerRepository.findByLineupId(lineup.getId());
                     List<LineupStarter> starters = rows.stream()
                             .filter(LineupPlayer::isStarting)
-                            .map(lp -> new LineupStarter(lp.getPlayerId(), lp.getRole().name()))
+                            .map(this::toLineupStarter)
                             .toList();
                     List<LineupStarter> bench = rows.stream()
                             .filter(lp -> !lp.isStarting())
-                            .map(lp -> new LineupStarter(lp.getPlayerId(), lp.getRole().name()))
+                            .map(this::toLineupStarter)
                             .toList();
                     return new LineupResponse(lineup.getId(), clubId, lineup.getFormation(), starters, bench);
                 });
@@ -537,6 +544,36 @@ public class LineupService {
             resolved.put(starter.playerId(), role);
         }
         return resolved;
+    }
+
+    /**
+     * Parses and validates the optional personal instruction for each selected player, mirroring
+     * {@link #validateAndParseRoles}: a null/blank value maps to null (no instruction), an unknown
+     * value throws, and an instruction on a goalkeeper is rejected. Returns playerId → instruction
+     * (null-valued entries mean "no instruction").
+     */
+    private Map<UUID, PlayerInstruction> validateAndParseInstructions(List<LineupStarter> starters, List<Player> clubPlayers) {
+        Map<UUID, Player> byId = clubPlayers.stream().collect(Collectors.toMap(Player::getId, p -> p));
+        Map<UUID, PlayerInstruction> resolved = new HashMap<>();
+        for (LineupStarter starter : starters) {
+            PlayerInstruction instruction = parseInstruction(starter.instruction());
+            // player is guaranteed non-null in practice (validatePlayersOwnedByClub ran first);
+            // the guard is defensive only, matching validateAndParseRoles.
+            Player player = byId.get(starter.playerId());
+            if (player != null) {
+                validateInstructionForPlayer(player, instruction);
+            }
+            resolved.put(starter.playerId(), instruction);
+        }
+        return resolved;
+    }
+
+    /** Maps a persisted lineup row back to the DTO, round-tripping role + optional instruction. */
+    private LineupStarter toLineupStarter(LineupPlayer lp) {
+        return new LineupStarter(
+                lp.getPlayerId(),
+                lp.getRole().name(),
+                lp.getInstruction() == null ? null : lp.getInstruction().name());
     }
 
     private Map<UUID, PlayerRole> currentRoles(UUID saveGameId, UUID clubId) {

@@ -299,6 +299,89 @@ class LineupServiceIT {
         assertThat(saved).isEmpty();
     }
 
+    // --- Per-player instruction wiring (Task 28) ---
+
+    @Test
+    void anInstructionOnAnOutfieldStarterPersistsAndRoundTrips() {
+        Career career = createCareer();
+        UUID saveGameId = career.id();
+        UUID clubId = career.managedClubId();
+        UUID userId = career.userId();
+
+        List<LineupStarter> starters = new java.util.ArrayList<>(buildValidStarters(clubId));
+        // Attach a personal instruction to an outfield starter.
+        LineupStarter outfield = starters.stream()
+                .filter(s -> !isGk(s.playerId()))
+                .findFirst().orElseThrow();
+        UUID instructedId = outfield.playerId();
+        starters.set(starters.indexOf(outfield),
+                new LineupStarter(instructedId, outfield.role(), "MARCACAO_DURA"));
+
+        lineupService.setLineup(saveGameId, clubId, new SetLineupRequest("4-4-2", starters, null), userId);
+
+        LineupResponse saved = lineupService.getLineup(saveGameId, clubId, userId).orElseThrow();
+        LineupStarter reloaded = saved.starters().stream()
+                .filter(s -> s.playerId().equals(instructedId)).findFirst().orElseThrow();
+        assertThat(reloaded.instruction()).isEqualTo("MARCACAO_DURA");
+        // Every other starter round-trips with no instruction (null, not blank).
+        assertThat(saved.starters().stream().filter(s -> !s.playerId().equals(instructedId)))
+                .allSatisfy(s -> assertThat(s.instruction()).isNull());
+    }
+
+    @Test
+    void aStartingGoalkeeperGivenAnInstructionIsRejected() {
+        Career career = createCareer();
+        UUID clubId = career.managedClubId();
+
+        List<LineupStarter> starters = new java.util.ArrayList<>(buildValidStarters(clubId));
+        LineupStarter gk = starters.stream().filter(s -> isGk(s.playerId())).findFirst().orElseThrow();
+        starters.set(starters.indexOf(gk), new LineupStarter(gk.playerId(), gk.role(), "MARCACAO_DURA"));
+
+        assertThatThrownBy(() -> lineupService.setLineup(
+                career.id(), clubId, new SetLineupRequest("4-4-2", starters, null), career.userId()))
+                .isInstanceOf(ApiException.class)
+                .hasMessage("Goleiros não recebem instruções pessoais")
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.INVALID_TACTICS));
+    }
+
+    @Test
+    void aBenchedGoalkeeperGivenAnInstructionIsAlsoRejected() {
+        Career career = createCareer();
+        UUID clubId = career.managedClubId();
+
+        List<LineupStarter> starters = buildValidStarters(clubId);
+        Set<UUID> startingIds = starters.stream().map(LineupStarter::playerId).collect(Collectors.toSet());
+        Player spareGk = playerRepository.findByClubId(clubId).stream()
+                .filter(p -> p.getPosition() == Position.GK && !startingIds.contains(p.getId()) && p.isEligible())
+                .findFirst().orElseThrow();
+        List<LineupStarter> bench = List.of(new LineupStarter(
+                spareGk.getId(),
+                br.com.carvoeiromanager.player.PlayerRole.defaultFor(Position.GK).name(),
+                "SEGURAR_POSICAO"));
+
+        assertThatThrownBy(() -> lineupService.setLineup(
+                career.id(), clubId, new SetLineupRequest("4-4-2", starters, bench), career.userId()))
+                .isInstanceOf(ApiException.class)
+                .hasMessage("Goleiros não recebem instruções pessoais");
+    }
+
+    @Test
+    void anUnknownInstructionStringIsRejected() {
+        Career career = createCareer();
+        UUID clubId = career.managedClubId();
+
+        List<LineupStarter> starters = new java.util.ArrayList<>(buildValidStarters(clubId));
+        LineupStarter outfield = starters.stream().filter(s -> !isGk(s.playerId())).findFirst().orElseThrow();
+        starters.set(starters.indexOf(outfield),
+                new LineupStarter(outfield.playerId(), outfield.role(), "NOT_A_REAL_INSTRUCTION"));
+
+        assertThatThrownBy(() -> lineupService.setLineup(
+                career.id(), clubId, new SetLineupRequest("4-4-2", starters, null), career.userId()))
+                .isInstanceOf(ApiException.class)
+                .hasMessage("Instrução pessoal inválida: NOT_A_REAL_INSTRUCTION")
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.INVALID_TACTICS));
+    }
+
     // --- (j) bestXi ranks GK by highest rating, and the date path benches the drained boundary player ---
 
     @Test
@@ -562,6 +645,12 @@ class LineupServiceIT {
 
     private List<UUID> idsOf(List<LineupStarter> starters) {
         return starters.stream().map(LineupStarter::playerId).collect(Collectors.toList());
+    }
+
+    private boolean isGk(UUID playerId) {
+        return playerRepository.findById(playerId)
+                .map(p -> p.getPosition() == Position.GK)
+                .orElse(false);
     }
 
     @Test

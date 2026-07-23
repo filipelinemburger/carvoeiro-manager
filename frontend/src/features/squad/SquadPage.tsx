@@ -13,7 +13,7 @@ import { getSquad, getLineup, setLineup, setTraining, renewContract, listPlayer,
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
-import type { PlayerResponse, PlayerRole, LineupStarter, TrainableAttribute, TrainingIntensity, TrainingAssignment, SquadResponse } from '../../api/types'
+import type { PlayerResponse, PlayerRole, PlayerInstruction, LineupStarter, TrainableAttribute, TrainingIntensity, TrainingAssignment, SquadResponse } from '../../api/types'
 import { TacticsPanel } from './TacticsPanel'
 import { PlayerDetails } from './PlayerDetails'
 import { FitnessBar } from './FitnessBar'
@@ -89,6 +89,17 @@ const ROLE_LABEL: Record<PlayerRole, string> = {
   POACHER: 'Finalizador',
   TARGET_MAN: 'Centroavante',
   WINGER: 'Ponta',
+}
+
+// Human-readable Portuguese labels for the optional per-player instruction. The <option> value
+// stays the enum (what the API expects); only the displayed text changes.
+const INSTRUCTION_LABEL: Record<PlayerInstruction, string> = {
+  INFILTRAR_NA_AREA: 'Infiltrar na área',
+  CHUTAR_DE_LONGE: 'Chutar de longe',
+  CRUZAR_MAIS: 'Cruzar mais',
+  SEGURAR_POSICAO: 'Segurar posição',
+  MARCACAO_DURA: 'Marcação dura',
+  DRIBLAR_MAIS: 'Driblar mais',
 }
 
 const TRAINABLE_ATTRIBUTE_LABEL: Record<TrainableAttribute, string> = {
@@ -178,6 +189,9 @@ export function SquadPage() {
   // removing a substitute never renumbers the others — the hole is reused on the next add.
   const [bench, setBench] = useState<(string | null)[]>([])
   const [roles, setRoles] = useState<Record<string, PlayerRole>>({})
+  // Per-player instruction keyed by playerId; '' is "Nenhuma" (no instruction). Kept in step with
+  // `roles`: every place that seeds or clears a role does the same to the instruction.
+  const [instructions, setInstructions] = useState<Record<string, PlayerInstruction | ''>>({})
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [detailsPlayerId, setDetailsPlayerId] = useState<string | null>(null)
   const [tab, setTab] = useState(0)
@@ -223,6 +237,7 @@ export function SquadPage() {
       setFormation(lineup.formation)
       setSelected(lineup.starters.map(s => s.playerId))
       setRoles(Object.fromEntries(lineup.starters.map(s => [s.playerId, s.role])))
+      setInstructions(Object.fromEntries(lineup.starters.map(s => [s.playerId, s.instruction ?? ''])))
       setBench((lineup.bench ?? []).map(s => s.playerId))
     }
     hydrated.current = true
@@ -244,7 +259,7 @@ export function SquadPage() {
     mutationFn: () => {
       const toStarter = (id: string): LineupStarter => {
         const player = players.find(p => p.id === id)!
-        return { playerId: id, role: roles[id] ?? DEFAULT_ROLE[player.position] }
+        return { playerId: id, role: roles[id] ?? DEFAULT_ROLE[player.position], instruction: instructions[id] || null }
       }
       const starters: LineupStarter[] = selected.map(toStarter)
       const benchStarters: LineupStarter[] = bench.filter((id): id is string => id !== null).map(toStarter)
@@ -362,6 +377,12 @@ export function SquadPage() {
         delete next[player.id]
         return next
       })
+      // Drop any personal instruction too, so a later re-add doesn't inherit a stale one.
+      setInstructions(prev => {
+        const next = { ...prev }
+        delete next[player.id]
+        return next
+      })
       return
     }
     if (!player.eligible) return
@@ -389,6 +410,10 @@ export function SquadPage() {
 
   function changeRole(player: PlayerResponse, role: PlayerRole) {
     setRoles(prev => ({ ...prev, [player.id]: role }))
+  }
+
+  function changeInstruction(player: PlayerResponse, value: PlayerInstruction | '') {
+    setInstructions(prev => ({ ...prev, [player.id]: value }))
   }
 
   function changeTrainingFocus(player: PlayerResponse, focus: TrainableAttribute | ''): void {
@@ -426,6 +451,8 @@ export function SquadPage() {
     // Any bench player promoted into the XI vacates their bench slot (keeps the rest stable).
     setBench(prev => prev.map(id => (id !== null && pickedIds.includes(id) ? null : id)))
     setRoles(Object.fromEntries(picked.map(p => [p.id, DEFAULT_ROLE[p.position]])))
+    // Fresh auto-pick: every picked player starts with no personal instruction.
+    setInstructions(Object.fromEntries(picked.map(p => [p.id, ''])))
   }
 
   // Empties the whole selection.
@@ -433,6 +460,7 @@ export function SquadPage() {
     setSaveSuccess(false)
     setSelected([])
     setRoles({})
+    setInstructions({})
     setBench([])
   }
 
@@ -527,6 +555,22 @@ export function SquadPage() {
       >
         {ROLES_BY_POSITION[player.position].map(r => (
           <option key={r} value={r}>{ROLE_LABEL[r]}</option>
+        ))}
+      </NativeSelect>
+    )
+  }
+
+  function instructionSelect(player: PlayerResponse) {
+    return (
+      <NativeSelect
+        value={instructions[player.id] ?? ''}
+        onChange={e => changeInstruction(player, e.target.value as PlayerInstruction | '')}
+        inputProps={{ 'aria-label': `Instrução pessoal de ${player.name}` }}
+        sx={{ fontSize: '0.85rem' }}
+      >
+        <option value="">Nenhuma</option>
+        {(Object.keys(INSTRUCTION_LABEL) as PlayerInstruction[]).map(i => (
+          <option key={i} value={i}>{INSTRUCTION_LABEL[i]}</option>
         ))}
       </NativeSelect>
     )
@@ -784,6 +828,9 @@ export function SquadPage() {
         saveGameId={saveGameId}
         lineupControl={isMobile && detailsPlayer && selected.includes(detailsPlayer.id)
           ? roleSelect(detailsPlayer)
+          : undefined}
+        instructionControl={isMobile && detailsPlayer && selected.includes(detailsPlayer.id) && detailsPlayer.position !== 'GK'
+          ? instructionSelect(detailsPlayer)
           : undefined}
         contractAction={detailsPlayer ? renewButton(detailsPlayer) : undefined}
         listingAction={detailsPlayer ? listingButton(detailsPlayer) : undefined}
