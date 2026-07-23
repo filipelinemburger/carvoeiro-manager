@@ -6,6 +6,7 @@ import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
+import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
@@ -96,6 +97,52 @@ class TacticsServiceIT {
         assertThat(profile.roles()).containsKey(other.getId());
         assertThat(profile.roles().get(other.getId()))
                 .isEqualTo(PlayerRole.defaultFor(other.getPosition()));
+    }
+
+    @Test
+    void managedLineupGameStyleFlowsIntoTheProfile() {
+        Career career = createCareer();
+        UUID save = career.save().id();
+        UUID club = career.save().managedClubId();
+        List<Player> xi = playerRepository.findByClubId(club);
+
+        Lineup lineup = Lineup.create(save, club, "4-3-3");
+        lineup.setGameStyle(GameStyle.CONTRA_ATAQUE);
+        lineupRepository.save(lineup);
+
+        TacticalProfile profile = tacticsService.profileFor(save, club, xi);
+        assertThat(profile.gameStyle()).isEqualTo(GameStyle.CONTRA_ATAQUE);
+    }
+
+    @Test
+    void aiClubDefaultGameStyleResolvesFromTheClubColumn() {
+        Career career = createCareer();
+        UUID save = career.save().id();
+        UUID managedClub = career.save().managedClubId();
+
+        Club ai = clubRepository.findBySaveGameId(save).stream()
+                .filter(c -> !c.getId().equals(managedClub))
+                .findFirst().orElseThrow();
+        List<Player> xi = playerRepository.findByClubId(ai.getId());
+
+        // A recognised style resolves through to the profile.
+        ai.setDefaultGameStyle(GameStyle.PRESSAO_ALTA.name());
+        clubRepository.save(ai);
+        assertThat(tacticsService.profileFor(save, ai.getId(), xi).gameStyle())
+                .isEqualTo(GameStyle.PRESSAO_ALTA);
+
+        // A null column falls back to the neutral EQUILIBRADO (the Task-22 state for fresh careers,
+        // since the seed does not yet author a style).
+        ai.setDefaultGameStyle(null);
+        clubRepository.save(ai);
+        assertThat(tacticsService.profileFor(save, ai.getId(), xi).gameStyle())
+                .isEqualTo(GameStyle.EQUILIBRADO);
+
+        // An unparseable column also falls back to EQUILIBRADO rather than throwing.
+        ai.setDefaultGameStyle("NOT_A_STYLE");
+        clubRepository.save(ai);
+        assertThat(tacticsService.profileFor(save, ai.getId(), xi).gameStyle())
+                .isEqualTo(GameStyle.EQUILIBRADO);
     }
 
     @Test

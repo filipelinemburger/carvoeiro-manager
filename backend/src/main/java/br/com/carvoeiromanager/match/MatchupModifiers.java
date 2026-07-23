@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Mentality;
 
 /**
@@ -9,6 +10,10 @@ import br.com.carvoeiromanager.player.Mentality;
  * when this side's defense outguns the opponent's attack. BALANCED contributes nothing, so a
  * BALANCED-vs-BALANCED matchup yields exactly {@code ChanceMults(1.0, 1.0)} — byte-identical to
  * pre-Task-18 behaviour.
+ *
+ * <p>A {@link GameStyle#CONTRA_ATAQUE} side gets a small extra scoring bonus against an opponent
+ * playing ATTACKING (its counter thrives on an opponent that commits forward). The neutral
+ * EQUILIBRADO style never triggers this, so BALANCED/EQUILIBRADO on both sides stays byte-identical.
  */
 public final class MatchupModifiers {
 
@@ -41,6 +46,10 @@ public final class MatchupModifiers {
         } else if (away.mentality() == Mentality.DEFENSIVE) {
             homeMult *= 1 - MENTALITY_WEIGHT * Math.tanh((away.defense() - home.attack()) / DIFF_SCALE);
         }
+
+        // Counter-attack bonus: a CONTRA_ATAQUE side punishes an opponent that commits to ATTACKING.
+        if (home.gameStyle() == GameStyle.CONTRA_ATAQUE && away.mentality() == Mentality.ATTACKING) homeMult *= 1.04;
+        if (away.gameStyle() == GameStyle.CONTRA_ATAQUE && home.mentality() == Mentality.ATTACKING) awayMult *= 1.04;
 
         homeMult = clamp(homeMult, MULT_FLOOR, MULT_CEILING);
         awayMult = clamp(awayMult, MULT_FLOOR, MULT_CEILING);

@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Pressing;
@@ -39,6 +40,10 @@ public class Lineup {
     private Mentality mentality;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "game_style", nullable = false, length = 16)
+    private GameStyle gameStyle;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "pressing", nullable = false, length = 8)
     private Pressing pressing;
 
@@ -65,6 +70,7 @@ public class Lineup {
         this.clubId = clubId;
         this.formation = formation;
         this.mentality = Mentality.BALANCED;
+        this.gameStyle = GameStyle.EQUILIBRADO;
         this.pressing = Pressing.MEDIUM;
         this.marking = Marking.ZONAL;
     }
@@ -78,6 +84,7 @@ public class Lineup {
     public UUID getClubId() { return clubId; }
     public String getFormation() { return formation; }
     public Mentality getMentality() { return mentality; }
+    public GameStyle getGameStyle() { return gameStyle; }
     public Pressing getPressing() { return pressing; }
     public Marking getMarking() { return marking; }
     public UUID getPenaltyTakerId() { return penaltyTakerId; }
@@ -86,6 +93,7 @@ public class Lineup {
 
     public void setFormation(String formation) { this.formation = formation; }
     public void setMentality(Mentality mentality) { this.mentality = mentality; }
+    public void setGameStyle(GameStyle gameStyle) { this.gameStyle = gameStyle; }
     public void setPressing(Pressing pressing) { this.pressing = pressing; }
     public void setMarking(Marking marking) { this.marking = marking; }
     public void setPenaltyTakerId(UUID id) { this.penaltyTakerId = id; }

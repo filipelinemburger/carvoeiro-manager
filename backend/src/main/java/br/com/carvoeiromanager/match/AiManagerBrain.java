@@ -79,7 +79,7 @@ public final class AiManagerBrain {
 
     private static TacticalProfile with(TacticalProfile identity, Mentality mentality,
                                         Pressing pressing, String formation) {
-        return new TacticalProfile(mentality, formation, pressing, identity.marking(),
+        return new TacticalProfile(mentality, identity.gameStyle(), formation, pressing, identity.marking(),
                 identity.roles(), identity.penaltyTakerId(), identity.freekickTakerId(),
                 identity.cornerTakerId());
     }

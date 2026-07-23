@@ -1,6 +1,7 @@
 package br.com.carvoeiromanager.match;
 
 import br.com.carvoeiromanager.match.MatchupModifiers.ChanceMults;
+import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Mentality;
 import org.junit.jupiter.api.Test;
 
@@ -15,7 +16,11 @@ import static org.assertj.core.api.Assertions.within;
 class MatchupModifiersTest {
 
     private TeamMatchInput input(double attack, double defense, Mentality mentality) {
-        return new TeamMatchInput(attack, defense, 1.0, 1.0, 0.5, 0.5, 0.82, 0.15, mentality);
+        return input(attack, defense, mentality, GameStyle.EQUILIBRADO);
+    }
+
+    private TeamMatchInput input(double attack, double defense, Mentality mentality, GameStyle gameStyle) {
+        return new TeamMatchInput(attack, defense, 1.0, 1.0, 0.5, 0.5, 0.82, 0.15, mentality, gameStyle);
     }
 
     @Test
@@ -129,6 +134,32 @@ class MatchupModifiersTest {
         ChanceMults mults = MatchupModifiers.chanceMults(home, away);
 
         assertThat(mults.home()).isCloseTo(1.15, within(1e-6));
+    }
+
+    @Test
+    void counterAttackStyleGetsABonusAgainstAnAttackingOpponent() {
+        // Home plays CONTRA_ATAQUE (with a neutral BALANCED mentality so no mentality effect fires)
+        // against an ATTACKING away side: home's chance is lifted by the flat 1.04 counter bonus,
+        // and away's ATTACKING effect is the only thing touching awayMult.
+        TeamMatchInput home = input(70, 65, Mentality.BALANCED, GameStyle.CONTRA_ATAQUE);
+        TeamMatchInput away = input(60, 55, Mentality.ATTACKING, GameStyle.EQUILIBRADO);
+
+        ChanceMults mults = MatchupModifiers.chanceMults(home, away);
+
+        assertThat(mults.home()).isEqualTo(1.04, within(1e-9));
+    }
+
+    @Test
+    void counterAttackStyleDoesNothingAgainstANonAttackingOpponent() {
+        // Same CONTRA_ATAQUE home, but the opponent is BALANCED: the bonus must not fire, so both
+        // sides stay exactly neutral (proving the bonus is gated on the opponent's ATTACKING).
+        TeamMatchInput home = input(70, 65, Mentality.BALANCED, GameStyle.CONTRA_ATAQUE);
+        TeamMatchInput away = input(60, 55, Mentality.BALANCED, GameStyle.EQUILIBRADO);
+
+        ChanceMults mults = MatchupModifiers.chanceMults(home, away);
+
+        assertThat(mults.home()).isEqualTo(1.0);
+        assertThat(mults.away()).isEqualTo(1.0);
     }
 
     @Test

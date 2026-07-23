@@ -3,6 +3,7 @@ package br.com.carvoeiromanager.match;
 import br.com.carvoeiromanager.match.AiManagerBrain.Posture;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Attributes;
+import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
@@ -56,7 +57,7 @@ class LiveMatchEngineTest {
     private static TacticalProfile defaultProfile(List<Player> xi) {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
-        return new TacticalProfile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
+        return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
     }
 
     /** A full-profile player with BOLA_PARADA 0 (so penaltyConversion is exactly 0.70) but
@@ -91,8 +92,8 @@ class LiveMatchEngineTest {
                                                       UUID freekickTakerId, UUID cornerTakerId) {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
-        return new TacticalProfile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles,
-                penaltyTakerId, freekickTakerId, cornerTakerId);
+        return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, "4-4-2", Pressing.MEDIUM,
+                Marking.ZONAL, roles, penaltyTakerId, freekickTakerId, cornerTakerId);
     }
 
     private static Map<UUID, Integer> fullFitness(List<Player> homeXi, List<Player> awayXi) {
@@ -413,7 +414,7 @@ class LiveMatchEngineTest {
         // exist for every seed.
         Map<UUID, PlayerRole> roles = new HashMap<>();
         awayXi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
-        TacticalProfile attackingAway = new TacticalProfile(Mentality.ATTACKING, "4-3-3",
+        TacticalProfile attackingAway = new TacticalProfile(Mentality.ATTACKING, GameStyle.EQUILIBRADO, "4-3-3",
                 Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
 
         for (long seed = 1; seed <= 20; seed++) {

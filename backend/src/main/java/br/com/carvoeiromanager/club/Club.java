@@ -50,6 +50,9 @@ public class Club {
     @Column(name = "default_mentality", length = 12)
     private String defaultMentality;
 
+    @Column(name = "default_game_style", length = 16)
+    private String defaultGameStyle;
+
     @Column(name = "default_pressing", length = 8)
     private String defaultPressing;
 
@@ -106,6 +109,7 @@ public class Club {
     public String getSecondaryColor() { return secondaryColor; }
     public String getDefaultFormation() { return defaultFormation; }
     public String getDefaultMentality() { return defaultMentality; }
+    public String getDefaultGameStyle() { return defaultGameStyle; }
     public String getDefaultPressing() { return defaultPressing; }
     public String getDefaultMarking() { return defaultMarking; }
 
@@ -116,6 +120,7 @@ public class Club {
     public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
     public void setDefaultFormation(String defaultFormation) { this.defaultFormation = defaultFormation; }
     public void setDefaultMentality(String defaultMentality) { this.defaultMentality = defaultMentality; }
+    public void setDefaultGameStyle(String defaultGameStyle) { this.defaultGameStyle = defaultGameStyle; }
     public void setDefaultPressing(String defaultPressing) { this.defaultPressing = defaultPressing; }
     public void setDefaultMarking(String defaultMarking) { this.defaultMarking = defaultMarking; }
 

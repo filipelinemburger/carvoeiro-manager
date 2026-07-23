@@ -2,6 +2,7 @@ package br.com.carvoeiromanager.match;
 
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
+import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
@@ -50,6 +51,8 @@ public class TacticsService {
 
         Mentality mentality = parseOrDefault(
                 club != null ? club.getDefaultMentality() : null, Mentality::valueOf, Mentality.BALANCED);
+        GameStyle gameStyle = parseOrDefault(
+                club != null ? club.getDefaultGameStyle() : null, GameStyle::valueOf, GameStyle.EQUILIBRADO);
         String formation = club != null && club.getDefaultFormation() != null
                 ? club.getDefaultFormation() : "4-4-2";
         Pressing pressing = parseOrDefault(
@@ -65,7 +68,7 @@ public class TacticsService {
                 .map(Player::getId).orElse(null);
         UUID bestPasser = xi.stream().max(Comparator.comparingInt(Player::getPassing))
                 .map(Player::getId).orElse(null);
-        return new TacticalProfile(mentality, formation, pressing, marking,
+        return new TacticalProfile(mentality, gameStyle, formation, pressing, marking,
                 roles, bestFinisher, bestPasser, bestFinisher);
     }
 
@@ -91,7 +94,8 @@ public class TacticsService {
             roles.put(p.getId(), persisted.getOrDefault(p.getId(), PlayerRole.defaultFor(p.getPosition())));
         }
         return new TacticalProfile(
-                lineup.getMentality(), lineup.getFormation(), lineup.getPressing(), lineup.getMarking(),
+                lineup.getMentality(), lineup.getGameStyle(), lineup.getFormation(),
+                lineup.getPressing(), lineup.getMarking(),
                 roles, lineup.getPenaltyTakerId(), lineup.getFreekickTakerId(), lineup.getCornerTakerId());
     }
 }

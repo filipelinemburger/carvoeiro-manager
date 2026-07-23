@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Mentality;
 
 /**
@@ -8,7 +9,8 @@ import br.com.carvoeiromanager.player.Mentality;
  * minute. {@code cornerThreat}/{@code freeKickThreat} are ~[0,1] taker-skill threats (corner
  * taker's Cruzamento, free-kick taker's Bola parada). {@code penaltyConversion} is the
  * precomputed chance a penalty is scored, in [0.70, 0.95]. {@code mentality} feeds
- * {@link MatchupModifiers} to reward/punish an attack/defense mismatch against the opponent.
+ * {@link MatchupModifiers} to reward/punish an attack/defense mismatch against the opponent;
+ * {@code gameStyle} feeds the same modifier for the counter-attack-vs-attacking bonus.
  */
 public record TeamMatchInput(
         double attack,
@@ -19,5 +21,6 @@ public record TeamMatchInput(
         double freeKickThreat,
         double penaltyConversion,
         double fitnessDecay,
-        Mentality mentality) {
+        Mentality mentality,
+        GameStyle gameStyle) {
 }

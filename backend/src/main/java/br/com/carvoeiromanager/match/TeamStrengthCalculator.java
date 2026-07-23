@@ -58,11 +58,19 @@ public class TeamStrengthCalculator {
         attack *= formation.attackMult() * profile.mentality().attackMult();
         defense *= formation.defenseMult() * profile.mentality().defenseMult() * profile.marking().defenseMult();
 
+        // GameStyle scales attack/defense/decay by how well the outfield XI fits the style. For the
+        // neutral EQUILIBRADO these are exact x1.0 (and fit is 0.0), preserving seeded determinism.
+        List<Player> outfield = xi.stream().filter(p -> p.getPosition() != Position.GK).toList();
+        double fit = profile.gameStyle().fit(outfield);
+        attack *= profile.gameStyle().attackMult(fit);
+        defense *= profile.gameStyle().defenseMult(fit);
+
         double tempo = profile.pressing().tempoMult();
         double aggression = 1.0 + profile.pressing().aggressionAdd() + profile.marking().aggressionAdd();
 
         double staminaAvg = staminaSum / xi.size();
-        double fitnessDecay = DECAY_BASE * profile.pressing().decayMult() * clamp(70.0 / staminaAvg, 0.7, 1.4);
+        double fitnessDecay = DECAY_BASE * profile.pressing().decayMult()
+                * profile.gameStyle().decayMult() * clamp(70.0 / staminaAvg, 0.7, 1.4);
 
         double cornerThreat = takerThreat(xi, profile.cornerTakerId(), Attribute.CRUZAMENTO);
         double freeKickThreat = takerThreat(xi, profile.freekickTakerId(), Attribute.BOLA_PARADA);
@@ -71,7 +79,8 @@ public class TeamStrengthCalculator {
                         .attribute(Attribute.BOLA_PARADA));
 
         return new TeamMatchInput(attack, defense, tempo, aggression,
-                cornerThreat, freeKickThreat, penaltyConversion, fitnessDecay, profile.mentality());
+                cornerThreat, freeKickThreat, penaltyConversion, fitnessDecay,
+                profile.mentality(), profile.gameStyle());
     }
 
     private PlayerRole resolveRole(TacticalProfile profile, Player p) {

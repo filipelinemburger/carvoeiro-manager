@@ -2,6 +2,7 @@ package br.com.carvoeiromanager.match;
 
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Attributes;
+import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
@@ -44,8 +45,8 @@ class TeamStrengthCalculatorTest {
                                                       UUID freekickTakerId, UUID cornerTakerId) {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
-        return new TacticalProfile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles,
-                penaltyTakerId, freekickTakerId, cornerTakerId);
+        return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, "4-4-2", Pressing.MEDIUM,
+                Marking.ZONAL, roles, penaltyTakerId, freekickTakerId, cornerTakerId);
     }
 
     /** 1 GK + 4 DEF + 4 MID + 2 ATT, all rated 70. */
@@ -60,7 +61,7 @@ class TeamStrengthCalculatorTest {
     private TacticalProfile profile(Mentality m, String formation, Pressing pr, Marking mk, List<Player> xi) {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
-        return new TacticalProfile(m, formation, pr, mk, roles, null, null, null);
+        return new TacticalProfile(m, GameStyle.EQUILIBRADO, formation, pr, mk, roles, null, null, null);
     }
 
     @Test
@@ -209,5 +210,71 @@ class TeamStrengthCalculatorTest {
         TeamMatchInput b = calc.compute(alsoNeutral, profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, alsoNeutral));
         assertThat(a.attack()).isEqualTo(b.attack());
         assertThat(a.defense()).isEqualTo(b.defense());
+    }
+
+    @Test
+    void equilibradoGameStyleLeavesComputedStrengthByteIdentical() {
+        // Byte-identity regression for the GameStyle wiring: EQUILIBRADO multiplies attack/defense by
+        // exactly 1.0 and its decay multiplier is 1.0, so a standard 70-rated XI on the neutral style
+        // must produce EXACTLY these values — the same numbers the engine yielded before GameStyle
+        // existed. Any drift here means the neutral no-op broke (seeded results would shift).
+        List<Player> xi = standardXi();
+        TeamMatchInput input = calc.compute(xi,
+                profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, xi));
+
+        assertThat(input.gameStyle()).isEqualTo(GameStyle.EQUILIBRADO);
+        assertThat(input.attack()).isEqualTo(45.81818181818182);
+        assertThat(input.defense()).isEqualTo(49.84);
+        assertThat(input.fitnessDecay()).isEqualTo(0.15);
+        assertThat(input.tempo()).isEqualTo(1.0);
+        assertThat(input.aggression()).isEqualTo(1.0);
+    }
+
+    @Test
+    void gameStyleFitScalesAttackForAFittingSquadAndPenalisesAMisfit() {
+        // A JOGO_DE_PASSES side whose passers are elite (PASSE/VISAO/COMPOSTURA ~90) outscores the
+        // same style with a poor passing squad — the squad-fit term lifts attack for the good fit and
+        // cuts it for the bad fit, straddling the EQUILIBRADO baseline.
+        List<Player> goodFit = passingXi(90);
+        List<Player> poorFit = passingXi(30);
+
+        TeamMatchInput neutral = calc.compute(standardXi(),
+                profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, standardXi()));
+        TeamMatchInput good = calc.compute(goodFit,
+                passProfile(goodFit));
+        TeamMatchInput poor = calc.compute(poorFit,
+                passProfile(poorFit));
+
+        assertThat(good.attack()).isGreaterThan(poor.attack());
+        // JOGO_DE_PASSES baseAttack 1.03 already lifts attack even at the neutral fit midpoint, so a
+        // strong fit clears the EQUILIBRADO baseline while a weak fit's malus pulls it back down.
+        assertThat(good.attack()).isGreaterThan(neutral.attack());
+    }
+
+    /** 1 GK + 10 outfield all rated 70, with PASSE/VISAO/COMPOSTURA set to {@code passRating}. */
+    private List<Player> passingXi(int passRating) {
+        List<Player> xi = new ArrayList<>();
+        xi.add(passingPlayer(Position.GK, 70, passRating));
+        for (int i = 0; i < 4; i++) xi.add(passingPlayer(Position.DEF, 70, passRating));
+        for (int i = 0; i < 4; i++) xi.add(passingPlayer(Position.MID, 70, passRating));
+        for (int i = 0; i < 2; i++) xi.add(passingPlayer(Position.ATT, 70, passRating));
+        return xi;
+    }
+
+    private static Player passingPlayer(Position pos, int rating, int passRating) {
+        Attributes attrs = Attributes.builder()
+                .set(Attribute.VELOCIDADE, rating).set(Attribute.FINALIZACAO, rating)
+                .set(Attribute.PASSE, passRating).set(Attribute.DESARME, rating)
+                .set(Attribute.REFLEXOS, pos == Position.GK ? rating : 10).set(Attribute.FOLEGO, rating)
+                .set(Attribute.VISAO, passRating).set(Attribute.COMPOSTURA, passRating)
+                .build();
+        return Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", pos, 25, "BRA", attrs, rating);
+    }
+
+    private TacticalProfile passProfile(List<Player> xi) {
+        Map<UUID, PlayerRole> roles = new HashMap<>();
+        xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
+        return new TacticalProfile(Mentality.BALANCED, GameStyle.JOGO_DE_PASSES, "4-4-2",
+                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
     }
 }
