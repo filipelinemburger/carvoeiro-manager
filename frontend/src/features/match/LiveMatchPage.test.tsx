@@ -17,8 +17,8 @@ import {
   getLiveMatch, advanceLiveMatch, advanceToLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics,
 } from '../../api/liveMatch'
 
-vi.mock('../../api/career', () => ({ getPlayer: vi.fn() }))
-import { getPlayer } from '../../api/career'
+vi.mock('../../api/career', () => ({ getPlayer: vi.fn(), getStandings: vi.fn(), getSaveGame: vi.fn() }))
+import { getPlayer, getStandings, getSaveGame } from '../../api/career'
 
 // WatchStar (mounted for opponent-side players in the read-only PlayerDetails modal) owns the
 // watchlist query itself — stub it out here so the modal tests don't need a real watchlist.
@@ -52,6 +52,7 @@ const STATE = {
   opponentRatings: [],
   homeClubColors: { primary: '#f7d417', secondary: '#111111' },
   awayClubColors: { primary: '#003399', secondary: '#ffffff' },
+  competitionId: 'comp-1', parallelScores: [],
 }
 
 function renderPage() {
@@ -75,6 +76,10 @@ describe('LiveMatchPage', () => {
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
     vi.mocked(advanceLiveMatch).mockResolvedValue({ ...STATE, minute: 13, status: 'IN_PROGRESS' } as never)
     vi.mocked(getWatchlist).mockResolvedValue([])
+    // Safe defaults for the two new live-match tabs so every existing test keeps a resolved
+    // (never-undefined) query; individual tab tests override these.
+    vi.mocked(getStandings).mockResolvedValue([])
+    vi.mocked(getSaveGame).mockResolvedValue({ managedClubId: 'club-x' } as never)
   })
 
   it('shows both starting lineups at kickoff (minute 0) instead of the empty feed', async () => {
@@ -795,5 +800,53 @@ describe('LiveMatchPage', () => {
     const dialog = await screen.findByRole('dialog')
     await waitFor(() => expect(getPlayer).toHaveBeenCalledWith('sg-1', 'h1', 'test-token'))
     expect(within(dialog).queryByRole('button', { name: 'Observar jogador' })).not.toBeInTheDocument()
+  })
+
+  it('Paralelas tab renders one formatted row per parallel fixture from state', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS',
+      parallelScores: [
+        { fixtureId: 'px1', homeShort: 'AVA', awayShort: 'FIG', homeGoals: 2, awayGoals: 1 },
+        { fixtureId: 'px2', homeShort: 'JEC', awayShort: 'CHA', homeGoals: 0, awayGoals: 0 },
+      ],
+    } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('tab', { name: /paralelas/i }))
+    expect(await screen.findByText('AVA 2 x 1 FIG')).toBeInTheDocument()
+    expect(screen.getByText('JEC 0 x 0 CHA')).toBeInTheDocument()
+    expect(screen.getByTestId('parallel-px1')).toBeInTheDocument()
+    expect(screen.getByTestId('parallel-px2')).toBeInTheDocument()
+  })
+
+  it('Paralelas tab shows an empty state when there are no other games this round', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', parallelScores: [] } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('tab', { name: /paralelas/i }))
+    expect(await screen.findByText('Sem outros jogos nesta rodada')).toBeInTheDocument()
+  })
+
+  it('Classificação tab fetches standings for the live competitionId and marks the managed club row', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', competitionId: 'comp-9' } as never)
+    vi.mocked(getSaveGame).mockResolvedValue({ managedClubId: 'club-1' } as never)
+    vi.mocked(getStandings).mockResolvedValue([
+      { clubId: 'club-1', clubName: 'Criciúma EC', commonName: 'Tigrão', played: 3, won: 2, drawn: 1, lost: 0, goalsFor: 5, goalsAgainst: 2, goalDifference: 3, points: 7 },
+      { clubId: 'club-2', clubName: 'Avaí FC', commonName: 'Leão', played: 3, won: 1, drawn: 0, lost: 2, goalsFor: 2, goalsAgainst: 4, goalDifference: -2, points: 3 },
+    ] as never)
+    renderPage()
+
+    // The standings query is enabled on mount (state.competitionId is set), so it fires with
+    // the live state's competitionId regardless of the active tab.
+    await waitFor(() => expect(getStandings).toHaveBeenCalledWith('sg-1', 'comp-9', 'test-token'))
+
+    fireEvent.click(await screen.findByRole('tab', { name: /classificação/i }))
+    expect(await screen.findByText('Tigrão')).toBeInTheDocument()
+    expect(screen.getByText('Leão')).toBeInTheDocument()
+
+    // Only the managed club's row carries the data-managed marker, and it is the Tigrão row.
+    const managedRows = document.querySelectorAll('[data-managed="true"]')
+    expect(managedRows).toHaveLength(1)
+    expect(within(managedRows[0] as HTMLElement).getByText('Tigrão')).toBeInTheDocument()
   })
 })

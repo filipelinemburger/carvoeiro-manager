@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Box, Stack, Typography, Button, Chip, Alert, LinearProgress, Tabs, Tab } from '@mui/material'
+import {
+  Box, Stack, Typography, Button, Chip, Alert, LinearProgress, Tabs, Tab,
+  Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+} from '@mui/material'
 import { useAuth } from '../../auth/AuthContext'
 import { formatDatePtBR } from '../../utils/date'
 import {
   getLiveMatch, advanceLiveMatch, advanceToLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics,
 } from '../../api/liveMatch'
-import { getPlayer } from '../../api/career'
+import { getPlayer, getStandings, getSaveGame } from '../../api/career'
 import type { LiveEvent, LiveMatchState, LiveTacticsRequest, LivePlayer, LiveKitColors } from '../../api/types'
 import { MatchActionsDialog } from './MatchActionsDialog'
 import type { SubPair } from './MatchActionsDialog'
@@ -42,6 +45,9 @@ const EVENT_ICON: Record<LiveEvent['type'], string> = {
 
 const ADVANCE_MS = 1500   // event-to-event pacing (client-owned clock)
 
+// Background tint for the managed club's standings row (matches TablePage's highlight).
+const MANAGED_BG = 'rgba(0, 100, 200, 0.1)'
+
 export function LiveMatchPage() {
   const { token } = useAuth()
   const [searchParams] = useSearchParams()
@@ -52,7 +58,8 @@ export function LiveMatchPage() {
   const [playing, setPlaying] = useState(true)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [actionsTab, setActionsTab] = useState<0 | 1>(0)
-  const [feedTab, setFeedTab] = useState<0 | 1 | 2>(0)   // 0 = Lances, 1 = Atuações, 2 = Campo
+  // 0 = Lances, 1 = Atuações, 2 = Campo, 3 = Paralelas, 4 = Classificação
+  const [feedTab, setFeedTab] = useState<0 | 1 | 2 | 3 | 4>(0)
   const [applyPending, setApplyPending] = useState(false)
   const [subError, setSubError] = useState<string | null>(null)
   // True while an "advance-to" skip request is in flight. Gates the per-minute client clock
@@ -81,6 +88,35 @@ export function LiveMatchPage() {
     queryFn: () => getPlayer(saveGameId, selectedPlayerId!, token ?? ''),
     enabled: Boolean(saveGameId && token && selectedPlayerId),
   })
+
+  // Pre-round standings snapshot for the Classificação tab. staleTime Infinity so the live
+  // clock (which replaces `state` every minute) never triggers a mid-match refetch.
+  const standingsQuery = useQuery({
+    queryKey: ['standings', saveGameId, state?.competitionId],
+    queryFn: () => getStandings(saveGameId, state!.competitionId, token ?? ''),
+    enabled: Boolean(saveGameId && token && state?.competitionId),
+    staleTime: Infinity,
+  })
+
+  // Shares the ['saveGame', saveGameId] cache with TablePage; used only to highlight the
+  // managed club's standings row.
+  const saveGameQuery = useQuery({
+    queryKey: ['saveGame', saveGameId],
+    queryFn: () => getSaveGame(saveGameId, token ?? ''),
+    enabled: Boolean(saveGameId && token),
+    staleTime: 30_000,
+  })
+  const managedClubId = saveGameQuery.data?.managedClubId
+
+  // Previous parallel scores keyed by fixtureId, used to flash a row when its score changes.
+  // Updated after every committed render, so during render it still holds the prior snapshot.
+  const prevScoresRef = useRef<Record<string, string>>({})
+  useEffect(() => {
+    if (!state) return
+    const snapshot: Record<string, string> = {}
+    for (const ps of state.parallelScores) snapshot[ps.fixtureId] = `${ps.homeGoals}-${ps.awayGoals}`
+    prevScoresRef.current = snapshot
+  }, [state])
 
   const setState = (s: LiveMatchState) => queryClient.setQueryData(['liveMatch', saveGameId], s)
 
@@ -314,10 +350,12 @@ export function LiveMatchPage() {
         )}
       </Stack>
 
-      <Tabs value={feedTab} onChange={(_, v) => setFeedTab(v as 0 | 1 | 2)} sx={{ mt: 2, minHeight: 40 }}>
+      <Tabs value={feedTab} onChange={(_, v) => setFeedTab(v as 0 | 1 | 2 | 3 | 4)} sx={{ mt: 2, minHeight: 40 }}>
         <Tab label="Lances" sx={{ minHeight: 40 }} />
         <Tab label="Atuações" sx={{ minHeight: 40 }} />
         <Tab label="Campo" sx={{ minHeight: 40 }} />
+        <Tab label="Paralelas" sx={{ minHeight: 40 }} />
+        <Tab label="Classificação" sx={{ minHeight: 40 }} />
       </Tabs>
 
       {feedTab === 0 && (
@@ -398,6 +436,108 @@ export function LiveMatchPage() {
               state.awayClubColors,
             )}
           />
+        </Box>
+      )}
+
+      {feedTab === 3 && (
+        <Box sx={{ mt: 1 }}>
+          {state.parallelScores.length === 0 ? (
+            <Typography sx={{ color: 'text.secondary', mt: 1 }}>Sem outros jogos nesta rodada</Typography>
+          ) : (
+            <Stack spacing={0.5}>
+              {state.parallelScores.map(ps => {
+                const scoreKey = `${ps.homeGoals}-${ps.awayGoals}`
+                const prev = prevScoresRef.current[ps.fixtureId]
+                const changed = prev !== undefined && prev !== scoreKey
+                return (
+                  <Box
+                    key={ps.fixtureId}
+                    data-testid={`parallel-${ps.fixtureId}`}
+                    sx={{ display: 'flex', justifyContent: 'center' }}
+                  >
+                    {/* Remounting on scoreKey change restarts the flash animation each time the
+                        score moves (even on consecutive advances). Gated by `changed` so it never
+                        fires on first mount or when switching to this tab. */}
+                    <Typography
+                      key={scoreKey}
+                      sx={{
+                        fontFamily: 'monospace',
+                        fontSize: '0.95rem',
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: 1,
+                        ...(changed && {
+                          '@keyframes parallelScoreFlash': {
+                            from: { backgroundColor: 'rgba(255, 193, 7, 0.6)' },
+                            to: { backgroundColor: 'transparent' },
+                          },
+                          animation: 'parallelScoreFlash 1s ease-out',
+                        }),
+                      }}
+                    >
+                      {`${ps.homeShort} ${ps.homeGoals} x ${ps.awayGoals} ${ps.awayShort}`}
+                    </Typography>
+                  </Box>
+                )
+              })}
+            </Stack>
+          )}
+        </Box>
+      )}
+
+      {feedTab === 4 && (
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>Classificação antes da rodada</Typography>
+          {standingsQuery.isLoading ? (
+            <Typography sx={{ mt: 1, color: 'text.secondary' }}>Carregando classificação…</Typography>
+          ) : (standingsQuery.data ?? []).length === 0 ? (
+            <Typography sx={{ mt: 1, color: 'text.secondary' }}>Classificação indisponível.</Typography>
+          ) : (
+            <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell align="center">POS</TableCell>
+                    <TableCell>CLUBE</TableCell>
+                    <TableCell align="center">P</TableCell>
+                    <TableCell align="center">V</TableCell>
+                    <TableCell align="center">E</TableCell>
+                    <TableCell align="center">D</TableCell>
+                    <TableCell align="center">GP</TableCell>
+                    <TableCell align="center">GC</TableCell>
+                    <TableCell align="center">SG</TableCell>
+                    <TableCell align="center">PTS</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(standingsQuery.data ?? []).map((row, index) => {
+                    const isManaged = row.clubId === managedClubId
+                    return (
+                      <TableRow
+                        key={row.clubId}
+                        data-managed={isManaged ? 'true' : undefined}
+                        sx={{
+                          backgroundColor: isManaged ? MANAGED_BG : undefined,
+                          '& td': { fontWeight: isManaged ? 700 : undefined },
+                        }}
+                      >
+                        <TableCell align="center">{index + 1}</TableCell>
+                        <TableCell>{row.commonName ?? row.clubName}</TableCell>
+                        <TableCell align="center">{row.played}</TableCell>
+                        <TableCell align="center">{row.won}</TableCell>
+                        <TableCell align="center">{row.drawn}</TableCell>
+                        <TableCell align="center">{row.lost}</TableCell>
+                        <TableCell align="center">{row.goalsFor}</TableCell>
+                        <TableCell align="center">{row.goalsAgainst}</TableCell>
+                        <TableCell align="center">{row.goalDifference}</TableCell>
+                        <TableCell align="center">{row.points}</TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </Box>
       )}
 
