@@ -593,6 +593,8 @@ public class LineupService {
                 p.getId(),
                 p.getName(),
                 p.getPosition().name(),
+                p.getDetailedPosition() != null ? p.getDetailedPosition().name() : null,
+                p.getDetailedPosition() != null ? p.getDetailedPosition().label() : null,
                 p.getAge(),
                 p.getOverall(),
                 p.getPace(),

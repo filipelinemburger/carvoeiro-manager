@@ -54,6 +54,15 @@ class NewgenGeneratorTest {
     }
 
     @Test
+    void generatedNewgenGetsACoarseConsistentDetailedPosition() {
+        for (Position position : Position.values()) {
+            Player p = generator.generate(UUID.randomUUID(), UUID.randomUUID(), position, new Random(7));
+            assertThat(p.getDetailedPosition()).isNotNull();
+            assertThat(p.getDetailedPosition().coarse()).isEqualTo(position);
+        }
+    }
+
+    @Test
     void generationIsDeterministicForAGivenSeed() {
         UUID saveGameId = UUID.randomUUID();
         UUID clubId = UUID.randomUUID();

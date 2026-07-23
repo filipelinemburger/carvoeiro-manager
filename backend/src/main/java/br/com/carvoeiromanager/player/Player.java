@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Objects;
+import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -38,6 +39,10 @@ public class Player {
     @Enumerated(EnumType.STRING)
     @Column(name = "position", nullable = false, length = 3)
     private Position position;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "detailed_position", length = 20)
+    private DetailedPosition detailedPosition;
 
     @Column(name = "age", nullable = false)
     private int age;
@@ -125,6 +130,13 @@ public class Player {
         this.nationality = nationality;
         this.attributes = attributes;
         this.overall = overall;
+        // Every constructed player gets a coarse-consistent detailed position. Derived from a
+        // per-player Random seeded off the (already-assigned) id, so it consumes NOTHING from any
+        // shared generation RNG — seeded generation/rollover output stays byte-identical. This is the
+        // single source of truth: it covers seed load, free agents, newgens, prospects and tests, so
+        // no path can hit the NOT-NULL detailed_position column with a null value.
+        this.detailedPosition = DetailedPosition.defaultFor(position, attributes.get(Attribute.PASSE),
+                new Random(id.getMostSignificantBits() ^ 0xDE7A11L));
     }
 
     public static Player create(UUID saveGameId, UUID clubId, String name, Position position,
@@ -154,6 +166,8 @@ public class Player {
     public UUID getClubId() { return clubId; }
     public String getName() { return name; }
     public Position getPosition() { return position; }
+    public DetailedPosition getDetailedPosition() { return detailedPosition; }
+    public void setDetailedPosition(DetailedPosition detailedPosition) { this.detailedPosition = detailedPosition; }
     public int getAge() { return age; }
     public String getNationality() { return nationality; }
 

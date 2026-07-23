@@ -32,6 +32,15 @@ class NewgenGeneratorProspectTest {
     }
 
     @Test
+    void generatedProspectGetsACoarseConsistentDetailedPosition() {
+        for (Position position : Position.values()) {
+            Player p = generator.generateProspect(UUID.randomUUID(), UUID.randomUUID(), position, new Random(3L));
+            assertThat(p.getDetailedPosition()).isNotNull();
+            assertThat(p.getDetailedPosition().coarse()).isEqualTo(position);
+        }
+    }
+
+    @Test
     void isDeterministicForAGivenSeed() {
         UUID sg = UUID.randomUUID(), club = UUID.randomUUID();
         Player a = generator.generateProspect(sg, club, Position.ATT, new Random(42L));

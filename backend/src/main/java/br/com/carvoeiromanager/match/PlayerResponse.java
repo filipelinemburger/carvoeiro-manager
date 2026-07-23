@@ -8,6 +8,8 @@ public record PlayerResponse(
         UUID id,
         String name,
         String position,
+        String detailedPosition,
+        String detailedPositionLabel,
         int age,
         int overall,
         int pace,
