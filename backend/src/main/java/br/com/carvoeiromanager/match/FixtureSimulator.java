@@ -5,9 +5,11 @@ import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
+import br.com.carvoeiromanager.player.PlayerRole;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -320,7 +322,7 @@ public class FixtureSimulator {
             }
 
             Player player = switch (event.type()) {
-                case GOAL -> pickByWeight(available, FixtureSimulator::goalWeight, rng);
+                case GOAL -> pickByWeight(available, p -> scorerWeight(p, profile.attackZone()), rng);
                 case PENALTY_GOAL -> SetPieces.takerOrFallback(available, profile.penaltyTakerId(), Player::getFinishing);
                 case FREE_KICK_GOAL -> SetPieces.takerOrFallback(available, profile.freekickTakerId(),
                         p -> p.attribute(Attribute.BOLA_PARADA));
@@ -378,7 +380,8 @@ public class FixtureSimulator {
                                TacticalProfile profile, Random assistRng) {
         return switch (event.type()) {
             case GOAL -> assistRng.nextDouble() < ASSIST_CHANCE
-                    ? pickByWeightExcluding(xi, scorer, FixtureSimulator::assistWeight, assistRng)
+                    ? pickByWeightExcluding(xi, scorer,
+                            p -> assistWeight(p, profile.attackZone(), PlayerRole.resolve(profile.roles(), p)), assistRng)
                     : null;
             case CORNER_GOAL -> SetPieces.takerOrFallback(xi, profile.cornerTakerId(),
                     p -> p.attribute(Attribute.CRUZAMENTO));
@@ -405,10 +408,47 @@ public class FixtureSimulator {
         return pool.get(pool.size() - 1);
     }
 
-    /** Mirrors LiveMatchEngine.assistWeight — creative-passing composite. */
-    private static int assistWeight(Player p) {
-        return p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO)
-                + p.attribute(Attribute.CRUZAMENTO) + 10;
+    /**
+     * Mirrors {@code LiveMatchEngine.scorerWeight} — zone-aware open-play scorer weight. The base
+     * {@link #goalWeight} plus the zone's signature half-attribute (headers wide, long shots central);
+     * MISTO equals {@link #goalWeight} exactly so instant attribution stays byte-identical. Integer
+     * {@code /2} matches the live engine's rounding.
+     */
+    static int scorerWeight(Player p, AttackZone zone) {
+        int base = goalWeight(p);
+        return switch (zone) {
+            case LATERAIS -> base + p.attribute(Attribute.CABECEIO) / 2;
+            case CENTRO -> base + p.attribute(Attribute.CHUTE_LONGE) / 2;
+            case MISTO -> base;
+        };
+    }
+
+    /**
+     * Mirrors {@code LiveMatchEngine.assistWeight} — zone- and role-aware creative-passing weight.
+     * MISTO is the legacy composite {@code 10 + PASSE + VISAO + CRUZAMENTO} (byte-identical); LATERAIS
+     * leans on crossing and boosts wide roles, CENTRO on passing/vision and boosts central creators.
+     * The {@code * 3 / 2} integer ×1.5 rounds identically to the live engine.
+     */
+    static int assistWeight(Player p, AttackZone zone, PlayerRole role) {
+        int base = 10;
+        return switch (zone) {
+            case MISTO -> base + p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO)
+                    + p.attribute(Attribute.CRUZAMENTO);
+            case LATERAIS -> {
+                int w = base + 2 * p.attribute(Attribute.CRUZAMENTO);
+                if (role == PlayerRole.WINGER || role == PlayerRole.FULL_BACK) {
+                    w = w * 3 / 2;
+                }
+                yield w;
+            }
+            case CENTRO -> {
+                int w = base + p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO);
+                if (role == PlayerRole.PLAYMAKER || role == PlayerRole.BOX_TO_BOX) {
+                    w = w * 3 / 2;
+                }
+                yield w;
+            }
+        };
     }
 
     private Player pickWeighted(List<Player> xi, ToIntFunction<Player> attribute, Random rng) {

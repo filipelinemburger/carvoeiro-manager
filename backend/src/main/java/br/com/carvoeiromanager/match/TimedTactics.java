@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
@@ -16,12 +17,17 @@ import br.com.carvoeiromanager.player.Pressing;
  * {@code gameStyle} as "keep the side's current style" (see
  * {@link LiveMatchEngine#applyTacticChanges}), preserving byte-identical behaviour for those
  * legacy schedules; a non-null value applies the chosen style from that minute onward.
+ *
+ * <p>{@code attackZone} is NULLABLE for the same reason (Task 25): schedules serialized before
+ * the field existed deserialize it as null, which the engine treats as "keep the side's current
+ * zone"; a non-null value applies the chosen zone from that minute onward.
  */
 public record TimedTactics(
         int minute,
         boolean home,
         Mentality mentality,
         GameStyle gameStyle,
+        AttackZone attackZone,
         Pressing pressing,
         Marking marking,
         String formation) {

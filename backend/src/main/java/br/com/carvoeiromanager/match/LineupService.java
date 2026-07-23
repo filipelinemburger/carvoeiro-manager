@@ -6,6 +6,7 @@ import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.contract.ContractValuation;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
@@ -609,6 +610,11 @@ public class LineupService {
         if (req.gameStyle() != null && !req.gameStyle().isBlank()) {
             lineup.setGameStyle(parseGameStyle(req.gameStyle()));
         }
+        // attackZone is optional in the same way: a null/blank value (pre-AttackZone-UI clients) leaves
+        // the persisted zone unchanged rather than resetting it to MISTO.
+        if (req.attackZone() != null && !req.attackZone().isBlank()) {
+            lineup.setAttackZone(parseAttackZone(req.attackZone()));
+        }
         lineup.setPenaltyTakerId(req.penaltyTakerId());
         lineup.setFreekickTakerId(req.freekickTakerId());
         lineup.setCornerTakerId(req.cornerTakerId());
@@ -622,14 +628,14 @@ public class LineupService {
         return lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
                 .map(this::toTacticsResponse)
                 .orElseGet(() -> new TacticsResponse(
-                        Mentality.BALANCED.name(), GameStyle.EQUILIBRADO.name(),
+                        Mentality.BALANCED.name(), GameStyle.EQUILIBRADO.name(), AttackZone.MISTO.name(),
                         Pressing.MEDIUM.name(), Marking.ZONAL.name(),
                         null, null, null));
     }
 
     private TacticsResponse toTacticsResponse(Lineup lineup) {
         return new TacticsResponse(
-                lineup.getMentality().name(), lineup.getGameStyle().name(),
+                lineup.getMentality().name(), lineup.getGameStyle().name(), lineup.getAttackZone().name(),
                 lineup.getPressing().name(), lineup.getMarking().name(),
                 lineup.getPenaltyTakerId(), lineup.getFreekickTakerId(), lineup.getCornerTakerId());
     }
@@ -652,6 +658,13 @@ public class LineupService {
         try { return GameStyle.valueOf(v); }
         catch (IllegalArgumentException e) {
             throw new ApiException(ErrorCode.INVALID_TACTICS, "Estilo de jogo inválido: " + v);
+        }
+    }
+
+    private AttackZone parseAttackZone(String v) {
+        try { return AttackZone.valueOf(v); }
+        catch (IllegalArgumentException e) {
+            throw new ApiException(ErrorCode.INVALID_TACTICS, "Zona de ataque inválida: " + v);
         }
     }
 

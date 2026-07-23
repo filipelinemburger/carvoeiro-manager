@@ -79,7 +79,7 @@ class LiveMatchTacticsIT {
 
         // Change tactics after kickoff (at minute 0, the change will be at minute 1)
         liveMatchService.changeTactics(saveGameId, userId,
-                new LiveTacticsRequest("ATTACKING", null, "HIGH", "ZONAL", "4-3-3"));
+                new LiveTacticsRequest("ATTACKING", null, null, "HIGH", "ZONAL", "4-3-3"));
 
         // Advance match all the way to FULL_TIME
         LiveMatchState state = null;
@@ -101,7 +101,7 @@ class LiveMatchTacticsIT {
 
         // Change tactics: schedules a TimedTactics at minute 1
         liveMatchService.changeTactics(saveGameId, userId,
-                new LiveTacticsRequest("ATTACKING", null, "HIGH", "ZONAL", "4-3-3"));
+                new LiveTacticsRequest("ATTACKING", null, null, "HIGH", "ZONAL", "4-3-3"));
 
         // Advance past minute 1 so the change is committed
         LiveMatchState state = liveMatchService.advance(saveGameId, userId);
@@ -125,7 +125,7 @@ class LiveMatchTacticsIT {
 
         // Schedule a game-style change at minute 1.
         liveMatchService.changeTactics(saveGameId, userId,
-                new LiveTacticsRequest("ATTACKING", "PRESSAO_ALTA", "HIGH", "ZONAL", "4-3-3"));
+                new LiveTacticsRequest("ATTACKING", "PRESSAO_ALTA", null, "HIGH", "ZONAL", "4-3-3"));
 
         // Advance past minute 1 so the change is committed.
         LiveMatchState state = liveMatchService.advance(saveGameId, userId);
@@ -136,11 +136,42 @@ class LiveMatchTacticsIT {
     }
 
     @Test
+    void liveAttackZoneChangeReflectsFromItsMinuteOnward() {
+        LiveMatchState atKickoff = liveMatchService.kickoff(saveGameId, userId);
+        // The managed club's saved lineup starts on the neutral zone (V37 default).
+        assertThat(atKickoff.currentTactics().attackZone()).isEqualTo("MISTO");
+
+        // Schedule an attack-zone change at minute 1.
+        liveMatchService.changeTactics(saveGameId, userId,
+                new LiveTacticsRequest("ATTACKING", null, "LATERAIS", "HIGH", "ZONAL", "4-3-3"));
+
+        // Advance past minute 1 so the change is committed.
+        LiveMatchState state = liveMatchService.advance(saveGameId, userId);
+        for (int i = 0; i < 90 && state.minute() < 1; i++) {
+            state = liveMatchService.advance(saveGameId, userId);
+        }
+        assertThat(state.currentTactics().attackZone()).isEqualTo("LATERAIS");
+    }
+
+    @Test
+    void invalidAttackZoneThrowsApiException() {
+        liveMatchService.kickoff(saveGameId, userId);
+
+        assertThatThrownBy(() -> liveMatchService.changeTactics(saveGameId, userId,
+                new LiveTacticsRequest("ATTACKING", null, "NOT_A_ZONE", "HIGH", "ZONAL", "4-3-3")))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.INVALID_TACTICS);
+                    assertThat(ex.getMessage()).isEqualTo("Zona de ataque inválida: NOT_A_ZONE");
+                });
+    }
+
+    @Test
     void invalidGameStyleThrowsApiException() {
         liveMatchService.kickoff(saveGameId, userId);
 
         assertThatThrownBy(() -> liveMatchService.changeTactics(saveGameId, userId,
-                new LiveTacticsRequest("ATTACKING", "NOT_A_STYLE", "HIGH", "ZONAL", "4-3-3")))
+                new LiveTacticsRequest("ATTACKING", "NOT_A_STYLE", null, "HIGH", "ZONAL", "4-3-3")))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.INVALID_TACTICS);
@@ -153,7 +184,7 @@ class LiveMatchTacticsIT {
         liveMatchService.kickoff(saveGameId, userId);
 
         assertThatThrownBy(() -> liveMatchService.changeTactics(saveGameId, userId,
-                new LiveTacticsRequest("BOGUS", null, "HIGH", "ZONAL", "4-3-3")))
+                new LiveTacticsRequest("BOGUS", null, null, "HIGH", "ZONAL", "4-3-3")))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.INVALID_TACTICS));
     }
@@ -163,7 +194,7 @@ class LiveMatchTacticsIT {
         liveMatchService.kickoff(saveGameId, userId);
 
         assertThatThrownBy(() -> liveMatchService.changeTactics(saveGameId, userId,
-                new LiveTacticsRequest("ATTACKING", null, "HIGH", "ZONAL", "9-9-9")))
+                new LiveTacticsRequest("ATTACKING", null, null, "HIGH", "ZONAL", "9-9-9")))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.INVALID_TACTICS));
     }

@@ -59,6 +59,9 @@ public class Club {
     @Column(name = "default_marking", length = 10)
     private String defaultMarking;
 
+    @Column(name = "default_attack_zone", length = 10)
+    private String defaultAttackZone;
+
     @Column(name = "balance", nullable = false)
     private BigDecimal balance = BigDecimal.ZERO;
 
@@ -112,6 +115,7 @@ public class Club {
     public String getDefaultGameStyle() { return defaultGameStyle; }
     public String getDefaultPressing() { return defaultPressing; }
     public String getDefaultMarking() { return defaultMarking; }
+    public String getDefaultAttackZone() { return defaultAttackZone; }
 
     public void setCommonName(String commonName) { this.commonName = commonName; }
     public void setNickname(String nickname) { this.nickname = nickname; }
@@ -123,6 +127,7 @@ public class Club {
     public void setDefaultGameStyle(String defaultGameStyle) { this.defaultGameStyle = defaultGameStyle; }
     public void setDefaultPressing(String defaultPressing) { this.defaultPressing = defaultPressing; }
     public void setDefaultMarking(String defaultMarking) { this.defaultMarking = defaultMarking; }
+    public void setDefaultAttackZone(String defaultAttackZone) { this.defaultAttackZone = defaultAttackZone; }
 
     public BigDecimal getBalance() { return balance; }
     public int getReputation() { return reputation; }

@@ -6,5 +6,6 @@ public record LiveTactics(
         String pressing,
         String marking,
         String formation,
-        String gameStyle) {
+        String gameStyle,
+        String attackZone) {
 }

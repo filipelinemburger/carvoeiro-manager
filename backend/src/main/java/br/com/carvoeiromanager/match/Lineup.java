@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
@@ -51,6 +52,10 @@ public class Lineup {
     @Column(name = "marking", nullable = false, length = 10)
     private Marking marking;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "attack_zone", nullable = false, length = 10)
+    private AttackZone attackZone;
+
     @Column(name = "penalty_taker_id")
     private UUID penaltyTakerId;
 
@@ -73,6 +78,7 @@ public class Lineup {
         this.gameStyle = GameStyle.EQUILIBRADO;
         this.pressing = Pressing.MEDIUM;
         this.marking = Marking.ZONAL;
+        this.attackZone = AttackZone.MISTO;
     }
 
     public static Lineup create(UUID saveGameId, UUID clubId, String formation) {
@@ -87,6 +93,7 @@ public class Lineup {
     public GameStyle getGameStyle() { return gameStyle; }
     public Pressing getPressing() { return pressing; }
     public Marking getMarking() { return marking; }
+    public AttackZone getAttackZone() { return attackZone; }
     public UUID getPenaltyTakerId() { return penaltyTakerId; }
     public UUID getFreekickTakerId() { return freekickTakerId; }
     public UUID getCornerTakerId() { return cornerTakerId; }
@@ -96,6 +103,7 @@ public class Lineup {
     public void setGameStyle(GameStyle gameStyle) { this.gameStyle = gameStyle; }
     public void setPressing(Pressing pressing) { this.pressing = pressing; }
     public void setMarking(Marking marking) { this.marking = marking; }
+    public void setAttackZone(AttackZone attackZone) { this.attackZone = attackZone; }
     public void setPenaltyTakerId(UUID id) { this.penaltyTakerId = id; }
     public void setFreekickTakerId(UUID id) { this.freekickTakerId = id; }
     public void setCornerTakerId(UUID id) { this.cornerTakerId = id; }

@@ -1,6 +1,7 @@
 package br.com.carvoeiromanager.player;
 
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * A tactical role bound to a position band, carrying the attribute weights that turn a
@@ -79,6 +80,20 @@ public enum PlayerRole {
             case MID -> BOX_TO_BOX;
             case ATT -> POACHER;
         };
+    }
+
+    /**
+     * The effective role for a player given a tactical profile's role map: the persisted role when
+     * present AND valid for the player's position band, else the band default. Single source of truth
+     * shared by team-strength scoring and both match engines' zone-aware attribution, so they always
+     * resolve the same role for the same player.
+     */
+    public static PlayerRole resolve(Map<UUID, PlayerRole> roles, Player p) {
+        PlayerRole role = roles == null ? null : roles.get(p.getId());
+        if (role == null || !role.isValidFor(p.getPosition())) {
+            return defaultFor(p.getPosition());
+        }
+        return role;
     }
 
     /** Behaviours available for this role (default first). */

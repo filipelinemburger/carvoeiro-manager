@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attributes;
 import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
@@ -75,8 +76,8 @@ class MatchCalibrationTest {
 
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(p -> roles.put(p.getId(), PlayerRole.defaultFor(p.getPosition())));
-        TacticalProfile profile = new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, "4-4-2",
-                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
+        TacticalProfile profile = new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO,
+                AttackZone.MISTO, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
         return strengthCalc.compute(xi, profile);
     }
 

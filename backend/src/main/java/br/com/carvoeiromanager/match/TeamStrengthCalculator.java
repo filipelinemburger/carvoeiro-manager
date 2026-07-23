@@ -1,7 +1,9 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Formation;
+import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Position;
@@ -34,7 +36,7 @@ public class TeamStrengthCalculator {
         int outfieldCount = 0;
 
         for (Player p : xi) {
-            PlayerRole role = resolveRole(profile, p);
+            PlayerRole role = PlayerRole.resolve(profile.roles(), p);
             double fitnessMult = fitnessMultById.getOrDefault(p.getId(), 1.0);
             // Each term is exactly 1.0 at its neutral value (form 0, morale 0, full fitness), so a
             // neutral squad's strength is unchanged — keep it that way to preserve seeded-result determinism.
@@ -65,6 +67,15 @@ public class TeamStrengthCalculator {
         attack *= profile.gameStyle().attackMult(fit);
         defense *= profile.gameStyle().defenseMult(fit);
 
+        // AttackZone x GameStyle synergy: forcing the play down the wings with a direct style, or
+        // through the middle with a passing style, is a natural fit and lifts attack a touch. MISTO
+        // (and any non-matching combo, incl. the neutral EQUILIBRADO) yields no synergy, so default
+        // settings stay byte-identical.
+        if ((profile.gameStyle() == GameStyle.JOGO_DIRETO && profile.attackZone() == AttackZone.LATERAIS)
+                || (profile.gameStyle() == GameStyle.JOGO_DE_PASSES && profile.attackZone() == AttackZone.CENTRO)) {
+            attack *= 1.02;
+        }
+
         double tempo = profile.pressing().tempoMult();
         double aggression = 1.0 + profile.pressing().aggressionAdd() + profile.marking().aggressionAdd();
 
@@ -81,14 +92,6 @@ public class TeamStrengthCalculator {
         return new TeamMatchInput(attack, defense, tempo, aggression,
                 cornerThreat, freeKickThreat, penaltyConversion, fitnessDecay,
                 profile.mentality(), profile.gameStyle());
-    }
-
-    private PlayerRole resolveRole(TacticalProfile profile, Player p) {
-        PlayerRole role = profile.roles() == null ? null : profile.roles().get(p.getId());
-        if (role == null || !role.isValidFor(p.getPosition())) {
-            return PlayerRole.defaultFor(p.getPosition());
-        }
-        return role;
     }
 
     /** The designated taker's attribute when in the XI, else the best in the XI — scaled to ~[0,1]. */

@@ -9,6 +9,7 @@ import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Formation;
 import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
@@ -235,14 +236,16 @@ public class LiveMatchService {
 
         Mentality mentality = parseMentality(req.mentality());
         GameStyle gameStyle = parseGameStyle(req.gameStyle());
+        AttackZone attackZone = parseAttackZone(req.attackZone());
         Pressing pressing = parsePressing(req.pressing());
         Marking marking = parseMarking(req.marking());
         String formation = parseFormation(req.formation());
 
         int minute = Math.min(MINUTES, lm.getCommittedMinute() + 1);
         List<TimedTactics> tactics = new ArrayList<>(deserializeTactics(lm.getTacticsSchedule()));
-        // A null gameStyle (client omitted it) records "keep current style" in the schedule entry.
-        tactics.add(new TimedTactics(minute, lm.isManagedIsHome(), mentality, gameStyle, pressing, marking, formation));
+        // A null gameStyle/attackZone (client omitted it) records "keep current" in the schedule entry.
+        tactics.add(new TimedTactics(minute, lm.isManagedIsHome(), mentality, gameStyle, attackZone,
+                pressing, marking, formation));
         lm.setTacticsSchedule(serialize(tactics));
         liveMatchRepository.save(lm);
         return toState(lm, save);
@@ -263,6 +266,17 @@ public class LiveMatchService {
         try { return GameStyle.valueOf(value); }
         catch (IllegalArgumentException e) {
             throw new ApiException(ErrorCode.INVALID_TACTICS, "Estilo de jogo inválido: " + value);
+        }
+    }
+
+    /** Null/blank → null ("keep current zone"); otherwise parse, rejecting an unknown zone. */
+    private AttackZone parseAttackZone(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try { return AttackZone.valueOf(value); }
+        catch (IllegalArgumentException e) {
+            throw new ApiException(ErrorCode.INVALID_TACTICS, "Zona de ataque inválida: " + value);
         }
     }
 
@@ -863,6 +877,7 @@ public class LiveMatchService {
         String marking = base.marking().name();
         String formation = base.formation();
         String gameStyle = base.gameStyle().name();
+        String attackZone = base.attackZone().name();
 
         // Apply the last scheduled change for this side whose minute <= committedMinute
         for (TimedTactics tt : cfg.tacticsSchedule()) {
@@ -875,9 +890,13 @@ public class LiveMatchService {
                 if (tt.gameStyle() != null) {
                     gameStyle = tt.gameStyle().name();
                 }
+                // A null attackZone entry (client omitted it, or a legacy schedule) keeps the current zone.
+                if (tt.attackZone() != null) {
+                    attackZone = tt.attackZone().name();
+                }
             }
         }
-        return new LiveTactics(mentality, pressing, marking, formation, gameStyle);
+        return new LiveTactics(mentality, pressing, marking, formation, gameStyle, attackZone);
     }
 
     /** One side's current on-pitch set, hobbled set, and bench-players-already-used, at {@code minute}. */

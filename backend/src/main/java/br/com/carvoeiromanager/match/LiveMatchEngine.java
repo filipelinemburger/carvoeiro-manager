@@ -1,8 +1,10 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.InjurySeverity;
 import br.com.carvoeiromanager.player.Player;
+import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.staff.StaffEffectsService;
 import org.springframework.stereotype.Service;
 
@@ -215,11 +217,12 @@ public class LiveMatchEngine {
         for (TimedTactics t : cfg.tacticsSchedule()) {
             if (t.minute() != minute || t.home() != side.home) continue;
             TacticalProfile old = side.currentProfile;
-            // A scheduled change may now set the game style (Task 23). A null gameStyle on the entry
-            // (client omitted it, or a legacy schedule serialized before the field existed) keeps the
-            // side's current style instead of resetting it.
+            // A scheduled change may now set the game style (Task 23) and attack zone (Task 25). A null
+            // gameStyle/attackZone on the entry (client omitted it, or a legacy schedule serialized before
+            // the field existed) keeps the side's current value instead of resetting it.
             side.currentProfile = new TacticalProfile(
                     t.mentality(), t.gameStyle() != null ? t.gameStyle() : old.gameStyle(),
+                    t.attackZone() != null ? t.attackZone() : old.attackZone(),
                     t.formation(), t.pressing(), t.marking(),
                     old.roles(), old.penaltyTakerId(), old.freekickTakerId(), old.cornerTakerId());
             side.dirty = true;
@@ -383,10 +386,47 @@ public class LiveMatchEngine {
         return pool.get(pool.size() - 1);
     }
 
-    /** Creative-passing composite for assist attribution: playmakers and wide players lead. */
-    private static int assistWeight(Player p) {
-        return p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO)
-                + p.attribute(Attribute.CRUZAMENTO) + 10;
+    /**
+     * Zone-aware scorer weight for open-play goals: the base {@link #goalWeight} plus a half-attribute
+     * kicker for the zone's signature finish — headers down the wings (LATERAIS), long shots through
+     * the middle (CENTRO). MISTO adds nothing, so it equals {@link #goalWeight} exactly (byte-identical
+     * to the pre-AttackZone engine). Integer {@code /2} so live and instant round identically.
+     */
+    static int scorerWeight(Player p, AttackZone zone) {
+        int base = goalWeight(p);
+        return switch (zone) {
+            case LATERAIS -> base + p.attribute(Attribute.CABECEIO) / 2;
+            case CENTRO -> base + p.attribute(Attribute.CHUTE_LONGE) / 2;
+            case MISTO -> base;
+        };
+    }
+
+    /**
+     * Zone- and role-aware creative-passing weight for open-play assist attribution. MISTO is the
+     * legacy composite {@code 10 + PASSE + VISAO + CRUZAMENTO} (byte-identical). LATERAIS leans on
+     * crossing and boosts wide roles; CENTRO leans on passing/vision and boosts central creators. The
+     * {@code * 3 / 2} integer boost (×1.5) rounds identically in both engines.
+     */
+    static int assistWeight(Player p, AttackZone zone, PlayerRole role) {
+        int base = 10;
+        return switch (zone) {
+            case MISTO -> base + p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO)
+                    + p.attribute(Attribute.CRUZAMENTO);
+            case LATERAIS -> {
+                int w = base + 2 * p.attribute(Attribute.CRUZAMENTO);
+                if (role == PlayerRole.WINGER || role == PlayerRole.FULL_BACK) {
+                    w = w * 3 / 2;
+                }
+                yield w;
+            }
+            case CENTRO -> {
+                int w = base + p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO);
+                if (role == PlayerRole.PLAYMAKER || role == PlayerRole.BOX_TO_BOX) {
+                    w = w * 3 / 2;
+                }
+                yield w;
+            }
+        };
     }
 
     /** Foul propensity composite: aggressive, tackle-heavy players commit more fouls. */
@@ -406,9 +446,15 @@ public class LiveMatchEngine {
     private boolean resolveScoringEvent(int minute, Side side, TeamMatchInput input, Random rng,
                                         Random attrRng, Random assistRng, List<LiveTimelineEvent> events) {
         if (rng.nextDouble() >= SetPieces.share(input.cornerThreat(), input.freeKickThreat())) {
-            UUID scorer = pickByWeight(side, LiveMatchEngine::goalWeight, attrRng);
+            // AttackZone re-weights WHO scores/assists this open-play goal. Each pick still draws
+            // exactly one nextInt from its stream (weight VALUES change, not the RNG contract). For
+            // the neutral MISTO the weights equal the pre-AttackZone formulas → byte-identical.
+            AttackZone zone = side.currentProfile.attackZone();
+            Map<UUID, PlayerRole> roles = side.currentProfile.roles();
+            UUID scorer = pickByWeight(side, p -> scorerWeight(p, zone), attrRng);
             UUID assister = assistRng.nextDouble() < ASSIST_CHANCE
-                    ? pickByWeightExcluding(side, scorer, LiveMatchEngine::assistWeight, assistRng)
+                    ? pickByWeightExcluding(side, scorer,
+                            p -> assistWeight(p, zone, PlayerRole.resolve(roles, p)), assistRng)
                     : null;
             events.add(new LiveTimelineEvent(minute, EventType.GOAL, side.home, scorer, assister, null, null));
             return true;

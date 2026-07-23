@@ -1,6 +1,7 @@
 package br.com.carvoeiromanager.match;
 
 import br.com.carvoeiromanager.match.AiManagerBrain.Posture;
+import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Attributes;
 import br.com.carvoeiromanager.player.GameStyle;
@@ -57,7 +58,7 @@ class LiveMatchEngineTest {
     private static TacticalProfile defaultProfile(List<Player> xi) {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
-        return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
+        return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
     }
 
     /** A full-profile player with BOLA_PARADA 0 (so penaltyConversion is exactly 0.70) but
@@ -92,8 +93,8 @@ class LiveMatchEngineTest {
                                                       UUID freekickTakerId, UUID cornerTakerId) {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
-        return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, "4-4-2", Pressing.MEDIUM,
-                Marking.ZONAL, roles, penaltyTakerId, freekickTakerId, cornerTakerId);
+        return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2",
+                Pressing.MEDIUM, Marking.ZONAL, roles, penaltyTakerId, freekickTakerId, cornerTakerId);
     }
 
     private static Map<UUID, Integer> fullFitness(List<Player> homeXi, List<Player> awayXi) {
@@ -181,6 +182,42 @@ class LiveMatchEngineTest {
         LiveTimeline a = engine.simulate(cfg);
         LiveTimeline b = engine.simulate(cfg);
         assertThat(a.events()).isEqualTo(b.events());
+    }
+
+    @Test
+    void allMistoGoalAttributionMatchesTheGoldenBaseline() {
+        // Byte-identity regression for AttackZone: the default profile is all-MISTO/all-EQUILIBRADO,
+        // whose scorer/assist weights equal the pre-AttackZone formulas, so the goal scorer/assister
+        // attribution for a fixed seed must match this golden signature captured from the neutral run.
+        // A drift here means MISTO stopped being the neutral no-op (seeded results would shift).
+        LiveMatchConfig cfg = config(1234L, List.of());
+        LiveTimeline t = engine.simulate(cfg);
+        assertThat(goalSignature(t)).isEqualTo("42:H:GOAL:8:9|63:H:GOAL:5:2");
+    }
+
+    /**
+     * A compact, UUID-independent signature of every goal event: {@code minute:side:type:scorerIdx:assisterIdx}
+     * where the indices are the scorer/assister positions within their side's XI list (stable for a fixed
+     * seed regardless of the random UUIDs), joined by {@code |}. {@code assisterIdx} is {@code -} when
+     * the goal is unassisted.
+     */
+    private String goalSignature(LiveTimeline t) {
+        return t.events().stream()
+                .filter(e -> e.type().isGoal())
+                .map(e -> {
+                    List<Player> xi = e.home() ? homeXi : awayXi;
+                    return e.minute() + ":" + (e.home() ? "H" : "A") + ":" + e.type().name()
+                            + ":" + indexOf(xi, e.playerId()) + ":" + indexOf(xi, e.playerInId());
+                })
+                .collect(java.util.stream.Collectors.joining("|"));
+    }
+
+    private static String indexOf(List<Player> xi, UUID id) {
+        if (id == null) return "-";
+        for (int i = 0; i < xi.size(); i++) {
+            if (xi.get(i).getId().equals(id)) return Integer.toString(i);
+        }
+        return "?";
     }
 
     @Test
@@ -325,7 +362,7 @@ class LiveMatchEngineTest {
         long seed = 42L;
         LiveTimeline base = engine.simulate(config(seed, List.of()));
 
-        TimedTactics change = new TimedTactics(60, true, Mentality.ATTACKING, null, Pressing.HIGH, Marking.ZONAL, "4-3-3");
+        TimedTactics change = new TimedTactics(60, true, Mentality.ATTACKING, null, null, Pressing.HIGH, Marking.ZONAL, "4-3-3");
         LiveTimeline withTactics = engine.simulate(config(seed, List.of(), List.of(change)));
 
         // Events up to and including minute 59 must be identical (tactics not yet applied).
@@ -414,8 +451,8 @@ class LiveMatchEngineTest {
         // exist for every seed.
         Map<UUID, PlayerRole> roles = new HashMap<>();
         awayXi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
-        TacticalProfile attackingAway = new TacticalProfile(Mentality.ATTACKING, GameStyle.EQUILIBRADO, "4-3-3",
-                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
+        TacticalProfile attackingAway = new TacticalProfile(Mentality.ATTACKING, GameStyle.EQUILIBRADO,
+                AttackZone.MISTO, "4-3-3", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
 
         for (long seed = 1; seed <= 20; seed++) {
             Map<UUID, Integer> fitness = new HashMap<>();
@@ -451,7 +488,7 @@ class LiveMatchEngineTest {
     void userTacticsAndAiReactionsCoexist() {
         // Managed home side schedules a change at 60; away side is the AI. The user's event keeps
         // a null detail; any AI event carries a posture detail; the managed side never gets one.
-        TimedTactics change = new TimedTactics(60, true, Mentality.ATTACKING, null, Pressing.HIGH,
+        TimedTactics change = new TimedTactics(60, true, Mentality.ATTACKING, null, null, Pressing.HIGH,
                 Marking.ZONAL, "4-3-3");
         boolean sawUserChange = false;
         for (long seed = 1; seed <= 20; seed++) {

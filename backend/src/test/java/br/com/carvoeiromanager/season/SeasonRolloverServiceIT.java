@@ -219,7 +219,7 @@ class SeasonRolloverServiceIT {
         // Designate the first starter as set-piece taker on all three FK columns
         UUID takerId = xi.get(0).playerId();
         lineupService.setTactics(c.id(), c.clubId(),
-                new SetTacticsRequest("BALANCED", null, "MEDIUM", "ZONAL", takerId, takerId, takerId),
+                new SetTacticsRequest("BALANCED", null, null, "MEDIUM", "ZONAL", takerId, takerId, takerId),
                 c.userId());
 
         // Force the taker to age 37 so it becomes 38 at rollover (retirement probability == 1.0)

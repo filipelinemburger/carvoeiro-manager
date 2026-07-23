@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Attributes;
 import br.com.carvoeiromanager.player.GameStyle;
@@ -45,8 +46,8 @@ class TeamStrengthCalculatorTest {
                                                       UUID freekickTakerId, UUID cornerTakerId) {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
-        return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, "4-4-2", Pressing.MEDIUM,
-                Marking.ZONAL, roles, penaltyTakerId, freekickTakerId, cornerTakerId);
+        return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2",
+                Pressing.MEDIUM, Marking.ZONAL, roles, penaltyTakerId, freekickTakerId, cornerTakerId);
     }
 
     /** 1 GK + 4 DEF + 4 MID + 2 ATT, all rated 70. */
@@ -61,7 +62,7 @@ class TeamStrengthCalculatorTest {
     private TacticalProfile profile(Mentality m, String formation, Pressing pr, Marking mk, List<Player> xi) {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
-        return new TacticalProfile(m, GameStyle.EQUILIBRADO, formation, pr, mk, roles, null, null, null);
+        return new TacticalProfile(m, GameStyle.EQUILIBRADO, AttackZone.MISTO, formation, pr, mk, roles, null, null, null);
     }
 
     @Test
@@ -251,6 +252,38 @@ class TeamStrengthCalculatorTest {
         assertThat(good.attack()).isGreaterThan(neutral.attack());
     }
 
+    @Test
+    void attackZoneGameStyleSynergyLiftsAttackForTheMatchingCombosOnly() {
+        // The two matching combos (direct play down the wings, passing play through the middle) each
+        // apply a flat attack x1.02 over the same profile on MISTO; every other combo is a no-op, so
+        // default MISTO stays byte-identical.
+        List<Player> xi = standardXi();
+
+        double directMisto = calc.compute(xi, styleZoneProfile(GameStyle.JOGO_DIRETO, AttackZone.MISTO, xi)).attack();
+        double directLaterais = calc.compute(xi, styleZoneProfile(GameStyle.JOGO_DIRETO, AttackZone.LATERAIS, xi)).attack();
+        assertThat(directLaterais).isEqualTo(directMisto * 1.02, within(1e-9));
+
+        double passMisto = calc.compute(xi, styleZoneProfile(GameStyle.JOGO_DE_PASSES, AttackZone.MISTO, xi)).attack();
+        double passCentro = calc.compute(xi, styleZoneProfile(GameStyle.JOGO_DE_PASSES, AttackZone.CENTRO, xi)).attack();
+        assertThat(passCentro).isEqualTo(passMisto * 1.02, within(1e-9));
+
+        // Non-matching combos: direct+centre, passing+wings, and the neutral style get no synergy.
+        double directCentro = calc.compute(xi, styleZoneProfile(GameStyle.JOGO_DIRETO, AttackZone.CENTRO, xi)).attack();
+        assertThat(directCentro).isEqualTo(directMisto);
+        double passLaterais = calc.compute(xi, styleZoneProfile(GameStyle.JOGO_DE_PASSES, AttackZone.LATERAIS, xi)).attack();
+        assertThat(passLaterais).isEqualTo(passMisto);
+        double neutralLaterais = calc.compute(xi, styleZoneProfile(GameStyle.EQUILIBRADO, AttackZone.LATERAIS, xi)).attack();
+        double neutralMisto = calc.compute(xi, styleZoneProfile(GameStyle.EQUILIBRADO, AttackZone.MISTO, xi)).attack();
+        assertThat(neutralLaterais).isEqualTo(neutralMisto);
+    }
+
+    private TacticalProfile styleZoneProfile(GameStyle style, AttackZone zone, List<Player> xi) {
+        Map<UUID, PlayerRole> roles = new HashMap<>();
+        xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
+        return new TacticalProfile(Mentality.BALANCED, style, zone, "4-4-2",
+                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
+    }
+
     /** 1 GK + 10 outfield all rated 70, with PASSE/VISAO/COMPOSTURA set to {@code passRating}. */
     private List<Player> passingXi(int passRating) {
         List<Player> xi = new ArrayList<>();
@@ -274,7 +307,7 @@ class TeamStrengthCalculatorTest {
     private TacticalProfile passProfile(List<Player> xi) {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
-        return new TacticalProfile(Mentality.BALANCED, GameStyle.JOGO_DE_PASSES, "4-4-2",
+        return new TacticalProfile(Mentality.BALANCED, GameStyle.JOGO_DE_PASSES, AttackZone.MISTO, "4-4-2",
                 Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
     }
 }

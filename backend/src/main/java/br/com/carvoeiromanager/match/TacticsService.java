@@ -2,6 +2,7 @@ package br.com.carvoeiromanager.match;
 
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
+import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
@@ -53,6 +54,8 @@ public class TacticsService {
                 club != null ? club.getDefaultMentality() : null, Mentality::valueOf, Mentality.BALANCED);
         GameStyle gameStyle = parseOrDefault(
                 club != null ? club.getDefaultGameStyle() : null, GameStyle::valueOf, GameStyle.EQUILIBRADO);
+        AttackZone attackZone = parseOrDefault(
+                club != null ? club.getDefaultAttackZone() : null, AttackZone::valueOf, AttackZone.MISTO);
         String formation = club != null && club.getDefaultFormation() != null
                 ? club.getDefaultFormation() : "4-4-2";
         Pressing pressing = parseOrDefault(
@@ -68,7 +71,7 @@ public class TacticsService {
                 .map(Player::getId).orElse(null);
         UUID bestPasser = xi.stream().max(Comparator.comparingInt(Player::getPassing))
                 .map(Player::getId).orElse(null);
-        return new TacticalProfile(mentality, gameStyle, formation, pressing, marking,
+        return new TacticalProfile(mentality, gameStyle, attackZone, formation, pressing, marking,
                 roles, bestFinisher, bestPasser, bestFinisher);
     }
 
@@ -94,7 +97,7 @@ public class TacticsService {
             roles.put(p.getId(), persisted.getOrDefault(p.getId(), PlayerRole.defaultFor(p.getPosition())));
         }
         return new TacticalProfile(
-                lineup.getMentality(), lineup.getGameStyle(), lineup.getFormation(),
+                lineup.getMentality(), lineup.getGameStyle(), lineup.getAttackZone(), lineup.getFormation(),
                 lineup.getPressing(), lineup.getMarking(),
                 roles, lineup.getPenaltyTakerId(), lineup.getFreekickTakerId(), lineup.getCornerTakerId());
     }
