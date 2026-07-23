@@ -72,9 +72,12 @@ public class TacticsService {
                 .map(Player::getId).orElse(null);
         UUID bestPasser = xi.stream().max(Comparator.comparingInt(Player::getPassing))
                 .map(Player::getId).orElse(null);
+        // Grade each starter against the formation the AI actually plays (same club-default-else-4-4-2
+        // resolution bestXi's formationFor uses), so the bestXi-picked XI assigns all-exact → x1.0.
+        Map<UUID, FormationSlots.Slot> slotAssignments = SlotAssigner.assignToSlots(xi, formation);
         // AI/default clubs carry no per-player instructions — an empty map is the neutral no-op.
         return new TacticalProfile(mentality, gameStyle, attackZone, formation, pressing, marking,
-                roles, bestFinisher, bestPasser, bestFinisher, Map.of());
+                roles, bestFinisher, bestPasser, bestFinisher, Map.of(), slotAssignments);
     }
 
     private <T extends Enum<T>> T parseOrDefault(String raw, Function<String, T> parser, T fallback) {
@@ -106,10 +109,14 @@ public class TacticsService {
         for (Player p : xi) {
             roles.put(p.getId(), persisted.getOrDefault(p.getId(), PlayerRole.defaultFor(p.getPosition())));
         }
+        // Grade each starter against the lineup's formation; a balanced managed XI assigns all-exact
+        // (→ x1.0), a surplus at one position forces a same-band/cross-band slot and is penalised.
+        Map<UUID, FormationSlots.Slot> slotAssignments =
+                SlotAssigner.assignToSlots(xi, lineup.getFormation());
         return new TacticalProfile(
                 lineup.getMentality(), lineup.getGameStyle(), lineup.getAttackZone(), lineup.getFormation(),
                 lineup.getPressing(), lineup.getMarking(),
                 roles, lineup.getPenaltyTakerId(), lineup.getFreekickTakerId(), lineup.getCornerTakerId(),
-                instructions);
+                instructions, slotAssignments);
     }
 }

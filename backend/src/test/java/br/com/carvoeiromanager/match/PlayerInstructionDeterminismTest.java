@@ -75,7 +75,7 @@ class PlayerInstructionDeterminismTest {
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
         // Empty instructions map: the neutral no-op.
         return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2",
-                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of());
+                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of(), Map.of());
     }
 
     @Test

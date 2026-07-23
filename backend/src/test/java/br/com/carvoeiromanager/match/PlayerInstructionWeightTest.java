@@ -220,7 +220,7 @@ class PlayerInstructionWeightTest {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(p -> roles.put(p.getId(), PlayerRole.defaultFor(p.getPosition())));
         return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2",
-                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, instructions);
+                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, instructions, Map.of());
     }
 
     /**

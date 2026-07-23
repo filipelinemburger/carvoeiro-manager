@@ -122,7 +122,7 @@ class AiManagerBrainTest {
     private static final UUID CORNER = UUID.randomUUID();
     private static final TacticalProfile IDENTITY = new TacticalProfile(
             Mentality.BALANCED, GameStyle.JOGO_DIRETO, AttackZone.MISTO, "3-5-2", Pressing.MEDIUM,
-            Marking.MAN_TIGHT, ROLES, PEN, FK, CORNER, Map.of());
+            Marking.MAN_TIGHT, ROLES, PEN, FK, CORNER, Map.of(), Map.of());
 
     @Test
     void normalReturnsTheIdentityUnchanged() {
@@ -133,27 +133,27 @@ class AiManagerBrainTest {
     void pushOnlyRaisesMentality() {
         assertThat(AiManagerBrain.profileFor(Posture.PUSH, IDENTITY)).isEqualTo(new TacticalProfile(
                 Mentality.ATTACKING, GameStyle.JOGO_DIRETO, AttackZone.MISTO, "3-5-2", Pressing.MEDIUM,
-                Marking.MAN_TIGHT, ROLES, PEN, FK, CORNER, Map.of()));
+                Marking.MAN_TIGHT, ROLES, PEN, FK, CORNER, Map.of(), Map.of()));
     }
 
     @Test
     void allOutGoesAttackingHighPressFourTwoFour() {
         assertThat(AiManagerBrain.profileFor(Posture.ALL_OUT, IDENTITY)).isEqualTo(new TacticalProfile(
                 Mentality.ATTACKING, GameStyle.JOGO_DIRETO, AttackZone.MISTO, "4-2-4", Pressing.HIGH,
-                Marking.MAN_TIGHT, ROLES, PEN, FK, CORNER, Map.of()));
+                Marking.MAN_TIGHT, ROLES, PEN, FK, CORNER, Map.of(), Map.of()));
     }
 
     @Test
     void protectOnlyLowersMentality() {
         assertThat(AiManagerBrain.profileFor(Posture.PROTECT, IDENTITY)).isEqualTo(new TacticalProfile(
                 Mentality.DEFENSIVE, GameStyle.JOGO_DIRETO, AttackZone.MISTO, "3-5-2", Pressing.MEDIUM,
-                Marking.MAN_TIGHT, ROLES, PEN, FK, CORNER, Map.of()));
+                Marking.MAN_TIGHT, ROLES, PEN, FK, CORNER, Map.of(), Map.of()));
     }
 
     @Test
     void parkTheBusGoesDefensiveLowPressFiveFourOne() {
         assertThat(AiManagerBrain.profileFor(Posture.PARK_THE_BUS, IDENTITY)).isEqualTo(new TacticalProfile(
                 Mentality.DEFENSIVE, GameStyle.JOGO_DIRETO, AttackZone.MISTO, "5-4-1", Pressing.LOW,
-                Marking.MAN_TIGHT, ROLES, PEN, FK, CORNER, Map.of()));
+                Marking.MAN_TIGHT, ROLES, PEN, FK, CORNER, Map.of(), Map.of()));
     }
 }

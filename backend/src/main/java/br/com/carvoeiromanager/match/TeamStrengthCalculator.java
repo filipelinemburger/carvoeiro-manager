@@ -39,9 +39,15 @@ public class TeamStrengthCalculator {
         for (Player p : xi) {
             PlayerRole role = PlayerRole.resolve(profile.roles(), p);
             double fitnessMult = fitnessMultById.getOrDefault(p.getId(), 1.0);
-            // Each term is exactly 1.0 at its neutral value (form 0, morale 0, full fitness), so a
-            // neutral squad's strength is unchanged — keep it that way to preserve seeded-result determinism.
-            double mult = (1.0 + 0.02 * p.getForm()) * (1.0 + MORALE_COEFF * p.getMorale()) * fitnessMult;
+            // Position-fit penalty: playing out of a player's detailed position costs effectiveness.
+            // A well-formed squad (every player in an accepting slot) is all-exact → x1.0, so the term
+            // is neutral and seeded results stay byte-identical. An empty/absent assignment (legacy or
+            // AI before Task 31 wired it) also resolves to x1.0.
+            double posMult = positionFitMult(p, profile);
+            // Each term is exactly 1.0 at its neutral value (form 0, morale 0, full fitness, exact
+            // position), so a neutral squad's strength is unchanged — keep it that way to preserve
+            // seeded-result determinism.
+            double mult = (1.0 + 0.02 * p.getForm()) * (1.0 + MORALE_COEFF * p.getMorale()) * fitnessMult * posMult;
             double attackContribution = role.attackContribution(p) * mult;
             double defenseContribution = role.defenseContribution(p) * mult;
             // Per-player instruction multipliers, applied ONLY when the player carries one. For the
@@ -105,6 +111,33 @@ public class TeamStrengthCalculator {
         return new TeamMatchInput(attack, defense, tempo, aggression,
                 cornerThreat, freeKickThreat, penaltyConversion, fitnessDecay,
                 profile.mentality(), profile.gameStyle());
+    }
+
+    /**
+     * How well this player fits the formation slot they were assigned at kickoff, as a pure per-player
+     * multiplier applied equally to their attack and defense contribution:
+     * <ul>
+     *   <li>x1.00 — exact fit (the slot accepts the player's detailed position), OR no assignment at
+     *       all (legacy/empty map, or a player not in the map): the neutral no-op.</li>
+     *   <li>x0.92 — same coarse band but wrong detailed position (−8%), e.g. a winger shoved into a
+     *       central striker slot.</li>
+     *   <li>x0.80 — cross-band (−20%), e.g. a midfielder forced into a defensive slot.</li>
+     * </ul>
+     * No RNG: a well-formed squad grades entirely to x1.0 and stays byte-identical.
+     */
+    private double positionFitMult(Player p, TacticalProfile profile) {
+        FormationSlots.Slot slot = profile.slotAssignments() == null
+                ? null : profile.slotAssignments().get(p.getId());
+        if (slot == null) {
+            return 1.00;                                          // legacy / unassigned
+        }
+        if (slot.accepted().contains(p.getDetailedPosition())) {
+            return 1.00;                                          // exact fit
+        }
+        if (slot.coarse() == p.getPosition()) {
+            return 0.92;                                          // same band, wrong detailed (−8%)
+        }
+        return 0.80;                                              // cross-band (−20%)
     }
 
     /** The designated taker's attribute when in the XI, else the best in the XI — scaled to ~[0,1]. */

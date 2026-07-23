@@ -79,10 +79,11 @@ public final class AiManagerBrain {
 
     private static TacticalProfile with(TacticalProfile identity, Mentality mentality,
                                         Pressing pressing, String formation) {
-        // Per-player instructions belong to the identity and never change with an AI posture swap.
+        // Per-player instructions and the kickoff slot assignment belong to the identity and never
+        // change with an AI posture swap (a mid-match formation change does not re-grade positions).
         return new TacticalProfile(mentality, identity.gameStyle(), identity.attackZone(), formation, pressing,
                 identity.marking(), identity.roles(), identity.penaltyTakerId(), identity.freekickTakerId(),
-                identity.cornerTakerId(), identity.instructions());
+                identity.cornerTakerId(), identity.instructions(), identity.slotAssignments());
     }
 
     private static int chaseOffset(Mentality identity) {

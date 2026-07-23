@@ -409,30 +409,8 @@ public class LineupService {
         // slots.get(0) is the GK slot; the 10 outfield slots follow in stable order.
         List<FormationSlots.Slot> outfieldSlots = slots.subList(1, slots.size());
 
-        // Scarcity = number of tier-1 (exact detailed-position) candidates in the initial pool.
-        // Computed once so the processing order does not depend on fill progress.
-        List<Integer> order = new ArrayList<>();
-        for (int i = 0; i < outfieldSlots.size(); i++) {
-            order.add(i);
-        }
-        Map<Integer, Long> tier1Count = new HashMap<>();
-        for (int i = 0; i < outfieldSlots.size(); i++) {
-            Set<DetailedPosition> accepted = outfieldSlots.get(i).accepted();
-            tier1Count.put(i, pool.stream().filter(p -> accepted.contains(p.getDetailedPosition())).count());
-        }
-        order.sort(Comparator.<Integer>comparingLong(tier1Count::get).thenComparing(Comparator.naturalOrder()));
-
-        Player[] picked = new Player[outfieldSlots.size()];
-        List<Player> available = new ArrayList<>(pool);
-        for (int slotIndex : order) {
-            if (available.isEmpty()) {
-                break;
-            }
-            FormationSlots.Slot slot = outfieldSlots.get(slotIndex);
-            Player choice = pickForSlot(available, slot, byRating);
-            picked[slotIndex] = choice;
-            available.remove(choice);
-        }
+        // Shared greedy best-fit assignment (scarcest slot first, tiered by fit); see SlotAssigner.
+        Player[] picked = SlotAssigner.assign(outfieldSlots, pool, byRating);
 
         List<Player> result = new ArrayList<>(outfieldSlots.size());
         for (Player p : picked) {
@@ -441,18 +419,6 @@ public class LineupService {
             }
         }
         return result;
-    }
-
-    /**
-     * Best candidate for a single slot from {@code available}, by tier then rating:
-     * tier 1 = detailed position accepted by the slot; tier 2 = same coarse band; tier 3 = anyone.
-     */
-    private static Player pickForSlot(List<Player> available, FormationSlots.Slot slot, Comparator<Player> byRating) {
-        Set<DetailedPosition> accepted = slot.accepted();
-        Position band = slot.coarse();
-        return available.stream().filter(p -> accepted.contains(p.getDetailedPosition())).max(byRating)
-                .or(() -> available.stream().filter(p -> p.getPosition() == band).max(byRating))
-                .orElseGet(() -> available.stream().max(byRating).orElseThrow());
     }
 
     private static final int BENCH_SIZE = 7;

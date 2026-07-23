@@ -3,6 +3,7 @@ package br.com.carvoeiromanager.match;
 import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Attributes;
+import br.com.carvoeiromanager.player.DetailedPosition;
 import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
@@ -16,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
@@ -47,7 +49,7 @@ class TeamStrengthCalculatorTest {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
         return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2",
-                Pressing.MEDIUM, Marking.ZONAL, roles, penaltyTakerId, freekickTakerId, cornerTakerId, Map.of());
+                Pressing.MEDIUM, Marking.ZONAL, roles, penaltyTakerId, freekickTakerId, cornerTakerId, Map.of(), Map.of());
     }
 
     /** 1 GK + 4 DEF + 4 MID + 2 ATT, all rated 70. */
@@ -62,7 +64,7 @@ class TeamStrengthCalculatorTest {
     private TacticalProfile profile(Mentality m, String formation, Pressing pr, Marking mk, List<Player> xi) {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
-        return new TacticalProfile(m, GameStyle.EQUILIBRADO, AttackZone.MISTO, formation, pr, mk, roles, null, null, null, Map.of());
+        return new TacticalProfile(m, GameStyle.EQUILIBRADO, AttackZone.MISTO, formation, pr, mk, roles, null, null, null, Map.of(), Map.of());
     }
 
     @Test
@@ -281,7 +283,7 @@ class TeamStrengthCalculatorTest {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
         return new TacticalProfile(Mentality.BALANCED, style, zone, "4-4-2",
-                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of());
+                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of(), Map.of());
     }
 
     /** 1 GK + 10 outfield all rated 70, with PASSE/VISAO/COMPOSTURA set to {@code passRating}. */
@@ -308,6 +310,144 @@ class TeamStrengthCalculatorTest {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
         return new TacticalProfile(Mentality.BALANCED, GameStyle.JOGO_DE_PASSES, AttackZone.MISTO, "4-4-2",
-                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of());
+                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of(), Map.of());
+    }
+
+    // ---- Task 31: position-fit penalty (playing out of a detailed position costs effectiveness) ----
+
+    @Test
+    void sameBandWrongDetailedDropsThatPlayersContributionByExactlyEightPercent() {
+        // Only the target (a full-back, default FULL_BACK role) carries attributes; every other player
+        // contributes exactly 0 (weighted sum over all-zero attributes). That isolates the per-player
+        // position-fit multiplier onto the whole TeamMatchInput, attack AND defense.
+        Player target = defPlayer(DetailedPosition.ZAGUEIRO);
+        List<Player> xi = xiWithSoleContributor(target);
+        TeamMatchInput base = calc.compute(xi, fitProfile(Map.of()));                 // unassigned → x1.0
+        // A DEF slot that does NOT accept ZAGUEIRO: same coarse band, wrong detailed → x0.92.
+        TeamMatchInput dropped = calc.compute(xi,
+                fitProfile(Map.of(target.getId(), slotOf(DetailedPosition.LATERAL_DIREITO))));
+        assertThat(dropped.attack()).isCloseTo(base.attack() * 0.92, within(1e-9));
+        assertThat(dropped.defense()).isCloseTo(base.defense() * 0.92, within(1e-9));
+    }
+
+    @Test
+    void crossBandMismatchDropsThatPlayersContributionByExactlyTwentyPercent() {
+        Player target = defPlayer(DetailedPosition.ZAGUEIRO);
+        List<Player> xi = xiWithSoleContributor(target);
+        TeamMatchInput base = calc.compute(xi, fitProfile(Map.of()));
+        // An ATT slot (a different coarse band) for a defender → x0.80.
+        TeamMatchInput dropped = calc.compute(xi,
+                fitProfile(Map.of(target.getId(), slotOf(DetailedPosition.PONTA))));
+        assertThat(dropped.attack()).isCloseTo(base.attack() * 0.80, within(1e-9));
+        assertThat(dropped.defense()).isCloseTo(base.defense() * 0.80, within(1e-9));
+    }
+
+    @Test
+    void exactFitAssignmentLeavesStrengthByteIdenticalToEmptyAssignment() {
+        // A well-formed XI (every player fits a distinct 4-4-2 slot) — the AI/bestXi case. Every
+        // resolved posMult is 1.0, so the greedy assignment is byte-identical to no assignment at all.
+        List<Player> xi = wellFormed442();
+        Map<UUID, FormationSlots.Slot> assignments = SlotAssigner.assignToSlots(xi, "4-4-2");
+        TeamMatchInput withAssign = calc.compute(xi, fitProfile(assignments));
+        TeamMatchInput withEmpty = calc.compute(xi, fitProfile(Map.of()));
+        assertThat(withAssign).isEqualTo(withEmpty);
+    }
+
+    @Test
+    void wellFormedSquadReproducesBaselineWhileMismatchDivergesUnderAFixedSeed() {
+        MatchSimulationService sim = new MatchSimulationService();
+        List<Player> xi = wellFormed442();
+        Map<UUID, FormationSlots.Slot> exact = SlotAssigner.assignToSlots(xi, "4-4-2");
+
+        TeamMatchInput baseline = calc.compute(xi, fitProfile(Map.of()));
+        TeamMatchInput wellFormed = calc.compute(xi, fitProfile(exact));
+        // A deliberate mismatch: shove one striker into a defensive slot (cross-band → x0.80).
+        Player striker = xi.stream().filter(p -> p.getPosition() == Position.ATT).findFirst().orElseThrow();
+        Map<UUID, FormationSlots.Slot> mismatchMap = new HashMap<>(exact);
+        mismatchMap.put(striker.getId(), slotOf(DetailedPosition.ZAGUEIRO));
+        TeamMatchInput mismatched = calc.compute(xi, fitProfile(mismatchMap));
+
+        TeamMatchInput opponent = calc.compute(wellFormed442(), fitProfile(Map.of()));
+
+        // Well-formed squad: strength is byte-identical to the pre-change baseline, so the fixed-seed
+        // match reproduces it exactly. This is the neutral-settings determinism guarantee.
+        assertThat(wellFormed).isEqualTo(baseline);
+        assertThat(sim.simulate(wellFormed, opponent, 123L)).isEqualTo(sim.simulate(baseline, opponent, 123L));
+
+        // Mismatched squad: strength actually drops, and the fixed-seed match diverges for some seed.
+        assertThat(mismatched.attack()).isLessThan(baseline.attack());
+        assertThat(mismatched).isNotEqualTo(baseline);
+        boolean diverges = false;
+        for (long seed = 0; seed < 25 && !diverges; seed++) {
+            diverges = !sim.simulate(mismatched, opponent, seed).equals(sim.simulate(baseline, opponent, seed));
+        }
+        assertThat(diverges).as("a penalised squad diverges from the baseline under some fixed seed").isTrue();
+    }
+
+    // ---- position-fit test helpers ----
+
+    /** A profile carrying only the given slot assignments; empty roles → every role resolves to its band default. */
+    private TacticalProfile fitProfile(Map<UUID, FormationSlots.Slot> slotAssignments) {
+        return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2",
+                Pressing.MEDIUM, Marking.ZONAL, Map.of(), null, null, null, Map.of(), slotAssignments);
+    }
+
+    private static FormationSlots.Slot slotOf(DetailedPosition... accepted) {
+        return new FormationSlots.Slot(Set.of(accepted));
+    }
+
+    /** A full-back (VEL/PASSE/DESARME 70) with an explicit detailed position — the sole contributor. */
+    private static Player defPlayer(DetailedPosition detailed) {
+        Player p = Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", Position.DEF, 25, "BRA",
+                70, 70, 70, 70, 10, 70, 70);
+        p.setDetailedPosition(detailed);
+        return p;
+    }
+
+    /** All-zero-attribute player: contributes exactly 0 to both attack and defense. */
+    private static Player zeroPlayer(Position pos) {
+        return Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", pos, 25, "BRA",
+                0, 0, 0, 0, 0, 0, 0);
+    }
+
+    /** 11 players (1 GK + target DEF + 9 all-zero outfielders) so {@code target} is the sole contributor. */
+    private static List<Player> xiWithSoleContributor(Player target) {
+        List<Player> xi = new ArrayList<>();
+        xi.add(zeroPlayer(Position.GK));
+        xi.add(target);
+        xi.add(zeroPlayer(Position.DEF));
+        xi.add(zeroPlayer(Position.DEF));
+        xi.add(zeroPlayer(Position.DEF));
+        xi.add(zeroPlayer(Position.MID));
+        xi.add(zeroPlayer(Position.MID));
+        xi.add(zeroPlayer(Position.MID));
+        xi.add(zeroPlayer(Position.MID));
+        xi.add(zeroPlayer(Position.ATT));
+        xi.add(zeroPlayer(Position.ATT));
+        return xi;
+    }
+
+    /** A well-formed 4-4-2 XI: each rated-70 player's detailed position fits a distinct slot exactly. */
+    private static List<Player> wellFormed442() {
+        List<Player> xi = new ArrayList<>();
+        xi.add(detailedPlayer(Position.GK, DetailedPosition.GOLEIRO));
+        xi.add(detailedPlayer(Position.DEF, DetailedPosition.LATERAL_DIREITO));
+        xi.add(detailedPlayer(Position.DEF, DetailedPosition.ZAGUEIRO));
+        xi.add(detailedPlayer(Position.DEF, DetailedPosition.ZAGUEIRO));
+        xi.add(detailedPlayer(Position.DEF, DetailedPosition.LATERAL_ESQUERDO));
+        xi.add(detailedPlayer(Position.MID, DetailedPosition.VOLANTE));
+        xi.add(detailedPlayer(Position.MID, DetailedPosition.MEIA_ARMADOR));
+        xi.add(detailedPlayer(Position.MID, DetailedPosition.MEIA_ARMADOR));
+        xi.add(detailedPlayer(Position.MID, DetailedPosition.MEIA_ARMADOR));
+        xi.add(detailedPlayer(Position.ATT, DetailedPosition.ATACANTE));
+        xi.add(detailedPlayer(Position.ATT, DetailedPosition.ATACANTE));
+        return xi;
+    }
+
+    private static Player detailedPlayer(Position pos, DetailedPosition detailed) {
+        Player p = Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", pos, 25, "BRA",
+                70, 70, 70, 70, pos == Position.GK ? 70 : 10, 70, 70);
+        p.setDetailedPosition(detailed);
+        return p;
     }
 }
