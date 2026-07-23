@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Formation;
 import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Player;
+import br.com.carvoeiromanager.player.PlayerInstruction;
 import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Position;
 import org.springframework.stereotype.Service;
@@ -41,13 +42,25 @@ public class TeamStrengthCalculator {
             // Each term is exactly 1.0 at its neutral value (form 0, morale 0, full fitness), so a
             // neutral squad's strength is unchanged — keep it that way to preserve seeded-result determinism.
             double mult = (1.0 + 0.02 * p.getForm()) * (1.0 + MORALE_COEFF * p.getMorale()) * fitnessMult;
-            attackSum += role.attackContribution(p) * mult;
+            double attackContribution = role.attackContribution(p) * mult;
+            double defenseContribution = role.defenseContribution(p) * mult;
+            // Per-player instruction multipliers, applied ONLY when the player carries one. For the
+            // empty instructions map (AI/unset) instr is null and neither contribution is touched, so
+            // a neutral squad's strength stays byte-identical. DRIBLAR_MAIS is intentionally inert
+            // here (see PlayerInstruction) — it has no strength effect.
+            PlayerInstruction instr = profile.instructionFor(p.getId());
+            if (instr == PlayerInstruction.SEGURAR_POSICAO) {
+                attackContribution *= 0.85;
+                defenseContribution *= 1.10;
+            } else if (instr == PlayerInstruction.MARCACAO_DURA) {
+                defenseContribution *= 1.08;
+            }
+            attackSum += attackContribution;
             staminaSum += p.getStamina();
-            double def = role.defenseContribution(p) * mult;
             if (p.getPosition() == Position.GK) {
-                gkDefense = def;
+                gkDefense = defenseContribution;
             } else {
-                outfieldDefenseSum += def;
+                outfieldDefenseSum += defenseContribution;
                 outfieldCount++;
             }
         }

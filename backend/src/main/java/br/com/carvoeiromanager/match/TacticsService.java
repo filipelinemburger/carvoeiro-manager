@@ -7,6 +7,7 @@ import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
+import br.com.carvoeiromanager.player.PlayerInstruction;
 import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Pressing;
 import org.springframework.stereotype.Service;
@@ -71,8 +72,9 @@ public class TacticsService {
                 .map(Player::getId).orElse(null);
         UUID bestPasser = xi.stream().max(Comparator.comparingInt(Player::getPassing))
                 .map(Player::getId).orElse(null);
+        // AI/default clubs carry no per-player instructions — an empty map is the neutral no-op.
         return new TacticalProfile(mentality, gameStyle, attackZone, formation, pressing, marking,
-                roles, bestFinisher, bestPasser, bestFinisher);
+                roles, bestFinisher, bestPasser, bestFinisher, Map.of());
     }
 
     private <T extends Enum<T>> T parseOrDefault(String raw, Function<String, T> parser, T fallback) {
@@ -88,9 +90,17 @@ public class TacticsService {
 
     private TacticalProfile fromLineup(Lineup lineup, List<Player> xi) {
         Map<UUID, PlayerRole> persisted = new HashMap<>();
+        Map<UUID, PlayerInstruction> instructions = new HashMap<>();
         lineupPlayerRepository.findByLineupId(lineup.getId()).stream()
                 .filter(LineupPlayer::isStarting)
-                .forEach(lp -> persisted.put(lp.getPlayerId(), lp.getRole()));
+                .forEach(lp -> {
+                    persisted.put(lp.getPlayerId(), lp.getRole());
+                    // Only starters with an explicit instruction enter the map; the rest resolve to
+                    // "no instruction", so a lineup with none set stays byte-identical.
+                    if (lp.getInstruction() != null) {
+                        instructions.put(lp.getPlayerId(), lp.getInstruction());
+                    }
+                });
         // Fill any XI member missing a persisted role with its band default.
         Map<UUID, PlayerRole> roles = new HashMap<>();
         for (Player p : xi) {
@@ -99,6 +109,7 @@ public class TacticsService {
         return new TacticalProfile(
                 lineup.getMentality(), lineup.getGameStyle(), lineup.getAttackZone(), lineup.getFormation(),
                 lineup.getPressing(), lineup.getMarking(),
-                roles, lineup.getPenaltyTakerId(), lineup.getFreekickTakerId(), lineup.getCornerTakerId());
+                roles, lineup.getPenaltyTakerId(), lineup.getFreekickTakerId(), lineup.getCornerTakerId(),
+                instructions);
     }
 }

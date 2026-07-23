@@ -47,7 +47,7 @@ class TeamStrengthCalculatorTest {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
         return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2",
-                Pressing.MEDIUM, Marking.ZONAL, roles, penaltyTakerId, freekickTakerId, cornerTakerId);
+                Pressing.MEDIUM, Marking.ZONAL, roles, penaltyTakerId, freekickTakerId, cornerTakerId, Map.of());
     }
 
     /** 1 GK + 4 DEF + 4 MID + 2 ATT, all rated 70. */
@@ -62,7 +62,7 @@ class TeamStrengthCalculatorTest {
     private TacticalProfile profile(Mentality m, String formation, Pressing pr, Marking mk, List<Player> xi) {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
-        return new TacticalProfile(m, GameStyle.EQUILIBRADO, AttackZone.MISTO, formation, pr, mk, roles, null, null, null);
+        return new TacticalProfile(m, GameStyle.EQUILIBRADO, AttackZone.MISTO, formation, pr, mk, roles, null, null, null, Map.of());
     }
 
     @Test
@@ -281,7 +281,7 @@ class TeamStrengthCalculatorTest {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
         return new TacticalProfile(Mentality.BALANCED, style, zone, "4-4-2",
-                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
+                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of());
     }
 
     /** 1 GK + 10 outfield all rated 70, with PASSE/VISAO/COMPOSTURA set to {@code passRating}. */
@@ -308,6 +308,6 @@ class TeamStrengthCalculatorTest {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
         return new TacticalProfile(Mentality.BALANCED, GameStyle.JOGO_DE_PASSES, AttackZone.MISTO, "4-4-2",
-                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
+                Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of());
     }
 }

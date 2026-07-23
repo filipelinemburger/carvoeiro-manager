@@ -58,7 +58,7 @@ class LiveMatchEngineTest {
     private static TacticalProfile defaultProfile(List<Player> xi) {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
-        return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
+        return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of());
     }
 
     /** A full-profile player with BOLA_PARADA 0 (so penaltyConversion is exactly 0.70) but
@@ -94,7 +94,7 @@ class LiveMatchEngineTest {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
         return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2",
-                Pressing.MEDIUM, Marking.ZONAL, roles, penaltyTakerId, freekickTakerId, cornerTakerId);
+                Pressing.MEDIUM, Marking.ZONAL, roles, penaltyTakerId, freekickTakerId, cornerTakerId, Map.of());
     }
 
     private static Map<UUID, Integer> fullFitness(List<Player> homeXi, List<Player> awayXi) {
@@ -452,7 +452,7 @@ class LiveMatchEngineTest {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         awayXi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
         TacticalProfile attackingAway = new TacticalProfile(Mentality.ATTACKING, GameStyle.EQUILIBRADO,
-                AttackZone.MISTO, "4-3-3", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
+                AttackZone.MISTO, "4-3-3", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of());
 
         for (long seed = 1; seed <= 20; seed++) {
             Map<UUID, Integer> fitness = new HashMap<>();

@@ -12,6 +12,7 @@ import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
+import br.com.carvoeiromanager.player.PlayerInstruction;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Position;
@@ -665,6 +666,34 @@ public class LineupService {
         try { return AttackZone.valueOf(v); }
         catch (IllegalArgumentException e) {
             throw new ApiException(ErrorCode.INVALID_TACTICS, "Zona de ataque inválida: " + v);
+        }
+    }
+
+    /**
+     * Parses an optional per-player instruction: a null/blank value means "no instruction" (returns
+     * null, the neutral no-op), a valid enum name returns the instruction, anything else is a client
+     * validation error. Package-private and unit-testable; wired to the lineup DTO by Task 28.
+     */
+    PlayerInstruction parseInstruction(String v) {
+        if (v == null || v.isBlank()) {
+            return null;
+        }
+        try {
+            return PlayerInstruction.valueOf(v);
+        } catch (IllegalArgumentException e) {
+            throw new ApiException(ErrorCode.INVALID_TACTICS, "Instrução pessoal inválida: " + v);
+        }
+    }
+
+    /**
+     * Rejects a personal instruction on a goalkeeper (keepers have no attacking/defensive instruction
+     * hooks). A null instruction, or any instruction on an outfield player, is accepted. Uses the same
+     * 422 validation code as the sibling tactics validators. Package-private and unit-testable; wired
+     * to the lineup DTO by Task 28.
+     */
+    void validateInstructionForPlayer(Player p, PlayerInstruction instr) {
+        if (instr != null && p.getPosition() == Position.GK) {
+            throw new ApiException(ErrorCode.INVALID_TACTICS, "Goleiros não recebem instruções pessoais");
         }
     }
 

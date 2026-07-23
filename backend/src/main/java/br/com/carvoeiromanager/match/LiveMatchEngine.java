@@ -4,6 +4,7 @@ import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.InjurySeverity;
 import br.com.carvoeiromanager.player.Player;
+import br.com.carvoeiromanager.player.PlayerInstruction;
 import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.staff.StaffEffectsService;
 import org.springframework.stereotype.Service;
@@ -224,7 +225,9 @@ public class LiveMatchEngine {
                     t.mentality(), t.gameStyle() != null ? t.gameStyle() : old.gameStyle(),
                     t.attackZone() != null ? t.attackZone() : old.attackZone(),
                     t.formation(), t.pressing(), t.marking(),
-                    old.roles(), old.penaltyTakerId(), old.freekickTakerId(), old.cornerTakerId());
+                    old.roles(), old.penaltyTakerId(), old.freekickTakerId(), old.cornerTakerId(),
+                    // A mid-match tactics change never alters per-player instructions.
+                    old.instructions());
             side.dirty = true;
             // Use the first on-pitch player as a sentinel playerId — never NPE, never displayed.
             UUID carrier = side.onPitch.isEmpty() ? null : side.onPitch.get(0);
@@ -331,7 +334,9 @@ public class LiveMatchEngine {
         if (rng.nextDouble() < BASE_CARD_RATE * input.aggression() && !side.onPitch.isEmpty()) {
             EventType t = rng.nextDouble() < RED_SHARE ? EventType.RED_CARD : EventType.YELLOW_CARD;
             // Fouls skew toward aggressive tacklers; the +1 keeps everyone eligible (unchanged formula).
-            UUID booked = pickByWeight(side, p -> p.getTackling() + 1, attrRng);
+            // MARCACAO_DURA raises that player's booking risk ×1.5; no instruction = the base tackling+1.
+            UUID booked = pickByWeight(side,
+                    p -> cardWeight(p, side.currentProfile.instructionFor(p.getId())), attrRng);
             boolean secondYellow = t == EventType.YELLOW_CARD && !side.booked.add(booked);
             events.add(new LiveTimelineEvent(minute, t, side.home, booked, null, null, null));
             if (secondYellow) {
@@ -358,7 +363,9 @@ public class LiveMatchEngine {
     private void maybeFoul(int minute, Side side, TeamMatchInput input, Random foulRng,
                           List<LiveTimelineEvent> events) {
         if (foulRng.nextDouble() < BASE_FOUL_RATE * input.aggression() && !side.onPitch.isEmpty()) {
-            UUID fouler = pickByWeight(side, LiveMatchEngine::foulWeight, foulRng);
+            // MARCACAO_DURA raises that player's foul propensity ×1.5; no instruction = the base weight.
+            UUID fouler = pickByWeight(side,
+                    p -> foulWeight(p, side.currentProfile.instructionFor(p.getId())), foulRng);
             events.add(new LiveTimelineEvent(minute, EventType.FOUL, side.home, fouler, null, null, null));
         }
     }
@@ -387,51 +394,83 @@ public class LiveMatchEngine {
     }
 
     /**
-     * Zone-aware scorer weight for open-play goals: the base {@link #goalWeight} plus a half-attribute
-     * kicker for the zone's signature finish — headers down the wings (LATERAIS), long shots through
-     * the middle (CENTRO). MISTO adds nothing, so it equals {@link #goalWeight} exactly (byte-identical
-     * to the pre-AttackZone engine). Integer {@code /2} so live and instant round identically.
+     * Zone- and instruction-aware scorer weight for open-play goals: the base {@link #goalWeight}
+     * plus a half-attribute kicker for the zone's signature finish — headers down the wings
+     * (LATERAIS), long shots through the middle (CENTRO). MISTO adds nothing. A null instruction adds
+     * nothing either, so {@code scorerWeight(p, zone, null)} equals the pre-instruction two-arg weight
+     * exactly (byte-identical). Per-player instructions then shift it: CHUTAR_DE_LONGE already lifted a
+     * midfielder's base position-factor 6→8 (in {@link #goalWeight}) and now scales the whole weight
+     * ×1.25; INFILTRAR_NA_AREA scales it ×1.5. A player has at most one instruction, so the two are
+     * mutually exclusive. Integer {@code /2}, {@code *3/2}, {@code *5/4} so live and instant round
+     * identically.
      */
-    static int scorerWeight(Player p, AttackZone zone) {
-        int base = goalWeight(p);
-        return switch (zone) {
+    static int scorerWeight(Player p, AttackZone zone, PlayerInstruction instr) {
+        int base = goalWeight(p, instr);
+        int w = switch (zone) {
             case LATERAIS -> base + p.attribute(Attribute.CABECEIO) / 2;
             case CENTRO -> base + p.attribute(Attribute.CHUTE_LONGE) / 2;
             case MISTO -> base;
         };
+        if (instr == PlayerInstruction.INFILTRAR_NA_AREA) {
+            w = w * 3 / 2;
+        } else if (instr == PlayerInstruction.CHUTAR_DE_LONGE) {
+            w = w * 5 / 4;
+        }
+        return w;
     }
 
     /**
-     * Zone- and role-aware creative-passing weight for open-play assist attribution. MISTO is the
-     * legacy composite {@code 10 + PASSE + VISAO + CRUZAMENTO} (byte-identical). LATERAIS leans on
-     * crossing and boosts wide roles; CENTRO leans on passing/vision and boosts central creators. The
-     * {@code * 3 / 2} integer boost (×1.5) rounds identically in both engines.
+     * Zone-, role- and instruction-aware creative-passing weight for open-play assist attribution.
+     * MISTO is the legacy composite {@code 10 + PASSE + VISAO + CRUZAMENTO}. LATERAIS leans on crossing
+     * and boosts wide roles; CENTRO leans on passing/vision and boosts central creators. CRUZAR_MAIS
+     * then scales the result ×1.5. A null instruction leaves the zone/role weight untouched, so
+     * {@code assistWeight(p, zone, role, null)} equals the pre-instruction three-arg weight exactly
+     * (byte-identical). The {@code * 3 / 2} integer boost (×1.5) rounds identically in both engines.
      */
-    static int assistWeight(Player p, AttackZone zone, PlayerRole role) {
+    static int assistWeight(Player p, AttackZone zone, PlayerRole role, PlayerInstruction instr) {
         int base = 10;
-        return switch (zone) {
+        int w = switch (zone) {
             case MISTO -> base + p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO)
                     + p.attribute(Attribute.CRUZAMENTO);
             case LATERAIS -> {
-                int w = base + 2 * p.attribute(Attribute.CRUZAMENTO);
+                int weight = base + 2 * p.attribute(Attribute.CRUZAMENTO);
                 if (role == PlayerRole.WINGER || role == PlayerRole.FULL_BACK) {
-                    w = w * 3 / 2;
+                    weight = weight * 3 / 2;
                 }
-                yield w;
+                yield weight;
             }
             case CENTRO -> {
-                int w = base + p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO);
+                int weight = base + p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO);
                 if (role == PlayerRole.PLAYMAKER || role == PlayerRole.BOX_TO_BOX) {
-                    w = w * 3 / 2;
+                    weight = weight * 3 / 2;
                 }
-                yield w;
+                yield weight;
             }
         };
+        if (instr == PlayerInstruction.CRUZAR_MAIS) {
+            w = w * 3 / 2;
+        }
+        return w;
     }
 
-    /** Foul propensity composite: aggressive, tackle-heavy players commit more fouls. */
-    private static int foulWeight(Player p) {
-        return p.attribute(Attribute.AGRESSIVIDADE) + p.attribute(Attribute.DESARME) + 10;
+    /**
+     * Card-attribution weight. Base is {@code tackling + 1} (the pre-instruction formula, with the +1
+     * floor keeping everyone eligible). MARCACAO_DURA scales it ×1.5 via integer {@code * 3 / 2};
+     * a null instruction returns the base unchanged (byte-identical).
+     */
+    static int cardWeight(Player p, PlayerInstruction instr) {
+        int base = p.getTackling() + 1;
+        return instr == PlayerInstruction.MARCACAO_DURA ? base * 3 / 2 : base;
+    }
+
+    /**
+     * Foul propensity composite: aggressive, tackle-heavy players commit more fouls. MARCACAO_DURA
+     * scales that player's weight ×1.5 via integer {@code * 3 / 2}; a null instruction returns the
+     * base {@code AGRESSIVIDADE + DESARME + 10} unchanged (byte-identical).
+     */
+    static int foulWeight(Player p, PlayerInstruction instr) {
+        int base = p.attribute(Attribute.AGRESSIVIDADE) + p.attribute(Attribute.DESARME) + 10;
+        return instr == PlayerInstruction.MARCACAO_DURA ? base * 3 / 2 : base;
     }
 
     /**
@@ -451,10 +490,12 @@ public class LiveMatchEngine {
             // the neutral MISTO the weights equal the pre-AttackZone formulas → byte-identical.
             AttackZone zone = side.currentProfile.attackZone();
             Map<UUID, PlayerRole> roles = side.currentProfile.roles();
-            UUID scorer = pickByWeight(side, p -> scorerWeight(p, zone), attrRng);
+            TacticalProfile profile = side.currentProfile;
+            UUID scorer = pickByWeight(side, p -> scorerWeight(p, zone, profile.instructionFor(p.getId())), attrRng);
             UUID assister = assistRng.nextDouble() < ASSIST_CHANCE
                     ? pickByWeightExcluding(side, scorer,
-                            p -> assistWeight(p, zone, PlayerRole.resolve(roles, p)), assistRng)
+                            p -> assistWeight(p, zone, PlayerRole.resolve(roles, p),
+                                    profile.instructionFor(p.getId())), assistRng)
                     : null;
             events.add(new LiveTimelineEvent(minute, EventType.GOAL, side.home, scorer, assister, null, null));
             return true;
@@ -566,9 +607,18 @@ public class LiveMatchEngine {
      * a poor finisher able to score occasionally while still trailing a clinical one.
      */
     private static int goalWeight(Player p) {
+        return goalWeight(p, null);
+    }
+
+    /**
+     * Instruction-aware {@link #goalWeight}: CHUTAR_DE_LONGE lifts a MIDFIELDER's position-factor
+     * 6→8 (ATT/DEF/GK unchanged), rewarding long-range attempts; any other instruction (or null)
+     * uses the pre-instruction factors, so it is byte-identical for the neutral case.
+     */
+    private static int goalWeight(Player p, PlayerInstruction instr) {
         int positionFactor = switch (p.getPosition()) {
             case ATT -> 12;
-            case MID -> 6;
+            case MID -> instr == PlayerInstruction.CHUTAR_DE_LONGE ? 8 : 6;
             case DEF -> 2;
             case GK -> 0;
         };

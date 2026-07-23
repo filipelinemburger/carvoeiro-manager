@@ -34,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class FixtureSimulatorAssistFoulIT {
 
     @Autowired FixtureSimulator fixtureSimulator;
+    @Autowired TacticsService tacticsService;
     @Autowired SaveGameService saveGameService;
     @Autowired SaveGameRepository saveGameRepository;
     @Autowired UserRepository userRepository;
@@ -128,9 +129,15 @@ class FixtureSimulatorAssistFoulIT {
         // both sides use bestXi. This test only needs SOME 22 real players — reuse squads.
         List<UUID> homeIds = playerIdsFor(fixture.getHomeClubId());
         List<UUID> awayIds = playerIdsFor(fixture.getAwayClubId());
+        List<Player> homeXi = playerRepository.findAllById(homeIds);
+        List<Player> awayXi = playerRepository.findAllById(awayIds);
+        // AI-club profiles carry no per-player instructions (empty map), so foul counts are the
+        // pre-instruction weighting.
+        TacticalProfile homeProfile = tacticsService.profileFor(saveGameId, fixture.getHomeClubId(), homeXi);
+        TacticalProfile awayProfile = tacticsService.profileFor(saveGameId, fixture.getAwayClubId(), awayXi);
 
         Map<UUID, Integer> fouls = fixtureSimulator.foulCounts(
-                playerRepository.findAllById(homeIds), playerRepository.findAllById(awayIds), seed);
+                homeXi, awayXi, homeProfile, awayProfile, seed);
 
         assertThat(fouls).isNotEmpty();
         fouls.values().forEach(count -> assertThat(count).isGreaterThanOrEqualTo(0));

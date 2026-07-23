@@ -8,6 +8,7 @@ import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Player;
+import br.com.carvoeiromanager.player.PlayerInstruction;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.PlayerRole;
 import org.springframework.stereotype.Service;
@@ -280,7 +281,7 @@ public class FixtureSimulator {
 
         List<AttributedEvent> attributed = saveEvents(fixture, match, homeXi, awayXi,
                 homeProfile, awayProfile, homeClubId, awayClubId, seed);
-        persistAppearances(fixture, homeXi, awayXi, homeClubId, awayClubId, seed);
+        persistAppearances(fixture, homeXi, awayXi, homeProfile, awayProfile, homeClubId, awayClubId, seed);
 
         Club homeClub = clubById.get(homeClubId);
         Club awayClub = clubById.get(awayClubId);
@@ -322,12 +323,18 @@ public class FixtureSimulator {
             }
 
             Player player = switch (event.type()) {
-                case GOAL -> pickByWeight(available, p -> scorerWeight(p, profile.attackZone()), rng);
+                case GOAL -> pickByWeight(available,
+                        p -> scorerWeight(p, profile.attackZone(), profile.instructionFor(p.getId())), rng);
                 case PENALTY_GOAL -> SetPieces.takerOrFallback(available, profile.penaltyTakerId(), Player::getFinishing);
                 case FREE_KICK_GOAL -> SetPieces.takerOrFallback(available, profile.freekickTakerId(),
                         p -> p.attribute(Attribute.BOLA_PARADA));
                 case CORNER_GOAL -> pickByWeight(available, SetPieces::headerWeight, rng);
-                case YELLOW_CARD, RED_CARD -> pickWeighted(available, Player::getTackling, rng);
+                // Card weight = tackling+1 (MARCACAO_DURA ×1.5). pickByWeight over (tackling+1) makes
+                // exactly one nextInt(sum(tackling+1)) draw with the same cumulative walk the former
+                // pickWeighted(getTackling) made (which added the +1 floor internally), so a null
+                // instruction is byte-identical to the pre-instruction pick.
+                case YELLOW_CARD, RED_CARD -> pickByWeight(available,
+                        p -> cardWeight(p, profile.instructionFor(p.getId())), rng);
                 case CHANCE, INJURY, SUBSTITUTION, TACTICS_CHANGE, HALF_TIME, PENALTY_MISSED, SET_PIECE_GOAL, FOUL ->
                         throw new IllegalStateException("Instant simulation does not emit " + event.type());
             };
@@ -358,8 +365,9 @@ public class FixtureSimulator {
 
     /** Every starter plays all 90 minutes — the instant path has no substitutions. */
     private void persistAppearances(Fixture fixture, List<Player> homeXi, List<Player> awayXi,
+                                    TacticalProfile homeProfile, TacticalProfile awayProfile,
                                     UUID homeClubId, UUID awayClubId, long seed) {
-        Map<UUID, Integer> fouls = foulCounts(homeXi, awayXi, seed);
+        Map<UUID, Integer> fouls = foulCounts(homeXi, awayXi, homeProfile, awayProfile, seed);
         for (Player p : homeXi) {
             fixtureAppearanceRepository.save(FixtureAppearance.create(
                     fixture.getId(), p.getId(), homeClubId, 90, fouls.getOrDefault(p.getId(), 0)));
@@ -381,7 +389,8 @@ public class FixtureSimulator {
         return switch (event.type()) {
             case GOAL -> assistRng.nextDouble() < ASSIST_CHANCE
                     ? pickByWeightExcluding(xi, scorer,
-                            p -> assistWeight(p, profile.attackZone(), PlayerRole.resolve(profile.roles(), p)), assistRng)
+                            p -> assistWeight(p, profile.attackZone(), PlayerRole.resolve(profile.roles(), p),
+                                    profile.instructionFor(p.getId())), assistRng)
                     : null;
             case CORNER_GOAL -> SetPieces.takerOrFallback(xi, profile.cornerTakerId(),
                     p -> p.attribute(Attribute.CRUZAMENTO));
@@ -409,65 +418,72 @@ public class FixtureSimulator {
     }
 
     /**
-     * Mirrors {@code LiveMatchEngine.scorerWeight} — zone-aware open-play scorer weight. The base
-     * {@link #goalWeight} plus the zone's signature half-attribute (headers wide, long shots central);
-     * MISTO equals {@link #goalWeight} exactly so instant attribution stays byte-identical. Integer
-     * {@code /2} matches the live engine's rounding.
+     * Mirrors {@code LiveMatchEngine.scorerWeight} — zone- and instruction-aware open-play scorer
+     * weight. The base {@link #goalWeight} plus the zone's signature half-attribute (headers wide,
+     * long shots central); MISTO adds nothing and a null instruction adds nothing, so
+     * {@code scorerWeight(p, zone, null)} equals the pre-instruction two-arg weight exactly
+     * (byte-identical). CHUTAR_DE_LONGE lifts a midfielder's base position-factor 6→8 (in
+     * {@link #goalWeight}) then ×1.25; INFILTRAR_NA_AREA ×1.5. Integer {@code /2}, {@code *3/2},
+     * {@code *5/4} match the live engine's rounding.
      */
-    static int scorerWeight(Player p, AttackZone zone) {
-        int base = goalWeight(p);
-        return switch (zone) {
+    static int scorerWeight(Player p, AttackZone zone, PlayerInstruction instr) {
+        int base = goalWeight(p, instr);
+        int w = switch (zone) {
             case LATERAIS -> base + p.attribute(Attribute.CABECEIO) / 2;
             case CENTRO -> base + p.attribute(Attribute.CHUTE_LONGE) / 2;
             case MISTO -> base;
         };
+        if (instr == PlayerInstruction.INFILTRAR_NA_AREA) {
+            w = w * 3 / 2;
+        } else if (instr == PlayerInstruction.CHUTAR_DE_LONGE) {
+            w = w * 5 / 4;
+        }
+        return w;
     }
 
     /**
-     * Mirrors {@code LiveMatchEngine.assistWeight} — zone- and role-aware creative-passing weight.
-     * MISTO is the legacy composite {@code 10 + PASSE + VISAO + CRUZAMENTO} (byte-identical); LATERAIS
+     * Mirrors {@code LiveMatchEngine.assistWeight} — zone-, role- and instruction-aware creative
+     * passing weight. MISTO is the legacy composite {@code 10 + PASSE + VISAO + CRUZAMENTO}; LATERAIS
      * leans on crossing and boosts wide roles, CENTRO on passing/vision and boosts central creators.
-     * The {@code * 3 / 2} integer ×1.5 rounds identically to the live engine.
+     * CRUZAR_MAIS then ×1.5. A null instruction leaves the zone/role weight untouched, so
+     * {@code assistWeight(p, zone, role, null)} equals the pre-instruction three-arg weight exactly
+     * (byte-identical). The {@code * 3 / 2} integer ×1.5 rounds identically to the live engine.
      */
-    static int assistWeight(Player p, AttackZone zone, PlayerRole role) {
+    static int assistWeight(Player p, AttackZone zone, PlayerRole role, PlayerInstruction instr) {
         int base = 10;
-        return switch (zone) {
+        int w = switch (zone) {
             case MISTO -> base + p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO)
                     + p.attribute(Attribute.CRUZAMENTO);
             case LATERAIS -> {
-                int w = base + 2 * p.attribute(Attribute.CRUZAMENTO);
+                int weight = base + 2 * p.attribute(Attribute.CRUZAMENTO);
                 if (role == PlayerRole.WINGER || role == PlayerRole.FULL_BACK) {
-                    w = w * 3 / 2;
+                    weight = weight * 3 / 2;
                 }
-                yield w;
+                yield weight;
             }
             case CENTRO -> {
-                int w = base + p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO);
+                int weight = base + p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO);
                 if (role == PlayerRole.PLAYMAKER || role == PlayerRole.BOX_TO_BOX) {
-                    w = w * 3 / 2;
+                    weight = weight * 3 / 2;
                 }
-                yield w;
+                yield weight;
             }
         };
+        if (instr == PlayerInstruction.CRUZAR_MAIS) {
+            w = w * 3 / 2;
+        }
+        return w;
     }
 
-    private Player pickWeighted(List<Player> xi, ToIntFunction<Player> attribute, Random rng) {
-        // Guard before any RNG draw, so determinism for valid XIs is unaffected. An
-        // empty XI cannot occur with full seeded rosters today, but once eligibility
-        // filtering lands (Tasks 6-7) a meaningful error beats nextInt(0)'s cryptic throw.
-        if (xi.isEmpty()) {
-            throw new IllegalStateException("Cannot attribute a match event to an empty XI");
-        }
-        int totalWeight = xi.stream().mapToInt(p -> attribute.applyAsInt(p) + 1).sum();
-        int pick = rng.nextInt(totalWeight);
-        int accumulated = 0;
-        for (Player player : xi) {
-            accumulated += attribute.applyAsInt(player) + 1;
-            if (pick < accumulated) {
-                return player;
-            }
-        }
-        return xi.get(xi.size() - 1);
+    /**
+     * Card-attribution weight, mirroring {@code LiveMatchEngine.cardWeight}. Base is {@code tackling+1}
+     * (the +1 floor keeps everyone eligible — the former {@code pickWeighted(getTackling)} added it
+     * internally, so a null instruction is byte-identical). MARCACAO_DURA ×1.5 via integer
+     * {@code * 3 / 2}, rounding identically to the live engine.
+     */
+    static int cardWeight(Player p, PlayerInstruction instr) {
+        int base = p.getTackling() + 1;
+        return instr == PlayerInstruction.MARCACAO_DURA ? base * 3 / 2 : base;
     }
 
     /** Weighted pick over an XI where a player with weight 0 (e.g. a keeper scoring) is never chosen. */
@@ -496,9 +512,18 @@ public class FixtureSimulator {
      * scorers consistently — a keeper does not top the scorers' chart.
      */
     private static int goalWeight(Player p) {
+        return goalWeight(p, null);
+    }
+
+    /**
+     * Instruction-aware {@link #goalWeight}, mirroring the live engine: CHUTAR_DE_LONGE lifts a
+     * MIDFIELDER's position-factor 6→8 (ATT/DEF/GK unchanged); any other instruction (or null) uses
+     * the pre-instruction factors, so the neutral case is byte-identical.
+     */
+    private static int goalWeight(Player p, PlayerInstruction instr) {
         int positionFactor = switch (p.getPosition()) {
             case ATT -> 12;
-            case MID -> 6;
+            case MID -> instr == PlayerInstruction.CHUTAR_DE_LONGE ? 8 : 6;
             case DEF -> 2;
             case GK -> 0;
         };
@@ -511,21 +536,22 @@ public class FixtureSimulator {
      * matters). Mirrors LiveMatchEngine.maybeFoul's calibration and weighting, using a fixed
      * "average aggression" input since the instant path has no per-minute TeamMatchInput here.
      */
-    Map<UUID, Integer> foulCounts(List<Player> homeXi, List<Player> awayXi, long seed) {
+    Map<UUID, Integer> foulCounts(List<Player> homeXi, List<Player> awayXi,
+                                  TacticalProfile homeProfile, TacticalProfile awayProfile, long seed) {
         Random foulRng = new Random(seed ^ 0xF0011E5L);
         Map<UUID, Integer> counts = new HashMap<>();
         for (int minute = 1; minute <= 90; minute++) {
-            drawFoul(homeXi, foulRng, counts);
-            drawFoul(awayXi, foulRng, counts);
+            drawFoul(homeXi, homeProfile, foulRng, counts);
+            drawFoul(awayXi, awayProfile, foulRng, counts);
         }
         return counts;
     }
 
-    private void drawFoul(List<Player> xi, Random foulRng, Map<UUID, Integer> counts) {
+    private void drawFoul(List<Player> xi, TacticalProfile profile, Random foulRng, Map<UUID, Integer> counts) {
         if (xi.isEmpty() || foulRng.nextDouble() >= BASE_FOUL_RATE) {
             return;
         }
-        int totalWeight = xi.stream().mapToInt(p -> Math.max(0, foulWeight(p))).sum();
+        int totalWeight = xi.stream().mapToInt(p -> Math.max(0, foulWeight(p, profile.instructionFor(p.getId())))).sum();
         Player fouler;
         if (totalWeight <= 0) {
             fouler = xi.get(foulRng.nextInt(xi.size()));
@@ -534,7 +560,7 @@ public class FixtureSimulator {
             int acc = 0;
             Player chosen = xi.get(xi.size() - 1);
             for (Player p : xi) {
-                acc += Math.max(0, foulWeight(p));
+                acc += Math.max(0, foulWeight(p, profile.instructionFor(p.getId())));
                 if (pick < acc) { chosen = p; break; }
             }
             fouler = chosen;
@@ -542,9 +568,14 @@ public class FixtureSimulator {
         counts.merge(fouler.getId(), 1, Integer::sum);
     }
 
-    /** Mirrors LiveMatchEngine.foulWeight. */
-    private static int foulWeight(Player p) {
-        return p.attribute(Attribute.AGRESSIVIDADE) + p.attribute(Attribute.DESARME) + 10;
+    /**
+     * Mirrors {@code LiveMatchEngine.foulWeight}. Base {@code AGRESSIVIDADE + DESARME + 10};
+     * MARCACAO_DURA ×1.5 via integer {@code * 3 / 2}. A null instruction returns the base unchanged
+     * (byte-identical).
+     */
+    static int foulWeight(Player p, PlayerInstruction instr) {
+        int base = p.attribute(Attribute.AGRESSIVIDADE) + p.attribute(Attribute.DESARME) + 10;
+        return instr == PlayerInstruction.MARCACAO_DURA ? base * 3 / 2 : base;
     }
 
     private Map<UUID, Integer> effectiveFitness(List<Player> xi, LocalDate onDate) {
@@ -580,7 +611,7 @@ public class FixtureSimulator {
     /**
      * Loads the exact players captured in a {@link PrecomputedFixture}, by id, preserving the
      * stored pick order (needed for byte-identical weighted attribution — see
-     * {@link #pickByWeight}/{@link #pickWeighted}, which pick by cumulative order). A stored id
+     * {@link #pickByWeight}, which picks by cumulative order). A stored id
      * that no longer resolves (players are not deleted mid-season; defensive only) is skipped
      * rather than failing the whole round.
      */

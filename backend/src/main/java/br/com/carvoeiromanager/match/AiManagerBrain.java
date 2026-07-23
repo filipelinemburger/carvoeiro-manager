@@ -79,9 +79,10 @@ public final class AiManagerBrain {
 
     private static TacticalProfile with(TacticalProfile identity, Mentality mentality,
                                         Pressing pressing, String formation) {
+        // Per-player instructions belong to the identity and never change with an AI posture swap.
         return new TacticalProfile(mentality, identity.gameStyle(), identity.attackZone(), formation, pressing,
                 identity.marking(), identity.roles(), identity.penaltyTakerId(), identity.freekickTakerId(),
-                identity.cornerTakerId());
+                identity.cornerTakerId(), identity.instructions());
     }
 
     private static int chaseOffset(Mentality identity) {

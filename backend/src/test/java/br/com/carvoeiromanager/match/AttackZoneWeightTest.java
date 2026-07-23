@@ -57,8 +57,8 @@ class AttackZoneWeightTest {
         for (Position pos : Position.values()) {
             Player p = player(pos, 50, 55, 45, 35, 40, 30);
             int legacy = legacyGoalWeight(p);
-            assertThat(LiveMatchEngine.scorerWeight(p, AttackZone.MISTO)).isEqualTo(legacy);
-            assertThat(FixtureSimulator.scorerWeight(p, AttackZone.MISTO)).isEqualTo(legacy);
+            assertThat(LiveMatchEngine.scorerWeight(p, AttackZone.MISTO, null)).isEqualTo(legacy);
+            assertThat(FixtureSimulator.scorerWeight(p, AttackZone.MISTO, null)).isEqualTo(legacy);
         }
     }
 
@@ -69,8 +69,8 @@ class AttackZoneWeightTest {
         // 55 + 45 + 35 + 10 = 145 — role must not matter for MISTO.
         assertThat(legacy).isEqualTo(145);
         for (PlayerRole role : PlayerRole.values()) {
-            assertThat(LiveMatchEngine.assistWeight(p, AttackZone.MISTO, role)).isEqualTo(legacy);
-            assertThat(FixtureSimulator.assistWeight(p, AttackZone.MISTO, role)).isEqualTo(legacy);
+            assertThat(LiveMatchEngine.assistWeight(p, AttackZone.MISTO, role, null)).isEqualTo(legacy);
+            assertThat(FixtureSimulator.assistWeight(p, AttackZone.MISTO, role, null)).isEqualTo(legacy);
         }
     }
 
@@ -80,10 +80,10 @@ class AttackZoneWeightTest {
         int base = legacyGoalWeight(att); // 12 * 60 = 720
         assertThat(base).isEqualTo(720);
         // +41/2 = +20 (integer), +31/2 = +15 (integer)
-        assertThat(LiveMatchEngine.scorerWeight(att, AttackZone.LATERAIS)).isEqualTo(720 + 20);
-        assertThat(LiveMatchEngine.scorerWeight(att, AttackZone.CENTRO)).isEqualTo(720 + 15);
-        assertThat(FixtureSimulator.scorerWeight(att, AttackZone.LATERAIS)).isEqualTo(720 + 20);
-        assertThat(FixtureSimulator.scorerWeight(att, AttackZone.CENTRO)).isEqualTo(720 + 15);
+        assertThat(LiveMatchEngine.scorerWeight(att, AttackZone.LATERAIS, null)).isEqualTo(720 + 20);
+        assertThat(LiveMatchEngine.scorerWeight(att, AttackZone.CENTRO, null)).isEqualTo(720 + 15);
+        assertThat(FixtureSimulator.scorerWeight(att, AttackZone.LATERAIS, null)).isEqualTo(720 + 20);
+        assertThat(FixtureSimulator.scorerWeight(att, AttackZone.CENTRO, null)).isEqualTo(720 + 15);
     }
 
     @Test
@@ -92,12 +92,12 @@ class AttackZoneWeightTest {
         int base = 10 + 2 * 35; // 80
         assertThat(base).isEqualTo(80);
         // Non-wide role: no boost.
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.LATERAIS, PlayerRole.POACHER)).isEqualTo(80);
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.LATERAIS, PlayerRole.POACHER, null)).isEqualTo(80);
         // Wide roles: ×1.5 via integer w*3/2.
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.LATERAIS, PlayerRole.WINGER)).isEqualTo(80 * 3 / 2);
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.LATERAIS, PlayerRole.FULL_BACK)).isEqualTo(120);
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.LATERAIS, PlayerRole.WINGER, null)).isEqualTo(80 * 3 / 2);
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.LATERAIS, PlayerRole.FULL_BACK, null)).isEqualTo(120);
         // Both engines agree.
-        assertThat(FixtureSimulator.assistWeight(p, AttackZone.LATERAIS, PlayerRole.WINGER)).isEqualTo(120);
+        assertThat(FixtureSimulator.assistWeight(p, AttackZone.LATERAIS, PlayerRole.WINGER, null)).isEqualTo(120);
     }
 
     @Test
@@ -106,11 +106,11 @@ class AttackZoneWeightTest {
         int base = 10 + 55 + 45; // 110
         assertThat(base).isEqualTo(110);
         // Non-central role: no boost.
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.CENTRO, PlayerRole.WINGER)).isEqualTo(110);
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.CENTRO, PlayerRole.WINGER, null)).isEqualTo(110);
         // Central creators: ×1.5.
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.CENTRO, PlayerRole.PLAYMAKER)).isEqualTo(110 * 3 / 2);
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.CENTRO, PlayerRole.BOX_TO_BOX)).isEqualTo(165);
-        assertThat(FixtureSimulator.assistWeight(p, AttackZone.CENTRO, PlayerRole.PLAYMAKER)).isEqualTo(165);
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.CENTRO, PlayerRole.PLAYMAKER, null)).isEqualTo(110 * 3 / 2);
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.CENTRO, PlayerRole.BOX_TO_BOX, null)).isEqualTo(165);
+        assertThat(FixtureSimulator.assistWeight(p, AttackZone.CENTRO, PlayerRole.PLAYMAKER, null)).isEqualTo(165);
     }
 
     @Test

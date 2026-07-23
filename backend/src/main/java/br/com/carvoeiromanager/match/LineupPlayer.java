@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.player.PlayerInstruction;
 import br.com.carvoeiromanager.player.PlayerRole;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -35,6 +36,15 @@ public class LineupPlayer {
     @Column(name = "role", nullable = false, length = 20)
     private PlayerRole role;
 
+    /**
+     * Optional per-player instruction ("instrução pessoal"). Nullable and never set by the factory
+     * methods — stays null (no instruction) unless a manager explicitly assigns one (Task 28 DTO
+     * wiring). A null instruction is the neutral no-op that keeps engine results byte-identical.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "instruction", length = 20)
+    private PlayerInstruction instruction;
+
     protected LineupPlayer() {
         // for JPA
     }
@@ -58,7 +68,9 @@ public class LineupPlayer {
     public UUID getPlayerId() { return playerId; }
     public boolean isStarting() { return starting; }
     public PlayerRole getRole() { return role; }
+    public PlayerInstruction getInstruction() { return instruction; }
 
     public void setStarting(boolean starting) { this.starting = starting; }
     public void setRole(PlayerRole role) { this.role = role; }
+    public void setInstruction(PlayerInstruction instruction) { this.instruction = instruction; }
 }

@@ -77,7 +77,7 @@ class MatchCalibrationTest {
         Map<UUID, PlayerRole> roles = new HashMap<>();
         xi.forEach(p -> roles.put(p.getId(), PlayerRole.defaultFor(p.getPosition())));
         TacticalProfile profile = new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO,
-                AttackZone.MISTO, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null);
+                AttackZone.MISTO, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of());
         return strengthCalc.compute(xi, profile);
     }
 
