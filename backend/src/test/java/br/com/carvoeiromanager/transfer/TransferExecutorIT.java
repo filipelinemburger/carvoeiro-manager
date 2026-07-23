@@ -100,7 +100,7 @@ class TransferExecutorIT {
         lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi, null), c.userId());
         UUID soldId = xi.get(0).playerId();
         lineupService.setTactics(c.id(), c.clubId(),
-                new SetTacticsRequest("BALANCED", "MEDIUM", "ZONAL", soldId, soldId, soldId), c.userId());
+                new SetTacticsRequest("BALANCED", null, "MEDIUM", "ZONAL", soldId, soldId, soldId), c.userId());
         UUID buyer = anyOtherClub(c.id(), c.clubId());
         BigDecimal fee = new BigDecimal("750000.00");
 

@@ -325,7 +325,7 @@ class LiveMatchEngineTest {
         long seed = 42L;
         LiveTimeline base = engine.simulate(config(seed, List.of()));
 
-        TimedTactics change = new TimedTactics(60, true, Mentality.ATTACKING, Pressing.HIGH, Marking.ZONAL, "4-3-3");
+        TimedTactics change = new TimedTactics(60, true, Mentality.ATTACKING, null, Pressing.HIGH, Marking.ZONAL, "4-3-3");
         LiveTimeline withTactics = engine.simulate(config(seed, List.of(), List.of(change)));
 
         // Events up to and including minute 59 must be identical (tactics not yet applied).
@@ -451,7 +451,7 @@ class LiveMatchEngineTest {
     void userTacticsAndAiReactionsCoexist() {
         // Managed home side schedules a change at 60; away side is the AI. The user's event keeps
         // a null detail; any AI event carries a posture detail; the managed side never gets one.
-        TimedTactics change = new TimedTactics(60, true, Mentality.ATTACKING, Pressing.HIGH,
+        TimedTactics change = new TimedTactics(60, true, Mentality.ATTACKING, null, Pressing.HIGH,
                 Marking.ZONAL, "4-3-3");
         boolean sawUserChange = false;
         for (long seed = 1; seed <= 20; seed++) {

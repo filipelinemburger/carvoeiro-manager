@@ -215,10 +215,12 @@ public class LiveMatchEngine {
         for (TimedTactics t : cfg.tacticsSchedule()) {
             if (t.minute() != minute || t.home() != side.home) continue;
             TacticalProfile old = side.currentProfile;
-            // TimedTactics does not carry gameStyle (Task 23), so keep the old profile's style
-            // instead of resetting it when a mid-match mentality/pressing/formation change lands.
+            // A scheduled change may now set the game style (Task 23). A null gameStyle on the entry
+            // (client omitted it, or a legacy schedule serialized before the field existed) keeps the
+            // side's current style instead of resetting it.
             side.currentProfile = new TacticalProfile(
-                    t.mentality(), old.gameStyle(), t.formation(), t.pressing(), t.marking(),
+                    t.mentality(), t.gameStyle() != null ? t.gameStyle() : old.gameStyle(),
+                    t.formation(), t.pressing(), t.marking(),
                     old.roles(), old.penaltyTakerId(), old.freekickTakerId(), old.cornerTakerId());
             side.dirty = true;
             // Use the first on-pitch player as a sentinel playerId — never NPE, never displayed.

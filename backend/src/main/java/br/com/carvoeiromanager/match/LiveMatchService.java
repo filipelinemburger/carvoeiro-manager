@@ -10,6 +10,7 @@ import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.player.Formation;
+import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
@@ -233,13 +234,15 @@ public class LiveMatchService {
         }
 
         Mentality mentality = parseMentality(req.mentality());
+        GameStyle gameStyle = parseGameStyle(req.gameStyle());
         Pressing pressing = parsePressing(req.pressing());
         Marking marking = parseMarking(req.marking());
         String formation = parseFormation(req.formation());
 
         int minute = Math.min(MINUTES, lm.getCommittedMinute() + 1);
         List<TimedTactics> tactics = new ArrayList<>(deserializeTactics(lm.getTacticsSchedule()));
-        tactics.add(new TimedTactics(minute, lm.isManagedIsHome(), mentality, pressing, marking, formation));
+        // A null gameStyle (client omitted it) records "keep current style" in the schedule entry.
+        tactics.add(new TimedTactics(minute, lm.isManagedIsHome(), mentality, gameStyle, pressing, marking, formation));
         lm.setTacticsSchedule(serialize(tactics));
         liveMatchRepository.save(lm);
         return toState(lm, save);
@@ -249,6 +252,17 @@ public class LiveMatchService {
         try { return Mentality.valueOf(value); }
         catch (IllegalArgumentException e) {
             throw new ApiException(ErrorCode.INVALID_TACTICS, "Unknown mentality: " + value);
+        }
+    }
+
+    /** Null/blank → null ("keep current style"); otherwise parse, rejecting an unknown style. */
+    private GameStyle parseGameStyle(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try { return GameStyle.valueOf(value); }
+        catch (IllegalArgumentException e) {
+            throw new ApiException(ErrorCode.INVALID_TACTICS, "Estilo de jogo inválido: " + value);
         }
     }
 
@@ -848,6 +862,7 @@ public class LiveMatchService {
         String pressing = base.pressing().name();
         String marking = base.marking().name();
         String formation = base.formation();
+        String gameStyle = base.gameStyle().name();
 
         // Apply the last scheduled change for this side whose minute <= committedMinute
         for (TimedTactics tt : cfg.tacticsSchedule()) {
@@ -856,9 +871,13 @@ public class LiveMatchService {
                 pressing = tt.pressing().name();
                 marking = tt.marking().name();
                 formation = tt.formation();
+                // A null gameStyle entry (client omitted it, or a legacy schedule) keeps the current style.
+                if (tt.gameStyle() != null) {
+                    gameStyle = tt.gameStyle().name();
+                }
             }
         }
-        return new LiveTactics(mentality, pressing, marking, formation);
+        return new LiveTactics(mentality, pressing, marking, formation, gameStyle);
     }
 
     /** One side's current on-pitch set, hobbled set, and bench-players-already-used, at {@code minute}. */

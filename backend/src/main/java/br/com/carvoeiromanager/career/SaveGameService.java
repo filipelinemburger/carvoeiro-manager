@@ -119,6 +119,10 @@ public class SaveGameService {
             club.setSecondaryColor(seedClub.secondaryColor());
             club.setDefaultFormation(seedClub.formation());
             club.setDefaultMentality(seedClub.mentality());
+            // Prefer a hand-picked seed style; otherwise derive from mentality, mirroring the V36
+            // migration backfill so fresh careers match upgraded saves.
+            club.setDefaultGameStyle(seedClub.style() != null
+                    ? seedClub.style() : styleFromMentality(seedClub.mentality()));
             club.setDefaultPressing(seedClub.pressing());
             club.setDefaultMarking(seedClub.marking());
             entityManager.persist(club);
@@ -267,6 +271,21 @@ public class SaveGameService {
 
     private ApiException saveGameNotFound() {
         return new ApiException(ErrorCode.SAVE_GAME_NOT_FOUND, "Save game not found");
+    }
+
+    /**
+     * Maps a club's default mentality to a default game style, mirroring the V36 migration CASE
+     * exactly (ATTACKING→JOGO_DE_PASSES, DEFENSIVE→CONTRA_ATAQUE, else/null→EQUILIBRADO) so a fresh
+     * career's AI clubs express the same style an upgraded (backfilled) save would.
+     */
+    private String styleFromMentality(String mentality) {
+        if ("ATTACKING".equals(mentality)) {
+            return "JOGO_DE_PASSES";
+        }
+        if ("DEFENSIVE".equals(mentality)) {
+            return "CONTRA_ATAQUE";
+        }
+        return "EQUILIBRADO";
     }
 
     /** All of a user's careers, most-recently-played first (falling back to creation time for

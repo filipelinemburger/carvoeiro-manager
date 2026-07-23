@@ -23,8 +23,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <ul>
  *   <li>{@code lineups.game_style} is NOT NULL DEFAULT 'EQUILIBRADO' — a raw insert that omits the
  *       column lands on the neutral style, so pre-existing lineups keep byte-identical behaviour.</li>
- *   <li>{@code clubs.default_game_style} exists and is null for fresh-career clubs (Task 22 does not
- *       yet author a seed style — that is Task 23).</li>
+ *   <li>{@code clubs.default_game_style} is populated for fresh-career clubs (Task 23): a club's
+ *       hand-picked seed {@code "style"} when present, else the mentality-derived fallback that
+ *       mirrors the V36 backfill.</li>
  *   <li>The backfill CASE maps default_mentality → default_game_style
  *       (ATTACKING→JOGO_DE_PASSES, DEFENSIVE→CONTRA_ATAQUE, else EQUILIBRADO) for legacy rows.</li>
  * </ul>
@@ -66,14 +67,28 @@ class GameStyleMigrationIT {
     }
 
     @Test
-    void freshCareerClubsHaveTheDefaultGameStyleColumnNull() {
-        // Task 22 adds the column but does not wire the seed onto it, so every runtime club is null
-        // (TacticsService resolves null -> EQUILIBRADO, keeping AI strength byte-identical).
+    void freshCareerClubsGetASeedOrMentalityDerivedGameStyle() {
+        // Task 23 wires default_game_style at career creation: every club now has a non-null style,
+        // equal to its hand-picked seed "style" when present, else derived from its mentality
+        // (ATTACKING→JOGO_DE_PASSES, DEFENSIVE→CONTRA_ATAQUE, else EQUILIBRADO) — matching V36's backfill.
         SaveGameResponse save = createCareer();
 
         List<String> styles = jdbc.queryForList(
                 "SELECT default_game_style FROM clubs WHERE save_game_id = ?", String.class, save.id());
-        assertThat(styles).isNotEmpty().allMatch(s -> s == null);
+        assertThat(styles).isNotEmpty().allMatch(s -> s != null);
+
+        // Criciúma (managed club) is ATTACKING with no explicit seed style → mentality fallback.
+        assertThat(styleOfShortName(save.id(), "CRI")).isEqualTo("JOGO_DE_PASSES");
+        // Ceará carries an explicit seed style that overrides its BALANCED mentality mapping.
+        assertThat(styleOfShortName(save.id(), "CEA")).isEqualTo("CONTRA_ATAQUE");
+        // Concórdia is DEFENSIVE but seeded RETRANCA, overriding the CONTRA_ATAQUE mapping.
+        assertThat(styleOfShortName(save.id(), "CON")).isEqualTo("RETRANCA");
+    }
+
+    private String styleOfShortName(UUID saveGameId, String shortName) {
+        return jdbc.queryForObject(
+                "SELECT default_game_style FROM clubs WHERE save_game_id = ? AND short_name = ?",
+                String.class, saveGameId, shortName);
     }
 
     @Test

@@ -54,14 +54,52 @@ class TacticsApiIT {
         UUID taker = xi.get(10).playerId();
 
         TacticsResponse saved = lineupService.setTactics(c.id(), c.clubId(),
-                new SetTacticsRequest("ATTACKING", "HIGH", "MAN_TIGHT", taker, taker, taker), c.userId());
+                new SetTacticsRequest("ATTACKING", "JOGO_DE_PASSES", "HIGH", "MAN_TIGHT", taker, taker, taker),
+                c.userId());
         assertThat(saved.mentality()).isEqualTo("ATTACKING");
+        assertThat(saved.gameStyle()).isEqualTo("JOGO_DE_PASSES");
         assertThat(saved.pressing()).isEqualTo("HIGH");
         assertThat(saved.penaltyTakerId()).isEqualTo(taker);
 
         TacticsResponse loaded = lineupService.getTactics(c.id(), c.clubId(), c.userId());
+        assertThat(loaded.gameStyle()).isEqualTo("JOGO_DE_PASSES");
         assertThat(loaded.marking()).isEqualTo("MAN_TIGHT");
         assertThat(loaded.freekickTakerId()).isEqualTo(taker);
+    }
+
+    @Test
+    void omittingGameStyleLeavesTheCurrentStyleUnchanged() {
+        Career c = createCareer();
+        List<LineupStarter> xi = starters(c.clubId());
+        lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi, null), c.userId());
+
+        // First save a concrete style.
+        lineupService.setTactics(c.id(), c.clubId(),
+                new SetTacticsRequest("BALANCED", "JOGO_DIRETO", "MEDIUM", "ZONAL", null, null, null), c.userId());
+        // A later save that omits gameStyle (pre-GameStyle-UI client) must NOT wipe it.
+        TacticsResponse afterOmit = lineupService.setTactics(c.id(), c.clubId(),
+                new SetTacticsRequest("ATTACKING", null, "HIGH", "ZONAL", null, null, null), c.userId());
+        assertThat(afterOmit.gameStyle()).isEqualTo("JOGO_DIRETO");
+        assertThat(afterOmit.mentality()).isEqualTo("ATTACKING");
+
+        // A blank gameStyle behaves the same as omitting it.
+        TacticsResponse afterBlank = lineupService.setTactics(c.id(), c.clubId(),
+                new SetTacticsRequest("BALANCED", "  ", "MEDIUM", "ZONAL", null, null, null), c.userId());
+        assertThat(afterBlank.gameStyle()).isEqualTo("JOGO_DIRETO");
+    }
+
+    @Test
+    void invalidGameStyleIsRejected() {
+        Career c = createCareer();
+        lineupService.setLineup(c.id(), c.clubId(),
+                new SetLineupRequest("4-4-2", starters(c.clubId()), null), c.userId());
+        assertThatThrownBy(() -> lineupService.setTactics(c.id(), c.clubId(),
+                new SetTacticsRequest("BALANCED", "NOT_A_STYLE", "MEDIUM", "ZONAL", null, null, null), c.userId()))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.INVALID_TACTICS);
+                    assertThat(ex.getMessage()).isEqualTo("Estilo de jogo inválido: NOT_A_STYLE");
+                });
     }
 
     @Test
@@ -69,6 +107,7 @@ class TacticsApiIT {
         Career c = createCareer();
         TacticsResponse loaded = lineupService.getTactics(c.id(), c.clubId(), c.userId());
         assertThat(loaded.mentality()).isEqualTo("BALANCED");
+        assertThat(loaded.gameStyle()).isEqualTo("EQUILIBRADO");
         assertThat(loaded.pressing()).isEqualTo("MEDIUM");
         assertThat(loaded.marking()).isEqualTo("ZONAL");
         assertThat(loaded.penaltyTakerId()).isNull();
@@ -79,7 +118,7 @@ class TacticsApiIT {
         Career c = createCareer();
         lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-4-2", starters(c.clubId()), null), c.userId());
         assertThatThrownBy(() -> lineupService.setTactics(c.id(), c.clubId(),
-                new SetTacticsRequest("WILD", "HIGH", "ZONAL", null, null, null), c.userId()))
+                new SetTacticsRequest("WILD", null, "HIGH", "ZONAL", null, null, null), c.userId()))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.INVALID_TACTICS));
     }
@@ -88,7 +127,7 @@ class TacticsApiIT {
     void settingTacticsBeforeLineupIsRejected() {
         Career c = createCareer();
         assertThatThrownBy(() -> lineupService.setTactics(c.id(), c.clubId(),
-                new SetTacticsRequest("BALANCED", "MEDIUM", "ZONAL", null, null, null), c.userId()))
+                new SetTacticsRequest("BALANCED", null, "MEDIUM", "ZONAL", null, null, null), c.userId()))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.LINEUP_REQUIRED));
     }
@@ -98,7 +137,7 @@ class TacticsApiIT {
         Career c = createCareer();
         lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-4-2", starters(c.clubId()), null), c.userId());
         assertThatThrownBy(() -> lineupService.setTactics(c.id(), c.clubId(),
-                new SetTacticsRequest("BALANCED", "MEDIUM", "ZONAL", UUID.randomUUID(), null, null), c.userId()))
+                new SetTacticsRequest("BALANCED", null, "MEDIUM", "ZONAL", UUID.randomUUID(), null, null), c.userId()))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.INVALID_TACTICS));
     }
@@ -119,7 +158,7 @@ class TacticsApiIT {
         Career owner = createCareer();
         Career intruder = createCareer();
         assertThatThrownBy(() -> lineupService.setTactics(owner.id(), owner.clubId(),
-                new SetTacticsRequest("BALANCED", "MEDIUM", "ZONAL", null, null, null), intruder.userId()))
+                new SetTacticsRequest("BALANCED", null, "MEDIUM", "ZONAL", null, null, null), intruder.userId()))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getStatus().value()).isEqualTo(404));
     }

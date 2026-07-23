@@ -5,5 +5,6 @@ public record LiveTactics(
         String mentality,
         String pressing,
         String marking,
-        String formation) {
+        String formation,
+        String gameStyle) {
 }

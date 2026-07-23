@@ -7,6 +7,7 @@ import br.com.carvoeiromanager.contract.ContractValuation;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.Attribute;
+import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
@@ -603,6 +604,11 @@ public class LineupService {
         lineup.setMentality(mentality);
         lineup.setPressing(pressing);
         lineup.setMarking(marking);
+        // gameStyle is optional: only overwrite the persisted style when the client actually sends one.
+        // A null/blank value (pre-GameStyle-UI clients) must NOT wipe a previously chosen style.
+        if (req.gameStyle() != null && !req.gameStyle().isBlank()) {
+            lineup.setGameStyle(parseGameStyle(req.gameStyle()));
+        }
         lineup.setPenaltyTakerId(req.penaltyTakerId());
         lineup.setFreekickTakerId(req.freekickTakerId());
         lineup.setCornerTakerId(req.cornerTakerId());
@@ -616,13 +622,15 @@ public class LineupService {
         return lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
                 .map(this::toTacticsResponse)
                 .orElseGet(() -> new TacticsResponse(
-                        Mentality.BALANCED.name(), Pressing.MEDIUM.name(), Marking.ZONAL.name(),
+                        Mentality.BALANCED.name(), GameStyle.EQUILIBRADO.name(),
+                        Pressing.MEDIUM.name(), Marking.ZONAL.name(),
                         null, null, null));
     }
 
     private TacticsResponse toTacticsResponse(Lineup lineup) {
         return new TacticsResponse(
-                lineup.getMentality().name(), lineup.getPressing().name(), lineup.getMarking().name(),
+                lineup.getMentality().name(), lineup.getGameStyle().name(),
+                lineup.getPressing().name(), lineup.getMarking().name(),
                 lineup.getPenaltyTakerId(), lineup.getFreekickTakerId(), lineup.getCornerTakerId());
     }
 
@@ -637,6 +645,13 @@ public class LineupService {
         try { return Mentality.valueOf(v); }
         catch (IllegalArgumentException e) {
             throw new ApiException(ErrorCode.INVALID_TACTICS, "Unknown mentality: " + v);
+        }
+    }
+
+    private GameStyle parseGameStyle(String v) {
+        try { return GameStyle.valueOf(v); }
+        catch (IllegalArgumentException e) {
+            throw new ApiException(ErrorCode.INVALID_TACTICS, "Estilo de jogo inválido: " + v);
         }
     }
 
