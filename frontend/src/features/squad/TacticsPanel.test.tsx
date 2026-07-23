@@ -39,6 +39,7 @@ describe('TacticsPanel', () => {
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
     mockGet.mockResolvedValue({
       mentality: 'ATTACKING',
+      gameStyle: 'EQUILIBRADO',
       pressing: 'HIGH',
       marking: 'ZONAL',
       penaltyTakerId: null,
@@ -47,6 +48,7 @@ describe('TacticsPanel', () => {
     })
     mockSet.mockResolvedValue({
       mentality: 'ATTACKING',
+      gameStyle: 'JOGO_DE_PASSES',
       pressing: 'HIGH',
       marking: 'MAN_TIGHT',
       penaltyTakerId: 'p1',
@@ -73,6 +75,25 @@ describe('TacticsPanel', () => {
     )
   })
 
+  it('prefills the game style and includes it in the setTactics payload when saved', async () => {
+    renderPanel()
+    // Wait for the load effect to settle (Mentalidade differs from its default, unlike gameStyle).
+    await waitFor(() => {
+      expect(screen.getByLabelText('Mentalidade')).toHaveValue('ATTACKING')
+    })
+    expect(screen.getByLabelText('Estilo de jogo')).toHaveValue('EQUILIBRADO')
+    fireEvent.change(screen.getByLabelText('Estilo de jogo'), { target: { value: 'CONTRA_ATAQUE' } })
+    fireEvent.click(screen.getByRole('button', { name: /salvar tática/i }))
+
+    await waitFor(() => expect(mockSet).toHaveBeenCalled())
+    expect(mockSet).toHaveBeenCalledWith(
+      'sg-1',
+      'club-1',
+      expect.objectContaining({ gameStyle: 'CONTRA_ATAQUE' }),
+      'test-token',
+    )
+  })
+
   it('displays friendly labels while keeping enum option values', async () => {
     renderPanel()
 
@@ -82,6 +103,16 @@ describe('TacticsPanel', () => {
       { value: 'DEFENSIVE', label: 'Defensiva' },
       { value: 'BALANCED', label: 'Equilibrada' },
       { value: 'ATTACKING', label: 'Ofensiva' },
+    ])
+
+    const gameStyle = screen.getByLabelText('Estilo de jogo') as HTMLSelectElement
+    expect(Array.from(gameStyle.options).map(o => ({ value: o.value, label: o.text }))).toEqual([
+      { value: 'EQUILIBRADO', label: 'Equilibrado' },
+      { value: 'JOGO_DE_PASSES', label: 'Jogo de passes' },
+      { value: 'CONTRA_ATAQUE', label: 'Contra-ataque' },
+      { value: 'JOGO_DIRETO', label: 'Jogo direto' },
+      { value: 'PRESSAO_ALTA', label: 'Pressão alta' },
+      { value: 'RETRANCA', label: 'Retranca' },
     ])
 
     const pressing = screen.getByLabelText('Pressão') as HTMLSelectElement

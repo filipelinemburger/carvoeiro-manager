@@ -155,7 +155,7 @@ describe('SquadPage', () => {
       bench: [],
     })
     vi.mocked(getTactics).mockResolvedValue({
-      mentality: 'BALANCED', pressing: 'MEDIUM', marking: 'ZONAL',
+      mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', pressing: 'MEDIUM', marking: 'ZONAL',
       penaltyTakerId: null, freekickTakerId: null, cornerTakerId: null,
     })
     localStorage.setItem('carvoeiro_manager_token', 'test-token')

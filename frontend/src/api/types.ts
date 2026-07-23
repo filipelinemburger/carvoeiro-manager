@@ -68,6 +68,7 @@ export type SaveGameSummary = {
 }
 
 export type Mentality = 'DEFENSIVE' | 'BALANCED' | 'ATTACKING'
+export type GameStyle = 'EQUILIBRADO' | 'JOGO_DE_PASSES' | 'CONTRA_ATAQUE' | 'JOGO_DIRETO' | 'PRESSAO_ALTA' | 'RETRANCA'
 export type Pressing = 'LOW' | 'MEDIUM' | 'HIGH'
 export type Marking = 'ZONAL' | 'MAN_TIGHT'
 export type PlayerRole =
@@ -193,6 +194,7 @@ export type LineupResponse = {
 
 export type TacticsRequest = {
   mentality: Mentality
+  gameStyle: GameStyle
   pressing: Pressing
   marking: Marking
   penaltyTakerId: string | null
@@ -630,6 +632,7 @@ export type LiveMatchStatus = 'IN_PROGRESS' | 'HALF_TIME' | 'PAUSED_INJURY' | 'P
 
 export type LiveTactics = {
   mentality: string
+  gameStyle: string
   pressing: string
   marking: string
   formation: string
@@ -637,6 +640,7 @@ export type LiveTactics = {
 
 export type LiveTacticsRequest = {
   mentality: string
+  gameStyle: string
   pressing: string
   marking: string
   formation: string

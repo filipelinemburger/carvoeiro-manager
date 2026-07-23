@@ -1,4 +1,4 @@
-import type { Mentality, Pressing, Marking } from '../../api/types'
+import type { Mentality, GameStyle, Pressing, Marking } from '../../api/types'
 
 /**
  * Friendly Portuguese display names for the tactic enum values. Single source
@@ -9,6 +9,15 @@ export const MENTALITY_LABEL: Record<Mentality, string> = {
   DEFENSIVE: 'Defensiva',
   BALANCED: 'Equilibrada',
   ATTACKING: 'Ofensiva',
+}
+
+export const GAME_STYLE_LABEL: Record<GameStyle, string> = {
+  EQUILIBRADO: 'Equilibrado',
+  JOGO_DE_PASSES: 'Jogo de passes',
+  CONTRA_ATAQUE: 'Contra-ataque',
+  JOGO_DIRETO: 'Jogo direto',
+  PRESSAO_ALTA: 'Pressão alta',
+  RETRANCA: 'Retranca',
 }
 
 export const PRESSING_LABEL: Record<Pressing, string> = {

@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { MatchActionsDialog } from './MatchActionsDialog'
 import { FORMATION_CODES } from '../pitch/pitchSlots'
-import { MENTALITY_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
+import { MENTALITY_LABEL, GAME_STYLE_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
 
-function renderTacticsTab() {
+function renderTacticsTab(onApply: (payload: unknown) => void = () => {}) {
   render(
     <MatchActionsDialog
       open
@@ -14,8 +14,8 @@ function renderTacticsTab() {
       bench={[]}
       subsRemaining={3}
       pending={false}
-      onApply={() => {}}
-      currentTactics={{ mentality: 'BALANCED', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-4-2' }}
+      onApply={onApply}
+      currentTactics={{ mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-4-2' }}
     />,
   )
 }
@@ -32,9 +32,25 @@ describe('MatchActionsDialog tactics tab', () => {
     renderTacticsTab()
     const mentality = screen.getByLabelText('Mentalidade') as HTMLSelectElement
     expect(Array.from(mentality.options).map(o => o.text)).toEqual(Object.values(MENTALITY_LABEL))
+    const gameStyle = screen.getByLabelText('Estilo de jogo') as HTMLSelectElement
+    expect(Array.from(gameStyle.options).map(o => o.text)).toEqual(Object.values(GAME_STYLE_LABEL))
     const pressing = screen.getByLabelText('Pressão') as HTMLSelectElement
     expect(Array.from(pressing.options).map(o => o.text)).toEqual(Object.values(PRESSING_LABEL))
     const marking = screen.getByLabelText('Marcação') as HTMLSelectElement
     expect(Array.from(marking.options).map(o => o.text)).toEqual(Object.values(MARKING_LABEL))
+  })
+
+  it('treats a game-style-only change as a tactics change and includes gameStyle in the applied payload', () => {
+    const onApply = vi.fn()
+    renderTacticsTab(onApply)
+
+    fireEvent.change(screen.getByLabelText('Estilo de jogo'), { target: { value: 'RETRANCA' } })
+    fireEvent.click(screen.getByRole('button', { name: /continuar/i }))
+
+    expect(onApply).toHaveBeenCalledTimes(1)
+    expect(onApply).toHaveBeenCalledWith({
+      subs: [],
+      tactics: expect.objectContaining({ gameStyle: 'RETRANCA', mentality: 'BALANCED' }),
+    })
   })
 })

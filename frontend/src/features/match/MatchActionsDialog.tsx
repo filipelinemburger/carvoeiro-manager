@@ -8,10 +8,10 @@ import PersonIcon from '@mui/icons-material/Person'
 import CloseIcon from '@mui/icons-material/Close'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import AddIcon from '@mui/icons-material/Add'
-import type { LivePlayer, LiveTactics, LiveTacticsRequest, Mentality, Pressing, Marking } from '../../api/types'
+import type { LivePlayer, LiveTactics, LiveTacticsRequest, Mentality, GameStyle, Pressing, Marking } from '../../api/types'
 import { FitnessBar } from '../squad/FitnessBar'
 import { FORMATION_CODES } from '../pitch/pitchSlots'
-import { MENTALITY_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
+import { MENTALITY_LABEL, GAME_STYLE_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
 
 // ---------------------------------------------------------------------------
 // Shared constants
@@ -24,6 +24,8 @@ function byPosition(a: LivePlayer, b: LivePlayer): number {
 
 const MENTALITIES = (Object.keys(MENTALITY_LABEL) as Mentality[])
   .map(v => ({ value: v, label: MENTALITY_LABEL[v] }))
+const GAME_STYLES = (Object.keys(GAME_STYLE_LABEL) as GameStyle[])
+  .map(v => ({ value: v, label: GAME_STYLE_LABEL[v] }))
 const PRESSINGS = (Object.keys(PRESSING_LABEL) as Pressing[])
   .map(v => ({ value: v, label: PRESSING_LABEL[v] }))
 const MARKINGS = (Object.keys(MARKING_LABEL) as Marking[])
@@ -307,10 +309,12 @@ function SubTabContent({
 interface TacticsTabProps {
   currentTactics: LiveTactics
   mentality: string
+  gameStyle: string
   pressing: string
   marking: string
   formation: string
   onMentalityChange: (v: string) => void
+  onGameStyleChange: (v: string) => void
   onPressingChange: (v: string) => void
   onMarkingChange: (v: string) => void
   onFormationChange: (v: string) => void
@@ -318,10 +322,12 @@ interface TacticsTabProps {
 
 function TacticsTabContent({
   mentality,
+  gameStyle,
   pressing,
   marking,
   formation,
   onMentalityChange,
+  onGameStyleChange,
   onPressingChange,
   onMarkingChange,
   onFormationChange,
@@ -333,6 +339,12 @@ function TacticsTabContent({
         value={mentality}
         onChange={onMentalityChange}
         options={MENTALITIES}
+      />
+      <SelectField
+        label="Estilo de jogo"
+        value={gameStyle}
+        onChange={onGameStyleChange}
+        options={GAME_STYLES}
       />
       <SelectField
         label="Pressão"
@@ -394,6 +406,7 @@ export function MatchActionsDialog({
 
   // Tactics tab state — initialised from the current tactics
   const [mentality, setMentality] = useState(currentTactics.mentality)
+  const [gameStyle, setGameStyle] = useState(currentTactics.gameStyle)
   const [pressing, setPressing] = useState(currentTactics.pressing)
   const [marking, setMarking] = useState(currentTactics.marking)
   const [formation, setFormation] = useState(currentTactics.formation)
@@ -417,13 +430,14 @@ export function MatchActionsDialog({
   function handleContinue() {
     const tacticsChanged =
       mentality !== currentTactics.mentality ||
+      gameStyle !== currentTactics.gameStyle ||
       pressing !== currentTactics.pressing ||
       marking !== currentTactics.marking ||
       formation !== currentTactics.formation
 
     onApply({
       subs: queue,
-      tactics: tacticsChanged ? { mentality, pressing, marking, formation } : null,
+      tactics: tacticsChanged ? { mentality, gameStyle, pressing, marking, formation } : null,
     })
   }
 
@@ -478,10 +492,12 @@ export function MatchActionsDialog({
             <TacticsTabContent
               currentTactics={currentTactics}
               mentality={mentality}
+              gameStyle={gameStyle}
               pressing={pressing}
               marking={marking}
               formation={formation}
               onMentalityChange={setMentality}
+              onGameStyleChange={setGameStyle}
               onPressingChange={setPressing}
               onMarkingChange={setMarking}
               onFormationChange={setFormation}
