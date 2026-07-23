@@ -7,6 +7,7 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.Attribute;
+import br.com.carvoeiromanager.player.DetailedPosition;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.TrainingIntensity;
@@ -430,21 +431,34 @@ class LineupServiceIT {
             playerRepository.save(gks.get(i));
         }
 
-        // 8 clear top outfield players at overall 75 (fresh).
+        // The managed club (Criciúma) plays 3-4-3, whose 10 outfield slots are 3×ZAGUEIRO, 1×VOLANTE,
+        // 3×MEIA_ARMADOR, 2×PONTA and 1 central striker. Slot-aware bestXi fills those by fit, so the
+        // XI/bench boundary must be contested between same-slot players — here the two PONTA (wing)
+        // slots. The eight non-wing slots go to clear 75-rated starters; fresh/drained/filler are the
+        // three PONTA candidates competing for the two wing slots (one is left out).
+        assertThat(clubRepository.findById(clubId).orElseThrow().getDefaultFormation()).isEqualTo("3-4-3");
+        DetailedPosition[] eightNonWingSlots = {
+                DetailedPosition.ZAGUEIRO, DetailedPosition.ZAGUEIRO, DetailedPosition.ZAGUEIRO,
+                DetailedPosition.VOLANTE,
+                DetailedPosition.MEIA_ARMADOR, DetailedPosition.MEIA_ARMADOR, DetailedPosition.MEIA_ARMADOR,
+                DetailedPosition.ATACANTE};
         for (int i = 0; i < 8; i++) {
             outfield.get(i).setOverall(75);
+            outfield.get(i).setDetailedPosition(eightNonWingSlots[i]);
             playerRepository.save(outfield.get(i));
         }
 
         // Fresh boundary player: overall 60, default fitness 100, no lastMatchDate → rating 60.0.
         Player freshPlayer = outfield.get(8);
         freshPlayer.setOverall(60);
+        freshPlayer.setDetailedPosition(DetailedPosition.PONTA);
         playerRepository.save(freshPlayer);
 
         // Drained boundary player: overall 60, base fitness 10, lastMatchDate = matchDate (no recovery)
         // → effectiveFitness 10, rating 60 × 0.82 = 49.2 on the date path (60.0 on the no-date path).
         Player drainedPlayer = outfield.get(9);
         drainedPlayer.setOverall(60);
+        drainedPlayer.setDetailedPosition(DetailedPosition.PONTA);
         drainedPlayer.recordAppearance(10, matchDate);
         playerRepository.save(drainedPlayer);
 
@@ -452,6 +466,7 @@ class LineupServiceIT {
         // but above the drained-60's 49.2 on the date path (date includes it, benching the drained one).
         Player fillerPlayer = outfield.get(10);
         fillerPlayer.setOverall(55);
+        fillerPlayer.setDetailedPosition(DetailedPosition.PONTA);
         playerRepository.save(fillerPlayer);
 
         // Everyone else clearly out.
@@ -550,9 +565,19 @@ class LineupServiceIT {
             playerRepository.save(gks.get(i));
         }
 
-        // Top 10 outfield players fill the XI.
+        // The managed club (Criciúma) plays 3-4-3. Give the top-10 outfield players detailed
+        // positions that exactly fill its 10 outfield slots (3×ZAGUEIRO, 1×VOLANTE, 3×MEIA_ARMADOR,
+        // 2×PONTA, 1 striker) at overall 90 so slot-aware bestXi selects precisely these ten as the
+        // XI; bestBench (still overall-ranked) then draws from the remainder.
+        assertThat(clubRepository.findById(clubId).orElseThrow().getDefaultFormation()).isEqualTo("3-4-3");
+        DetailedPosition[] tenOutfieldSlots = {
+                DetailedPosition.ZAGUEIRO, DetailedPosition.ZAGUEIRO, DetailedPosition.ZAGUEIRO,
+                DetailedPosition.VOLANTE,
+                DetailedPosition.MEIA_ARMADOR, DetailedPosition.MEIA_ARMADOR, DetailedPosition.MEIA_ARMADOR,
+                DetailedPosition.PONTA, DetailedPosition.PONTA, DetailedPosition.ATACANTE};
         for (int i = 0; i < 10; i++) {
             outfield.get(i).setOverall(90);
+            outfield.get(i).setDetailedPosition(tenOutfieldSlots[i]);
             playerRepository.save(outfield.get(i));
         }
         // Next 6 outfield players are the expected bench (clear, descending overalls).

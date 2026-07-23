@@ -8,6 +8,7 @@ import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
+import br.com.carvoeiromanager.player.DetailedPosition;
 import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
@@ -328,18 +329,26 @@ public class LineupService {
      * Eligible players (not suspended, not injured) are preferred. If there are fewer than 11
      * eligible players, ineligible players are used as fallback (ordered by rating) to ensure
      * the match engine always has a full XI. A missing GK is similarly filled from ineligible GKs.
+     *
+     * <p>Outfield selection is <b>slot-aware</b>: the club's default formation
+     * (see {@link FormationSlots}) supplies 10 ordered outfield slots and each is filled greedily
+     * by fit — an exact detailed-position match (tier 1) beats a same-coarse-band match (tier 2)
+     * beats anyone left (tier 3), and within a tier the highest rating wins (id tie-break). Slots
+     * are processed scarcest-first (fewest tier-1 candidates), ties broken by slot index, so a
+     * specialist slot is never starved by a generalist grabbing its only candidate. The result is a
+     * pure function of the squad + formation, so the two calls made per fixture (parallel pre-sim at
+     * kickoff, attribution at finish) always return the identical XI.
      */
     public List<Player> bestXi(UUID clubId, LocalDate onDate) {
         List<Player> allPlayers = playerRepository.findByClubIdAndYouthProspectFalse(clubId);
         List<Player> eligible = allPlayers.stream().filter(Player::isEligible).toList();
 
-        // Ascending comparator: .max(byRating) yields the highest-rated player,
-        // and .sorted(byRating.reversed()) yields best-first (top 10 outfield).
-        // Secondary tie-break on id (a deterministic total order) so that rating ties near
-        // the XI/bench cutoff resolve identically across repeated calls regardless of the
-        // DB row order (findByClubIdAndYouthProspectFalse has no ORDER BY) — required because
-        // this method is now called twice for the same fixture (parallel pre-simulation at
-        // kickoff, then attribution at finish) and both calls must select the identical XI.
+        // Ascending comparator: .max(byRating) yields the highest-rated player.
+        // Secondary tie-break on id (a deterministic total order) so that rating ties resolve
+        // identically across repeated calls regardless of the DB row order
+        // (findByClubIdAndYouthProspectFalse has no ORDER BY) — required because this method is
+        // called twice for the same fixture (parallel pre-simulation at kickoff, then attribution
+        // at finish) and both calls must select the identical XI.
         Comparator<Player> byRating =
                 Comparator.comparingDouble((Player p) -> rating(p, onDate))
                         .thenComparing(Player::getId);
@@ -354,34 +363,96 @@ public class LineupService {
                         .orElseThrow(() -> new ApiException(
                                 ErrorCode.NO_GK_FOUND, "Club " + clubId + " has no goalkeeper at all")));
 
-        // Fill 10 outfield slots: prefer eligible, then fill from ineligible if needed.
-        List<Player> eligibleOutfield = eligible.stream()
+        // Candidate pool for the 10 outfield slots: prefer eligible, top up from ineligible if the
+        // club has fewer than 10 eligible outfielders (graceful fallback, same as before).
+        List<Player> pool = eligible.stream()
                 .filter(p -> p.getPosition() != Position.GK && !p.getId().equals(bestGk.getId()))
-                .sorted(byRating.reversed())
-                .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
-
-        List<Player> topOutfield;
-        if (eligibleOutfield.size() >= 10) {
-            topOutfield = eligibleOutfield.subList(0, 10);
-        } else {
-            // Not enough eligible outfield players — fill with ineligible ones (graceful fallback).
-            java.util.Set<UUID> usedIds = new java.util.HashSet<>();
-            eligibleOutfield.forEach(p -> usedIds.add(p.getId()));
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (pool.size() < 10) {
+            Set<UUID> usedIds = pool.stream().map(Player::getId).collect(Collectors.toCollection(java.util.HashSet::new));
             usedIds.add(bestGk.getId());
             List<Player> ineligibleOutfield = allPlayers.stream()
                     .filter(p -> !usedIds.contains(p.getId()) && p.getPosition() != Position.GK)
                     .sorted(byRating.reversed())
                     .toList();
-            int needed = 10 - eligibleOutfield.size();
-            List<Player> combined = new java.util.ArrayList<>(eligibleOutfield);
-            combined.addAll(ineligibleOutfield.subList(0, Math.min(needed, ineligibleOutfield.size())));
-            topOutfield = combined;
+            int needed = 10 - pool.size();
+            pool.addAll(ineligibleOutfield.subList(0, Math.min(needed, ineligibleOutfield.size())));
         }
 
-        return new java.util.ArrayList<>(
-                java.util.stream.Stream.concat(java.util.stream.Stream.of(bestGk), topOutfield.stream())
-                        .toList()
-        );
+        List<Player> outfield = fillOutfieldSlots(pool, formationFor(clubId), byRating);
+
+        List<Player> xi = new ArrayList<>(1 + outfield.size());
+        xi.add(bestGk);
+        xi.addAll(outfield);
+        return xi;
+    }
+
+    /** The formation a club plays when no explicit lineup is set: its default, else 4-4-2. */
+    private String formationFor(UUID clubId) {
+        return clubRepository.findById(clubId)
+                .map(Club::getDefaultFormation)
+                .filter(f -> f != null && !f.isBlank())
+                .orElse("4-4-2");
+    }
+
+    /**
+     * Fills the formation's 10 outfield slots greedily from {@code pool} (GK slot excluded).
+     * Slots are processed scarcest-first (fewest tier-1 candidates in the initial pool), ties broken
+     * by slot index, so scarce specialist slots pick before generalists can starve them. Each slot
+     * takes the best remaining candidate by tier (exact detailed match &gt; same coarse band &gt;
+     * anyone), and within a tier by {@code byRating}. Deterministic: scarcity is computed once over
+     * the initial pool, so the fill order and every tie-break are a pure function of squad + slots.
+     * Returned in slot order (DEF left→right, then MID, then ATT).
+     */
+    static List<Player> fillOutfieldSlots(List<Player> pool, String formation, Comparator<Player> byRating) {
+        List<FormationSlots.Slot> slots = FormationSlots.of(formation);
+        // slots.get(0) is the GK slot; the 10 outfield slots follow in stable order.
+        List<FormationSlots.Slot> outfieldSlots = slots.subList(1, slots.size());
+
+        // Scarcity = number of tier-1 (exact detailed-position) candidates in the initial pool.
+        // Computed once so the processing order does not depend on fill progress.
+        List<Integer> order = new ArrayList<>();
+        for (int i = 0; i < outfieldSlots.size(); i++) {
+            order.add(i);
+        }
+        Map<Integer, Long> tier1Count = new HashMap<>();
+        for (int i = 0; i < outfieldSlots.size(); i++) {
+            Set<DetailedPosition> accepted = outfieldSlots.get(i).accepted();
+            tier1Count.put(i, pool.stream().filter(p -> accepted.contains(p.getDetailedPosition())).count());
+        }
+        order.sort(Comparator.<Integer>comparingLong(tier1Count::get).thenComparing(Comparator.naturalOrder()));
+
+        Player[] picked = new Player[outfieldSlots.size()];
+        List<Player> available = new ArrayList<>(pool);
+        for (int slotIndex : order) {
+            if (available.isEmpty()) {
+                break;
+            }
+            FormationSlots.Slot slot = outfieldSlots.get(slotIndex);
+            Player choice = pickForSlot(available, slot, byRating);
+            picked[slotIndex] = choice;
+            available.remove(choice);
+        }
+
+        List<Player> result = new ArrayList<>(outfieldSlots.size());
+        for (Player p : picked) {
+            if (p != null) {
+                result.add(p);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Best candidate for a single slot from {@code available}, by tier then rating:
+     * tier 1 = detailed position accepted by the slot; tier 2 = same coarse band; tier 3 = anyone.
+     */
+    private static Player pickForSlot(List<Player> available, FormationSlots.Slot slot, Comparator<Player> byRating) {
+        Set<DetailedPosition> accepted = slot.accepted();
+        Position band = slot.coarse();
+        return available.stream().filter(p -> accepted.contains(p.getDetailedPosition())).max(byRating)
+                .or(() -> available.stream().filter(p -> p.getPosition() == band).max(byRating))
+                .orElseGet(() -> available.stream().max(byRating).orElseThrow());
     }
 
     private static final int BENCH_SIZE = 7;
