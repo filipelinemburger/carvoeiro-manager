@@ -45,10 +45,10 @@ const STATE = {
   events: [{ minute: 12, type: 'GOAL', home: true, playerId: 'p1', playerName: 'Camisa 9',
     playerInId: null, playerInName: null, severity: null, text: 'GOL! Camisa 9 balança as redes!' }],
   onPitch: [], bench: [], subsRemaining: 5,
-  currentTactics: { mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-3-3' },
+  currentTactics: { mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', attackZone: 'MISTO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-3-3' },
   playerRatings: [],
   opponentOnPitch: [],
-  opponentTactics: { mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-4-2' },
+  opponentTactics: { mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', attackZone: 'MISTO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-4-2' },
   opponentRatings: [],
   homeClubColors: { primary: '#f7d417', secondary: '#111111' },
   awayClubColors: { primary: '#003399', secondary: '#ffffff' },
@@ -513,7 +513,7 @@ describe('LiveMatchPage', () => {
 
   it('opens the Tática dialog, changes mentality, clicks Continuar, and calls changeTactics', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
-    vi.mocked(changeTactics).mockResolvedValue({ ...STATE, currentTactics: { mentality: 'ATTACKING', gameStyle: 'EQUILIBRADO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-3-3' } } as never)
+    vi.mocked(changeTactics).mockResolvedValue({ ...STATE, currentTactics: { mentality: 'ATTACKING', gameStyle: 'EQUILIBRADO', attackZone: 'MISTO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-3-3' } } as never)
 
     renderPage()
 
@@ -675,7 +675,7 @@ describe('LiveMatchPage', () => {
     } as never)
     vi.mocked(substituteLiveMatch).mockResolvedValue({ ...STATE, subsRemaining: 4 } as never)
     vi.mocked(changeTactics).mockResolvedValue({
-      ...STATE, currentTactics: { mentality: 'ATTACKING', gameStyle: 'EQUILIBRADO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-3-3' },
+      ...STATE, currentTactics: { mentality: 'ATTACKING', gameStyle: 'EQUILIBRADO', attackZone: 'MISTO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-3-3' },
     } as never)
 
     renderPage()

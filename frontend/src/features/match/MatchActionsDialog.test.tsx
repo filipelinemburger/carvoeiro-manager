@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MatchActionsDialog } from './MatchActionsDialog'
 import { FORMATION_CODES } from '../pitch/pitchSlots'
-import { MENTALITY_LABEL, GAME_STYLE_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
+import { MENTALITY_LABEL, GAME_STYLE_LABEL, ATTACK_ZONE_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
 
 function renderTacticsTab(onApply: (payload: unknown) => void = () => {}) {
   render(
@@ -15,7 +15,7 @@ function renderTacticsTab(onApply: (payload: unknown) => void = () => {}) {
       subsRemaining={3}
       pending={false}
       onApply={onApply}
-      currentTactics={{ mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-4-2' }}
+      currentTactics={{ mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', attackZone: 'MISTO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-4-2' }}
     />,
   )
 }
@@ -34,6 +34,8 @@ describe('MatchActionsDialog tactics tab', () => {
     expect(Array.from(mentality.options).map(o => o.text)).toEqual(Object.values(MENTALITY_LABEL))
     const gameStyle = screen.getByLabelText('Estilo de jogo') as HTMLSelectElement
     expect(Array.from(gameStyle.options).map(o => o.text)).toEqual(Object.values(GAME_STYLE_LABEL))
+    const attackZone = screen.getByLabelText('Onde forçar o jogo') as HTMLSelectElement
+    expect(Array.from(attackZone.options).map(o => o.text)).toEqual(Object.values(ATTACK_ZONE_LABEL))
     const pressing = screen.getByLabelText('Pressão') as HTMLSelectElement
     expect(Array.from(pressing.options).map(o => o.text)).toEqual(Object.values(PRESSING_LABEL))
     const marking = screen.getByLabelText('Marcação') as HTMLSelectElement
@@ -51,6 +53,20 @@ describe('MatchActionsDialog tactics tab', () => {
     expect(onApply).toHaveBeenCalledWith({
       subs: [],
       tactics: expect.objectContaining({ gameStyle: 'RETRANCA', mentality: 'BALANCED' }),
+    })
+  })
+
+  it('treats an attack-zone-only change as a tactics change and includes attackZone in the applied payload', () => {
+    const onApply = vi.fn()
+    renderTacticsTab(onApply)
+
+    fireEvent.change(screen.getByLabelText('Onde forçar o jogo'), { target: { value: 'CENTRO' } })
+    fireEvent.click(screen.getByRole('button', { name: /continuar/i }))
+
+    expect(onApply).toHaveBeenCalledTimes(1)
+    expect(onApply).toHaveBeenCalledWith({
+      subs: [],
+      tactics: expect.objectContaining({ attackZone: 'CENTRO', mentality: 'BALANCED' }),
     })
   })
 })

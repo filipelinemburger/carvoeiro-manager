@@ -8,10 +8,10 @@ import PersonIcon from '@mui/icons-material/Person'
 import CloseIcon from '@mui/icons-material/Close'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import AddIcon from '@mui/icons-material/Add'
-import type { LivePlayer, LiveTactics, LiveTacticsRequest, Mentality, GameStyle, Pressing, Marking } from '../../api/types'
+import type { LivePlayer, LiveTactics, LiveTacticsRequest, Mentality, GameStyle, AttackZone, Pressing, Marking } from '../../api/types'
 import { FitnessBar } from '../squad/FitnessBar'
 import { FORMATION_CODES } from '../pitch/pitchSlots'
-import { MENTALITY_LABEL, GAME_STYLE_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
+import { MENTALITY_LABEL, GAME_STYLE_LABEL, ATTACK_ZONE_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
 
 // ---------------------------------------------------------------------------
 // Shared constants
@@ -26,6 +26,8 @@ const MENTALITIES = (Object.keys(MENTALITY_LABEL) as Mentality[])
   .map(v => ({ value: v, label: MENTALITY_LABEL[v] }))
 const GAME_STYLES = (Object.keys(GAME_STYLE_LABEL) as GameStyle[])
   .map(v => ({ value: v, label: GAME_STYLE_LABEL[v] }))
+const ATTACK_ZONES = (Object.keys(ATTACK_ZONE_LABEL) as AttackZone[])
+  .map(v => ({ value: v, label: ATTACK_ZONE_LABEL[v] }))
 const PRESSINGS = (Object.keys(PRESSING_LABEL) as Pressing[])
   .map(v => ({ value: v, label: PRESSING_LABEL[v] }))
 const MARKINGS = (Object.keys(MARKING_LABEL) as Marking[])
@@ -310,11 +312,13 @@ interface TacticsTabProps {
   currentTactics: LiveTactics
   mentality: string
   gameStyle: string
+  attackZone: string
   pressing: string
   marking: string
   formation: string
   onMentalityChange: (v: string) => void
   onGameStyleChange: (v: string) => void
+  onAttackZoneChange: (v: string) => void
   onPressingChange: (v: string) => void
   onMarkingChange: (v: string) => void
   onFormationChange: (v: string) => void
@@ -323,11 +327,13 @@ interface TacticsTabProps {
 function TacticsTabContent({
   mentality,
   gameStyle,
+  attackZone,
   pressing,
   marking,
   formation,
   onMentalityChange,
   onGameStyleChange,
+  onAttackZoneChange,
   onPressingChange,
   onMarkingChange,
   onFormationChange,
@@ -345,6 +351,12 @@ function TacticsTabContent({
         value={gameStyle}
         onChange={onGameStyleChange}
         options={GAME_STYLES}
+      />
+      <SelectField
+        label="Onde forçar o jogo"
+        value={attackZone}
+        onChange={onAttackZoneChange}
+        options={ATTACK_ZONES}
       />
       <SelectField
         label="Pressão"
@@ -407,6 +419,7 @@ export function MatchActionsDialog({
   // Tactics tab state — initialised from the current tactics
   const [mentality, setMentality] = useState(currentTactics.mentality)
   const [gameStyle, setGameStyle] = useState(currentTactics.gameStyle)
+  const [attackZone, setAttackZone] = useState(currentTactics.attackZone)
   const [pressing, setPressing] = useState(currentTactics.pressing)
   const [marking, setMarking] = useState(currentTactics.marking)
   const [formation, setFormation] = useState(currentTactics.formation)
@@ -431,13 +444,14 @@ export function MatchActionsDialog({
     const tacticsChanged =
       mentality !== currentTactics.mentality ||
       gameStyle !== currentTactics.gameStyle ||
+      attackZone !== currentTactics.attackZone ||
       pressing !== currentTactics.pressing ||
       marking !== currentTactics.marking ||
       formation !== currentTactics.formation
 
     onApply({
       subs: queue,
-      tactics: tacticsChanged ? { mentality, gameStyle, pressing, marking, formation } : null,
+      tactics: tacticsChanged ? { mentality, gameStyle, attackZone, pressing, marking, formation } : null,
     })
   }
 
@@ -493,11 +507,13 @@ export function MatchActionsDialog({
               currentTactics={currentTactics}
               mentality={mentality}
               gameStyle={gameStyle}
+              attackZone={attackZone}
               pressing={pressing}
               marking={marking}
               formation={formation}
               onMentalityChange={setMentality}
               onGameStyleChange={setGameStyle}
+              onAttackZoneChange={setAttackZone}
               onPressingChange={setPressing}
               onMarkingChange={setMarking}
               onFormationChange={setFormation}

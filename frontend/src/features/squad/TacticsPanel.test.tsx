@@ -40,6 +40,7 @@ describe('TacticsPanel', () => {
     mockGet.mockResolvedValue({
       mentality: 'ATTACKING',
       gameStyle: 'EQUILIBRADO',
+      attackZone: 'LATERAIS',
       pressing: 'HIGH',
       marking: 'ZONAL',
       penaltyTakerId: null,
@@ -49,6 +50,7 @@ describe('TacticsPanel', () => {
     mockSet.mockResolvedValue({
       mentality: 'ATTACKING',
       gameStyle: 'JOGO_DE_PASSES',
+      attackZone: 'MISTO',
       pressing: 'HIGH',
       marking: 'MAN_TIGHT',
       penaltyTakerId: 'p1',
@@ -94,6 +96,27 @@ describe('TacticsPanel', () => {
     )
   })
 
+  it('prefills the attack zone and includes it in the setTactics payload when saved', async () => {
+    renderPanel()
+    // Wait for the load effect to settle (Mentalidade differs from its default, unlike attackZone).
+    await waitFor(() => {
+      expect(screen.getByLabelText('Mentalidade')).toHaveValue('ATTACKING')
+    })
+    const attackZone = screen.getByLabelText('Onde forçar o jogo') as HTMLSelectElement
+    expect(Array.from(attackZone.options).map(o => o.value)).toEqual(['LATERAIS', 'CENTRO', 'MISTO'])
+    expect(attackZone).toHaveValue('LATERAIS')
+    fireEvent.change(attackZone, { target: { value: 'CENTRO' } })
+    fireEvent.click(screen.getByRole('button', { name: /salvar tática/i }))
+
+    await waitFor(() => expect(mockSet).toHaveBeenCalled())
+    expect(mockSet).toHaveBeenCalledWith(
+      'sg-1',
+      'club-1',
+      expect.objectContaining({ attackZone: 'CENTRO' }),
+      'test-token',
+    )
+  })
+
   it('displays friendly labels while keeping enum option values', async () => {
     renderPanel()
 
@@ -113,6 +136,13 @@ describe('TacticsPanel', () => {
       { value: 'JOGO_DIRETO', label: 'Jogo direto' },
       { value: 'PRESSAO_ALTA', label: 'Pressão alta' },
       { value: 'RETRANCA', label: 'Retranca' },
+    ])
+
+    const attackZone = screen.getByLabelText('Onde forçar o jogo') as HTMLSelectElement
+    expect(Array.from(attackZone.options).map(o => ({ value: o.value, label: o.text }))).toEqual([
+      { value: 'LATERAIS', label: 'Pelos lados' },
+      { value: 'CENTRO', label: 'Pelo centro' },
+      { value: 'MISTO', label: 'Misto' },
     ])
 
     const pressing = screen.getByLabelText('Pressão') as HTMLSelectElement

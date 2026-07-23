@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Box, Stack, Button, NativeSelect, FormControl, Typography, Alert, Snackbar } from '@mui/material'
 import { getTactics, setTactics } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
-import type { Mentality, GameStyle, Pressing, Marking } from '../../api/types'
-import { MENTALITY_LABEL, GAME_STYLE_LABEL, PRESSING_LABEL, MARKING_LABEL } from './tacticsLabels'
+import type { Mentality, GameStyle, AttackZone, Pressing, Marking } from '../../api/types'
+import { MENTALITY_LABEL, GAME_STYLE_LABEL, ATTACK_ZONE_LABEL, PRESSING_LABEL, MARKING_LABEL } from './tacticsLabels'
 
 interface Starter {
   id: string
@@ -19,6 +19,7 @@ interface TacticsPanelProps {
 
 const MENTALITIES: Mentality[] = ['DEFENSIVE', 'BALANCED', 'ATTACKING']
 const GAME_STYLES: GameStyle[] = ['EQUILIBRADO', 'JOGO_DE_PASSES', 'CONTRA_ATAQUE', 'JOGO_DIRETO', 'PRESSAO_ALTA', 'RETRANCA']
+const ATTACK_ZONES: AttackZone[] = ['LATERAIS', 'CENTRO', 'MISTO']
 const PRESSINGS: Pressing[] = ['LOW', 'MEDIUM', 'HIGH']
 const MARKINGS: Marking[] = ['ZONAL', 'MAN_TIGHT']
 
@@ -51,6 +52,7 @@ export function TacticsPanel({ saveGameId, clubId, starters }: TacticsPanelProps
   const queryClient = useQueryClient()
   const [mentality, setMentality] = useState<Mentality>('BALANCED')
   const [gameStyle, setGameStyle] = useState<GameStyle>('EQUILIBRADO')
+  const [attackZone, setAttackZone] = useState<AttackZone>('MISTO')
   const [pressing, setPressing] = useState<Pressing>('MEDIUM')
   const [marking, setMarking] = useState<Marking>('ZONAL')
   const [penalty, setPenalty] = useState('')
@@ -69,6 +71,7 @@ export function TacticsPanel({ saveGameId, clubId, starters }: TacticsPanelProps
     if (data) {
       setMentality(data.mentality)
       setGameStyle(data.gameStyle)
+      setAttackZone(data.attackZone)
       setPressing(data.pressing)
       setMarking(data.marking)
       setPenalty(data.penaltyTakerId ?? '')
@@ -85,6 +88,7 @@ export function TacticsPanel({ saveGameId, clubId, starters }: TacticsPanelProps
         {
           mentality,
           gameStyle,
+          attackZone,
           pressing,
           marking,
           penaltyTakerId: penalty || null,
@@ -125,6 +129,9 @@ export function TacticsPanel({ saveGameId, clubId, starters }: TacticsPanelProps
         </SelectField>
         <SelectField label="Estilo de jogo" value={gameStyle} onChange={v => { setSaved(false); setGameStyle(v as GameStyle) }}>
           {GAME_STYLES.map(s => <option key={s} value={s}>{GAME_STYLE_LABEL[s]}</option>)}
+        </SelectField>
+        <SelectField label="Onde forçar o jogo" value={attackZone} onChange={v => { setSaved(false); setAttackZone(v as AttackZone) }}>
+          {ATTACK_ZONES.map(z => <option key={z} value={z}>{ATTACK_ZONE_LABEL[z]}</option>)}
         </SelectField>
         <SelectField label="Pressão" value={pressing} onChange={v => { setSaved(false); setPressing(v as Pressing) }}>
           {PRESSINGS.map(p => <option key={p} value={p}>{PRESSING_LABEL[p]}</option>)}
