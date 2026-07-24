@@ -138,6 +138,7 @@ public class LineupService {
         // partially mutating the persisted lineup.
         Map<UUID, PlayerInstruction> starterInstructions = validateAndParseInstructions(starters, clubPlayers);
         Map<UUID, PlayerInstruction> benchInstructions = validateAndParseInstructions(bench, clubPlayers);
+        validateSlotIndexes(starters, bench, clubPlayers);
 
         Lineup lineup = lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId).orElse(null);
 
@@ -155,6 +156,7 @@ public class LineupService {
         for (LineupStarter starter : starters) {
             LineupPlayer lp = LineupPlayer.create(lineupId, starter.playerId(), true, starterRoles.get(starter.playerId()));
             lp.setInstruction(starterInstructions.get(starter.playerId()));
+            lp.setSlotIndex(starter.slotIndex());
             lineupPlayerRepository.save(lp);
         }
         for (LineupStarter sub : bench) {
@@ -605,12 +607,51 @@ public class LineupService {
         return resolved;
     }
 
-    /** Maps a persisted lineup row back to the DTO, round-tripping role + optional instruction. */
+    /**
+     * Validates the optional explicit slot assignment: either every starter carries a slotIndex
+     * (the 11 values must then be a permutation of 0..10, and the player at slot 0 — the GK slot
+     * in every formation — must be a goalkeeper) or none does (legacy greedy assignment).
+     * Bench entries never carry one. Runs before any delete/insert so a bad request rejects the
+     * whole call without partial mutation.
+     */
+    private void validateSlotIndexes(List<LineupStarter> starters, List<LineupStarter> bench,
+                                     List<Player> clubPlayers) {
+        if (bench != null && bench.stream().anyMatch(s -> s.slotIndex() != null)) {
+            throw new ApiException(ErrorCode.INVALID_LINEUP, "Bench players cannot carry a slotIndex");
+        }
+        long withSlot = starters.stream().filter(s -> s.slotIndex() != null).count();
+        if (withSlot == 0) {
+            return; // legacy request — the engine falls back to greedy assignment
+        }
+        if (withSlot != starters.size()) {
+            throw new ApiException(ErrorCode.INVALID_LINEUP,
+                    "Either every starter carries a slotIndex or none does");
+        }
+        Set<Integer> indexes = starters.stream().map(LineupStarter::slotIndex).collect(Collectors.toSet());
+        if (indexes.size() != starters.size()
+                || indexes.stream().anyMatch(i -> i < 0 || i >= starters.size())) {
+            throw new ApiException(ErrorCode.INVALID_LINEUP,
+                    "Starter slotIndexes must be a permutation of 0.." + (starters.size() - 1));
+        }
+        UUID slotZeroPlayerId = starters.stream().filter(s -> s.slotIndex() == 0)
+                .map(LineupStarter::playerId).findFirst().orElseThrow();
+        Player slotZeroPlayer = clubPlayers.stream()
+                .filter(p -> p.getId().equals(slotZeroPlayerId)).findFirst().orElse(null);
+        if (slotZeroPlayer == null || slotZeroPlayer.getPosition() != Position.GK) {
+            throw new ApiException(ErrorCode.INVALID_LINEUP, "Slot 0 is the goalkeeper slot");
+        }
+    }
+
+    /**
+     * Maps a persisted lineup row back to the DTO, round-tripping role + optional instruction +
+     * optional slot index.
+     */
     private LineupStarter toLineupStarter(LineupPlayer lp) {
         return new LineupStarter(
                 lp.getPlayerId(),
                 lp.getRole().name(),
-                lp.getInstruction() == null ? null : lp.getInstruction().name());
+                lp.getInstruction() == null ? null : lp.getInstruction().name(),
+                lp.getSlotIndex());
     }
 
     private Map<UUID, PlayerRole> currentRoles(UUID saveGameId, UUID clubId) {
