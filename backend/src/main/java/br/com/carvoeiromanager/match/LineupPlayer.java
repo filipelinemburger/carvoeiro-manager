@@ -45,6 +45,14 @@ public class LineupPlayer {
     @Column(name = "instruction", length = 20)
     private PlayerInstruction instruction;
 
+    /**
+     * Index of the formation slot this starter occupies (0 = GK slot; order of
+     * {@code FormationSlots.of}). Null for bench rows and legacy lineups — the engine then
+     * falls back to greedy assignment.
+     */
+    @Column(name = "slot_index")
+    private Integer slotIndex;
+
     protected LineupPlayer() {
         // for JPA
     }
@@ -69,8 +77,10 @@ public class LineupPlayer {
     public boolean isStarting() { return starting; }
     public PlayerRole getRole() { return role; }
     public PlayerInstruction getInstruction() { return instruction; }
+    public Integer getSlotIndex() { return slotIndex; }
 
     public void setStarting(boolean starting) { this.starting = starting; }
     public void setRole(PlayerRole role) { this.role = role; }
     public void setInstruction(PlayerInstruction instruction) { this.instruction = instruction; }
+    public void setSlotIndex(Integer slotIndex) { this.slotIndex = slotIndex; }
 }
