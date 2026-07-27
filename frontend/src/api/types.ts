@@ -150,6 +150,12 @@ export type LineupStarter = {
   role: PlayerRole
   /** Optional per-player instruction; null (or omitted) means none. */
   instruction: PlayerInstruction | null
+  /**
+   * Explicit formation slot (index into pitchSlots(formation); 0 = GK). Null/omitted on bench
+   * entries and legacy lineups — the engine then assigns greedily. Optional here only to keep
+   * older test fixtures compiling.
+   */
+  slotIndex?: number | null
 }
 
 export type SquadResponse = {
