@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { pitchSlots, FORMATION_CODES, LAYOUTS } from './pitchSlots'
 import { FORMATION_SHAPE } from '../squad/SquadPage'
 import { DETAILED_TO_COARSE } from '../players/positionLabels'
+import type { DetailedPosition } from '../../api/types'
 
 // Derive the canonical coarse-band shape straight from the formation code's digits, exactly like
 // the backend FormationSlots guard: GK = 1, DEF = first digit, ATT = last digit, MID = the digits
@@ -84,5 +85,138 @@ describe('pitchSlots', () => {
       const shape = shapeFromCode(code)
       expect(FORMATION_SHAPE[code]).toEqual({ DEF: shape.DEF, MID: shape.MID, ATT: shape.ATT })
     }
+  })
+})
+
+// The backend persists `slot_index` (0-10) per lineup starter, meaning "position N in the ordered
+// list pitchSlots(formation) returns". The tests above only check per-line COUNTS (e.g. 4-3-3 has
+// 4 DEF slots) and that each slot's `accepted` positions belong to the right coarse line — neither
+// catches someone silently reordering slots WITHIN a line (e.g. swapping the two ZAGUEIRO slots'
+// position, or moving VOLANTE to a different index inside MID). That kind of reorder would leave
+// every existing lineup's already-persisted slot_index pointing at a different slot than when it
+// was saved: a silent data-meaning corruption with no error anywhere.
+//
+// This golden table pins the EXACT ordered sequence of `accepted` tags pitchSlots() returns today,
+// per formation, as a literal fingerprint. It is intentionally copied straight from pitchSlots.ts's
+// current LAYOUTS output (not re-derived from shared constants) so a within-line reorder changes the
+// literal array here and fails immediately and specifically, rather than passing silently.
+const GOLDEN_ACCEPTED_SEQUENCE: Record<string, DetailedPosition[][]> = {
+  '4-4-2': [
+    ['GOLEIRO'],
+    ['LATERAL_DIREITO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['LATERAL_ESQUERDO'],
+    ['VOLANTE'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['ATACANTE', 'FALSO_9'], ['ATACANTE', 'FALSO_9'],
+  ],
+  '4-3-3': [
+    ['GOLEIRO'],
+    ['LATERAL_DIREITO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['LATERAL_ESQUERDO'],
+    ['VOLANTE'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['PONTA'], ['ATACANTE', 'FALSO_9'], ['PONTA'],
+  ],
+  '3-5-2': [
+    ['GOLEIRO'],
+    ['ZAGUEIRO'], ['ZAGUEIRO'], ['ZAGUEIRO'],
+    ['VOLANTE'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['ATACANTE', 'FALSO_9'], ['ATACANTE', 'FALSO_9'],
+  ],
+  '5-3-2': [
+    ['GOLEIRO'],
+    ['LATERAL_DIREITO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['LATERAL_ESQUERDO'],
+    ['VOLANTE'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['ATACANTE', 'FALSO_9'], ['ATACANTE', 'FALSO_9'],
+  ],
+  '4-5-1': [
+    ['GOLEIRO'],
+    ['LATERAL_DIREITO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['LATERAL_ESQUERDO'],
+    ['VOLANTE'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['ATACANTE', 'FALSO_9'],
+  ],
+  '4-2-3-1': [
+    ['GOLEIRO'],
+    ['LATERAL_DIREITO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['LATERAL_ESQUERDO'],
+    ['VOLANTE'], ['VOLANTE'],
+    ['MEIA_ARMADOR'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['ATACANTE', 'FALSO_9'],
+  ],
+  '4-1-4-1': [
+    ['GOLEIRO'],
+    ['LATERAL_DIREITO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['LATERAL_ESQUERDO'],
+    ['VOLANTE'],
+    ['MEIA_ARMADOR'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['ATACANTE', 'FALSO_9'],
+  ],
+  '4-3-2-1': [
+    ['GOLEIRO'],
+    ['LATERAL_DIREITO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['LATERAL_ESQUERDO'],
+    ['VOLANTE'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['ATACANTE', 'FALSO_9'],
+  ],
+  '3-4-3': [
+    ['GOLEIRO'],
+    ['ZAGUEIRO'], ['ZAGUEIRO'], ['ZAGUEIRO'],
+    ['VOLANTE'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['PONTA'], ['ATACANTE', 'FALSO_9'], ['PONTA'],
+  ],
+  '4-4-1-1': [
+    ['GOLEIRO'],
+    ['LATERAL_DIREITO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['LATERAL_ESQUERDO'],
+    ['VOLANTE'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['MEIA_ARMADOR'],
+    ['ATACANTE', 'FALSO_9'],
+  ],
+  '5-4-1': [
+    ['GOLEIRO'],
+    ['LATERAL_DIREITO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['LATERAL_ESQUERDO'],
+    ['VOLANTE'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['ATACANTE', 'FALSO_9'],
+  ],
+  '4-2-4': [
+    ['GOLEIRO'],
+    ['LATERAL_DIREITO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['LATERAL_ESQUERDO'],
+    ['VOLANTE'], ['MEIA_ARMADOR'],
+    ['PONTA'], ['ATACANTE', 'FALSO_9'], ['ATACANTE', 'FALSO_9'], ['PONTA'],
+  ],
+  '3-4-2-1': [
+    ['GOLEIRO'],
+    ['ZAGUEIRO'], ['ZAGUEIRO'], ['ZAGUEIRO'],
+    ['VOLANTE'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['ATACANTE', 'FALSO_9'],
+  ],
+  '4-1-2-1-2': [
+    ['GOLEIRO'],
+    ['LATERAL_DIREITO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['LATERAL_ESQUERDO'],
+    ['VOLANTE'],
+    ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['MEIA_ARMADOR'],
+    ['ATACANTE', 'FALSO_9'], ['ATACANTE', 'FALSO_9'],
+  ],
+  '5-2-3': [
+    ['GOLEIRO'],
+    ['LATERAL_DIREITO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['LATERAL_ESQUERDO'],
+    ['VOLANTE'], ['MEIA_ARMADOR'],
+    ['PONTA'], ['ATACANTE', 'FALSO_9'], ['PONTA'],
+  ],
+  '4-3-1-2': [
+    ['GOLEIRO'],
+    ['LATERAL_DIREITO'], ['ZAGUEIRO'], ['ZAGUEIRO'], ['LATERAL_ESQUERDO'],
+    ['VOLANTE'], ['MEIA_ARMADOR'], ['MEIA_ARMADOR'],
+    ['MEIA_ARMADOR'],
+    ['ATACANTE', 'FALSO_9'], ['ATACANTE', 'FALSO_9'],
+  ],
+}
+
+describe('pitchSlots golden slot order (regression guard for persisted slot_index)', () => {
+  it('covers every known formation code with a golden sequence', () => {
+    expect(new Set(Object.keys(GOLDEN_ACCEPTED_SEQUENCE))).toEqual(new Set(FORMATION_CODES))
+  })
+
+  it.each(FORMATION_CODES)('%s has the exact same ordered accepted-tag sequence as today', code => {
+    const slots = pitchSlots(code)
+    // A literal, hard-coded comparison — not a count or "belongs to the right line" check — so
+    // reordering slots within (or across) a line fails this test even though every other test in
+    // this file keeps passing.
+    expect(slots.map(s => s.accepted)).toEqual(GOLDEN_ACCEPTED_SEQUENCE[code])
   })
 })
