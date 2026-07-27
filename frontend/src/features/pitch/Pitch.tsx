@@ -11,6 +11,11 @@ export type PlacedPlayer = {
   position: 'GK' | 'DEF' | 'MID' | 'ATT'
   /** Fine-grained position; when set and not accepted by the slot, the token gets a warn tint. */
   detailedPosition?: DetailedPosition | null
+  /**
+   * Explicit formation slot (index into pitchSlots(formation)). When EVERY player of a team
+   * carries one, placement uses it; otherwise the legacy line-zip below runs.
+   */
+  slotIndex?: number
   fitness: number
   badges?: TokenBadges
 }
@@ -38,11 +43,23 @@ function assign(team: TeamOnPitch): Positioned[] {
   return out
 }
 
+// Places players by their explicit slotIndex; slots nobody claims stay on the pitch as empty
+// placeholders. Used when every player carries a slotIndex; otherwise `assign` line-zips.
+function placeExplicit(team: TeamOnPitch): Positioned[] {
+  const slots = pitchSlots(team.formation)
+  const bySlot = new Map(team.players.map(p => [p.slotIndex as number, p]))
+  return slots.map((slot, i) => ({ slot, number: i + 1, player: bySlot.get(i) ?? null }))
+}
+
+function place(team: TeamOnPitch): Positioned[] {
+  return team.players.every(p => p.slotIndex != null) ? placeExplicit(team) : assign(team)
+}
+
 function TeamLayer({ team, mirror }: { team: TeamOnPitch; mirror: boolean }) {
   const colors = tokenColors(team.kit)
   return (
     <>
-      {assign(team).map(({ slot, number, player }) => {
+      {place(team).map(({ slot, number, player }, i) => {
         const yPct = (mirror ? 1 - slot.y : slot.y) * 100
         const xPct = (mirror ? 1 - slot.x : slot.x) * 100
         // The slot's primary accepted position labels the token; a player whose detailed position
@@ -52,6 +69,7 @@ function TeamLayer({ team, mirror }: { team: TeamOnPitch; mirror: boolean }) {
         return (
           <Box
             key={player?.id ?? `slot-${number}`}
+            data-slot-index={i}
             sx={{ position: 'absolute', left: `${xPct}%`, top: `${yPct}%`, transform: 'translate(-50%, -50%)' }}
           >
             {player ? (
