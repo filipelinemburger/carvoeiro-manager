@@ -157,7 +157,14 @@ function validate(selected: string[], players: PlayerResponse[],
   }
   // Every starter needs a distinct formation slot (drag-and-drop / auto-assign keeps this
   // true; the guard catches degenerate states like a saved starter no longer in the squad).
-  const assigned = new Set(selected.map(id => slotByPlayerId[id]).filter(v => v !== undefined))
+  // `selected` is filtered down to ids that still resolve to a real player BEFORE the slot
+  // lookup: a starter can depart mid-session (e.g. Layout's advance-day refetch invalidates
+  // the squad query while this page stays mounted with them already selected) without
+  // anything clearing their `selected`/`slotByPlayerId` entries — their slot must not count
+  // toward the 11, or `toStarter` crashes on their now-missing player at save time instead.
+  const assigned = new Set(
+    selected.filter(id => players.some(p => p.id === id))
+      .map(id => slotByPlayerId[id]).filter(v => v !== undefined))
   if (assigned.size !== 11) {
     return 'Cada titular precisa de uma posição no campo — use o campo na aba Táticas para organizar.'
   }

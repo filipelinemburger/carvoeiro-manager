@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -897,6 +897,50 @@ describe('SquadPage', () => {
     await waitFor(() => expect(screen.getByLabelText(/formação/i)).toHaveValue('4-3-3'))
     // The departed player's slot never lands in slotByPlayerId, so the permutation is short by
     // one — validate blocks saving instead of letting a save attempt reach `toStarter` and throw.
+    expect(screen.getByRole('button', { name: /salvar escala/i })).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent(/posição no campo/i)
+  })
+
+  it('blocks saving when a selected starter drops out of the squad after hydration', async () => {
+    // Regression: distinct from the test above, which covers a *saved* lineup that already
+    // referenced a departed player at hydration time (Task 7's fix filters that in the
+    // hydration effect). Here the XI is built normally while the squad is fully intact, and
+    // a starter departs only AFTER hydration — e.g. Layout's advance-day handler invalidates
+    // the ['squad', ...] query while this page stays mounted with them already selected.
+    // Nothing re-runs the hydration effect, so `selected`/`slotByPlayerId` still reference
+    // them; only the refetched `players` array drops them. `validate` must catch this itself.
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <MemoryRouter initialEntries={['/squad?saveGameId=sg-1&clubId=club-1']}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <SquadPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+
+    // Build a valid, fully-slotted XI the normal way (auto-pick is deterministic: GK2,
+    // DEF1-4, MID1-3, ATT1-3 for the default 4-3-3 — see the comment on the bench test above).
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+    expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
+
+    // Simulate the squad refetching without DEF1 (transferred/released/contract expired)
+    // the same way Layout.tsx's `invalidateQueries({ queryKey: ['squad'] })` on advance-day
+    // would, while DEF1 is still a selected starter.
+    mockGetSquad.mockResolvedValueOnce({
+      ...squad,
+      players: squad.players.filter(p => p.id !== DEF1.id),
+    })
+    await act(async () => {
+      await qc.invalidateQueries({ queryKey: ['squad', 'sg-1', 'club-1'] })
+    })
+
+    // DEF1 is gone from the roster, but `selected` and `slotByPlayerId` still hold them —
+    // validate must still block saving (assigned.size drops below 11) instead of leaving
+    // `canSave` true and letting `toStarter` crash on the missing player at save time.
+    await waitFor(() => expect(screen.queryByText('Defensor Um')).not.toBeInTheDocument())
     expect(screen.getByRole('button', { name: /salvar escala/i })).toBeDisabled()
     expect(screen.getByRole('alert')).toHaveTextContent(/posição no campo/i)
   })
