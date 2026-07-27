@@ -337,7 +337,7 @@ class TeamStrengthCalculatorTest {
         TeamMatchInput base = calc.compute(xi, fitProfile(Map.of()));
         // An ATT slot (a different coarse band) for a defender → x0.80.
         TeamMatchInput dropped = calc.compute(xi,
-                fitProfile(Map.of(target.getId(), slotOf(DetailedPosition.PONTA))));
+                fitProfile(Map.of(target.getId(), slotOf(DetailedPosition.PONTA_DIREITA))));
         assertThat(dropped.attack()).isCloseTo(base.attack() * 0.80, within(1e-9));
         assertThat(dropped.defense()).isCloseTo(base.defense() * 0.80, within(1e-9));
     }
@@ -427,7 +427,10 @@ class TeamStrengthCalculatorTest {
         return xi;
     }
 
-    /** A well-formed 4-4-2 XI: each rated-70 player's detailed position fits a distinct slot exactly. */
+    /**
+     * A well-formed 4-4-2 XI: each rated-70 player's detailed position fits a distinct slot exactly.
+     * 4-4-2's MID row is four all-distinct slots (MD, VOL, MC, ME), so each gets its own candidate.
+     */
     private static List<Player> wellFormed442() {
         List<Player> xi = new ArrayList<>();
         xi.add(detailedPlayer(Position.GK, DetailedPosition.GOLEIRO));
@@ -435,10 +438,10 @@ class TeamStrengthCalculatorTest {
         xi.add(detailedPlayer(Position.DEF, DetailedPosition.ZAGUEIRO));
         xi.add(detailedPlayer(Position.DEF, DetailedPosition.ZAGUEIRO));
         xi.add(detailedPlayer(Position.DEF, DetailedPosition.LATERAL_ESQUERDO));
+        xi.add(detailedPlayer(Position.MID, DetailedPosition.MEIA_DIREITA));
         xi.add(detailedPlayer(Position.MID, DetailedPosition.VOLANTE));
-        xi.add(detailedPlayer(Position.MID, DetailedPosition.MEIA_ARMADOR));
-        xi.add(detailedPlayer(Position.MID, DetailedPosition.MEIA_ARMADOR));
-        xi.add(detailedPlayer(Position.MID, DetailedPosition.MEIA_ARMADOR));
+        xi.add(detailedPlayer(Position.MID, DetailedPosition.MEIA_CENTRAL));
+        xi.add(detailedPlayer(Position.MID, DetailedPosition.MEIA_ESQUERDA));
         xi.add(detailedPlayer(Position.ATT, DetailedPosition.ATACANTE));
         xi.add(detailedPlayer(Position.ATT, DetailedPosition.ATACANTE));
         return xi;

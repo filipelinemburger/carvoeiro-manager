@@ -122,16 +122,17 @@ class SlotAssignerTest {
     // ---- helpers ----
 
     private static List<Player> wellFormed442() {
+        // 4-4-2's MID row is four all-distinct slots (MD, VOL, MC, ME), so each gets its own candidate.
         List<Player> xi = new ArrayList<>();
         xi.add(detailed(Position.GK, DetailedPosition.GOLEIRO));
         xi.add(detailed(Position.DEF, DetailedPosition.LATERAL_DIREITO));
         xi.add(detailed(Position.DEF, DetailedPosition.ZAGUEIRO));
         xi.add(detailed(Position.DEF, DetailedPosition.ZAGUEIRO));
         xi.add(detailed(Position.DEF, DetailedPosition.LATERAL_ESQUERDO));
+        xi.add(detailed(Position.MID, DetailedPosition.MEIA_DIREITA));
         xi.add(detailed(Position.MID, DetailedPosition.VOLANTE));
-        xi.add(detailed(Position.MID, DetailedPosition.MEIA_ARMADOR));
-        xi.add(detailed(Position.MID, DetailedPosition.MEIA_ARMADOR));
-        xi.add(detailed(Position.MID, DetailedPosition.MEIA_ARMADOR));
+        xi.add(detailed(Position.MID, DetailedPosition.MEIA_CENTRAL));
+        xi.add(detailed(Position.MID, DetailedPosition.MEIA_ESQUERDA));
         xi.add(detailed(Position.ATT, DetailedPosition.ATACANTE));
         xi.add(detailed(Position.ATT, DetailedPosition.ATACANTE));
         return xi;

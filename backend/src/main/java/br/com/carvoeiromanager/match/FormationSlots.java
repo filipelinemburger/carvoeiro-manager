@@ -12,8 +12,8 @@ import java.util.Set;
 /**
  * The ORDERED detailed-position slots that make up each supported formation. Mirrors the pitch
  * geometry the frontend renders in {@code frontend/src/features/pitch/pitchSlots.ts} ({@code LAYOUTS}),
- * translating each geometric slot (a line + an x within that line) into the set of
- * {@link DetailedPosition}s that legitimately fill it.
+ * translating each geometric slot (a line + an x within that line) into the single {@link DetailedPosition}
+ * that legitimately fills it.
  *
  * <p>Slot order is stable and mirrors the lineup starter order the frontend uses: GK first, then the
  * DEF line left→right, then MID (deepest row first), then ATT. This lets slot-aware selection
@@ -23,16 +23,16 @@ import java.util.Set;
  * formation code — DEF = first digit, ATT = last digit, MID = the digits in between):
  * <ul>
  *   <li><b>GK</b> → {@code GOLEIRO}.</li>
- *   <li><b>DEF</b> by count: a back-3 is three centre-backs; a back-4/5 has the outer two as
- *       full-backs (leftmost {@code LATERAL_DIREITO}, rightmost {@code LATERAL_ESQUERDO}) and the
- *       inner slots as {@code ZAGUEIRO}.</li>
- *   <li><b>MID</b>: a single midfield row uses one holder (leftmost {@code VOLANTE}) with the rest
- *       {@code MEIA_ARMADOR}; when a formation has multiple midfield rows the deepest row holds
- *       (a holding pair/single → all {@code VOLANTE}, a wider deep band → one {@code VOLANTE} + rest
- *       {@code MEIA_ARMADOR}) and the more advanced rows are {@code MEIA_ARMADOR}. Midfield slots are
- *       never wingers so the coarse MID count always matches the code's middle digits.</li>
- *   <li><b>ATT</b>: wide slots → {@code PONTA}; central striker slots accept both {@code ATACANTE}
- *       and {@code FALSO_9}.</li>
+ *   <li><b>DEF</b> by count: a back-3 is three centre-backs ({@code ZAGUEIRO}); a back-4/5 has the
+ *       outer two as full-backs (leftmost {@code LATERAL_DIREITO}, rightmost {@code LATERAL_ESQUERDO})
+ *       and the inner slots as {@code ZAGUEIRO}.</li>
+ *   <li><b>MID</b>: a wide slot in a 4+ / flat midfield row is {@code MEIA_DIREITA} (right) or
+ *       {@code MEIA_ESQUERDA} (left); central slots fill by depth — the deepest holder is
+ *       {@code VOLANTE}, the next is {@code MEIA_CENTRAL}, and the most advanced is
+ *       {@code MEIA_ARMADOR}. Midfield slots are never wingers so the coarse MID count always
+ *       matches the code's middle digits.</li>
+ *   <li><b>ATT</b>: a front-3's wide slots are {@code PONTA_DIREITA} / {@code PONTA_ESQUERDA}; the
+ *       central striker slot is {@code ATACANTE}.</li>
  * </ul>
  */
 public final class FormationSlots {
@@ -59,32 +59,33 @@ public final class FormationSlots {
     private static final Slot LE = slot(DetailedPosition.LATERAL_ESQUERDO);
     private static final Slot ZAG = slot(DetailedPosition.ZAGUEIRO);
     private static final Slot VOL = slot(DetailedPosition.VOLANTE);
+    private static final Slot MC = slot(DetailedPosition.MEIA_CENTRAL);
     private static final Slot MEI = slot(DetailedPosition.MEIA_ARMADOR);
-    private static final Slot PON = slot(DetailedPosition.PONTA);
-    // A central striker slot: an out-and-out striker or a false-9 both fit.
-    private static final Slot ST = slot(DetailedPosition.ATACANTE, DetailedPosition.FALSO_9);
+    private static final Slot MD = slot(DetailedPosition.MEIA_DIREITA);
+    private static final Slot ME = slot(DetailedPosition.MEIA_ESQUERDA);
+    private static final Slot PD = slot(DetailedPosition.PONTA_DIREITA);
+    private static final Slot PE = slot(DetailedPosition.PONTA_ESQUERDA);
+    private static final Slot ST = slot(DetailedPosition.ATACANTE);
 
     private static final String DEFAULT_FORMATION = "4-4-2";
 
     private static final Map<String, List<Slot>> FORMATIONS = Map.ofEntries(
-            Map.entry("4-4-2", List.of(GK, LD, ZAG, ZAG, LE, VOL, MEI, MEI, MEI, ST, ST)),
-            Map.entry("4-3-3", List.of(GK, LD, ZAG, ZAG, LE, VOL, MEI, MEI, PON, ST, PON)),
-            Map.entry("3-5-2", List.of(GK, ZAG, ZAG, ZAG, VOL, MEI, MEI, MEI, MEI, ST, ST)),
-            Map.entry("5-3-2", List.of(GK, LD, ZAG, ZAG, ZAG, LE, VOL, MEI, MEI, ST, ST)),
-            Map.entry("4-5-1", List.of(GK, LD, ZAG, ZAG, LE, VOL, MEI, MEI, MEI, MEI, ST)),
-            Map.entry("4-2-3-1", List.of(GK, LD, ZAG, ZAG, LE, VOL, VOL, MEI, MEI, MEI, ST)),
-            Map.entry("4-1-4-1", List.of(GK, LD, ZAG, ZAG, LE, VOL, MEI, MEI, MEI, MEI, ST)),
-            Map.entry("4-3-2-1", List.of(GK, LD, ZAG, ZAG, LE, VOL, MEI, MEI, MEI, MEI, ST)),
-            Map.entry("3-4-3", List.of(GK, ZAG, ZAG, ZAG, VOL, MEI, MEI, MEI, PON, ST, PON)),
-            // 4-4-1-1: the withdrawn "1" behind the striker reads as an advanced playmaker (MEIA_ARMADOR),
-            // keeping coarse MID = 5 / ATT = 1 in line with the code's digits.
-            Map.entry("4-4-1-1", List.of(GK, LD, ZAG, ZAG, LE, VOL, MEI, MEI, MEI, MEI, ST)),
-            Map.entry("5-4-1", List.of(GK, LD, ZAG, ZAG, ZAG, LE, VOL, MEI, MEI, MEI, ST)),
-            Map.entry("4-2-4", List.of(GK, LD, ZAG, ZAG, LE, VOL, MEI, PON, ST, ST, PON)),
-            Map.entry("3-4-2-1", List.of(GK, ZAG, ZAG, ZAG, VOL, MEI, MEI, MEI, MEI, MEI, ST)),
-            Map.entry("4-1-2-1-2", List.of(GK, LD, ZAG, ZAG, LE, VOL, MEI, MEI, MEI, ST, ST)),
-            Map.entry("5-2-3", List.of(GK, LD, ZAG, ZAG, ZAG, LE, VOL, MEI, PON, ST, PON)),
-            Map.entry("4-3-1-2", List.of(GK, LD, ZAG, ZAG, LE, VOL, MEI, MEI, MEI, ST, ST)));
+            Map.entry("4-4-2", List.of(GK, LD, ZAG, ZAG, LE, MD, VOL, MC, ME, ST, ST)),
+            Map.entry("4-3-3", List.of(GK, LD, ZAG, ZAG, LE, VOL, MC, MEI, PD, ST, PE)),
+            Map.entry("3-5-2", List.of(GK, ZAG, ZAG, ZAG, MD, VOL, MC, MEI, ME, ST, ST)),
+            Map.entry("5-3-2", List.of(GK, LD, ZAG, ZAG, ZAG, LE, VOL, MC, MEI, ST, ST)),
+            Map.entry("4-5-1", List.of(GK, LD, ZAG, ZAG, LE, MD, VOL, MC, MEI, ME, ST)),
+            Map.entry("4-2-3-1", List.of(GK, LD, ZAG, ZAG, LE, VOL, VOL, MD, MEI, ME, ST)),
+            Map.entry("4-1-4-1", List.of(GK, LD, ZAG, ZAG, LE, VOL, MD, MC, MEI, ME, ST)),
+            Map.entry("4-3-2-1", List.of(GK, LD, ZAG, ZAG, LE, VOL, MC, MC, MEI, MEI, ST)),
+            Map.entry("3-4-3", List.of(GK, ZAG, ZAG, ZAG, MD, VOL, MC, ME, PD, ST, PE)),
+            Map.entry("4-4-1-1", List.of(GK, LD, ZAG, ZAG, LE, MD, VOL, MC, ME, MEI, ST)),
+            Map.entry("5-4-1", List.of(GK, LD, ZAG, ZAG, ZAG, LE, MD, VOL, MC, ME, ST)),
+            Map.entry("4-2-4", List.of(GK, LD, ZAG, ZAG, LE, VOL, MC, PD, ST, ST, PE)),
+            Map.entry("3-4-2-1", List.of(GK, ZAG, ZAG, ZAG, MD, VOL, MC, ME, MEI, MEI, ST)),
+            Map.entry("4-1-2-1-2", List.of(GK, LD, ZAG, ZAG, LE, VOL, MC, MC, MEI, ST, ST)),
+            Map.entry("5-2-3", List.of(GK, LD, ZAG, ZAG, ZAG, LE, VOL, MC, PD, ST, PE)),
+            Map.entry("4-3-1-2", List.of(GK, LD, ZAG, ZAG, LE, VOL, MC, MC, MEI, ST, ST)));
 
     private FormationSlots() {
     }

@@ -78,19 +78,22 @@ class LineupServiceSlotFillTest {
 
     @Test
     void fillIsDeterministicAcrossRepeatedCalls() {
-        // Given a mixed pool
+        // Given a mixed pool. 4-3-3's outfield slots are LD, ZAG, ZAG, LE, VOL, MC, MEI, PD, ST, PE
+        // — ten distinct slots (only ZAG repeats) — so M1/M2 each exact-fit a different central-mid
+        // slot (MC / MEI) and Pon1/Pon2 each exact-fit a different wing slot (PD / PE).
         List<Player> pool = new ArrayList<>(List.of(
                 player("LD", Position.DEF, DetailedPosition.LATERAL_DIREITO, 71),
                 player("LE", Position.DEF, DetailedPosition.LATERAL_ESQUERDO, 72),
                 player("Z1", Position.DEF, DetailedPosition.ZAGUEIRO, 80),
                 player("Z2", Position.DEF, DetailedPosition.ZAGUEIRO, 79),
                 player("V", Position.MID, DetailedPosition.VOLANTE, 78),
-                player("M1", Position.MID, DetailedPosition.MEIA_ARMADOR, 77),
+                player("M1", Position.MID, DetailedPosition.MEIA_CENTRAL, 77),
                 player("M2", Position.MID, DetailedPosition.MEIA_ARMADOR, 76),
-                player("Pon1", Position.ATT, DetailedPosition.PONTA, 75),
-                player("Pon2", Position.ATT, DetailedPosition.PONTA, 74),
+                player("Pon1", Position.ATT, DetailedPosition.PONTA_DIREITA, 75),
+                player("Pon2", Position.ATT, DetailedPosition.PONTA_ESQUERDA, 74),
                 player("St", Position.ATT, DetailedPosition.ATACANTE, 82),
-                // one extra bench-grade candidate that must be dropped identically both times
+                // one extra bench-grade candidate (same detailed position as M2) that must lose the
+                // single MEI slot and be dropped identically both times
                 player("M3", Position.MID, DetailedPosition.MEIA_ARMADOR, 50)));
 
         // When filled twice

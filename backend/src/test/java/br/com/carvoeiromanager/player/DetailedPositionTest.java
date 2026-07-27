@@ -3,83 +3,116 @@ package br.com.carvoeiromanager.player;
 import org.junit.jupiter.api.Test;
 
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Covers {@link DetailedPosition#defaultFor}: coarse-consistency for every branch, the position
- * distributions, and the PASSE-gated FALSO_9 rule.
+ * Covers {@link DetailedPosition}: the tactical distance graph ({@link DetailedPosition#distance}
+ * / {@link DetailedPosition#adjacent}), {@link DetailedPosition#defaultFor} coarse-consistency and
+ * distribution across all 12 values, and {@link DetailedPosition#alternatesFor}.
  */
 class DetailedPositionTest {
 
     @Test
-    void everyResultIsCoarseConsistentWithTheRequestedPosition() {
-        for (Position position : Position.values()) {
-            for (int passe = 0; passe <= 99; passe += 7) {
-                Random rng = new Random(passe * 31L + position.ordinal());
-                for (int i = 0; i < 200; i++) {
-                    DetailedPosition d = DetailedPosition.defaultFor(position, passe, rng);
-                    assertThat(d.coarse())
-                            .as("defaultFor(%s, %d) -> %s must map back to %s", position, passe, d, position)
-                            .isEqualTo(position);
+    void distanceIsSymmetricAndBounded() {
+        for (DetailedPosition a : DetailedPosition.values()) {
+            for (DetailedPosition b : DetailedPosition.values()) {
+                assertThat(a.distance(b)).as("%s <-> %s should be symmetric", a, b).isEqualTo(b.distance(a));
+
+                if (a == b) {
+                    assertThat(a.distance(b)).as("%s <-> itself", a).isZero();
+                } else {
+                    assertThat(a.distance(b)).as("%s <-> %s should not be 0", a, b).isNotZero();
+                }
+
+                boolean exactlyOneGoleiro = (a == DetailedPosition.GOLEIRO) ^ (b == DetailedPosition.GOLEIRO);
+                if (exactlyOneGoleiro) {
+                    assertThat(a.distance(b)).as("%s <-> %s (GK vs outfield)", a, b).isEqualTo(3);
+                } else {
+                    assertThat(a.distance(b)).as("%s <-> %s", a, b).isIn(0, 1, 2);
                 }
             }
         }
     }
 
     @Test
-    void goalkeepersAlwaysGetGoleiro() {
-        Random rng = new Random(1);
-        for (int i = 0; i < 100; i++) {
-            assertThat(DetailedPosition.defaultFor(Position.GK, i % 100, rng))
-                    .isEqualTo(DetailedPosition.GOLEIRO);
+    void adjacencyMatchesTheSpecGraph() {
+        assertThat(DetailedPosition.LATERAL_DIREITO.adjacent()).containsExactlyInAnyOrder(
+                DetailedPosition.MEIA_DIREITA, DetailedPosition.ZAGUEIRO);
+        assertThat(DetailedPosition.LATERAL_ESQUERDO.adjacent()).containsExactlyInAnyOrder(
+                DetailedPosition.MEIA_ESQUERDA, DetailedPosition.ZAGUEIRO);
+        assertThat(DetailedPosition.MEIA_DIREITA.adjacent()).containsExactlyInAnyOrder(
+                DetailedPosition.LATERAL_DIREITO, DetailedPosition.PONTA_DIREITA);
+        assertThat(DetailedPosition.MEIA_ESQUERDA.adjacent()).containsExactlyInAnyOrder(
+                DetailedPosition.LATERAL_ESQUERDO, DetailedPosition.PONTA_ESQUERDA);
+        assertThat(DetailedPosition.VOLANTE.adjacent()).containsExactlyInAnyOrder(
+                DetailedPosition.ZAGUEIRO, DetailedPosition.MEIA_CENTRAL);
+        assertThat(DetailedPosition.MEIA_CENTRAL.adjacent()).containsExactlyInAnyOrder(
+                DetailedPosition.VOLANTE, DetailedPosition.MEIA_ARMADOR);
+        assertThat(DetailedPosition.MEIA_ARMADOR.adjacent()).containsExactlyInAnyOrder(
+                DetailedPosition.MEIA_CENTRAL, DetailedPosition.ATACANTE);
+        assertThat(DetailedPosition.ZAGUEIRO.adjacent()).containsExactlyInAnyOrder(
+                DetailedPosition.VOLANTE, DetailedPosition.LATERAL_DIREITO, DetailedPosition.LATERAL_ESQUERDO);
+        assertThat(DetailedPosition.PONTA_DIREITA.adjacent()).containsExactlyInAnyOrder(
+                DetailedPosition.MEIA_DIREITA, DetailedPosition.ATACANTE);
+        assertThat(DetailedPosition.PONTA_ESQUERDA.adjacent()).containsExactlyInAnyOrder(
+                DetailedPosition.MEIA_ESQUERDA, DetailedPosition.ATACANTE);
+        assertThat(DetailedPosition.ATACANTE.adjacent()).containsExactlyInAnyOrder(
+                DetailedPosition.MEIA_ARMADOR, DetailedPosition.PONTA_DIREITA, DetailedPosition.PONTA_ESQUERDA);
+        assertThat(DetailedPosition.GOLEIRO.adjacent()).isEmpty();
+    }
+
+    @Test
+    void defaultForIsCoarseConsistentAndCovers12Values() {
+        for (Position position : Position.values()) {
+            Random rng = new Random(42);
+            Set<DetailedPosition> seen = EnumSet.noneOf(DetailedPosition.class);
+            for (int i = 0; i < 10_000; i++) {
+                DetailedPosition d = DetailedPosition.defaultFor(position, rng);
+                assertThat(d.coarse()).as("defaultFor(%s) -> %s must map back to %s", position, d, position)
+                        .isEqualTo(position);
+                seen.add(d);
+            }
+            switch (position) {
+                case GK -> assertThat(seen).containsExactly(DetailedPosition.GOLEIRO);
+                case DEF -> assertThat(seen).containsExactlyInAnyOrder(DetailedPosition.ZAGUEIRO,
+                        DetailedPosition.LATERAL_DIREITO, DetailedPosition.LATERAL_ESQUERDO);
+                case MID -> assertThat(seen).containsExactlyInAnyOrder(DetailedPosition.VOLANTE,
+                        DetailedPosition.MEIA_CENTRAL, DetailedPosition.MEIA_ARMADOR,
+                        DetailedPosition.MEIA_DIREITA, DetailedPosition.MEIA_ESQUERDA);
+                case ATT -> assertThat(seen).containsExactlyInAnyOrder(DetailedPosition.PONTA_DIREITA,
+                        DetailedPosition.PONTA_ESQUERDA, DetailedPosition.ATACANTE);
+            }
         }
     }
 
     @Test
-    void defendersOnlyYieldTheThreeDefValuesAndProduceEachAcrossManySeeds() {
-        Set<DetailedPosition> seen = EnumSet.noneOf(DetailedPosition.class);
-        for (int seed = 0; seed < 500; seed++) {
-            DetailedPosition d = DetailedPosition.defaultFor(Position.DEF, 50, new Random(seed));
-            assertThat(d).isIn(DetailedPosition.ZAGUEIRO,
-                    DetailedPosition.LATERAL_ESQUERDO, DetailedPosition.LATERAL_DIREITO);
-            seen.add(d);
-        }
-        assertThat(seen).containsExactlyInAnyOrder(DetailedPosition.ZAGUEIRO,
-                DetailedPosition.LATERAL_ESQUERDO, DetailedPosition.LATERAL_DIREITO);
-    }
+    void alternatesAreAdjacentDistinctAndNeverGk() {
+        for (DetailedPosition primary : DetailedPosition.values()) {
+            Random rng = new Random(42);
+            int drawsWithAtLeastOne = 0;
+            for (int i = 0; i < 10_000; i++) {
+                List<DetailedPosition> alts = DetailedPosition.alternatesFor(primary, rng);
 
-    @Test
-    void midfieldersOnlyYieldVolanteOrMeiaArmador() {
-        Set<DetailedPosition> seen = EnumSet.noneOf(DetailedPosition.class);
-        Random rng = new Random(11);
-        for (int i = 0; i < 200; i++) {
-            DetailedPosition d = DetailedPosition.defaultFor(Position.MID, 50, rng);
-            assertThat(d).isIn(DetailedPosition.VOLANTE, DetailedPosition.MEIA_ARMADOR);
-            seen.add(d);
+                assertThat(alts.size()).as("alternatesFor(%s) size", primary).isLessThanOrEqualTo(2);
+                assertThat(alts).as("alternatesFor(%s) has no duplicates", primary).doesNotHaveDuplicates();
+                assertThat(primary.adjacent()).as("alternatesFor(%s) subset of adjacent()", primary)
+                        .containsAll(alts);
+                if (primary == DetailedPosition.GOLEIRO) {
+                    assertThat(alts).as("GOLEIRO never gets alternates").isEmpty();
+                }
+                if (!alts.isEmpty()) {
+                    drawsWithAtLeastOne++;
+                }
+            }
+            if (primary != DetailedPosition.GOLEIRO) {
+                double share = drawsWithAtLeastOne / 10_000.0;
+                assertThat(share).as("share of draws with >=1 alternate for %s", primary).isBetween(0.25, 0.35);
+            }
         }
-        assertThat(seen).containsExactlyInAnyOrder(DetailedPosition.VOLANTE, DetailedPosition.MEIA_ARMADOR);
-    }
-
-    @Test
-    void attackersNeverGetFalso9BelowThePasseThreshold() {
-        for (int seed = 0; seed < 2000; seed++) {
-            DetailedPosition d = DetailedPosition.defaultFor(Position.ATT, 59, new Random(seed));
-            assertThat(d).isNotEqualTo(DetailedPosition.FALSO_9);
-            assertThat(d).isIn(DetailedPosition.PONTA, DetailedPosition.ATACANTE);
-        }
-    }
-
-    @Test
-    void attackersCanGetFalso9AtOrAboveThePasseThreshold() {
-        Set<DetailedPosition> seen = EnumSet.noneOf(DetailedPosition.class);
-        for (int seed = 0; seed < 2000; seed++) {
-            seen.add(DetailedPosition.defaultFor(Position.ATT, 60, new Random(seed)));
-        }
-        assertThat(seen).contains(DetailedPosition.FALSO_9,
-                DetailedPosition.PONTA, DetailedPosition.ATACANTE);
     }
 
     @Test

@@ -119,7 +119,12 @@ class DetailedPositionMigrationIT {
             String position = (String) row.get("position");
             String detailed = (String) row.get("detailed_position");
             assertThat(detailed).isNotEqualTo("FALSO_9");
-            assertThat(DetailedPosition.valueOf(detailed).coarse().name()).isEqualTo(position);
+            // V39's backfill CASE above is frozen, historical SQL and can still legitimately produce
+            // 'PONTA' — a DetailedPosition name V41 retired (split into PONTA_DIREITA/PONTA_ESQUERDA).
+            // Its coarse band (ATT) is asserted directly for that one legacy value instead of
+            // round-tripping through the current enum, which no longer has that constant.
+            String coarse = detailed.equals("PONTA") ? "ATT" : DetailedPosition.valueOf(detailed).coarse().name();
+            assertThat(coarse).isEqualTo(position);
         }
     }
 

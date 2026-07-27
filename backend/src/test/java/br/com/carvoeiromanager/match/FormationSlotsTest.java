@@ -67,11 +67,11 @@ class FormationSlotsTest {
                 set(DetailedPosition.ZAGUEIRO),
                 set(DetailedPosition.LATERAL_ESQUERDO),
                 set(DetailedPosition.VOLANTE),
+                set(DetailedPosition.MEIA_CENTRAL),
                 set(DetailedPosition.MEIA_ARMADOR),
-                set(DetailedPosition.MEIA_ARMADOR),
-                set(DetailedPosition.PONTA),
-                set(DetailedPosition.ATACANTE, DetailedPosition.FALSO_9),
-                set(DetailedPosition.PONTA));
+                set(DetailedPosition.PONTA_DIREITA),
+                set(DetailedPosition.ATACANTE),
+                set(DetailedPosition.PONTA_ESQUERDA));
     }
 
     @Test
@@ -91,11 +91,11 @@ class FormationSlotsTest {
     }
 
     @Test
-    void centralStrikerSlotAcceptsBothStrikerAndFalseNine() {
-        // 4-5-1's lone forward is a central striker slot.
+    void centralStrikerSlotAcceptsOnlyAtacante() {
+        // 4-5-1's lone forward is a central striker slot — single-position now that FALSO_9 is
+        // retired (a false-9 archetype survives only as a familiar-role flavour, not a slot value).
         List<FormationSlots.Slot> slots = FormationSlots.of("4-5-1");
-        assertThat(slots.get(10).accepted())
-                .containsExactlyInAnyOrder(DetailedPosition.ATACANTE, DetailedPosition.FALSO_9);
+        assertThat(slots.get(10).accepted()).containsExactly(DetailedPosition.ATACANTE);
     }
 
     private static List<java.util.Set<DetailedPosition>> accepted(List<FormationSlots.Slot> slots) {

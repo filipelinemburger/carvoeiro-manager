@@ -1,6 +1,10 @@
 package br.com.carvoeiromanager.player;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 /**
  * A fine-grained playing position that refines the coarse {@link Position}. Every player carries one:
@@ -14,12 +18,15 @@ public enum DetailedPosition {
 
     GOLEIRO(Position.GK, "Goleiro", "GOL"),
     ZAGUEIRO(Position.DEF, "Zagueiro", "ZAG"),
-    LATERAL_ESQUERDO(Position.DEF, "Lateral esquerdo", "LE"),
     LATERAL_DIREITO(Position.DEF, "Lateral direito", "LD"),
+    LATERAL_ESQUERDO(Position.DEF, "Lateral esquerdo", "LE"),
     VOLANTE(Position.MID, "Volante", "VOL"),
+    MEIA_CENTRAL(Position.MID, "Meia central", "MC"),
     MEIA_ARMADOR(Position.MID, "Meia armador", "MEI"),
-    PONTA(Position.ATT, "Ponta", "PON"),
-    FALSO_9(Position.ATT, "Falso 9", "F9"),
+    MEIA_DIREITA(Position.MID, "Meia direita", "MD"),
+    MEIA_ESQUERDA(Position.MID, "Meia esquerda", "ME"),
+    PONTA_DIREITA(Position.ATT, "Ponta direita", "PD"),
+    PONTA_ESQUERDA(Position.ATT, "Ponta esquerda", "PE"),
     ATACANTE(Position.ATT, "Atacante", "ATA");
 
     private final Position coarse;
@@ -44,36 +51,84 @@ public enum DetailedPosition {
         return shortLabel;
     }
 
+    /** Unordered adjacent (1-step) pairs of the position graph — see spec §4.1. */
+    private static final Set<Set<DetailedPosition>> ADJACENT = Set.of(
+            Set.of(LATERAL_DIREITO, MEIA_DIREITA), Set.of(LATERAL_ESQUERDO, MEIA_ESQUERDA),
+            Set.of(MEIA_DIREITA, PONTA_DIREITA), Set.of(MEIA_ESQUERDA, PONTA_ESQUERDA),
+            Set.of(VOLANTE, MEIA_CENTRAL), Set.of(MEIA_CENTRAL, MEIA_ARMADOR),
+            Set.of(MEIA_ARMADOR, ATACANTE), Set.of(ZAGUEIRO, VOLANTE),
+            Set.of(LATERAL_DIREITO, ZAGUEIRO), Set.of(LATERAL_ESQUERDO, ZAGUEIRO),
+            Set.of(PONTA_DIREITA, ATACANTE), Set.of(PONTA_ESQUERDA, ATACANTE));
+
+    /**
+     * Tactical distance between positions: 0 = same, 1 = adjacent (natural improvisation),
+     * 2 = far, 3 = goalkeeper vs any outfield position (either direction).
+     */
+    public int distance(DetailedPosition other) {
+        if (this == other) {
+            return 0;
+        }
+        if (this == GOLEIRO || other == GOLEIRO) {
+            return 3;
+        }
+        return ADJACENT.contains(Set.of(this, other)) ? 1 : 2;
+    }
+
+    /** Distance-1 neighbours in declaration order (never contains GOLEIRO for outfield callers). */
+    public List<DetailedPosition> adjacent() {
+        return Arrays.stream(values()).filter(p -> distance(p) == 1).toList();
+    }
+
     /**
      * Picks a coarse-consistent detailed position for a player, adding realistic variety within a
      * coarse position. Draws from {@code rng}; callers that must not disturb a shared generation
      * stream pass a per-player {@link Random} seeded off the player's id.
      *
-     * <p>The result always satisfies {@code defaultFor(position, passe, rng).coarse() == position}.
+     * <p>The result always satisfies {@code defaultFor(position, rng).coarse() == position}.
      *
      * @param position the coarse position the detailed value must belong to
-     * @param passe    the player's PASSE attribute (only the FALSO_9 rule consults it)
      * @param rng      the source of variety
      */
-    public static DetailedPosition defaultFor(Position position, int passe, Random rng) {
+    public static DetailedPosition defaultFor(Position position, Random rng) {
         return switch (position) {
             case GK -> GOLEIRO;
             case DEF -> {
-                int r = rng.nextInt(5);
-                if (r < 3) {
-                    yield ZAGUEIRO;
-                }
-                yield r == 3 ? LATERAL_ESQUERDO : LATERAL_DIREITO;
+                int r = rng.nextInt(10);            // 60% ZAG, 20% LD, 20% LE
+                if (r < 6) yield ZAGUEIRO;
+                yield r < 8 ? LATERAL_DIREITO : LATERAL_ESQUERDO;
             }
-            case MID -> rng.nextBoolean() ? VOLANTE : MEIA_ARMADOR;
+            case MID -> {
+                int r = rng.nextInt(10);            // 30% VOL, 30% MC, 20% MEI, 10% MD, 10% ME
+                if (r < 3) yield VOLANTE;
+                if (r < 6) yield MEIA_CENTRAL;
+                if (r < 8) yield MEIA_ARMADOR;
+                yield r == 8 ? MEIA_DIREITA : MEIA_ESQUERDA;
+            }
             case ATT -> {
-                if (passe >= 60 && rng.nextInt(10) == 0) {
-                    yield FALSO_9;
-                }
-                // Draw the ponta/atacante split unconditionally so the distribution is stable
-                // regardless of whether the FALSO_9 branch fired.
-                yield rng.nextInt(10) < 3 ? PONTA : ATACANTE;
+                int r = rng.nextInt(10);            // 20% PD, 20% PE, 60% ATA
+                if (r < 2) yield PONTA_DIREITA;
+                if (r < 4) yield PONTA_ESQUERDA;
+                yield ATACANTE;
             }
         };
+    }
+
+    /**
+     * 0–2 alternate positions for a generated player: ~30% one alternate, ~5% two, drawn from the
+     * primary's adjacent outfield neighbours. Goalkeepers never get (or are) alternates. Draws come
+     * from the caller's per-player Random, so no shared stream is disturbed.
+     */
+    public static List<DetailedPosition> alternatesFor(DetailedPosition primary, Random rng) {
+        if (primary == GOLEIRO) {
+            return List.of();
+        }
+        int roll = rng.nextInt(100);
+        int count = roll < 5 ? 2 : roll < 35 ? 1 : 0;
+        List<DetailedPosition> pool = new ArrayList<>(primary.adjacent());
+        List<DetailedPosition> alts = new ArrayList<>();
+        for (int i = 0; i < count && !pool.isEmpty(); i++) {
+            alts.add(pool.remove(rng.nextInt(pool.size())));
+        }
+        return alts;
     }
 }

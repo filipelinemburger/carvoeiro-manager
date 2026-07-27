@@ -10,9 +10,13 @@ import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.Random;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Maps to the {@code players} table created in V2__game.sql.
@@ -43,6 +47,10 @@ public class Player {
     @Enumerated(EnumType.STRING)
     @Column(name = "detailed_position", length = 20)
     private DetailedPosition detailedPosition;
+
+    /** CSV of 0–2 alternate DetailedPosition names (spec §1.2); null = no alternates. */
+    @Column(name = "alt_positions", length = 40)
+    private String altPositions;
 
     @Column(name = "age", nullable = false)
     private int age;
@@ -130,13 +138,17 @@ public class Player {
         this.nationality = nationality;
         this.attributes = attributes;
         this.overall = overall;
-        // Every constructed player gets a coarse-consistent detailed position. Derived from a
-        // per-player Random seeded off the (already-assigned) id, so it consumes NOTHING from any
-        // shared generation RNG — seeded generation/rollover output stays byte-identical. This is the
-        // single source of truth: it covers seed load, free agents, newgens, prospects and tests, so
-        // no path can hit the NOT-NULL detailed_position column with a null value.
-        this.detailedPosition = DetailedPosition.defaultFor(position, attributes.get(Attribute.PASSE),
-                new Random(id.getMostSignificantBits() ^ 0xDE7A11L));
+        // Every constructed player gets a coarse-consistent detailed position (and 0–2 adjacent
+        // alternates). Derived from a per-player Random seeded off the (already-assigned) id, so it
+        // consumes NOTHING from any shared generation RNG — seeded generation/rollover output stays
+        // byte-identical. This is the single source of truth: it covers seed load, free agents,
+        // newgens, prospects and tests, so no path can hit the NOT-NULL detailed_position column with
+        // a null value.
+        Random posRng = new Random(id.getMostSignificantBits() ^ 0xDE7A11L);
+        this.detailedPosition = DetailedPosition.defaultFor(position, posRng);
+        List<DetailedPosition> alts = DetailedPosition.alternatesFor(this.detailedPosition, posRng);
+        this.altPositions = alts.isEmpty() ? null
+                : alts.stream().map(Enum::name).collect(Collectors.joining(","));
     }
 
     public static Player create(UUID saveGameId, UUID clubId, String name, Position position,
@@ -168,6 +180,30 @@ public class Player {
     public Position getPosition() { return position; }
     public DetailedPosition getDetailedPosition() { return detailedPosition; }
     public void setDetailedPosition(DetailedPosition detailedPosition) { this.detailedPosition = detailedPosition; }
+
+    /** Alternate positions (may be empty), parsed from the CSV column. */
+    public List<DetailedPosition> getAltPositions() {
+        if (altPositions == null || altPositions.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(altPositions.split(",")).map(DetailedPosition::valueOf).toList();
+    }
+
+    /** All playable positions, primary first. */
+    public List<DetailedPosition> positions() {
+        List<DetailedPosition> all = new ArrayList<>(1 + getAltPositions().size());
+        all.add(detailedPosition);
+        all.addAll(getAltPositions());
+        return all;
+    }
+
+    /** Replaces primary + alternates (researched seed data or migration backfill). */
+    public void setPositions(DetailedPosition primary, List<DetailedPosition> alternates) {
+        this.detailedPosition = primary;
+        this.altPositions = alternates == null || alternates.isEmpty() ? null
+                : alternates.stream().map(Enum::name).collect(Collectors.joining(","));
+    }
+
     public int getAge() { return age; }
     public String getNationality() { return nationality; }
 
