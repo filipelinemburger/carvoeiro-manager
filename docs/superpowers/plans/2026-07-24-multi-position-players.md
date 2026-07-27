@@ -22,6 +22,17 @@
 - All UI text PT-BR. Known flaky test: `TransferServiceSellingIT.listedManagedPlayersDrawBoostedBids` — re-run isolated before judging.
 - The archetype↔position↔focus matrix and all numeric tunings in this plan are FINAL — do not invent different values.
 
+## Adaptation: the drag-and-drop work that landed first (2026-07-27)
+
+A concurrent session shipped explicit slot assignment (`0a4a448..e5f37f1`) BEFORE this plan executes. Its work is now the baseline — reuse it, never rebuild it:
+
+- **`lineup_players.slot_index INT` NULL already exists (V40).** This plan's "add a `slot` column" is DONE; use the existing `slotIndex` name everywhere. Migrations renumber: this plan's V40→**V41**, V41→**V42**, V42→**V43**.
+- **`LineupStarter` is already `(playerId, role, instruction, slotIndex)`** with convenience constructors `(playerId, role)` and `(playerId, role, instruction)`. Task 4 ADDS `focus` to it (final shape `(playerId, role, focus, instruction, slotIndex)`) — it does not rename `slotIndex`.
+- **`LineupService.validateSlotIndexes`** exists (all-or-nothing; the 11 values must be a permutation of 0..10; bench rows carry none). Keep it. Task 4 only relaxes its GK rule (below).
+- **`SlotAssigner.assignToSlots(xi, formation, pinnedSlotIndexes)`** exists and honors pinned indexes; `TacticsService` already passes them from the persisted lineup. Task 5 therefore only changes the *tiering* (natural-first, multi-position aware) and adds the AI familiar-archetype auto-pick.
+- **Frontend `features/pitch/slotAssign.ts`** is the client mirror of the greedy assigner and `Pitch.tsx` has pointer-event drag-and-drop between slots, with `SquadPage` persisting the arrangement. Task 8 updates `slotAssign.ts` to natural-first (it replaces this plan's proposed `assignSlots.ts` — do NOT create a second assigner). Task 9 keeps drag-and-drop and ADDS the tap-to-open picker, the improvisado warn tint, and the role/focus selects.
+- **GK-slot rule (spec §5.1 governs):** the shipped validation requires slot 0 to hold a `Position.GK` player and exactly 1 GK in the XI. The approved spec allows improvising anyone anywhere. Task 4 relaxes both: slot 0 may hold any player, and the XI may contain **0 or 1** GK (2+ stays rejected — the engine's defense split assumes a single keeper). This edits the shipped `LineupServiceSlotIndexIT` slot-0 assertion; that is intended.
+
 ---
 
 ## Phase A — Positions core
@@ -32,7 +43,7 @@
 - Modify: `backend/src/main/java/br/com/carvoeiromanager/player/DetailedPosition.java` (full rewrite)
 - Modify: `backend/src/main/java/br/com/carvoeiromanager/match/FormationSlots.java`
 - Modify: `backend/src/main/java/br/com/carvoeiromanager/player/Player.java`
-- Create: `backend/src/main/resources/db/migration/V40__multi_position.sql`
+- Create: `backend/src/main/resources/db/migration/V41__multi_position.sql`
 - Test: `backend/src/test/java/br/com/carvoeiromanager/player/DetailedPositionTest.java` (extend/adjust existing)
 - Test: `backend/src/test/java/br/com/carvoeiromanager/player/MultiPositionMigrationIT.java` (new; follow the existing V39 migration IT pattern in `player/`)
 - Adjust any test referencing `PONTA`/`FALSO_9` as a `DetailedPosition` (grep `DetailedPosition.PONTA\|DetailedPosition.FALSO_9` in `src/test`).
@@ -238,7 +249,7 @@ In the private constructor, replace the `detailedPosition` assignment block with
 
 (Imports: `java.util.ArrayList`, `java.util.Arrays`, `java.util.List`, `java.util.stream.Collectors`.)
 
-- [ ] **Step 4: Write `V40__multi_position.sql`**
+- [ ] **Step 4: Write `V41__multi_position.sql`**
 
 ```sql
 -- Multi-position players (spec §1): 12-value DetailedPosition, alternate positions, and
@@ -310,7 +321,7 @@ Run focused first: `--tests 'br.com.carvoeiromanager.player.*' --tests 'br.com.c
 - [ ] **Step 7: Commit**
 
 ```bash
-git add backend/src/main/java/br/com/carvoeiromanager/player/DetailedPosition.java backend/src/main/java/br/com/carvoeiromanager/match/FormationSlots.java backend/src/main/java/br/com/carvoeiromanager/player/Player.java backend/src/main/resources/db/migration/V40__multi_position.sql backend/src/test/java/br/com/carvoeiromanager/player/DetailedPositionTest.java backend/src/test/java/br/com/carvoeiromanager/player/MultiPositionMigrationIT.java <other-adjusted-test-files>
+git add backend/src/main/java/br/com/carvoeiromanager/player/DetailedPosition.java backend/src/main/java/br/com/carvoeiromanager/match/FormationSlots.java backend/src/main/java/br/com/carvoeiromanager/player/Player.java backend/src/main/resources/db/migration/V41__multi_position.sql backend/src/test/java/br/com/carvoeiromanager/player/DetailedPositionTest.java backend/src/test/java/br/com/carvoeiromanager/player/MultiPositionMigrationIT.java <other-adjusted-test-files>
 git commit -m "feat(player): 12 EAFC detailed positions + alternates (V40)"
 ```
 
@@ -700,7 +711,7 @@ The single big-churn task (precedent: GameStyle's "one big churn commit"). After
 
 **Files:**
 - Create: `backend/src/main/java/br/com/carvoeiromanager/player/RoleAssignment.java`
-- Create: `backend/src/main/resources/db/migration/V41__role_archetypes.sql`
+- Create: `backend/src/main/resources/db/migration/V42__role_archetypes.sql`
 - Modify: `backend/src/main/java/br/com/carvoeiromanager/match/LineupPlayer.java`, `LineupStarter.java`, `LineupService.java`, `TacticalProfile.java`, `TacticsService.java`, `TeamStrengthCalculator.java`, `LiveMatchEngine.java`, `FixtureSimulator.java`, `LiveMatchService.java`, `LivePlayerResponse.java`, `PlayerResponse.java`
 - Delete: `backend/src/main/java/br/com/carvoeiromanager/player/PlayerRole.java`, `RoleBehaviour.java`, `backend/src/test/java/br/com/carvoeiromanager/player/PlayerRoleTest.java`, `RoleBehaviourTest.java`
 - Test: `backend/src/test/java/br/com/carvoeiromanager/match/RoleAssignmentContributionTest.java` (new), `backend/src/test/java/br/com/carvoeiromanager/match/RoleMigrationIT.java` (new), plus updating every test that references `PlayerRole` (list below).
@@ -714,19 +725,18 @@ The single big-churn task (precedent: GameStyle's "one big churn commit"). After
   - `static RoleAssignment defaultFor(DetailedPosition pos)` = `new RoleAssignment(RoleArchetype.defaultFor(pos), RoleArchetype.defaultFor(pos).canonicalDefaultFocus())`
   - `static RoleAssignment resolve(Map<UUID, RoleAssignment> roles, Player p)` — persisted entry when present (NO validity re-check — write-time validation only, so legacy/improvised rows keep scoring with what the manager set), else `defaultFor(p.getDetailedPosition())`
 - `TacticalProfile.roles()` becomes `Map<UUID, RoleAssignment>`
-- DTO `LineupStarter(UUID playerId, String role, String focus, String instruction, Integer slot)` — `role` carries the ARCHETYPE name (wire-compat name), `focus` optional (null → default for the archetype), `slot` optional explicit slot index (null = auto). Keep a convenience constructor `(playerId, role)` for tests.
-- `LineupPlayer` maps `archetype VARCHAR(24) NOT NULL`, `focus VARCHAR(16) NOT NULL`, `slot SMALLINT NULL`; `getArchetype()/getFocus()/getSlot()`, `create(lineupId, playerId, starting, RoleArchetype, RoleFocus)`.
+- DTO `LineupStarter(UUID playerId, String role, String focus, String instruction, Integer slotIndex)` — `role` carries the ARCHETYPE name (wire-compat name), `focus` optional (null → the archetype's default), `slotIndex` unchanged from the shipped drag-and-drop work. Keep the existing convenience constructors `(playerId, role)` and `(playerId, role, instruction)` compiling (they pass null focus + null slotIndex).
+- `LineupPlayer` maps `archetype VARCHAR(24) NOT NULL` + `focus VARCHAR(16) NOT NULL` (its existing `slotIndex` field is untouched); `getArchetype()/getFocus()`, `create(lineupId, playerId, starting, RoleArchetype, RoleFocus)`.
 - `PlayerResponse` gains `String focus`, `List<String> altPositions`, `List<String> familiarRoles` (raw tokens) — appended after the existing `role` field.
 
-- [ ] **Step 1: `V41__role_archetypes.sql`**
+- [ ] **Step 1: `V42__role_archetypes.sql`**
 
 ```sql
--- Role archetype + focus replace the legacy PlayerRole on lineup rows (spec §2.4), and each row
--- gains an optional explicit formation slot (NULL = auto-assigned). Focus is seeded with each
--- archetype's canonical default so migrated lineups score byte-identically at unit level.
+-- Role archetype + focus replace the legacy PlayerRole on lineup rows (spec §2.4). Focus is seeded
+-- with each archetype's canonical default so migrated lineups score byte-identically at unit level.
+-- (slot_index already exists from V40 — untouched here.)
 ALTER TABLE lineup_players ADD COLUMN archetype VARCHAR(24);
 ALTER TABLE lineup_players ADD COLUMN focus VARCHAR(16);
-ALTER TABLE lineup_players ADD COLUMN slot SMALLINT;
 
 UPDATE lineup_players SET
     archetype = CASE role
@@ -766,8 +776,8 @@ Work through, in order (compile-driven):
 2. `LineupStarter` + `SetLineupRequest`: per interface block; `SetLineupRequest` unchanged apart from the starter shape.
 3. `LineupService`:
    - `validateAndParseRoles` → `validateAndParseAssignments(List<LineupStarter>, List<Player>, String formation)` returning `Map<UUID, RoleAssignment>`: parse archetype (`ErrorCode.INVALID_ROLE`, message `"Função desconhecida: X"`); parse focus when present else `archetype.canonicalDefaultFocus()`; validate the pair — when the starter has an explicit `slot`, the archetype must be `validFor` at least one accepted position of `FormationSlots.of(formation).get(slot)` and the focus must be in `focusesFor` that position (`"Função X não é válida para a posição Y"` / `"Foco X não é válido para a função Y"`); with NO explicit slot, archetype must be valid for ≥1 of the player's `positions()`.
-   - New `validateSlots(List<LineupStarter> starters, String formation)`: explicit slots must be in `[0, 10]` and unique — PT-BR 422s via `ErrorCode.INVALID_LINEUP` (`"Posição no campo inválida"`, `"Dois jogadores na mesma posição do campo"`). Any player MAY take the GK slot (spec §5.1 allows improvising in goal).
-   - Relax `validateGkCount` from "exactly 1" to "AT MOST 1" GK among starters (message: `"A escalação pode ter no máximo 1 goleiro, mas encontrou N"`). A lineup with 0 goalkeepers (outfielder improvised in goal) is now legal — the engine already degrades it naturally (`gkDefense` stays 0.0 and the improviser's fit is ×0.50). Two GK players in the XI stays blocked (deliberate limit: it breaks the engine's single-keeper defense split).
+   - Keep the shipped `validateSlotIndexes` (all-or-nothing, permutation of 0..10, bench carries none) but DELETE its "Slot 0 is the goalkeeper slot" check — spec §5.1 lets the manager improvise anyone in goal. Update the shipped `LineupServiceSlotIndexIT` assertion accordingly.
+   - Relax `validateGkCount` from "exactly 1" to "AT MOST 1" GK among starters (message: `"A escalação pode ter no máximo 1 goleiro, mas encontrou N"`). A lineup with 0 goalkeepers (outfielder improvised in goal) becomes legal — the engine degrades it naturally (`gkDefense` stays 0.0 and the improviser's position fit is ×0.50). Two GK players in the XI stays blocked (deliberate: it breaks the engine's single-keeper defense split).
    - Persist: `LineupPlayer.create(lineupId, id, starting, assignment.archetype(), assignment.focus())` + `lp.setSlot(starter.slot())`.
    - `toLineupStarter`: `new LineupStarter(lp.getPlayerId(), lp.getArchetype().name(), lp.getFocus().name(), lp.getInstruction() == null ? null : lp.getInstruction().name(), lp.getSlot())`.
    - `currentRoles` → returns `Map<UUID, RoleAssignment>`; `toPlayerResponse` gains `focus` + `altPositions` (names) + `familiarRoles` (raw tokens) fields.
@@ -816,7 +826,7 @@ Run the FULL suite (600000ms). Expected: PASS. Determinism spot-check: `PlayerIn
 - [ ] **Step 5: Commit**
 
 ```bash
-git add -u backend/src backend/src/main/resources/db/migration/V41__role_archetypes.sql backend/src/main/java/br/com/carvoeiromanager/player/RoleAssignment.java backend/src/test/java/br/com/carvoeiromanager/match/RoleAssignmentContributionTest.java backend/src/test/java/br/com/carvoeiromanager/match/RoleMigrationIT.java
+git add -u backend/src backend/src/main/resources/db/migration/V42__role_archetypes.sql backend/src/main/java/br/com/carvoeiromanager/player/RoleAssignment.java backend/src/test/java/br/com/carvoeiromanager/match/RoleAssignmentContributionTest.java backend/src/test/java/br/com/carvoeiromanager/match/RoleMigrationIT.java
 git commit -m "feat(match): RoleArchetype+RoleFocus replace PlayerRole/RoleBehaviour end-to-end (V41)"
 ```
 
@@ -832,7 +842,7 @@ git commit -m "feat(match): RoleArchetype+RoleFocus replace PlayerRole/RoleBehav
 
 **Interfaces:**
 - `SlotAssigner.assign(...)` same signature; tiering becomes: tier 1 = NATURAL (any of `p.positions()` ∈ slot accepted), fallback = smallest `min-distance(p.positions(), slot.accepted())`, then byRating. Scarcity ordering now counts natural candidates.
-- `SlotAssigner.assignToSlots(List<Player> xi, String formation, Map<UUID, Integer> explicitSlots)` — new overload honoring explicit slot indices first, auto-filling the rest (old 2-arg overload delegates with `Map.of()`).
+- Both `assignToSlots` overloads (incl. the pinned-index one shipped with drag-and-drop) keep their signatures — only the tiering inside changes.
 - `TacticsService` produces AI/default archetypes via best familiarity.
 
 - [ ] **Step 1: Failing tests**
@@ -842,7 +852,7 @@ git commit -m "feat(match): RoleArchetype+RoleFocus replace PlayerRole/RoleBehav
 - `alternatePositionsCountAsNatural` — primary ZAG + alternate LE (overall 70) beats pure ZAG 90 for the LE slot.
 - `fallbackPicksTheSmallestDistance` — no LE anywhere: ZAG (distance 1) chosen over PONTA_ESQUERDA... careful: PE↔LE distance is 2 (not adjacent) — use ZAG (1) vs ATACANTE (2): ZAG wins even at lower overall.
 - `deterministicTieBreakByRatingThenId` — two equal candidates: higher overall, then smaller id.
-- `explicitSlotsPinPlayersAndAutoFillsTheRest` — explicit map {playerX → slot 5} keeps X there even when a better natural exists; remaining slots fill natural-first without X.
+- `explicitSlotsPinPlayersAndAutoFillsTheRest` — extend the SHIPPED `SlotAssignerTest`: explicit map {playerX → slot 5} keeps X there even when a better natural exists; remaining slots fill natural-first without X.
 - `wellFormedNaturalXiAssignsAllExact` — 11 players matching 4-4-2's slots 1:1 → every assignment natural (grades to 1.0).
 
 `TacticsServiceIT` additions:
@@ -877,7 +887,7 @@ git commit -m "feat(match): RoleArchetype+RoleFocus replace PlayerRole/RoleBehav
     }
 ```
 
-Scarcity in `assign(...)`: `tier1Count` counts `isNatural`. New `assignToSlots` overload: place explicit entries first (skip invalid indices defensively), remove them from the pool, run the greedy fill over remaining slots, merge.
+Scarcity in `assign(...)`: `tier1Count` counts `isNatural`. Both `assignToSlots` overloads stay exactly as shipped (the pinned-index one already places explicit entries first and greedily fills the leftovers) — they inherit the new tiering for free. Update the class Javadoc's tier description.
 
 `TacticsService`: extract
 
@@ -982,7 +992,7 @@ git commit -m "feat(seed): researched real positions + role archetypes for all 8
 
 **Files:**
 - Create: `backend/scripts/gen-research-backfill.mjs` (committed — regenerable)
-- Create: `backend/src/main/resources/db/migration/V42__research_backfill.sql` (generated output, committed)
+- Create: `backend/src/main/resources/db/migration/V43__research_backfill.sql` (generated output, committed)
 - Test: `backend/src/test/java/br/com/carvoeiromanager/player/ResearchBackfillMigrationIT.java` (new)
 
 - [ ] **Step 1: Generator script**
@@ -1012,7 +1022,7 @@ Testcontainers: insert a save with a club named exactly as a seed club + a playe
 - [ ] **Step 3: Full suite, commit**
 
 ```bash
-git add backend/scripts/gen-research-backfill.mjs backend/src/main/resources/db/migration/V42__research_backfill.sql backend/src/test/java/br/com/carvoeiromanager/player/ResearchBackfillMigrationIT.java
+git add backend/scripts/gen-research-backfill.mjs backend/src/main/resources/db/migration/V43__research_backfill.sql backend/src/test/java/br/com/carvoeiromanager/player/ResearchBackfillMigrationIT.java
 git commit -m "feat(player): V42 name+club-matched research backfill for existing saves"
 ```
 
@@ -1027,24 +1037,24 @@ git commit -m "feat(player): V42 name+club-matched research backfill for existin
 - Modify: `frontend/src/features/players/positionLabels.ts`
 - Modify: `frontend/src/features/pitch/pitchSlots.ts`
 - Create: `frontend/src/features/players/roleLabels.ts`
-- Create: `frontend/src/features/pitch/assignSlots.ts`
-- Test: `frontend/src/features/pitch/pitchSlots.test.ts` (update), `frontend/src/features/pitch/assignSlots.test.ts` (new), `frontend/src/features/players/roleLabels.test.ts` (new)
+- Modify: `frontend/src/features/pitch/slotAssign.ts` (the SHIPPED client-side greedy assigner — make it natural-first; do NOT create a second assigner)
+- Test: `frontend/src/features/pitch/pitchSlots.test.ts` (update), `frontend/src/features/pitch/slotAssign.test.ts` (update), `frontend/src/features/players/roleLabels.test.ts` (new)
 - Plus compile fixes everywhere `PlayerRole`/old `DetailedPosition` unions are referenced (`npm run build` drives the list; expect `SquadPage.tsx`, `LiveMatchPage` player lists, transfer/free-agent pages).
 
 **Interfaces:**
 - `types.ts`: `DetailedPosition` = 12-name union; `RoleArchetype` = 30-name union; `RoleFocus` = 10-name union; `PlayerRole` type DELETED (alias `RoleArchetype` where the wire field is still called `role`); `LineupStarter` gains `focus: RoleFocus | null` and `slot: number | null`; `PlayerResponse` gains `focus: string | null`, `altPositions: DetailedPosition[]`, `familiarRoles: string[]`.
 - `positionLabels.ts`: the three records extended to 12 keys (labels/shorts exactly as Task 1's enum); add `POSITION_DISTANCE`-lite helper `isNatural(p: {detailedPosition?, altPositions?}, accepted: DetailedPosition[]): boolean`.
 - `roleLabels.ts`: `ARCHETYPE_LABEL: Record<RoleArchetype, string>` (PT-BR labels from Task 2), `FOCUS_LABEL: Record<RoleFocus, string>`, `ARCHETYPES_FOR_POSITION: Record<DetailedPosition, RoleArchetype[]>` and `FOCUSES_FOR: (a: RoleArchetype, pos: DetailedPosition) => RoleFocus[]` — a hand-mirrored copy of the backend MATRIX (the test is the sync-guard).
-- `assignSlots.ts`: `assignSlots(players: PlacedPlayer[], formation: string, overrides: Record<number, string>): (PlacedPlayer | null)[]` — TS mirror of SlotAssigner's natural-first greedy (same scarcity ordering, natural tier, distance fallback, overall-then-id tie-break) returning one entry per slot index.
+- `slotAssign.ts`: keep the shipped signature `assignSlots(players: AssignablePlayer[], formation: string): Record<string, number>`; `AssignablePlayer` gains `altPositions?: DetailedPosition[]`. Tiering becomes natural-first (any of primary+alternates accepted by the slot), fallback by smallest position distance (add a `POSITION_DISTANCE` helper in `positionLabels.ts` mirroring the backend graph), then overall desc / id — same scarcity ordering as today.
 
 - [ ] **Step 1:** Update `pitchSlots.ts`: new consts (`mc, md, me, pd, pe`; `st` becomes `['ATACANTE']`), rewrite every LAYOUTS `acc` array to mirror Task 1's `FORMATIONS` exactly (same left→right, deepest-first order; e.g. `'4-4-2'` MID row `acc: [md, vol, mc, me]`, `'4-3-3'` ATT row `acc: [pd, st, pe]`). DELETE the per-line `DEFAULT_ROLE` record (a single archetype per coarse line can no longer be valid — FULLBACK is invalid for a ZAG); `roleLabels.ts` instead exports `defaultArchetypeFor(pos: DetailedPosition): RoleArchetype` mirroring the backend `RoleArchetype.defaultFor` switch (GOLEIRO→GOALKEEPER, ZAGUEIRO→DEFENDER, LD/LE→FULLBACK, VOLANTE→HOLDING, MC→BOX_TO_BOX, MEI→PLAYMAKER, MD/ME/PD/PE→WINGER, ATACANTE→ADVANCED_FORWARD). SquadPage/pitchSlots `DEFAULT_ROLE` usages switch to `defaultArchetypeFor(player.detailedPosition ?? bandFallback)` as a mechanical compile fix now (full UX rework is Task 9); `Slot.defaultRole` becomes `defaultArchetypeFor(accepted[0])` computed in `pitchSlots()`.
 - [ ] **Step 2:** `pitchSlots.test.ts` — per formation: band counts equal the code digits AND the flattened accepted-position list matches a hard-coded expectation table copied from Task 1's backend map (the cross-stack sync-guard).
 - [ ] **Step 3:** `roleLabels.test.ts` — assert the full ARCHETYPES_FOR_POSITION/FOCUSES_FOR tables against the same spec §2.1 data (mirrors the backend futbin sync test; drift on either side now fails somewhere).
-- [ ] **Step 4:** `assignSlots.test.ts` — port the scenarios of `SlotAssignerNaturalFirstTest` (natural beats stronger improviser; override pins; deterministic).
+- [ ] **Step 4:** `slotAssign.test.ts` — keep the shipped cases green and add the natural-first ones (natural beats a stronger improviser; an alternate position counts as natural; distance fallback; deterministic).
 - [ ] **Step 5:** `npm run build` clean + `npx vitest run` green. Commit (named files + whatever pages needed mechanical union renames):
 
 ```bash
-git add frontend/src/api/types.ts frontend/src/features/players/positionLabels.ts frontend/src/features/players/roleLabels.ts frontend/src/features/pitch/pitchSlots.ts frontend/src/features/pitch/assignSlots.ts frontend/src/features/pitch/pitchSlots.test.ts frontend/src/features/pitch/assignSlots.test.ts frontend/src/features/players/roleLabels.test.ts <compile-fix files>
+git add frontend/src/api/types.ts frontend/src/features/players/positionLabels.ts frontend/src/features/players/roleLabels.ts frontend/src/features/pitch/pitchSlots.ts frontend/src/features/pitch/slotAssign.ts frontend/src/features/pitch/pitchSlots.test.ts frontend/src/features/pitch/slotAssign.test.ts frontend/src/features/players/roleLabels.test.ts <compile-fix files>
 git commit -m "feat(front): 12-position + archetype/focus foundation with cross-stack sync-guards"
 ```
 
@@ -1055,14 +1065,14 @@ git commit -m "feat(front): 12-position + archetype/focus foundation with cross-
 - Modify: `frontend/src/features/squad/SquadPage.tsx`, `frontend/src/features/pitch/Pitch.tsx`
 - Test: `frontend/src/features/squad/SlotPickerDialog.test.tsx` (new), extend `SquadPage` tests
 
-**Behavior (spec §5.1/§5.2):**
-- `Pitch` gains optional `onSlotClick?: (slotIndex: number) => void` and renders tokens from a caller-supplied per-slot assignment (new optional prop `assigned?: (PlacedPlayer | null)[]`; when absent, keep the legacy coarse-line fill for read-only usages like the live match).
-- SquadPage state: `slotOverrides: Record<number, string>`; display assignment = `assignSlots(selectedPlayers, formation, slotOverrides)`.
-- Tapping a slot opens `SlotPickerDialog`: header "Quem joga aqui? ({slot short label})"; list = whole squad, natural players for the slot first (by overall desc), then the rest each flagged with a warning chip `Improvisado` + their natural shorts (e.g. "PE · ME"); currently-assigned player highlighted; picking sets the override (and adds the player to `selected` if absent, swapping out the displaced occupant); an "Automático" action clears that slot's override. The GK slot lists goalkeepers first but allows anyone; OUTFIELD slot pickers exclude GK-position players (the backend allows at most 1 GK in the XI, so a keeper improvised outfield would always 422).
-- Improvised tokens (slot accepted ∌ any of player's positions incl. alternates — use `isNatural`) get the existing amber `outOfPosition` tint; tooltip "Improvisado — posição natural: {labels}".
-- "Selecionar melhores" resets: `slotOverrides = {}`, picks natural-first XI via `assignSlots` over the whole eligible squad, sets each picked player's archetype to their best familiar valid for their assigned slot (parse `familiarRoles` tokens; ties → first token) and focus to that archetype's default (`FOCUSES_FOR(...)[0]`).
-- Role/focus selects (replacing the old role select wherever it lives in the Plantel table): "Função" options = `ARCHETYPES_FOR_POSITION[slotPosition]` (familiar ones first with ★★/★ suffixes), "Foco" options = `FOCUSES_FOR(archetype, slotPosition)`; changing Função resets Foco to its default. For bench players (no slot) use the player's primary position.
-- Save payload: starters map to `{ playerId, role, focus, instruction, slot: slotOverrides-inverse[playerId] ?? null }`.
+**Behavior (spec §5.1/§5.2) — builds ON the shipped drag-and-drop, never replaces it:**
+- Drag-and-drop between slots stays exactly as shipped. `Pitch` gains an optional `onSlotClick?: (slotIndex: number) => void` fired on a TAP (a pointer interaction the existing drag handler resolved as a click, not a drag) — no other Pitch behavior changes.
+- SquadPage keeps `slotByPlayerId: Record<string, number>` as the single source of truth. The picker writes into it, exactly like a drop does.
+- Tapping a slot opens `SlotPickerDialog`: header "Quem joga aqui? ({slot short label})"; list = whole squad, natural players for the slot first (by overall desc), then the rest each flagged with a warning chip `Improvisado` + their natural shorts (e.g. "PE · ME"); the current occupant highlighted; picking assigns that player to the slot (adding them to `selected` if needed, and swapping places with the displaced occupant rather than dropping them). The GK slot lists goalkeepers first but allows anyone; outfield pickers exclude GK-position players (the backend allows at most 1 GK in the XI, so a keeper improvised outfield would always 422).
+- Improvised tokens (slot accepted ∌ any of the player's positions incl. alternates — use `isNatural`) get the existing amber `outOfPosition` tint; tooltip "Improvisado — posição natural: {labels}".
+- "Selecionar melhores" (the shipped `autoPickBestXI`) becomes natural-first: pick the XI + `slotByPlayerId` from the updated `assignSlots` over the whole eligible squad, then set each picked player's archetype to their best familiar one valid for their assigned slot (parse `familiarRoles` tokens; ties → first token) and focus to that archetype's default (`FOCUSES_FOR(...)[0]`).
+- Role/focus selects (replacing the old role select in the Plantel table): "Função" options = `ARCHETYPES_FOR_POSITION[slotPosition]` (familiar ones first with ★★/★ suffixes), "Foco" options = `FOCUSES_FOR(archetype, slotPosition)`; changing Função resets Foco to its default. Bench players (no slot) use their primary position.
+- Save payload: the shipped `toStarter(id, slotIndex)` gains `focus` — `{ playerId, role, focus, instruction, slotIndex }`.
 
 - [ ] **Step 1:** RTL tests first: picker ordering (natural first), improvisado flag, override → warn tint, "Automático" clears, best-XI reset clears overrides and sets familiar archetypes, focus resets on archetype change, save payload carries slot/focus.
 - [ ] **Step 2:** Implement; `npx vitest run` + `npm run build` green.
