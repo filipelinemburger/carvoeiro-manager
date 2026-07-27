@@ -12,7 +12,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 import java.util.UUID;
@@ -51,6 +53,10 @@ public class Player {
     /** CSV of 0–2 alternate DetailedPosition names (spec §1.2); null = no alternates. */
     @Column(name = "alt_positions", length = 40)
     private String altPositions;
+
+    /** CSV of familiar role tokens, e.g. "WINGBACK++,FULLBACK+" (spec §2.3). */
+    @Column(name = "familiar_roles", nullable = false, length = 120)
+    private String familiarRoles = "";
 
     @Column(name = "age", nullable = false)
     private int age;
@@ -149,6 +155,8 @@ public class Player {
         List<DetailedPosition> alts = DetailedPosition.alternatesFor(this.detailedPosition, posRng);
         this.altPositions = alts.isEmpty() ? null
                 : alts.stream().map(Enum::name).collect(Collectors.joining(","));
+        this.familiarRoles = String.join(",",
+                RoleArchetype.defaultFamiliarFor(this.detailedPosition, attributes, posRng));
     }
 
     public static Player create(UUID saveGameId, UUID clubId, String name, Position position,
@@ -202,6 +210,34 @@ public class Player {
         this.detailedPosition = primary;
         this.altPositions = alternates == null || alternates.isEmpty() ? null
                 : alternates.stream().map(Enum::name).collect(Collectors.joining(","));
+    }
+
+    /** Parses the familiar-role CSV into archetype → familiarity level (2 = ++, 1 = +), insertion-ordered. */
+    public Map<RoleArchetype, Integer> familiarRoles() {
+        Map<RoleArchetype, Integer> out = new LinkedHashMap<>();
+        if (familiarRoles == null || familiarRoles.isBlank()) {
+            return out;
+        }
+        for (String token : familiarRoles.split(",")) {
+            int level = token.endsWith("++") ? 2 : 1;
+            out.put(RoleArchetype.valueOf(token.substring(0, token.length() - (level == 2 ? 2 : 1))), level);
+        }
+        return out;
+    }
+
+    public int familiarity(RoleArchetype archetype) {
+        return familiarRoles().getOrDefault(archetype, 0);
+    }
+
+    /** Replaces the familiar-role tokens (validated: parseable, level suffix required). */
+    public void setFamiliarRoles(List<String> tokens) {
+        for (String t : tokens) {
+            if (!t.endsWith("+")) {
+                throw new IllegalArgumentException("Familiar role token missing +/++ suffix: " + t);
+            }
+            RoleArchetype.valueOf(t.replaceAll("\\+", ""));   // throws on unknown archetype
+        }
+        this.familiarRoles = String.join(",", tokens);
     }
 
     public int getAge() { return age; }

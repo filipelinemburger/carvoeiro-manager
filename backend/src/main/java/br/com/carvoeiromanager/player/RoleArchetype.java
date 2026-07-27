@@ -3,8 +3,11 @@ package br.com.carvoeiromanager.player;
 import static br.com.carvoeiromanager.player.DetailedPosition.*;
 import static br.com.carvoeiromanager.player.RoleFocus.*;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 /**
@@ -218,6 +221,34 @@ public enum RoleArchetype {
             case MEIA_DIREITA, MEIA_ESQUERDA, PONTA_DIREITA, PONTA_ESQUERDA -> WINGER;
             case ATACANTE -> ADVANCED_FORWARD;
         };
+    }
+
+    /**
+     * Generation-time familiar roles for a player: always one fully-familiar (++) archetype —
+     * the position default, upgraded to a playmaker-type when the profile clearly leans that way —
+     * plus a ~25% chance of a second, somewhat-familiar (+) archetype among the position's others.
+     * Draws only from the caller's per-player Random.
+     */
+    public static List<String> defaultFamiliarFor(DetailedPosition primary, Attributes attrs, Random rng) {
+        RoleArchetype picked = defaultFor(primary);
+        int passe = attrs.get(Attribute.PASSE);
+        if (passe >= 68) {
+            if (primary == DetailedPosition.MEIA_CENTRAL || primary == DetailedPosition.VOLANTE) {
+                picked = DEEP_LYING_PLAYMAKER;
+            } else if (primary == DetailedPosition.ATACANTE) {
+                picked = FALSE_9;
+            }
+        }
+        final RoleArchetype first = picked;
+        List<String> out = new ArrayList<>(2);
+        out.add(first.name() + "++");
+        List<RoleArchetype> others = Arrays.stream(values())
+                .filter(a -> a.validFor(primary) && a != first)
+                .toList();
+        if (!others.isEmpty() && rng.nextInt(100) < 25) {
+            out.add(others.get(rng.nextInt(others.size())).name() + "+");
+        }
+        return out;
     }
 
     /** Wide creators boosted by AttackZone.LATERAIS (legacy: WINGER, FULL_BACK). */
