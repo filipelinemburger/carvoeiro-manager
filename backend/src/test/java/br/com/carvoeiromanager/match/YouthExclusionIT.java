@@ -4,7 +4,7 @@ import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
@@ -76,11 +76,12 @@ class YouthExclusionIT {
         // Build an otherwise-valid 11 from bestXi (all seniors) and replace one starter with the prospect
         List<LineupStarter> starters = new ArrayList<>(
                 lineupService.bestXi(clubId).stream()
-                        .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                        .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                         .collect(Collectors.toList())
         );
         // Replace last outfield starter with the prospect (same role: ATT position → POACHER)
-        starters.set(10, new LineupStarter(prospect.getId(), PlayerRole.defaultFor(Position.ATT).name()));
+        starters.set(10, new LineupStarter(prospect.getId(),
+                RoleArchetype.defaultFor(prospect.getDetailedPosition()).name()));
 
         SetLineupRequest req = new SetLineupRequest("4-4-2", starters, List.of());
 
@@ -112,12 +113,12 @@ class YouthExclusionIT {
 
         // Build a valid senior starting XI
         List<LineupStarter> starters = lineupService.bestXi(clubId).stream()
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
 
         // Place the prospect only on the bench
         List<LineupStarter> bench = List.of(
-                new LineupStarter(prospect.getId(), PlayerRole.defaultFor(Position.MID).name())
+                new LineupStarter(prospect.getId(), RoleArchetype.defaultFor(prospect.getDetailedPosition()).name())
         );
 
         SetLineupRequest req = new SetLineupRequest("4-4-2", starters, bench);

@@ -5,9 +5,9 @@ import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
-import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.Pressing;
+import br.com.carvoeiromanager.player.RoleAssignment;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -71,8 +71,9 @@ class PlayerInstructionDeterminismTest {
     private final List<Player> homeBench = List.of(p(Position.MID, 65), p(Position.ATT, 65), p(Position.DEF, 65));
 
     private TacticalProfile defaultProfile(List<Player> xi) {
-        Map<UUID, PlayerRole> roles = new HashMap<>();
-        xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
+        // Legacy archetype + canonical focus + familiarity 2 = the regression contract, so the
+        // golden signatures captured against the old PlayerRole model must reproduce verbatim.
+        Map<UUID, RoleAssignment> roles = LegacyRoles.forXi(xi);
         // Empty instructions map: the neutral no-op.
         return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2",
                 Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of(), Map.of());

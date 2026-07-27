@@ -27,7 +27,7 @@ import br.com.carvoeiromanager.match.LineupStarter;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.TrainingIntensity;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
@@ -93,7 +93,7 @@ class SeasonRolloverServiceIT {
         // Given a finished season with a saved managed lineup
         Career c = createCareer();
         List<LineupStarter> xi = lineupService.bestXi(c.clubId()).stream()
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .toList();
         lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi, null), c.userId());
         finishSeason(c);
@@ -212,7 +212,7 @@ class SeasonRolloverServiceIT {
 
         // Build the managed XI and set it as the active lineup
         List<LineupStarter> xi = lineupService.bestXi(c.clubId()).stream()
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .toList();
         lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi, null), c.userId());
 
@@ -267,7 +267,7 @@ class SeasonRolloverServiceIT {
     void rolloverArchivesSeasonPlayerStatsAndPurgesFixtureAppearance() {
         Career c = createCareer();
         List<LineupStarter> xi = lineupService.bestXi(c.clubId()).stream()
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .toList();
         lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi, null), c.userId());
 

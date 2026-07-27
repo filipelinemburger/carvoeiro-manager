@@ -2,12 +2,13 @@ package br.com.carvoeiromanager.match;
 
 import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
+import br.com.carvoeiromanager.player.DetailedPosition;
 import br.com.carvoeiromanager.player.Formation;
 import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerInstruction;
-import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Position;
+import br.com.carvoeiromanager.player.RoleAssignment;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -37,7 +38,9 @@ public class TeamStrengthCalculator {
         int outfieldCount = 0;
 
         for (Player p : xi) {
-            PlayerRole role = PlayerRole.resolve(profile.roles(), p);
+            // Focus and familiarity are folded INSIDE the RoleAssignment contribution — never
+            // re-applied here.
+            RoleAssignment role = RoleAssignment.resolve(profile.roles(), p);
             double fitnessMult = fitnessMultById.getOrDefault(p.getId(), 1.0);
             // Position-fit penalty: playing out of a player's detailed position costs effectiveness.
             // A well-formed squad (every player in an accepting slot) is all-exact → x1.0, so the term
@@ -114,30 +117,29 @@ public class TeamStrengthCalculator {
     }
 
     /**
-     * How well this player fits the formation slot they were assigned at kickoff, as a pure per-player
-     * multiplier applied equally to their attack and defense contribution:
-     * <ul>
-     *   <li>x1.00 — exact fit (the slot accepts the player's detailed position), OR no assignment at
-     *       all (legacy/empty map, or a player not in the map): the neutral no-op.</li>
-     *   <li>x0.92 — same coarse band but wrong detailed position (−8%), e.g. a winger shoved into a
-     *       central striker slot.</li>
-     *   <li>x0.80 — cross-band (−20%), e.g. a midfielder forced into a defensive slot.</li>
-     * </ul>
-     * No RNG: a well-formed squad grades entirely to x1.0 and stays byte-identical.
+     * Position fit from the tactical distance between the assigned slot and the player's playable
+     * positions (spec §4.1): natural x1.00, adjacent x0.92, far x0.80, GK-cross x0.50. No slot
+     * assignment (legacy/empty) is the x1.0 neutral no-op. Multi-position aware: the BEST of the
+     * player's positions counts.
      */
     private double positionFitMult(Player p, TacticalProfile profile) {
         FormationSlots.Slot slot = profile.slotAssignments() == null
                 ? null : profile.slotAssignments().get(p.getId());
         if (slot == null) {
-            return 1.00;                                          // legacy / unassigned
+            return 1.00;
         }
-        if (slot.accepted().contains(p.getDetailedPosition())) {
-            return 1.00;                                          // exact fit
+        int best = Integer.MAX_VALUE;
+        for (DetailedPosition mine : p.positions()) {
+            for (DetailedPosition accepted : slot.accepted()) {
+                best = Math.min(best, mine.distance(accepted));
+            }
         }
-        if (slot.coarse() == p.getPosition()) {
-            return 0.92;                                          // same band, wrong detailed (−8%)
-        }
-        return 0.80;                                              // cross-band (−20%)
+        return switch (best) {
+            case 0 -> 1.00;
+            case 1 -> 0.92;
+            case 2 -> 0.80;
+            default -> 0.50;
+        };
     }
 
     /** The designated taker's attribute when in the XI, else the best in the XI — scaled to ~[0,1]. */

@@ -178,13 +178,17 @@ class AccountDeletionIT {
             String id = player.get("id").asString();
             // Fill a 4-4-2: 1 GK, 4 DEF, 4 MID, 2 ATT.
             boolean take;
-            String role;
             switch (position) {
-                case "GK" -> { take = gkId == null; role = "GOALKEEPER"; if (take) gkId = id; }
-                case "DEF" -> { take = def < 4; role = "FULL_BACK"; if (take) def++; }
-                case "MID" -> { take = mid < 4; role = "BOX_TO_BOX"; if (take) mid++; }
-                default -> { take = att < 2; role = "POACHER"; if (take) att++; }
+                case "GK" -> { take = gkId == null; if (take) gkId = id; }
+                case "DEF" -> { take = def < 4; if (take) def++; }
+                case "MID" -> { take = mid < 4; if (take) mid++; }
+                default -> { take = att < 2; if (take) att++; }
             }
+            // An archetype must be valid for the position it is played in, so it comes from the
+            // player's DETAILED position — a coarse-band mapping no longer validates.
+            String role = br.com.carvoeiromanager.player.RoleArchetype.defaultFor(
+                    br.com.carvoeiromanager.player.DetailedPosition.valueOf(
+                            player.get("detailedPosition").asString())).name();
             if (take) {
                 starters.append("{\"playerId\":\"").append(id).append("\",\"role\":\"").append(role).append("\"},");
             }

@@ -158,7 +158,7 @@ class InjuryEngineIT {
         List<LineupStarter> starters = lineupService.bestXi(clubId).stream()
                 .map(p -> new LineupStarter(
                         p.getId(),
-                        br.com.carvoeiromanager.player.PlayerRole.defaultFor(p.getPosition()).name()))
+                        br.com.carvoeiromanager.player.RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(java.util.stream.Collectors.toList());
 
         // Injure the 6th starter

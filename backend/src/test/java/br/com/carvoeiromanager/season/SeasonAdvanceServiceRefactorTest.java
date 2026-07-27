@@ -12,7 +12,7 @@ import br.com.carvoeiromanager.match.LiveMatchService;
 import br.com.carvoeiromanager.match.SetLineupRequest;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,7 +57,7 @@ class SeasonAdvanceServiceRefactorTest {
         // Save a valid 11-player XI + 3 bench players for the managed club so kickoff works.
         List<Player> bestXi = lineupService.bestXi(managedClubId);
         List<LineupStarter> starters = bestXi.stream()
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
 
         List<UUID> xiIds = bestXi.stream().map(Player::getId).toList();
@@ -65,7 +65,7 @@ class SeasonAdvanceServiceRefactorTest {
                 .filter(p -> !xiIds.contains(p.getId()))
                 .filter(Player::isEligible)
                 .limit(3)
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
 
         lineupService.setLineup(saveGameId, managedClubId,

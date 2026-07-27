@@ -5,7 +5,8 @@ import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.InjurySeverity;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerInstruction;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
+import br.com.carvoeiromanager.player.RoleAssignment;
 import br.com.carvoeiromanager.staff.StaffEffectsService;
 import org.springframework.stereotype.Service;
 
@@ -428,21 +429,21 @@ public class LiveMatchEngine {
      * {@code assistWeight(p, zone, role, null)} equals the pre-instruction three-arg weight exactly
      * (byte-identical). The {@code * 3 / 2} integer boost (×1.5) rounds identically in both engines.
      */
-    static int assistWeight(Player p, AttackZone zone, PlayerRole role, PlayerInstruction instr) {
+    static int assistWeight(Player p, AttackZone zone, RoleArchetype role, PlayerInstruction instr) {
         int base = 10;
         int w = switch (zone) {
             case MISTO -> base + p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO)
                     + p.attribute(Attribute.CRUZAMENTO);
             case LATERAIS -> {
                 int weight = base + 2 * p.attribute(Attribute.CRUZAMENTO);
-                if (role == PlayerRole.WINGER || role == PlayerRole.FULL_BACK) {
+                if (role.isWideCreator()) {
                     weight = weight * 3 / 2;
                 }
                 yield weight;
             }
             case CENTRO -> {
                 int weight = base + p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO);
-                if (role == PlayerRole.PLAYMAKER || role == PlayerRole.BOX_TO_BOX) {
+                if (role.isCentralCreator()) {
                     weight = weight * 3 / 2;
                 }
                 yield weight;
@@ -490,12 +491,12 @@ public class LiveMatchEngine {
             // exactly one nextInt from its stream (weight VALUES change, not the RNG contract). For
             // the neutral MISTO the weights equal the pre-AttackZone formulas → byte-identical.
             AttackZone zone = side.currentProfile.attackZone();
-            Map<UUID, PlayerRole> roles = side.currentProfile.roles();
+            Map<UUID, RoleAssignment> roles = side.currentProfile.roles();
             TacticalProfile profile = side.currentProfile;
             UUID scorer = pickByWeight(side, p -> scorerWeight(p, zone, profile.instructionFor(p.getId())), attrRng);
             UUID assister = assistRng.nextDouble() < ASSIST_CHANCE
                     ? pickByWeightExcluding(side, scorer,
-                            p -> assistWeight(p, zone, PlayerRole.resolve(roles, p),
+                            p -> assistWeight(p, zone, RoleAssignment.resolve(roles, p).archetype(),
                                     profile.instructionFor(p.getId())), assistRng)
                     : null;
             events.add(new LiveTimelineEvent(minute, EventType.GOAL, side.home, scorer, assister, null, null));

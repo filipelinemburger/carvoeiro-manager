@@ -16,7 +16,7 @@ import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleAssignment;
 import br.com.carvoeiromanager.player.Pressing;
 import br.com.carvoeiromanager.season.AdvanceResponse;
 import br.com.carvoeiromanager.season.SeasonAdvanceService;
@@ -949,9 +949,9 @@ public class LiveMatchService {
     private LivePlayerResponse livePlayer(Player p, LiveMatchConfig cfg, TacticalProfile profile,
                                           boolean onPitch, boolean used, boolean hobbled) {
         int fit = cfg.fitness().getOrDefault(p.getId(), 100);
-        PlayerRole role = profile.roles().getOrDefault(p.getId(), PlayerRole.defaultFor(p.getPosition()));
+        RoleAssignment role = RoleAssignment.resolve(profile.roles(), p);
         return new LivePlayerResponse(p.getId().toString(), p.getName(), p.getPosition().name(),
-                p.getOverall(), fit, hobbled, onPitch, used, p.isEligible(), role.name());
+                p.getOverall(), fit, hobbled, onPitch, used, p.isEligible(), role.archetype().name());
     }
 
     // ---- helpers ----

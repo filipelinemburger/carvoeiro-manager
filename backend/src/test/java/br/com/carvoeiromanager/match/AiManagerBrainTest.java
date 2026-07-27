@@ -5,7 +5,8 @@ import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.DetailedPosition;
+import br.com.carvoeiromanager.player.RoleAssignment;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.Pressing;
 import org.junit.jupiter.api.Test;
@@ -115,8 +116,8 @@ class AiManagerBrainTest {
     }
 
     // ---- profileFor(): overrides on top of identity; marking/roles/takers always preserved
-    private static final Map<UUID, PlayerRole> ROLES =
-            Map.of(UUID.randomUUID(), PlayerRole.defaultFor(Position.MID));
+    private static final Map<UUID, RoleAssignment> ROLES =
+            Map.of(UUID.randomUUID(), RoleAssignment.defaultFor(DetailedPosition.MEIA_CENTRAL));
     private static final UUID PEN = UUID.randomUUID();
     private static final UUID FK = UUID.randomUUID();
     private static final UUID CORNER = UUID.randomUUID();

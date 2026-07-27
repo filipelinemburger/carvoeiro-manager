@@ -18,7 +18,7 @@ import br.com.carvoeiromanager.match.SetLineupRequest;
 import br.com.carvoeiromanager.match.SetTacticsRequest;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -95,7 +95,7 @@ class TransferExecutorIT {
         SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();
         // Set a managed lineup and make the first starter a set-piece taker.
         List<LineupStarter> xi = lineupService.bestXi(c.clubId()).stream()
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .toList();
         lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi, null), c.userId());
         UUID soldId = xi.get(0).playerId();

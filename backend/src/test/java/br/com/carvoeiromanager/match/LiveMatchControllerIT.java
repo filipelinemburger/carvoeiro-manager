@@ -79,7 +79,7 @@ class LiveMatchControllerIT {
             if (!eligible) continue;
             String pid = player.get("id").asString();
             String position = player.get("position").asString();
-            String role = defaultRole(position);
+            String role = defaultRole(player.get("detailedPosition").asString());
             boolean isGk = "GK".equals(position);
             if (isGk && !gkPicked) {
                 // First GK goes into starters
@@ -176,12 +176,13 @@ class LiveMatchControllerIT {
 
     // --- helpers ---
 
-    private String defaultRole(String position) {
-        return switch (position) {
-            case "GK" -> "GOALKEEPER";
-            case "DEF" -> "FULL_BACK";
-            case "MID" -> "BOX_TO_BOX";
-            default -> "POACHER";  // ATT
-        };
+    /**
+     * The default archetype for a player's DETAILED position, read straight off the squad JSON.
+     * Since the role-model swap an archetype must be valid for the position it is played in, so a
+     * coarse-band mapping (every defender a FULLBACK) no longer validates.
+     */
+    private String defaultRole(String detailedPosition) {
+        return br.com.carvoeiromanager.player.RoleArchetype.defaultFor(
+                br.com.carvoeiromanager.player.DetailedPosition.valueOf(detailedPosition)).name();
     }
 }

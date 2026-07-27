@@ -18,7 +18,7 @@ import java.util.Set;
  *
  * <p>Mirrors futbin.com/26/roles exactly (kept honest by {@code RoleArchetypeFutbinSyncTest}).
  * The 10 legacy-mapped archetypes (declared first) carry the exact weights of the retired
- * {@link PlayerRole}, so a lineup migrated onto its mapped archetype at default focus scores
+ * {@code PlayerRole}, so a lineup migrated onto its mapped archetype at default focus scores
  * identically to the old role-only model — the regression contract from the design spec.
  */
 public enum RoleArchetype {
@@ -196,11 +196,7 @@ public enum RoleArchetype {
 
     public double defenseContribution(Player p) { return weighted(defenseWeights, p.attributes()); }
 
-    /**
-     * Weighted sum of the given attribute weights against a player's attribute profile.
-     * Copied verbatim from {@link PlayerRole#weighted} — {@code PlayerRole} still exists (and
-     * still owns its own copy) until a later task swaps every caller onto this enum and deletes it.
-     */
+    /** Weighted sum of the given attribute weights against a player's attribute profile. */
     public static double weighted(Map<Attribute, Double> weights, Attributes attrs) {
         double sum = 0.0;
         for (Map.Entry<Attribute, Double> e : weights.entrySet()) {

@@ -10,7 +10,8 @@ import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerInstruction;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
+import br.com.carvoeiromanager.player.RoleAssignment;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -389,7 +390,8 @@ public class FixtureSimulator {
         return switch (event.type()) {
             case GOAL -> assistRng.nextDouble() < ASSIST_CHANCE
                     ? pickByWeightExcluding(xi, scorer,
-                            p -> assistWeight(p, profile.attackZone(), PlayerRole.resolve(profile.roles(), p),
+                            p -> assistWeight(p, profile.attackZone(),
+                                    RoleAssignment.resolve(profile.roles(), p).archetype(),
                                     profile.instructionFor(p.getId())), assistRng)
                     : null;
             case CORNER_GOAL -> SetPieces.takerOrFallback(xi, profile.cornerTakerId(),
@@ -449,21 +451,21 @@ public class FixtureSimulator {
      * {@code assistWeight(p, zone, role, null)} equals the pre-instruction three-arg weight exactly
      * (byte-identical). The {@code * 3 / 2} integer ×1.5 rounds identically to the live engine.
      */
-    static int assistWeight(Player p, AttackZone zone, PlayerRole role, PlayerInstruction instr) {
+    static int assistWeight(Player p, AttackZone zone, RoleArchetype role, PlayerInstruction instr) {
         int base = 10;
         int w = switch (zone) {
             case MISTO -> base + p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO)
                     + p.attribute(Attribute.CRUZAMENTO);
             case LATERAIS -> {
                 int weight = base + 2 * p.attribute(Attribute.CRUZAMENTO);
-                if (role == PlayerRole.WINGER || role == PlayerRole.FULL_BACK) {
+                if (role.isWideCreator()) {
                     weight = weight * 3 / 2;
                 }
                 yield weight;
             }
             case CENTRO -> {
                 int weight = base + p.attribute(Attribute.PASSE) + p.attribute(Attribute.VISAO);
-                if (role == PlayerRole.PLAYMAKER || role == PlayerRole.BOX_TO_BOX) {
+                if (role.isCentralCreator()) {
                     weight = weight * 3 / 2;
                 }
                 yield weight;

@@ -7,9 +7,9 @@ import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.OverallCalculator;
 import br.com.carvoeiromanager.player.Player;
-import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.Pressing;
+import br.com.carvoeiromanager.player.RoleAssignment;
 import br.com.carvoeiromanager.seed.SeedClub;
 import br.com.carvoeiromanager.seed.SeedLoader;
 import br.com.carvoeiromanager.seed.SeedPlayer;
@@ -74,8 +74,9 @@ class MatchCalibrationTest {
                 .limit(10)
                 .forEach(xi::add);
 
-        Map<UUID, PlayerRole> roles = new HashMap<>();
-        xi.forEach(p -> roles.put(p.getId(), PlayerRole.defaultFor(p.getPosition())));
+        // Legacy archetype + canonical focus + familiarity 2: the calibration bands were tuned
+        // against the retired PlayerRole model and must survive the swap unchanged.
+        Map<UUID, RoleAssignment> roles = LegacyRoles.forXi(xi);
         TacticalProfile profile = new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO,
                 AttackZone.MISTO, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of(), Map.of());
         return strengthCalc.compute(xi, profile);

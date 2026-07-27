@@ -42,7 +42,7 @@ class TacticsApiIT {
     private List<LineupStarter> starters(UUID clubId) {
         return lineupService.bestXi(clubId).stream()
                 .map(p -> new LineupStarter(p.getId(),
-                        br.com.carvoeiromanager.player.PlayerRole.defaultFor(p.getPosition()).name()))
+                        br.com.carvoeiromanager.player.RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .toList();
     }
 

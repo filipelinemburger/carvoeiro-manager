@@ -7,7 +7,7 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerInstruction;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,7 +45,7 @@ class LineupPlayerInstructionIT {
         Lineup lineup = Lineup.create(save.id(), club, "4-3-3");
         lineupRepository.save(lineup);
 
-        LineupPlayer lp = LineupPlayer.create(lineup.getId(), anyPlayer.getId(), true, PlayerRole.POACHER);
+        LineupPlayer lp = LineupPlayer.create(lineup.getId(), anyPlayer.getId(), true, RoleArchetype.POACHER);
         assertThat(lp.getInstruction()).as("factory never sets an instruction").isNull();
         lp.setInstruction(PlayerInstruction.INFILTRAR_NA_AREA);
         lineupPlayerRepository.save(lp);
@@ -62,7 +62,7 @@ class LineupPlayerInstructionIT {
 
         Lineup lineup = Lineup.create(save.id(), club, "4-3-3");
         lineupRepository.save(lineup);
-        lineupPlayerRepository.save(LineupPlayer.create(lineup.getId(), anyPlayer.getId(), true, PlayerRole.POACHER));
+        lineupPlayerRepository.save(LineupPlayer.create(lineup.getId(), anyPlayer.getId(), true, RoleArchetype.POACHER));
 
         assertThat(lineupPlayerRepository.findByLineupId(lineup.getId()).get(0).getInstruction()).isNull();
     }
@@ -77,10 +77,10 @@ class LineupPlayerInstructionIT {
 
         Lineup lineup = Lineup.create(save.id(), club, "4-3-3");
         lineupRepository.save(lineup);
-        LineupPlayer withInstr = LineupPlayer.create(lineup.getId(), instructed.getId(), true, PlayerRole.POACHER);
+        LineupPlayer withInstr = LineupPlayer.create(lineup.getId(), instructed.getId(), true, RoleArchetype.POACHER);
         withInstr.setInstruction(PlayerInstruction.CRUZAR_MAIS);
         lineupPlayerRepository.save(withInstr);
-        lineupPlayerRepository.save(LineupPlayer.create(lineup.getId(), plain.getId(), true, PlayerRole.POACHER));
+        lineupPlayerRepository.save(LineupPlayer.create(lineup.getId(), plain.getId(), true, RoleArchetype.POACHER));
 
         TacticalProfile profile = tacticsService.profileFor(save.id(), club, List.of(instructed, plain));
 

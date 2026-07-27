@@ -8,7 +8,7 @@ import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.Pressing;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
@@ -52,10 +52,11 @@ class TacticsEntityIT {
         Lineup reloaded = lineupRepository.findById(lineup.getId()).orElseThrow();
         assertThat(reloaded.getMentality()).isEqualTo(Mentality.ATTACKING);
 
-        LineupPlayer lp = LineupPlayer.create(lineup.getId(), anyPlayer.getId(), true, PlayerRole.POACHER);
+        LineupPlayer lp = LineupPlayer.create(lineup.getId(), anyPlayer.getId(), true, RoleArchetype.POACHER);
         lineupPlayerRepository.save(lp);
-        assertThat(lineupPlayerRepository.findByLineupId(lineup.getId()).get(0).getRole())
-                .isEqualTo(PlayerRole.POACHER);
+        LineupPlayer persisted = lineupPlayerRepository.findByLineupId(lineup.getId()).get(0);
+        assertThat(persisted.getArchetype()).isEqualTo(RoleArchetype.POACHER);
+        assertThat(persisted.getFocus()).isEqualTo(RoleArchetype.POACHER.canonicalDefaultFocus());
     }
 
     @Test

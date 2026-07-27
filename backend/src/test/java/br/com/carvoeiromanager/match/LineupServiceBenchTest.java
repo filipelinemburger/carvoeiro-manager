@@ -7,7 +7,7 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.Player;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
@@ -56,7 +56,7 @@ class LineupServiceBenchTest {
 
     private List<LineupStarter> buildValidStarters(UUID clubId) {
         return lineupService.bestXi(clubId).stream()
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
     }
 
@@ -66,7 +66,7 @@ class LineupServiceBenchTest {
                 .filter(p -> !usedIds.contains(p.getId()))
                 .filter(Player::isEligible)
                 .limit(count)
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
     }
 

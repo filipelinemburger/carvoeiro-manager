@@ -7,7 +7,7 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.Player;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
@@ -28,8 +28,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * ITs for the explicit slot assignment on setLineup/getLineup: all-or-nothing slotIndexes,
- * permutation of 0..10, goalkeeper pinned to slot 0, bench never carries one, and the
- * save→get roundtrip echoes what was sent.
+ * permutation of 0..10, bench never carries one, and the save→get roundtrip echoes what was sent.
+ *
+ * <p>Slot 0 is NOT reserved for a goalkeeper (spec §5.1: the manager may improvise anyone
+ * anywhere, including in goal) — only the role played there has to suit the slot.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -58,8 +60,9 @@ class LineupServiceSlotIndexIT {
     }
 
     /**
-     * A valid XI where the GK takes slot 0 and the outfielders take 1..10 in bestXi order.
-     * Some may be "out of position" for their index — legal by design.
+     * A valid XI where the GK takes slot 0 and the outfielders take 1..10 in bestXi order. Players
+     * may be "out of position" for their index — legal by design — so the role is derived from the
+     * SLOT, which is what the service validates against once an explicit slot is given.
      */
     private List<LineupStarter> startersWithSlots(UUID clubId) {
         List<Player> xi = lineupService.bestXi(clubId);
@@ -67,15 +70,20 @@ class LineupServiceSlotIndexIT {
         int next = 1;
         for (Player p : xi) {
             int slot = p.getPosition() == Position.GK ? 0 : next++;
-            starters.add(new LineupStarter(p.getId(),
-                    PlayerRole.defaultFor(p.getPosition()).name(), null, slot));
+            starters.add(new LineupStarter(p.getId(), roleForSlot("4-4-2", slot), null, null, slot));
         }
         return starters;
     }
 
+    /** The default archetype of the (single) detailed position a formation slot accepts. */
+    private static String roleForSlot(String formation, int slot) {
+        return RoleArchetype.defaultFor(
+                FormationSlots.of(formation).get(slot).accepted().iterator().next()).name();
+    }
+
     private List<LineupStarter> startersWithoutSlots(UUID clubId) {
         return lineupService.bestXi(clubId).stream()
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
     }
 
@@ -104,7 +112,7 @@ class LineupServiceSlotIndexIT {
         Career career = createCareer();
         List<LineupStarter> starters = new ArrayList<>(startersWithSlots(career.clubId()));
         LineupStarter last = starters.remove(starters.size() - 1);
-        starters.add(new LineupStarter(last.playerId(), last.role(), null, null));
+        starters.add(new LineupStarter(last.playerId(), last.role(), null, null, null));
 
         assertRejected(() -> lineupService.setLineup(career.saveGameId(), career.clubId(),
                 new SetLineupRequest("4-4-2", starters, null), career.userId()));
@@ -117,7 +125,7 @@ class LineupServiceSlotIndexIT {
         // Break the permutation: give the last outfielder the same index as the previous one.
         LineupStarter a = starters.get(9);
         LineupStarter b = starters.remove(10);
-        starters.add(new LineupStarter(b.playerId(), b.role(), null, a.slotIndex()));
+        starters.add(new LineupStarter(b.playerId(), b.role(), null, null, a.slotIndex()));
 
         assertRejected(() -> lineupService.setLineup(career.saveGameId(), career.clubId(),
                 new SetLineupRequest("4-4-2", starters, null), career.userId()));
@@ -128,24 +136,34 @@ class LineupServiceSlotIndexIT {
         Career career = createCareer();
         List<LineupStarter> starters = new ArrayList<>(startersWithSlots(career.clubId()));
         LineupStarter last = starters.remove(starters.size() - 1);
-        starters.add(new LineupStarter(last.playerId(), last.role(), null, 11));
+        starters.add(new LineupStarter(last.playerId(), last.role(), null, null, 11));
 
         assertRejected(() -> lineupService.setLineup(career.saveGameId(), career.clubId(),
                 new SetLineupRequest("4-4-2", starters, null), career.userId()));
     }
 
     @Test
-    void rejectsNonGoalkeeperAtSlotZero() {
+    void acceptsANonGoalkeeperAtSlotZero() {
+        // Spec §5.1: the manager may improvise anyone anywhere, including in goal. Swapping slot 0
+        // (the keeper) with slot 1 (an outfielder) is legal as long as each plays a role that suits
+        // the slot they now occupy.
         Career career = createCareer();
-        // Swap slot 0 (GK) with slot 1 (an outfielder).
         List<LineupStarter> starters = startersWithSlots(career.clubId()).stream()
-                .map(s -> s.slotIndex() == 0 ? new LineupStarter(s.playerId(), s.role(), null, 1)
-                        : s.slotIndex() == 1 ? new LineupStarter(s.playerId(), s.role(), null, 0)
+                .map(s -> s.slotIndex() == 0
+                        ? new LineupStarter(s.playerId(), roleForSlot("4-4-2", 1), null, null, 1)
+                        : s.slotIndex() == 1
+                        ? new LineupStarter(s.playerId(), roleForSlot("4-4-2", 0), null, null, 0)
                         : s)
                 .collect(Collectors.toList());
 
-        assertRejected(() -> lineupService.setLineup(career.saveGameId(), career.clubId(),
-                new SetLineupRequest("4-4-2", starters, null), career.userId()));
+        LineupResponse saved = lineupService.setLineup(career.saveGameId(), career.clubId(),
+                new SetLineupRequest("4-4-2", starters, null), career.userId());
+
+        assertThat(saved.starters()).hasSize(11);
+        LineupResponse loaded = lineupService.getLineup(career.saveGameId(), career.clubId(),
+                career.userId()).orElseThrow();
+        assertThat(loaded.starters()).extracting(LineupStarter::slotIndex)
+                .containsExactlyInAnyOrder(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
     }
 
     @Test
@@ -158,7 +176,7 @@ class LineupServiceSlotIndexIT {
                 .filter(Player::isEligible)
                 .findFirst().orElseThrow();
         List<LineupStarter> bench = List.of(new LineupStarter(benchPlayer.getId(),
-                PlayerRole.defaultFor(benchPlayer.getPosition()).name(), null, 5));
+                RoleArchetype.defaultFor(benchPlayer.getDetailedPosition()).name(), null, null, 5));
 
         assertRejected(() -> lineupService.setLineup(career.saveGameId(), career.clubId(),
                 new SetLineupRequest("4-4-2", starters, bench), career.userId()));

@@ -110,29 +110,41 @@ class LineupServiceIT {
         assertThat(lineupPlayerRepository.findByLineupId(lineupId)).hasSize(11);
     }
 
-    // --- (b) 0 GKs → INVALID_LINEUP ---
+    // --- (b) GK count: 0 is legal (improvised keeper), 2 is not ---
 
     @Test
-    void lineupWithNoGkIsRejected() {
-        // Given
+    void lineupWithNoGkIsAcceptedSoAnOutfielderCanBeImprovisedInGoal() {
+        // Spec §5.1: the manager may improvise anyone anywhere, including in goal. The engine
+        // degrades it naturally (no gkDefense, x0.50 position fit) rather than the API blocking it.
         Career career = createCareer();
         UUID saveGameId = career.id();
         UUID clubId = career.managedClubId();
         UUID userId = career.userId();
 
-        // Use position-appropriate roles so this test isolates the no-GK rule
-        // regardless of validator ordering (a hardcoded outfield role on a striker
-        // would otherwise trip INVALID_ROLE and mask the INVALID_LINEUP we assert).
-        List<LineupStarter> noGk = lineupService.getSquad(career.id(), clubId, userId).players().stream()
-                .filter(p -> !p.position().equals("GK"))
-                .limit(11)
-                .map(p -> new LineupStarter(p.id(),
-                        br.com.carvoeiromanager.player.PlayerRole.defaultFor(
-                                br.com.carvoeiromanager.player.Position.valueOf(p.position())).name()))
-                .collect(Collectors.toList());
+        List<LineupStarter> noGk = outfieldOnlyStarters(career, clubId, userId, 11);
         SetLineupRequest req = new SetLineupRequest("4-4-2", noGk, null);
 
-        // When / Then
+        LineupResponse saved = lineupService.setLineup(saveGameId, clubId, req, userId);
+
+        assertThat(saved.starters()).hasSize(11);
+    }
+
+    @Test
+    void lineupWithTwoGoalkeepersIsRejected() {
+        // Two keepers stays blocked: the engine's defense split assumes a single keeper.
+        Career career = createCareer();
+        UUID saveGameId = career.id();
+        UUID clubId = career.managedClubId();
+        UUID userId = career.userId();
+
+        List<PlayerResponse> squad = lineupService.getSquad(saveGameId, clubId, userId).players();
+        List<LineupStarter> twoGks = new java.util.ArrayList<>(
+                squad.stream().filter(p -> p.position().equals("GK")).limit(2)
+                        .map(LineupServiceIT::starterFor).collect(Collectors.toList()));
+        assertThat(twoGks).hasSize(2);
+        twoGks.addAll(outfieldOnlyStarters(career, clubId, userId, 9));
+        SetLineupRequest req = new SetLineupRequest("4-4-2", twoGks, null);
+
         assertThatThrownBy(() -> lineupService.setLineup(saveGameId, clubId, req, userId))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
@@ -140,6 +152,20 @@ class LineupServiceIT {
                     assertThat(apiEx.getCode()).isEqualTo(ErrorCode.INVALID_LINEUP);
                     assertThat(apiEx.getStatus().value()).isEqualTo(422);
                 });
+    }
+
+    /** {@code limit} outfielders, each carrying the default archetype of their own detailed position. */
+    private List<LineupStarter> outfieldOnlyStarters(Career career, UUID clubId, UUID userId, int limit) {
+        return lineupService.getSquad(career.id(), clubId, userId).players().stream()
+                .filter(p -> !p.position().equals("GK"))
+                .limit(limit)
+                .map(LineupServiceIT::starterFor)
+                .collect(Collectors.toList());
+    }
+
+    private static LineupStarter starterFor(PlayerResponse p) {
+        return new LineupStarter(p.id(), br.com.carvoeiromanager.player.RoleArchetype.defaultFor(
+                br.com.carvoeiromanager.player.DetailedPosition.valueOf(p.detailedPosition())).name());
     }
 
     // --- (c) != 11 players → INVALID_LINEUP ---
@@ -357,7 +383,7 @@ class LineupServiceIT {
                 .findFirst().orElseThrow();
         List<LineupStarter> bench = List.of(new LineupStarter(
                 spareGk.getId(),
-                br.com.carvoeiromanager.player.PlayerRole.defaultFor(Position.GK).name(),
+                br.com.carvoeiromanager.player.RoleArchetype.GOALKEEPER.name(),
                 "SEGURAR_POSICAO"));
 
         assertThatThrownBy(() -> lineupService.setLineup(
@@ -666,7 +692,7 @@ class LineupServiceIT {
         return lineupService.bestXi(clubId).stream()
                 .map(p -> new LineupStarter(
                         p.getId(),
-                        br.com.carvoeiromanager.player.PlayerRole.defaultFor(p.getPosition()).name()))
+                        br.com.carvoeiromanager.player.RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
     }
 

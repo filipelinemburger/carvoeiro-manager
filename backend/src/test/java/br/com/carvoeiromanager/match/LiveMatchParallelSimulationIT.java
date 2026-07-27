@@ -8,7 +8,7 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.player.Player;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.season.AdvanceResponse;
 import br.com.carvoeiromanager.season.SeasonEventRepository;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
@@ -70,7 +70,7 @@ class LiveMatchParallelSimulationIT {
 
         List<Player> bestXi = lineupService.bestXi(managedClubId);
         List<LineupStarter> starters = bestXi.stream()
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
 
         List<UUID> xiIds = bestXi.stream().map(Player::getId).toList();
@@ -78,7 +78,7 @@ class LiveMatchParallelSimulationIT {
                 .filter(p -> !xiIds.contains(p.getId()))
                 .filter(Player::isEligible)
                 .limit(3)
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
 
         lineupService.setLineup(saveGameId, managedClubId, new SetLineupRequest("4-4-2", starters, bench), userId);

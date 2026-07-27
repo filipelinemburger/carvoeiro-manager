@@ -8,7 +8,8 @@ import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerInstruction;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
+import br.com.carvoeiromanager.player.RoleAssignment;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.Pressing;
 import org.junit.jupiter.api.Test;
@@ -93,14 +94,14 @@ class PlayerInstructionWeightTest {
     void cruzarMaisScalesTheAssistWeightByOneAndAHalfInBothEngines() {
         Player p = player(Position.MID, 0, 55, 45, 35, 0, 0, 0, 0);
         int mistoBase = 10 + 55 + 45 + 35; // 145
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.MISTO, PlayerRole.BOX_TO_BOX, null))
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.MISTO, RoleArchetype.BOX_TO_BOX, null))
                 .isEqualTo(mistoBase);
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.MISTO, PlayerRole.BOX_TO_BOX,
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.MISTO, RoleArchetype.BOX_TO_BOX,
                 PlayerInstruction.CRUZAR_MAIS)).isEqualTo(mistoBase * 3 / 2);
-        assertThat(FixtureSimulator.assistWeight(p, AttackZone.MISTO, PlayerRole.BOX_TO_BOX,
+        assertThat(FixtureSimulator.assistWeight(p, AttackZone.MISTO, RoleArchetype.BOX_TO_BOX,
                 PlayerInstruction.CRUZAR_MAIS)).isEqualTo(145 * 3 / 2);
         // Compounds with the LATERAIS wide-role boost: (10 + 2*35)=80, WINGER ×3/2=120, then ×3/2=180.
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.LATERAIS, PlayerRole.WINGER,
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.LATERAIS, RoleArchetype.WINGER,
                 PlayerInstruction.CRUZAR_MAIS)).isEqualTo(80 * 3 / 2 * 3 / 2);
     }
 
@@ -176,9 +177,9 @@ class PlayerInstructionWeightTest {
                 .isEqualTo(LiveMatchEngine.scorerWeight(att, AttackZone.MISTO, null));
         assertThat(FixtureSimulator.scorerWeight(att, AttackZone.CENTRO, PlayerInstruction.DRIBLAR_MAIS))
                 .isEqualTo(FixtureSimulator.scorerWeight(att, AttackZone.CENTRO, null));
-        assertThat(LiveMatchEngine.assistWeight(att, AttackZone.LATERAIS, PlayerRole.WINGER,
+        assertThat(LiveMatchEngine.assistWeight(att, AttackZone.LATERAIS, RoleArchetype.WINGER,
                 PlayerInstruction.DRIBLAR_MAIS))
-                .isEqualTo(LiveMatchEngine.assistWeight(att, AttackZone.LATERAIS, PlayerRole.WINGER, null));
+                .isEqualTo(LiveMatchEngine.assistWeight(att, AttackZone.LATERAIS, RoleArchetype.WINGER, null));
         assertThat(LiveMatchEngine.cardWeight(att, PlayerInstruction.DRIBLAR_MAIS))
                 .isEqualTo(LiveMatchEngine.cardWeight(att, null));
         assertThat(FixtureSimulator.foulWeight(att, PlayerInstruction.DRIBLAR_MAIS))
@@ -217,8 +218,7 @@ class PlayerInstructionWeightTest {
     }
 
     private static TacticalProfile profile(List<Player> xi, Map<UUID, PlayerInstruction> instructions) {
-        Map<UUID, PlayerRole> roles = new HashMap<>();
-        xi.forEach(p -> roles.put(p.getId(), PlayerRole.defaultFor(p.getPosition())));
+        Map<UUID, RoleAssignment> roles = LegacyRoles.forXi(xi);
         return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2",
                 Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, instructions, Map.of());
     }

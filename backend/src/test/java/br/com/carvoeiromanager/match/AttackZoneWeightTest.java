@@ -4,7 +4,7 @@ import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Attributes;
 import br.com.carvoeiromanager.player.Player;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.player.Position;
 import org.junit.jupiter.api.Test;
 
@@ -68,7 +68,7 @@ class AttackZoneWeightTest {
         int legacy = legacyAssistWeight(p);
         // 55 + 45 + 35 + 10 = 145 — role must not matter for MISTO.
         assertThat(legacy).isEqualTo(145);
-        for (PlayerRole role : PlayerRole.values()) {
+        for (RoleArchetype role : RoleArchetype.values()) {
             assertThat(LiveMatchEngine.assistWeight(p, AttackZone.MISTO, role, null)).isEqualTo(legacy);
             assertThat(FixtureSimulator.assistWeight(p, AttackZone.MISTO, role, null)).isEqualTo(legacy);
         }
@@ -92,12 +92,12 @@ class AttackZoneWeightTest {
         int base = 10 + 2 * 35; // 80
         assertThat(base).isEqualTo(80);
         // Non-wide role: no boost.
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.LATERAIS, PlayerRole.POACHER, null)).isEqualTo(80);
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.LATERAIS, RoleArchetype.POACHER, null)).isEqualTo(80);
         // Wide roles: ×1.5 via integer w*3/2.
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.LATERAIS, PlayerRole.WINGER, null)).isEqualTo(80 * 3 / 2);
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.LATERAIS, PlayerRole.FULL_BACK, null)).isEqualTo(120);
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.LATERAIS, RoleArchetype.WINGER, null)).isEqualTo(80 * 3 / 2);
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.LATERAIS, RoleArchetype.FULLBACK, null)).isEqualTo(120);
         // Both engines agree.
-        assertThat(FixtureSimulator.assistWeight(p, AttackZone.LATERAIS, PlayerRole.WINGER, null)).isEqualTo(120);
+        assertThat(FixtureSimulator.assistWeight(p, AttackZone.LATERAIS, RoleArchetype.WINGER, null)).isEqualTo(120);
     }
 
     @Test
@@ -106,11 +106,11 @@ class AttackZoneWeightTest {
         int base = 10 + 55 + 45; // 110
         assertThat(base).isEqualTo(110);
         // Non-central role: no boost.
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.CENTRO, PlayerRole.WINGER, null)).isEqualTo(110);
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.CENTRO, RoleArchetype.WINGER, null)).isEqualTo(110);
         // Central creators: ×1.5.
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.CENTRO, PlayerRole.PLAYMAKER, null)).isEqualTo(110 * 3 / 2);
-        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.CENTRO, PlayerRole.BOX_TO_BOX, null)).isEqualTo(165);
-        assertThat(FixtureSimulator.assistWeight(p, AttackZone.CENTRO, PlayerRole.PLAYMAKER, null)).isEqualTo(165);
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.CENTRO, RoleArchetype.PLAYMAKER, null)).isEqualTo(110 * 3 / 2);
+        assertThat(LiveMatchEngine.assistWeight(p, AttackZone.CENTRO, RoleArchetype.BOX_TO_BOX, null)).isEqualTo(165);
+        assertThat(FixtureSimulator.assistWeight(p, AttackZone.CENTRO, RoleArchetype.PLAYMAKER, null)).isEqualTo(165);
     }
 
     @Test

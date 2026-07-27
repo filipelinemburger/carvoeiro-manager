@@ -12,7 +12,7 @@ import br.com.carvoeiromanager.match.LineupStarter;
 import br.com.carvoeiromanager.match.SetLineupRequest;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import br.com.carvoeiromanager.transfer.TransferDirection;
 import br.com.carvoeiromanager.transfer.TransferOffer;
@@ -67,7 +67,7 @@ class AdvancePreviewIT {
 
     private void setBestEligibleLineup(Career c) {
         List<LineupStarter> starters = lineupService.bestXi(c.clubId()).stream()
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
         lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-4-2", starters, null), c.userId());
     }

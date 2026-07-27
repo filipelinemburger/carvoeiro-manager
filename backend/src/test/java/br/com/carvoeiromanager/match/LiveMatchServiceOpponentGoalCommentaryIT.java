@@ -6,7 +6,7 @@ import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.player.Player;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,14 +50,14 @@ class LiveMatchServiceOpponentGoalCommentaryIT {
 
         List<Player> bestXi = lineupService.bestXi(managedClubId);
         List<LineupStarter> starters = bestXi.stream()
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
         List<UUID> xiIds = bestXi.stream().map(Player::getId).toList();
         List<LineupStarter> bench = playerRepository.findByClubId(managedClubId).stream()
                 .filter(p -> !xiIds.contains(p.getId()))
                 .filter(Player::isEligible)
                 .limit(3)
-                .map(p -> new LineupStarter(p.getId(), PlayerRole.defaultFor(p.getPosition()).name()))
+                .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
         lineupService.setLineup(saveGameId, managedClubId, new SetLineupRequest("4-4-2", starters, bench), userId);
 

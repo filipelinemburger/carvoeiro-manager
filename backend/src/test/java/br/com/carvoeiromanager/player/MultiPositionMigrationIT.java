@@ -91,9 +91,11 @@ class MultiPositionMigrationIT {
 
         UUID clubId = insertScratchClub(save.id());
         UUID lineupId = insertScratchLineup(save.id(), clubId);
+        // V42 later retired lineup_players.role in favour of archetype+focus, so the persisted
+        // lineup role is written (and read back below) in its post-V42 shape. STOPPER maps to itself.
         jdbc.update("""
-                INSERT INTO lineup_players (lineup_id, player_id, starting, role)
-                VALUES (?, ?, true, 'STOPPER')
+                INSERT INTO lineup_players (lineup_id, player_id, starting, archetype, focus)
+                VALUES (?, ?, true, 'STOPPER', 'BALANCED')
                 """, lineupId, stopperId);
 
         applyFamiliarRolesBackfill(save.id());
@@ -176,17 +178,19 @@ class MultiPositionMigrationIT {
                 END
                 WHERE save_game_id = ? AND name LIKE 'Legacy %'
                 """, saveGameId);
+        // V41 keyed this off lp.role; V42 dropped that column, so the reproduction reads the
+        // equivalent post-V42 lp.archetype values (FULL_BACK→FULLBACK etc. per the V42 mapping).
         jdbc.update("""
-                UPDATE players p SET familiar_roles = CASE lp.role
+                UPDATE players p SET familiar_roles = CASE lp.archetype
                         WHEN 'STOPPER' THEN 'STOPPER++'
-                        WHEN 'BALL_PLAYING_DEF' THEN 'BALL_PLAYING_DEFENDER++'
-                        WHEN 'TARGET_MAN' THEN 'TARGET_FORWARD++'
+                        WHEN 'BALL_PLAYING_DEFENDER' THEN 'BALL_PLAYING_DEFENDER++'
+                        WHEN 'TARGET_FORWARD' THEN 'TARGET_FORWARD++'
                     END
                 FROM lineup_players lp
                 WHERE lp.player_id = p.id
                   AND p.save_game_id = ? AND p.name LIKE 'Legacy %'
-                  AND ((lp.role IN ('STOPPER', 'BALL_PLAYING_DEF') AND p.detailed_position = 'ZAGUEIRO')
-                       OR (lp.role = 'TARGET_MAN' AND p.detailed_position = 'ATACANTE'))
+                  AND ((lp.archetype IN ('STOPPER', 'BALL_PLAYING_DEFENDER') AND p.detailed_position = 'ZAGUEIRO')
+                       OR (lp.archetype = 'TARGET_FORWARD' AND p.detailed_position = 'ATACANTE'))
                 """, saveGameId);
     }
 

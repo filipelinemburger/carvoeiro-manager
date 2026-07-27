@@ -8,8 +8,8 @@ import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerInstruction;
-import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Pressing;
+import br.com.carvoeiromanager.player.RoleAssignment;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -64,9 +64,9 @@ public class TacticsService {
         Marking marking = parseOrDefault(
                 club != null ? club.getDefaultMarking() : null, Marking::valueOf, Marking.ZONAL);
 
-        Map<UUID, PlayerRole> roles = new HashMap<>();
+        Map<UUID, RoleAssignment> roles = new HashMap<>();
         for (Player p : xi) {
-            roles.put(p.getId(), PlayerRole.defaultFor(p.getPosition()));
+            roles.put(p.getId(), RoleAssignment.defaultFor(p.getDetailedPosition()));
         }
         UUID bestFinisher = xi.stream().max(Comparator.comparingInt(Player::getFinishing))
                 .map(Player::getId).orElse(null);
@@ -92,13 +92,13 @@ public class TacticsService {
     }
 
     private TacticalProfile fromLineup(Lineup lineup, List<Player> xi) {
-        Map<UUID, PlayerRole> persisted = new HashMap<>();
+        Map<UUID, RoleAssignment> persisted = new HashMap<>();
         Map<UUID, PlayerInstruction> instructions = new HashMap<>();
         Map<UUID, Integer> pinnedSlots = new HashMap<>();
         lineupPlayerRepository.findByLineupId(lineup.getId()).stream()
                 .filter(LineupPlayer::isStarting)
                 .forEach(lp -> {
-                    persisted.put(lp.getPlayerId(), lp.getRole());
+                    persisted.put(lp.getPlayerId(), new RoleAssignment(lp.getArchetype(), lp.getFocus()));
                     // Only starters with an explicit instruction enter the map; the rest resolve to
                     // "no instruction", so a lineup with none set stays byte-identical.
                     if (lp.getInstruction() != null) {
@@ -108,10 +108,11 @@ public class TacticsService {
                         pinnedSlots.put(lp.getPlayerId(), lp.getSlotIndex());
                     }
                 });
-        // Fill any XI member missing a persisted role with its band default.
-        Map<UUID, PlayerRole> roles = new HashMap<>();
+        // Fill any XI member missing a persisted assignment with its position default.
+        Map<UUID, RoleAssignment> roles = new HashMap<>();
         for (Player p : xi) {
-            roles.put(p.getId(), persisted.getOrDefault(p.getId(), PlayerRole.defaultFor(p.getPosition())));
+            roles.put(p.getId(),
+                    persisted.getOrDefault(p.getId(), RoleAssignment.defaultFor(p.getDetailedPosition())));
         }
         // Persisted (drag-and-drop) slots are honored verbatim; XI members without one — subs
         // who came on, legacy lineups — fill the remaining slots greedily.

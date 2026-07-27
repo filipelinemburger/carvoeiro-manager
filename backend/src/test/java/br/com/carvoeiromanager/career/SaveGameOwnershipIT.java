@@ -155,12 +155,11 @@ class SaveGameOwnershipIT {
         for (JsonNode player : players) {
             String position = player.get("position").asString();
             String id = player.get("id").asString();
-            String role = switch (position) {
-                case "GK" -> "GOALKEEPER";
-                case "DEF" -> "FULL_BACK";
-                case "MID" -> "BOX_TO_BOX";
-                default -> "POACHER";
-            };
+            // An archetype must be valid for the position it is played in, so it comes from the
+            // player's DETAILED position — a coarse-band mapping no longer validates.
+            String role = br.com.carvoeiromanager.player.RoleArchetype.defaultFor(
+                    br.com.carvoeiromanager.player.DetailedPosition.valueOf(
+                            player.get("detailedPosition").asString())).name();
             if ("GK".equals(position) && gkId == null) {
                 gkId = id;
                 starters.append("{\"playerId\":\"").append(id).append("\",\"role\":\"").append(role).append("\"},");

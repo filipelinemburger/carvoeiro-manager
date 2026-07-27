@@ -1,7 +1,8 @@
 package br.com.carvoeiromanager.match;
 
 import br.com.carvoeiromanager.player.PlayerInstruction;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.RoleArchetype;
+import br.com.carvoeiromanager.player.RoleFocus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -32,9 +33,15 @@ public class LineupPlayer {
     @Column(name = "starting", nullable = false)
     private boolean starting;
 
+    /** The tactical archetype the manager assigned (spec §2.4); replaces the retired PlayerRole. */
     @Enumerated(EnumType.STRING)
-    @Column(name = "role", nullable = false, length = 20)
-    private PlayerRole role;
+    @Column(name = "archetype", nullable = false, length = 24)
+    private RoleArchetype archetype;
+
+    /** The focus the archetype is played at; the archetype's canonical default when unspecified. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "focus", nullable = false, length = 16)
+    private RoleFocus focus;
 
     /**
      * Optional per-player instruction ("instrução pessoal"). Nullable and never set by the factory
@@ -57,30 +64,41 @@ public class LineupPlayer {
         // for JPA
     }
 
-    private LineupPlayer(UUID lineupId, UUID playerId, boolean starting, PlayerRole role) {
+    private LineupPlayer(UUID lineupId, UUID playerId, boolean starting,
+                         RoleArchetype archetype, RoleFocus focus) {
         this.lineupId = lineupId;
         this.playerId = playerId;
         this.starting = starting;
-        this.role = role;
+        this.archetype = archetype;
+        this.focus = focus;
     }
 
+    /** No-role factory: the direct successor of the old {@code PlayerRole.BOX_TO_BOX} default. */
     public static LineupPlayer create(UUID lineupId, UUID playerId, boolean starting) {
-        return new LineupPlayer(lineupId, playerId, starting, PlayerRole.BOX_TO_BOX);
+        return new LineupPlayer(lineupId, playerId, starting, RoleArchetype.BOX_TO_BOX, RoleFocus.BALANCED);
     }
 
-    public static LineupPlayer create(UUID lineupId, UUID playerId, boolean starting, PlayerRole role) {
-        return new LineupPlayer(lineupId, playerId, starting, role);
+    /** Assigns the archetype at its canonical default focus. */
+    public static LineupPlayer create(UUID lineupId, UUID playerId, boolean starting, RoleArchetype archetype) {
+        return new LineupPlayer(lineupId, playerId, starting, archetype, archetype.canonicalDefaultFocus());
+    }
+
+    public static LineupPlayer create(UUID lineupId, UUID playerId, boolean starting,
+                                      RoleArchetype archetype, RoleFocus focus) {
+        return new LineupPlayer(lineupId, playerId, starting, archetype, focus);
     }
 
     public UUID getLineupId() { return lineupId; }
     public UUID getPlayerId() { return playerId; }
     public boolean isStarting() { return starting; }
-    public PlayerRole getRole() { return role; }
+    public RoleArchetype getArchetype() { return archetype; }
+    public RoleFocus getFocus() { return focus; }
     public PlayerInstruction getInstruction() { return instruction; }
     public Integer getSlotIndex() { return slotIndex; }
 
     public void setStarting(boolean starting) { this.starting = starting; }
-    public void setRole(PlayerRole role) { this.role = role; }
+    public void setArchetype(RoleArchetype archetype) { this.archetype = archetype; }
+    public void setFocus(RoleFocus focus) { this.focus = focus; }
     public void setInstruction(PlayerInstruction instruction) { this.instruction = instruction; }
     public void setSlotIndex(Integer slotIndex) { this.slotIndex = slotIndex; }
 }

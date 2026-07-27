@@ -10,7 +10,9 @@ import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import br.com.carvoeiromanager.player.PlayerRole;
+import br.com.carvoeiromanager.player.DetailedPosition;
+import br.com.carvoeiromanager.player.RoleArchetype;
+import br.com.carvoeiromanager.player.RoleAssignment;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
@@ -69,7 +71,10 @@ class TacticsServiceIT {
         UUID bestFinisher = xi.stream().max(java.util.Comparator.comparingInt(Player::getFinishing))
                 .orElseThrow().getId();
         assertThat(profile.penaltyTakerId()).isEqualTo(bestFinisher);
-        assertThat(profile.roles().values()).contains(PlayerRole.GOALKEEPER, PlayerRole.POACHER);
+        assertThat(profile.roles().values())
+                .contains(RoleAssignment.defaultFor(DetailedPosition.GOLEIRO));
+        assertThat(profile.roles().values()).allSatisfy(r ->
+                assertThat(r.focus()).isEqualTo(r.archetype().canonicalDefaultFocus()));
     }
 
     @Test
@@ -84,19 +89,21 @@ class TacticsServiceIT {
         Lineup lineup = Lineup.create(save, club, "4-3-3");
         lineup.setMentality(Mentality.ATTACKING);
         lineupRepository.save(lineup);
-        lineupPlayerRepository.save(LineupPlayer.create(lineup.getId(), firstId, true, PlayerRole.GOALKEEPER));
+        lineupPlayerRepository.save(
+                LineupPlayer.create(lineup.getId(), firstId, true, RoleArchetype.GOALKEEPER));
 
         TacticalProfile profile = tacticsService.profileFor(save, club, xi);
         assertThat(profile.mentality()).isEqualTo(Mentality.ATTACKING);
         assertThat(profile.formation()).isEqualTo("4-3-3");
-        assertThat(profile.roles().get(firstId)).isEqualTo(PlayerRole.GOALKEEPER);
+        assertThat(profile.roles().get(firstId)).isEqualTo(
+                new RoleAssignment(RoleArchetype.GOALKEEPER, RoleArchetype.GOALKEEPER.canonicalDefaultFocus()));
 
-        // band-default fill: a roster member with no persisted lineup_player row
-        // still gets a role — its position-band default — not a missing entry.
+        // position-default fill: a roster member with no persisted lineup_player row
+        // still gets an assignment — its detailed-position default — not a missing entry.
         Player other = xi.get(1);
         assertThat(profile.roles()).containsKey(other.getId());
         assertThat(profile.roles().get(other.getId()))
-                .isEqualTo(PlayerRole.defaultFor(other.getPosition()));
+                .isEqualTo(RoleAssignment.defaultFor(other.getDetailedPosition()));
     }
 
     @Test
@@ -198,13 +205,13 @@ class TacticsServiceIT {
         lineupRepository.save(lineup);
         // Persist GK -> slot 0, then the outfielders in REVERSE order into slots 1..10, so the
         // arrangement cannot coincide with what greedy would pick.
-        LineupPlayer gkRow = LineupPlayer.create(lineup.getId(), gk.getId(), true, PlayerRole.GOALKEEPER);
+        LineupPlayer gkRow = LineupPlayer.create(lineup.getId(), gk.getId(), true, RoleArchetype.GOALKEEPER);
         gkRow.setSlotIndex(0);
         lineupPlayerRepository.save(gkRow);
         for (int i = 0; i < outfield.size(); i++) {
             Player p = outfield.get(outfield.size() - 1 - i);
             LineupPlayer row = LineupPlayer.create(lineup.getId(), p.getId(), true,
-                    PlayerRole.defaultFor(p.getPosition()));
+                    RoleArchetype.defaultFor(p.getDetailedPosition()));
             row.setSlotIndex(i + 1);
             lineupPlayerRepository.save(row);
         }
@@ -233,12 +240,12 @@ class TacticsServiceIT {
         // Persist a full XI (gk + first 10 outfielders) with slots 0..10 …
         Lineup lineup = Lineup.create(save, club, "4-3-3");
         lineupRepository.save(lineup);
-        LineupPlayer gkRow = LineupPlayer.create(lineup.getId(), gk.getId(), true, PlayerRole.GOALKEEPER);
+        LineupPlayer gkRow = LineupPlayer.create(lineup.getId(), gk.getId(), true, RoleArchetype.GOALKEEPER);
         gkRow.setSlotIndex(0);
         lineupPlayerRepository.save(gkRow);
         for (int i = 0; i < 10; i++) {
             LineupPlayer row = LineupPlayer.create(lineup.getId(), outfield.get(i).getId(), true,
-                    PlayerRole.defaultFor(outfield.get(i).getPosition()));
+                    RoleArchetype.defaultFor(outfield.get(i).getDetailedPosition()));
             row.setSlotIndex(i + 1);
             lineupPlayerRepository.save(row);
         }

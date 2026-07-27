@@ -15,9 +15,11 @@ import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerInstruction;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.Pressing;
+import br.com.carvoeiromanager.player.RoleArchetype;
+import br.com.carvoeiromanager.player.RoleAssignment;
+import br.com.carvoeiromanager.player.RoleFocus;
 import br.com.carvoeiromanager.player.TrainingIntensity;
 import br.com.carvoeiromanager.transfer.TransferValuation;
 import org.springframework.stereotype.Service;
@@ -74,7 +76,7 @@ public class LineupService {
         if (!club.getSaveGameId().equals(saveGameId)) {
             throw clubNotFound();
         }
-        Map<UUID, PlayerRole> roleByPlayer = currentRoles(saveGameId, clubId);
+        Map<UUID, RoleAssignment> roleByPlayer = currentRoles(saveGameId, clubId);
         List<PlayerResponse> responses = playerRepository.findByClubIdAndYouthProspectFalse(clubId).stream()
                 .map(p -> toPlayerResponse(p, roleByPlayer.get(p.getId()), onDate))
                 .toList();
@@ -93,7 +95,7 @@ public class LineupService {
         Player player = playerRepository.findById(playerId)
                 .filter(p -> p.getSaveGameId().equals(saveGameId))
                 .orElseThrow(() -> new ApiException(ErrorCode.PLAYER_NOT_FOUND, "Player " + playerId + " not found"));
-        PlayerRole role = player.getClubId() != null
+        RoleAssignment role = player.getClubId() != null
                 ? currentRoles(saveGameId, player.getClubId()).get(player.getId())
                 : null;
         return toPlayerResponse(player, role, onDate);
@@ -104,10 +106,10 @@ public class LineupService {
      *
      * Validation rules:
      * - Exactly 11 starting players.
-     * - Exactly 1 GK among them.
+     * - At most 1 GK among them (spec §5.1: an outfielder may be improvised in goal).
      * - Every player ID must belong to this club.
      * - No suspended player may be selected.
-     * - Each role must be valid for the player's position.
+     * - Each archetype+focus must be valid for the slot (or, without slots, for the player).
      *
      * On conflict (lineup already exists): updates the formation and replaces all lineup_players
      * (delete-all + insert) so there are never leftover rows.
@@ -131,14 +133,19 @@ public class LineupService {
         validateGkCount(startingIds, clubPlayers);
         validateNoIneligible(startingIds, clubPlayers);
         validateNoIneligible(benchIds, clubPlayers);
-        Map<UUID, PlayerRole> starterRoles = validateAndParseRoles(starters, clubPlayers);
-        Map<UUID, PlayerRole> benchRoles = validateAndParseRoles(bench, clubPlayers);
+        // Slot structure first: role validity is measured against the pinned slot, so a malformed
+        // slotIndex must be reported as such rather than surfacing as a confusing role error.
+        validateSlotIndexes(starters, bench);
+        Map<UUID, RoleAssignment> starterRoles =
+                validateAndParseAssignments(starters, clubPlayers, req.formation());
+        // Bench entries never carry a slot (validateSlotIndexes just proved it), so they always
+        // validate against the player's own positions.
+        Map<UUID, RoleAssignment> benchRoles = validateAndParseAssignments(bench, clubPlayers, req.formation());
         // Parse + validate personal instructions BEFORE any delete/save, mirroring the roles above,
         // so a bad instruction (unknown value, or one on a GK) rejects the whole request without
         // partially mutating the persisted lineup.
         Map<UUID, PlayerInstruction> starterInstructions = validateAndParseInstructions(starters, clubPlayers);
         Map<UUID, PlayerInstruction> benchInstructions = validateAndParseInstructions(bench, clubPlayers);
-        validateSlotIndexes(starters, bench, clubPlayers);
 
         Lineup lineup = lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId).orElse(null);
 
@@ -154,13 +161,17 @@ public class LineupService {
         final UUID lineupId = lineup.getId();
         // starters is guaranteed non-null and size == 11 here: validatePlayerCount threw earlier if not
         for (LineupStarter starter : starters) {
-            LineupPlayer lp = LineupPlayer.create(lineupId, starter.playerId(), true, starterRoles.get(starter.playerId()));
+            RoleAssignment assignment = starterRoles.get(starter.playerId());
+            LineupPlayer lp = LineupPlayer.create(lineupId, starter.playerId(), true,
+                    assignment.archetype(), assignment.focus());
             lp.setInstruction(starterInstructions.get(starter.playerId()));
             lp.setSlotIndex(starter.slotIndex());
             lineupPlayerRepository.save(lp);
         }
         for (LineupStarter sub : bench) {
-            LineupPlayer lp = LineupPlayer.create(lineupId, sub.playerId(), false, benchRoles.get(sub.playerId()));
+            RoleAssignment assignment = benchRoles.get(sub.playerId());
+            LineupPlayer lp = LineupPlayer.create(lineupId, sub.playerId(), false,
+                    assignment.archetype(), assignment.focus());
             lp.setInstruction(benchInstructions.get(sub.playerId()));
             lineupPlayerRepository.save(lp);
         }
@@ -517,10 +528,12 @@ public class LineupService {
                 .filter(p -> p.getPosition() == Position.GK)
                 .count();
 
-        if (gkCount != 1) {
+        // At most one, not exactly one: spec §5.1 lets the manager improvise an outfielder in goal.
+        // Two keepers stays blocked — the engine's defense split assumes a single keeper.
+        if (gkCount > 1) {
             throw new ApiException(
                     ErrorCode.INVALID_LINEUP,
-                    "A lineup must have exactly 1 goalkeeper, but found " + gkCount);
+                    "A escalação pode ter no máximo 1 goleiro, mas encontrou " + gkCount);
         }
     }
 
@@ -562,32 +575,88 @@ public class LineupService {
         }
     }
 
-    private Map<UUID, PlayerRole> validateAndParseRoles(List<LineupStarter> starters, List<Player> clubPlayers) {
+    /**
+     * Parses and validates each selected player's {@link RoleAssignment} (archetype + optional focus).
+     *
+     * <p>An absent focus means "the archetype's canonical default". Validity is measured against the
+     * <b>slot</b> when the starter carries an explicit {@code slotIndex} — the manager may improvise
+     * any player anywhere (spec §5.1), but the role they play must make sense for the spot on the
+     * pitch. Without a slot (legacy requests, bench rows) it is measured against the player's own
+     * playable {@link Player#positions()}.
+     */
+    private Map<UUID, RoleAssignment> validateAndParseAssignments(List<LineupStarter> starters,
+                                                                  List<Player> clubPlayers,
+                                                                  String formation) {
         Map<UUID, Player> byId = clubPlayers.stream().collect(Collectors.toMap(Player::getId, p -> p));
-        Map<UUID, PlayerRole> resolved = new HashMap<>();
+        List<FormationSlots.Slot> slots = FormationSlots.of(formation);
+        Map<UUID, RoleAssignment> resolved = new HashMap<>();
         for (LineupStarter starter : starters) {
-            PlayerRole role;
-            try {
-                role = PlayerRole.valueOf(starter.role());
-            } catch (IllegalArgumentException ex) {
-                throw new ApiException(ErrorCode.INVALID_ROLE, "Unknown role: " + starter.role());
-            }
-            // player is guaranteed non-null in practice: validatePlayersOwnedByClub
-            // runs before this and rejects any starter not in clubPlayers. The guard
-            // is defensive only.
+            RoleArchetype archetype = parseArchetype(starter.role());
+            RoleFocus focus = parseFocus(starter.focus(), archetype);
+            // player is guaranteed non-null in practice: validatePlayersOwnedByClub runs before this
+            // and rejects any starter not in clubPlayers. The guard is defensive only.
             Player player = byId.get(starter.playerId());
-            if (player != null && !role.isValidFor(player.getPosition())) {
-                throw new ApiException(ErrorCode.INVALID_ROLE,
-                        "Role " + role + " is not valid for position " + player.getPosition());
+            List<DetailedPosition> against = candidatePositions(starter, player, slots);
+            if (!against.isEmpty()) {
+                validateAgainstPositions(archetype, focus, against);
             }
-            resolved.put(starter.playerId(), role);
+            resolved.put(starter.playerId(), new RoleAssignment(archetype, focus));
         }
         return resolved;
     }
 
     /**
+     * The positions an assignment is judged against: the accepted set of the pinned formation slot
+     * when one is given, else every position the player can play. Empty when neither is available.
+     */
+    private List<DetailedPosition> candidatePositions(LineupStarter starter, Player player,
+                                                      List<FormationSlots.Slot> slots) {
+        Integer slotIndex = starter.slotIndex();
+        if (slotIndex != null && slotIndex >= 0 && slotIndex < slots.size()) {
+            return List.copyOf(slots.get(slotIndex).accepted());
+        }
+        return player == null ? List.of() : player.positions();
+    }
+
+    /** The archetype must be valid for at least one candidate position, and the focus valid there. */
+    private void validateAgainstPositions(RoleArchetype archetype, RoleFocus focus,
+                                          List<DetailedPosition> candidates) {
+        List<DetailedPosition> playable = candidates.stream().filter(archetype::validFor).toList();
+        if (playable.isEmpty()) {
+            throw new ApiException(ErrorCode.INVALID_ROLE,
+                    "Função " + archetype.label() + " não é válida para a posição "
+                            + candidates.get(0).label());
+        }
+        boolean focusOk = playable.stream().anyMatch(pos -> archetype.focusesFor(pos).contains(focus));
+        if (!focusOk) {
+            throw new ApiException(ErrorCode.INVALID_ROLE,
+                    "Foco " + focus.label() + " não é válido para a função " + archetype.label());
+        }
+    }
+
+    private RoleArchetype parseArchetype(String raw) {
+        try {
+            return RoleArchetype.valueOf(raw);
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            throw new ApiException(ErrorCode.INVALID_ROLE, "Função desconhecida: " + raw);
+        }
+    }
+
+    /** A null/blank focus falls back to the archetype's canonical default. */
+    private RoleFocus parseFocus(String raw, RoleArchetype archetype) {
+        if (raw == null || raw.isBlank()) {
+            return archetype.canonicalDefaultFocus();
+        }
+        try {
+            return RoleFocus.valueOf(raw);
+        } catch (IllegalArgumentException ex) {
+            throw new ApiException(ErrorCode.INVALID_ROLE, "Foco desconhecido: " + raw);
+        }
+    }
+
+    /**
      * Parses and validates the optional personal instruction for each selected player, mirroring
-     * {@link #validateAndParseRoles}: a null/blank value maps to null (no instruction), an unknown
+     * {@link #validateAndParseAssignments}: a null/blank value maps to null (no instruction), an unknown
      * value throws, and an instruction on a goalkeeper is rejected. Returns playerId → instruction
      * (null-valued entries mean "no instruction").
      */
@@ -597,7 +666,7 @@ public class LineupService {
         for (LineupStarter starter : starters) {
             PlayerInstruction instruction = parseInstruction(starter.instruction());
             // player is guaranteed non-null in practice (validatePlayersOwnedByClub ran first);
-            // the guard is defensive only, matching validateAndParseRoles.
+            // the guard is defensive only, matching validateAndParseAssignments.
             Player player = byId.get(starter.playerId());
             if (player != null) {
                 validateInstructionForPlayer(player, instruction);
@@ -609,13 +678,15 @@ public class LineupService {
 
     /**
      * Validates the optional explicit slot assignment: either every starter carries a slotIndex
-     * (the 11 values must then be a permutation of 0..10, and the player at slot 0 — the GK slot
-     * in every formation — must be a goalkeeper) or none does (legacy greedy assignment).
+     * (the 11 values must then be a permutation of 0..10) or none does (legacy greedy assignment).
      * Bench entries never carry one. Runs before any delete/insert so a bad request rejects the
      * whole call without partial mutation.
+     *
+     * <p>Deliberately does NOT require a goalkeeper at slot 0: spec §5.1 lets the manager improvise
+     * anyone anywhere, including in goal. The engine degrades that naturally (no {@code gkDefense}
+     * and a x0.50 position-fit penalty on the improviser).
      */
-    private void validateSlotIndexes(List<LineupStarter> starters, List<LineupStarter> bench,
-                                     List<Player> clubPlayers) {
+    private void validateSlotIndexes(List<LineupStarter> starters, List<LineupStarter> bench) {
         if (bench != null && bench.stream().anyMatch(s -> s.slotIndex() != null)) {
             throw new ApiException(ErrorCode.INVALID_LINEUP, "Bench players cannot carry a slotIndex");
         }
@@ -633,36 +704,37 @@ public class LineupService {
             throw new ApiException(ErrorCode.INVALID_LINEUP,
                     "Starter slotIndexes must be a permutation of 0.." + (starters.size() - 1));
         }
-        UUID slotZeroPlayerId = starters.stream().filter(s -> s.slotIndex() == 0)
-                .map(LineupStarter::playerId).findFirst().orElseThrow();
-        Player slotZeroPlayer = clubPlayers.stream()
-                .filter(p -> p.getId().equals(slotZeroPlayerId)).findFirst().orElse(null);
-        if (slotZeroPlayer == null || slotZeroPlayer.getPosition() != Position.GK) {
-            throw new ApiException(ErrorCode.INVALID_LINEUP, "Slot 0 is the goalkeeper slot");
-        }
     }
 
     /**
-     * Maps a persisted lineup row back to the DTO, round-tripping role + optional instruction +
-     * optional slot index.
+     * Maps a persisted lineup row back to the DTO, round-tripping archetype + focus + optional
+     * instruction + optional slot index.
      */
     private LineupStarter toLineupStarter(LineupPlayer lp) {
         return new LineupStarter(
                 lp.getPlayerId(),
-                lp.getRole().name(),
+                lp.getArchetype().name(),
+                lp.getFocus().name(),
                 lp.getInstruction() == null ? null : lp.getInstruction().name(),
                 lp.getSlotIndex());
     }
 
-    private Map<UUID, PlayerRole> currentRoles(UUID saveGameId, UUID clubId) {
-        Map<UUID, PlayerRole> map = new HashMap<>();
+    private Map<UUID, RoleAssignment> currentRoles(UUID saveGameId, UUID clubId) {
+        Map<UUID, RoleAssignment> map = new HashMap<>();
         lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId).ifPresent(lineup ->
                 lineupPlayerRepository.findByLineupId(lineup.getId()).forEach(lp ->
-                        map.put(lp.getPlayerId(), lp.getRole())));
+                        map.put(lp.getPlayerId(), new RoleAssignment(lp.getArchetype(), lp.getFocus()))));
         return map;
     }
 
-    private PlayerResponse toPlayerResponse(Player p, PlayerRole role, LocalDate onDate) {
+    /** Familiar roles as their raw CSV tokens (e.g. {@code WINGBACK++}), insertion-ordered. */
+    private static List<String> familiarRoleTokens(Player p) {
+        return p.familiarRoles().entrySet().stream()
+                .map(e -> e.getKey().name() + (e.getValue() == 2 ? "++" : "+"))
+                .toList();
+    }
+
+    private PlayerResponse toPlayerResponse(Player p, RoleAssignment role, LocalDate onDate) {
         int fitness = fitnessCalculator.effectiveFitness(p.getFitness(), p.getLastMatchDate(), onDate, p.getAge());
         List<AttributeView> attributes = java.util.Arrays.stream(Attribute.values())
                 .map(a -> new AttributeView(a.name(), a.label(), a.group().name(), p.attribute(a)))
@@ -687,7 +759,10 @@ public class LineupService {
                 p.getSuspensionRemaining(),
                 p.getInjuryMatches(),
                 p.isEligible(),
-                role != null ? role.name() : null,
+                role != null ? role.archetype().name() : null,
+                role != null ? role.focus().name() : null,
+                p.getAltPositions().stream().map(Enum::name).toList(),
+                familiarRoleTokens(p),
                 p.getContractYears(),
                 transferValuation.marketValue(p.getOverall(), p.getAge()),
                 contractValuation.wageDemand(p.getOverall(), p.getAge()),

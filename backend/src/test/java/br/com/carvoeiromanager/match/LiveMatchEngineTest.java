@@ -8,9 +8,9 @@ import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
-import br.com.carvoeiromanager.player.PlayerRole;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.Pressing;
+import br.com.carvoeiromanager.player.RoleAssignment;
 import br.com.carvoeiromanager.match.TimedTactics;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -56,8 +56,9 @@ class LiveMatchEngineTest {
     }
 
     private static TacticalProfile defaultProfile(List<Player> xi) {
-        Map<UUID, PlayerRole> roles = new HashMap<>();
-        xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
+        // Legacy archetype + canonical focus + familiarity 2 — the regression contract that keeps
+        // the fixed-seed golden signatures identical to the retired PlayerRole model.
+        Map<UUID, RoleAssignment> roles = LegacyRoles.forXi(xi);
         return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of(), Map.of());
     }
 
@@ -91,8 +92,7 @@ class LiveMatchEngineTest {
 
     private static TacticalProfile profileWithTakers(List<Player> xi, UUID penaltyTakerId,
                                                       UUID freekickTakerId, UUID cornerTakerId) {
-        Map<UUID, PlayerRole> roles = new HashMap<>();
-        xi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
+        Map<UUID, RoleAssignment> roles = LegacyRoles.forXi(xi);
         return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, "4-4-2",
                 Pressing.MEDIUM, Marking.ZONAL, roles, penaltyTakerId, freekickTakerId, cornerTakerId, Map.of(), Map.of());
     }
@@ -449,8 +449,7 @@ class LiveMatchEngineTest {
         // losing -> PUSH/ALL_OUT (thresholds <= 70), drawing -> PUSH (75),
         // winning by 1 -> PROTECT (80), winning by 2+ -> PROTECT (85). So a reaction event must
         // exist for every seed.
-        Map<UUID, PlayerRole> roles = new HashMap<>();
-        awayXi.forEach(pl -> roles.put(pl.getId(), PlayerRole.defaultFor(pl.getPosition())));
+        Map<UUID, RoleAssignment> roles = LegacyRoles.forXi(awayXi);
         TacticalProfile attackingAway = new TacticalProfile(Mentality.ATTACKING, GameStyle.EQUILIBRADO,
                 AttackZone.MISTO, "4-3-3", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of(), Map.of());
 
