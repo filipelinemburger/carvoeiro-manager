@@ -35,17 +35,32 @@ type Positioned = { slot: Slot; number: number; player: PlacedPlayer | null }
 // Every one of the 11 slots is emitted: a slot with no matching player is kept
 // on the pitch as an empty placeholder (player === null) so the formation shape
 // is always fully drawn.
+//
+// Slot-based lineup validation permits cross-line arrangements (e.g. 4 defenders fielded
+// against a formation with only 3 DEF slots — the "extra" defender legally occupies a slot
+// on another line). When a line has more players than that formation has slots for, the
+// leftover players are collected as overflow and dropped into whichever slots (on any line)
+// are still empty once every line has been zipped, in slot order — so every player in
+// `team.players` always lands somewhere, never silently vanishing.
 function assign(team: TeamOnPitch): Positioned[] {
   const slots = pitchSlots(team.formation)
-  const out: Positioned[] = []
+  const placed = new Map<number, PlacedPlayer>()
+  const overflow: PlacedPlayer[] = []
   for (const line of LINES) {
     const lineSlots = slots.map((s, i) => ({ s, i })).filter(x => x.s.line === line)
     const linePlayers = team.players.filter(p => p.position === line)
-    lineSlots.forEach(({ s, i }, k) => {
-      out.push({ slot: s, number: i + 1, player: linePlayers[k] ?? null })
+    lineSlots.forEach(({ i }, k) => {
+      if (linePlayers[k]) placed.set(i, linePlayers[k])
     })
+    if (linePlayers.length > lineSlots.length) {
+      overflow.push(...linePlayers.slice(lineSlots.length))
+    }
   }
-  return out
+  const emptySlotIndexes = slots.map((_, i) => i).filter(i => !placed.has(i))
+  overflow.forEach((p, k) => {
+    if (emptySlotIndexes[k] !== undefined) placed.set(emptySlotIndexes[k], p)
+  })
+  return slots.map((slot, i) => ({ slot, number: i + 1, player: placed.get(i) ?? null }))
 }
 
 // Places players by their explicit slotIndex; slots nobody claims stay on the pitch as empty

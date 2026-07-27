@@ -122,6 +122,35 @@ describe('explicit slot placement', () => {
   })
 })
 
+describe('line-zip overflow (assign fallback)', () => {
+  it('places an overflow player (more players on a line than the formation has slots for) into a remaining empty slot instead of dropping them', () => {
+    const mk = (id: string, position: 'GK' | 'DEF' | 'MID' | 'ATT'): PlacedPlayer =>
+      ({ id, surname: id.toUpperCase(), position, detailedPosition: null, fitness: 100 })
+    // 4-2-4 genuinely has only 2 MID slots (a double pivot); fielding 3 MID players overflows
+    // that line. None of these players carry a slotIndex, so `assign`'s legacy line-zip runs.
+    const home: TeamOnPitch = {
+      formation: '4-2-4',
+      kit: { primary: '#f7d417', secondary: '#111111' },
+      showNames: true,
+      players: [
+        mk('gk', 'GK'),
+        mk('d1', 'DEF'), mk('d2', 'DEF'), mk('d3', 'DEF'), mk('d4', 'DEF'),
+        mk('m1', 'MID'), mk('m2', 'MID'), mk('m3', 'MID'),
+        mk('a1', 'ATT'), mk('a2', 'ATT'), mk('a3', 'ATT'),
+      ],
+    }
+    render(<Pitch home={home} />)
+    const tokens = screen.getAllByTestId('player-token')
+    expect(tokens).toHaveLength(11)
+    // No player silently vanishes: every player's surname is rendered somewhere on the pitch.
+    for (const p of home.players) {
+      expect(screen.getByText(p.surname)).toBeInTheDocument()
+    }
+    // With exactly 11 players for 11 slots, nothing should be left as an empty placeholder.
+    expect(tokens.filter(t => t.getAttribute('data-empty') === 'true')).toHaveLength(0)
+  })
+})
+
 describe('drag and drop', () => {
   const kit = { primary: '#f7d417', secondary: '#111111' }
 
