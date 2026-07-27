@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { Pitch } from './Pitch'
 import type { TeamOnPitch, PlacedPlayer } from './Pitch'
 
@@ -119,5 +119,89 @@ describe('explicit slot placement', () => {
     const { container } = render(<Pitch home={home} />)
     // Legacy zip: the first DEF fills the first DEF slot (index 1 in 4-3-3).
     expect(container.querySelector('[data-slot-index="1"]')).toHaveTextContent('Zaga')
+  })
+})
+
+describe('drag and drop', () => {
+  const kit = { primary: '#f7d417', secondary: '#111111' }
+
+  function fullXi(): PlacedPlayer[] {
+    const mk = (id: string, position: 'GK' | 'DEF' | 'MID' | 'ATT', slotIndex: number): PlacedPlayer =>
+      ({ id, surname: id, position, detailedPosition: null, fitness: 100, slotIndex })
+    return [
+      mk('gk', 'GK', 0),
+      mk('d1', 'DEF', 1), mk('d2', 'DEF', 2), mk('d3', 'DEF', 3), mk('d4', 'DEF', 4),
+      mk('m1', 'MID', 5), mk('m2', 'MID', 6), mk('m3', 'MID', 7),
+      mk('a1', 'ATT', 8), mk('a2', 'ATT', 9), mk('a3', 'ATT', 10),
+    ]
+  }
+
+  function renderDraggable(players = fullXi()) {
+    const onSwap = vi.fn()
+    const { container } = render(
+      <Pitch home={{ formation: '4-3-3', kit, showNames: true, players }} onSwap={onSwap} />,
+    )
+    const pitch = screen.getByTestId('pitch')
+    vi.spyOn(pitch, 'getBoundingClientRect').mockReturnValue({
+      left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0,
+      toJSON: () => ({}),
+    } as DOMRect)
+    const token = (slot: number) => container.querySelector(`[data-slot-index="${slot}"]`)!
+    return { onSwap, container, token }
+  }
+
+  it('dropping a token on another slot reports both slot indexes', () => {
+    const { onSwap, token } = renderDraggable()
+    fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+    fireEvent.pointerMove(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
+    fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
+    expect(onSwap).toHaveBeenCalledWith(1, 9)
+  })
+
+  it('dropping onto an unoccupied slot also reports it (move)', () => {
+    const players = fullXi().filter(p => p.slotIndex !== 9) // striker slot empty
+    const { onSwap, token } = renderDraggable(players)
+    fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+    fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
+    expect(onSwap).toHaveBeenCalledWith(1, 9)
+  })
+
+  it('a drop far from any slot snaps back (no callback)', () => {
+    const { onSwap, token } = renderDraggable()
+    fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+    fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 399, clientY: 10 })
+    expect(onSwap).not.toHaveBeenCalled()
+  })
+
+  it('the GK token is not draggable', () => {
+    const { onSwap, token } = renderDraggable()
+    fireEvent.pointerDown(token(0), { pointerId: 1, clientX: 200, clientY: 564 })
+    fireEvent.pointerUp(token(0), { pointerId: 1, clientX: 200, clientY: 192 })
+    expect(onSwap).not.toHaveBeenCalled()
+  })
+
+  it('the GK slot is never a drop target', () => {
+    const { onSwap, token } = renderDraggable()
+    fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+    fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 200, clientY: 564 })
+    expect(onSwap).not.toHaveBeenCalled()
+  })
+
+  it('highlights the drop candidate while dragging over it', () => {
+    const { token } = renderDraggable()
+    fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+    fireEvent.pointerMove(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
+    expect(token(9)).toHaveAttribute('data-drop-candidate', 'true')
+  })
+
+  it('without onSwap the pitch stays inert', () => {
+    const { container } = render(
+      <Pitch home={{ formation: '4-3-3', kit, showNames: true, players: fullXi() }} />,
+    )
+    const token = container.querySelector('[data-slot-index="1"]')!
+    fireEvent.pointerDown(token, { pointerId: 1, clientX: 64, clientY: 474 })
+    fireEvent.pointerUp(token, { pointerId: 1, clientX: 200, clientY: 192 })
+    // No crash, no drag state — nothing to assert beyond absence of the candidate attr.
+    expect(container.querySelector('[data-drop-candidate="true"]')).toBeNull()
   })
 })
