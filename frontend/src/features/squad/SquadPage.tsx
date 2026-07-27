@@ -21,7 +21,8 @@ import { MoodChip } from './MoodChip'
 import { teamMorale } from './morale'
 import { SEVERITY_LABEL } from './injurySeverity'
 import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
-import { FORMATION_CODES } from '../pitch/pitchSlots'
+import { FORMATION_CODES, pitchSlots } from '../pitch/pitchSlots'
+import { assignSlots, type AssignablePlayer } from '../pitch/slotAssign'
 import { positionShort } from '../players/positionLabels'
 import { CARBON, ovrBadgeSx } from '../../muiTheme'
 
@@ -50,15 +51,6 @@ export const FORMATION_SHAPE: Record<string, Record<OutfieldPosition, number>> =
   '4-1-2-1-2': { DEF: 4, MID: 4, ATT: 2 },
   '5-2-3': { DEF: 5, MID: 2, ATT: 3 },
   '4-3-1-2': { DEF: 4, MID: 4, ATT: 2 },
-}
-
-const BAND_LABEL: Record<OutfieldPosition, string> = {
-  DEF: 'defensor(es)', MID: 'meio-campista(s)', ATT: 'atacante(s)',
-}
-
-/** Max players allowed for a position under a formation (goalkeeper is always 1). */
-function positionCap(formation: string, position: PlayerResponse['position']): number {
-  return position === 'GK' ? 1 : FORMATION_SHAPE[formation][position]
 }
 
 // Display order for the squad list: goalkeepers, then defenders, midfielders, attackers.
@@ -154,7 +146,8 @@ function countByPosition(selected: string[], players: PlayerResponse[]): Record<
   return counts
 }
 
-function validate(selected: string[], players: PlayerResponse[], formation: string): string | null {
+function validate(selected: string[], players: PlayerResponse[],
+                  slotByPlayerId: Record<string, number>): string | null {
   if (selected.length !== 11) {
     return `Selecione exatamente 11 jogadores (${selected.length}/11)`
   }
@@ -162,13 +155,11 @@ function validate(selected: string[], players: PlayerResponse[], formation: stri
   if (counts.GK !== 1) {
     return 'A escalação precisa de exatamente 1 goleiro'
   }
-  // The line-up must match the chosen formation exactly (e.g. 4-3-3 → 4 DEF, 3 MEI, 3 ATA).
-  // This also catches a saved XI that no longer fits after the formation was switched.
-  const shape = FORMATION_SHAPE[formation]
-  for (const pos of ['DEF', 'MID', 'ATT'] as OutfieldPosition[]) {
-    if (counts[pos] !== shape[pos]) {
-      return `A formação ${formation} exige ${shape[pos]} ${BAND_LABEL[pos]}, mas você selecionou ${counts[pos]}.`
-    }
+  // Every starter needs a distinct formation slot (drag-and-drop / auto-assign keeps this
+  // true; the guard catches degenerate states like a saved starter no longer in the squad).
+  const assigned = new Set(selected.map(id => slotByPlayerId[id]).filter(v => v !== undefined))
+  if (assigned.size !== 11) {
+    return 'Cada titular precisa de uma posição no campo — use o campo na aba Táticas para organizar.'
   }
   // A saved XI can contain a player who has since become unavailable (suspended now;
   // injured once that lands — both flow through `eligible`). Block saving and make the
@@ -205,6 +196,9 @@ export function SquadPage() {
     Record<string, { focus: TrainableAttribute | null; intensity: TrainingIntensity }>
   >({})
   const [trainingSaveSuccess, setTrainingSaveSuccess] = useState(false)
+  // playerId -> formation slot index (0 = GK). Keys ⊆ selected; values unique. The pitch
+  // renders from this map and drag-and-drop edits it.
+  const [slotByPlayerId, setSlotByPlayerId] = useState<Record<string, number>>({})
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['squad', saveGameId, clubId],
@@ -214,6 +208,10 @@ export function SquadPage() {
   })
 
   const players = data?.players ?? []
+  const slots = pitchSlots(formation)
+
+  const toAssignable = (p: PlayerResponse): AssignablePlayer =>
+    ({ id: p.id, position: p.position, detailedPosition: p.detailedPosition, overall: p.overall })
 
   // Tracks the query cache (rather than a snapshot taken at click time) so the open dialog
   // reflects updates — e.g. an optimistic contract renewal — without the user closing/reopening.
@@ -235,9 +233,10 @@ export function SquadPage() {
 
   // Seed the form from the saved lineup exactly once. A guard prevents later refetches
   // (e.g. the save mutation's invalidation) from clobbering the user's in-progress edits.
+  // Also waits for the squad (`data`) so the legacy fallback below can read player attributes.
   const hydrated = useRef(false)
   useEffect(() => {
-    if (hydrated.current || !savedLineup.isSuccess) return
+    if (hydrated.current || !savedLineup.isSuccess || !data) return
     const lineup = savedLineup.data
     if (lineup) {
       setFormation(lineup.formation)
@@ -245,9 +244,19 @@ export function SquadPage() {
       setRoles(Object.fromEntries(lineup.starters.map(s => [s.playerId, s.role])))
       setInstructions(Object.fromEntries(lineup.starters.map(s => [s.playerId, s.instruction ?? ''])))
       setBench((lineup.bench ?? []).map(s => s.playerId))
+      if (lineup.starters.every(s => s.slotIndex != null)) {
+        setSlotByPlayerId(Object.fromEntries(
+          lineup.starters.map(s => [s.playerId, s.slotIndex as number])))
+      } else {
+        // Legacy lineup without persisted slots: derive the same default the engine would.
+        const xi = lineup.starters
+          .map(s => data.players.find(p => p.id === s.playerId))
+          .filter((p): p is PlayerResponse => Boolean(p))
+        setSlotByPlayerId(assignSlots(xi.map(toAssignable), lineup.formation))
+      }
     }
     hydrated.current = true
-  }, [savedLineup.isSuccess, savedLineup.data])
+  }, [savedLineup.isSuccess, savedLineup.data, data])
 
   // Seed the training tab from the squad query exactly once, the same way the lineup form is
   // seeded from its own query above — a separate ref so the two hydrations don't interfere.
@@ -263,12 +272,19 @@ export function SquadPage() {
 
   const mutation = useMutation({
     mutationFn: () => {
-      const toStarter = (id: string): LineupStarter => {
+      const toStarter = (id: string, slotIndex: number | null): LineupStarter => {
         const player = players.find(p => p.id === id)!
-        return { playerId: id, role: roles[id] ?? DEFAULT_ROLE[player.position], instruction: instructions[id] || null }
+        return {
+          playerId: id,
+          role: roles[id] ?? DEFAULT_ROLE[player.position],
+          instruction: instructions[id] || null,
+          slotIndex,
+        }
       }
-      const starters: LineupStarter[] = selected.map(toStarter)
-      const benchStarters: LineupStarter[] = bench.filter((id): id is string => id !== null).map(toStarter)
+      const starters: LineupStarter[] = selected.map(id => toStarter(id, slotByPlayerId[id] ?? null))
+      const benchStarters: LineupStarter[] = bench
+        .filter((id): id is string => id !== null)
+        .map(id => toStarter(id, null))
       return setLineup(saveGameId, clubId, { formation, starters, bench: benchStarters }, token ?? '')
     },
     onSuccess: (data) => {
@@ -333,11 +349,8 @@ export function SquadPage() {
     },
   })
 
-  const validationError = players.length > 0 ? validate(selected, players, formation) : null
+  const validationError = players.length > 0 ? validate(selected, players, slotByPlayerId) : null
   const canSave = validationError === null
-
-  // Live per-position tally, used for the formation caps and the progress hint.
-  const positionCounts = countByPosition(selected, players)
 
   // Read-only pitch view-model: the current formation is always drawn in full;
   // slots without a selected player stay on the pitch as nameless placeholders.
@@ -348,12 +361,22 @@ export function SquadPage() {
     players: selected
       .map(id => players.find(p => p.id === id))
       .filter((p): p is PlayerResponse => Boolean(p))
-      .map((p): PlacedPlayer => ({ id: p.id, surname: p.name, position: p.position, detailedPosition: p.detailedPosition, fitness: p.fitness })),
+      .map((p): PlacedPlayer => ({
+        id: p.id, surname: p.name, position: p.position,
+        detailedPosition: p.detailedPosition, fitness: p.fitness,
+        slotIndex: slotByPlayerId[p.id],
+      })),
   } : null
 
-  // A position band is full once it holds as many starters as the formation allows.
-  function isBandFull(position: PlayerResponse['position']): boolean {
-    return positionCounts[position] >= positionCap(formation, position)
+  // First free slot for a newly picked starter: an exact detailed-position slot first, else
+  // any free slot of the player's coarse line. Cross-line placement only happens by dragging.
+  function firstFreeSlotFor(player: PlayerResponse): number | null {
+    const taken = new Set(Object.values(slotByPlayerId))
+    const free = slots.map((slot, index) => ({ slot, index })).filter(x => !taken.has(x.index))
+    const exact = player.detailedPosition
+      ? free.find(x => x.slot.accepted.includes(player.detailedPosition!))
+      : undefined
+    return (exact ?? free.find(x => x.slot.line === player.position))?.index ?? null
   }
 
   type Involvement = { kind: 'OUT' } | { kind: 'TITULAR' } | { kind: 'RESERVA'; sub: number }
@@ -389,11 +412,18 @@ export function SquadPage() {
         delete next[player.id]
         return next
       })
+      setSlotByPlayerId(prev => {
+        const next = { ...prev }
+        delete next[player.id]
+        return next
+      })
       return
     }
     if (!player.eligible) return
-    if (!isBandFull(player.position)) {
+    const slotIndex = firstFreeSlotFor(player)
+    if (slotIndex !== null) {
       setSelected(prev => [...prev, player.id])
+      setSlotByPlayerId(prev => ({ ...prev, [player.id]: slotIndex }))
       setRoles(prev => ({ ...prev, [player.id]: DEFAULT_ROLE[player.position] }))
       return
     }
@@ -459,6 +489,7 @@ export function SquadPage() {
     setRoles(Object.fromEntries(picked.map(p => [p.id, DEFAULT_ROLE[p.position]])))
     // Fresh auto-pick: every picked player starts with no personal instruction.
     setInstructions(Object.fromEntries(picked.map(p => [p.id, ''])))
+    setSlotByPlayerId(assignSlots(picked.map(toAssignable), formation))
   }
 
   // Empties the whole selection.
@@ -468,6 +499,32 @@ export function SquadPage() {
     setRoles({})
     setInstructions({})
     setBench([])
+    setSlotByPlayerId({})
+  }
+
+  // Formation switch: re-derives slot assignments for the CURRENT selection (rather than
+  // resetting it) so an in-progress XI survives the change, out-of-position or not.
+  function changeFormation(next: string) {
+    setSaveSuccess(false)
+    setFormation(next)
+    const xi = selected
+      .map(id => players.find(p => p.id === id))
+      .filter((p): p is PlayerResponse => Boolean(p))
+    setSlotByPlayerId(assignSlots(xi.map(toAssignable), next))
+  }
+
+  // Drop from the pitch: the dragged player takes the target slot; a previous occupant takes
+  // the vacated one (swap). Pitch guarantees fromSlot holds a player and toSlot is not the GK.
+  function swapSlots(fromSlot: number, toSlot: number) {
+    setSaveSuccess(false)
+    setSlotByPlayerId(prev => {
+      const fromId = Object.keys(prev).find(id => prev[id] === fromSlot)
+      if (!fromId) return prev
+      const toId = Object.keys(prev).find(id => prev[id] === toSlot)
+      const next = { ...prev, [fromId]: toSlot }
+      if (toId) next[toId] = fromSlot
+      return next
+    })
   }
 
   // ── Per-player controls, shared by the desktop table and the mobile cards ──
@@ -647,16 +704,21 @@ export function SquadPage() {
   const formationSelect = (
     <FormControl size="small" sx={{ mb: 2, minWidth: 160 }}>
       <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.25 }}>Formação</Typography>
-      <NativeSelect value={formation} onChange={e => setFormation(e.target.value)} inputProps={{ 'aria-label': 'Formação' }}>
+      <NativeSelect value={formation} onChange={e => changeFormation(e.target.value)} inputProps={{ 'aria-label': 'Formação' }}>
         {FORMATIONS.map(f => <option key={f} value={f}>{f}</option>)}
       </NativeSelect>
     </FormControl>
   )
 
+  // Slot occupancy per line, used by the helper line below.
+  const lineTotal = (line: 'GK' | 'DEF' | 'MID' | 'ATT') => slots.filter(s => s.line === line).length
+  const lineFilled = (line: 'GK' | 'DEF' | 'MID' | 'ATT') =>
+    Object.values(slotByPlayerId).filter(i => slots[i]?.line === line).length
+
   const helperAndAlerts = (
     <>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
-        Formação {formation} — Titulares {selected.length}/11 · Banco {bench.filter(Boolean).length}/9 · GOL {positionCounts.GK}/1 · DEF {positionCounts.DEF}/{FORMATION_SHAPE[formation].DEF} · MEI {positionCounts.MID}/{FORMATION_SHAPE[formation].MID} · ATA {positionCounts.ATT}/{FORMATION_SHAPE[formation].ATT}
+        Formação {formation} — Titulares {selected.length}/11 · Banco {bench.filter(Boolean).length}/9 · GOL {lineFilled('GK')}/{lineTotal('GK')} · DEF {lineFilled('DEF')}/{lineTotal('DEF')} · MEI {lineFilled('MID')}/{lineTotal('MID')} · ATA {lineFilled('ATT')}/{lineTotal('ATT')}
       </Typography>
       {players.length > 0 && (
         <Box sx={{ mb: 2 }}>
@@ -779,7 +841,16 @@ export function SquadPage() {
           </Box>
           {pitchTeam && (
             <Box sx={{ flex: 1, minWidth: 0, mb: 2 }}>
-              <Pitch home={pitchTeam} />
+              <Pitch home={pitchTeam} onSwap={swapSlots} />
+              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+                <Button
+                  color="secondary"
+                  disabled={!canSave || mutation.isPending}
+                  onClick={() => mutation.mutate()}
+                >
+                  {mutation.isPending ? 'Salvando…' : 'Salvar escalação'}
+                </Button>
+              </Box>
             </Box>
           )}
         </Box>

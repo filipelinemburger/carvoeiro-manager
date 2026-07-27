@@ -399,23 +399,6 @@ describe('SquadPage', () => {
     expect(pickBtn('atacante quatro')).toHaveTextContent(/sub/i)
   })
 
-  it('blocks saving when the line-up no longer fits a changed formation', async () => {
-    renderWithProviders()
-    await waitFor(() => screen.getByText('Goleiro Teste'))
-
-    // Build a valid 4-3-3 XI (4 DEF, 3 MEI, 3 ATA + 1 GK).
-    const xi = [GK, DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
-    for (const player of xi) {
-      fireEvent.click(pickBtn(player.name))
-    }
-    expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
-
-    // Switching to 3-5-2 (3 DEF, 5 MEI, 2 ATA) makes the current shape invalid.
-    fireEvent.change(screen.getByLabelText(/formação/i), { target: { value: '3-5-2' } })
-    expect(screen.getByRole('button', { name: /salvar escala/i })).toBeDisabled()
-    expect(screen.getByRole('alert')).toHaveTextContent(/3-5-2/)
-  })
-
   it('keeps button disabled when fewer than 11 are selected', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Teste'))
@@ -841,5 +824,112 @@ describe('SquadPage', () => {
     // Every other selected player carries a null instruction (none chosen).
     const payload = mockSetLineup.mock.calls[0][2] as { starters: { playerId: string; instruction: string | null }[] }
     expect(payload.starters.find(s => s.playerId === GK.id)?.instruction).toBeNull()
+  })
+
+  it('sends a slotIndex permutation (GK at 0) for the starters and null for the bench', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+    fireEvent.click(pickBtn('goleiro teste')) // bands full → bench
+    fireEvent.click(screen.getByRole('button', { name: /salvar escala/i }))
+
+    await waitFor(() => expect(mockSetLineup).toHaveBeenCalled())
+    const req = mockSetLineup.mock.calls[0][2]
+    const slotIndexes = req.starters.map((s: { slotIndex?: number | null }) => s.slotIndex)
+    expect([...slotIndexes].sort((a, b) => (a ?? -1) - (b ?? -1)))
+      .toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    const gkStarter = req.starters.find((s: { playerId: string }) => s.playerId === GK2.id)
+    expect(gkStarter?.slotIndex).toBe(0)
+    expect(req.bench.every((s: { slotIndex?: number | null }) => s.slotIndex == null)).toBe(true)
+  })
+
+  it('rehydrates explicit slot assignments from the saved lineup onto the pitch', async () => {
+    // Deliberately cross-line: MID1 is saved into an ATT slot (index 9 in 4-3-3).
+    mockGetLineup.mockResolvedValue({
+      lineupId: 'l-3', clubId: 'club-1', formation: '4-3-3',
+      starters: [
+        { playerId: GK.id, role: 'GOALKEEPER', instruction: null, slotIndex: 0 },
+        { playerId: DEF1.id, role: 'FULL_BACK', instruction: null, slotIndex: 1 },
+        { playerId: DEF2.id, role: 'FULL_BACK', instruction: null, slotIndex: 2 },
+        { playerId: DEF3.id, role: 'FULL_BACK', instruction: null, slotIndex: 3 },
+        { playerId: DEF4.id, role: 'FULL_BACK', instruction: null, slotIndex: 4 },
+        { playerId: MID2.id, role: 'BOX_TO_BOX', instruction: null, slotIndex: 5 },
+        { playerId: MID3.id, role: 'BOX_TO_BOX', instruction: null, slotIndex: 6 },
+        { playerId: ATT1.id, role: 'POACHER', instruction: null, slotIndex: 7 },
+        { playerId: ATT2.id, role: 'POACHER', instruction: null, slotIndex: 8 },
+        { playerId: MID1.id, role: 'BOX_TO_BOX', instruction: null, slotIndex: 9 },
+        { playerId: ATT3.id, role: 'POACHER', instruction: null, slotIndex: 10 },
+      ],
+      bench: [],
+    })
+    const { container } = renderWithProviders()
+    await waitFor(() => expect(screen.getByLabelText(/formação/i)).toHaveValue('4-3-3'))
+    // The pitch (mounted under the hidden Táticas panel) placed MID1 at slot 9.
+    expect(container.querySelector('[data-slot-index="9"]')).toHaveTextContent('Meio Um')
+    // Cross-line arrangements are legal: saving stays enabled.
+    expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
+  })
+
+  it('dragging on the tactics pitch swaps the two players in the save payload', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+    fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
+
+    const pitch = screen.getByTestId('pitch')
+    vi.spyOn(pitch, 'getBoundingClientRect').mockReturnValue({
+      left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0,
+      toJSON: () => ({}),
+    } as DOMRect)
+    const tokenAt = (slot: number) => pitch.querySelector(`[data-slot-index="${slot}"]`)!
+    // Token text is "«shirt number»«surname»"; every fixture name is unique, so the suffix
+    // identifies the player.
+    const idOfToken = (text: string | null) =>
+      squad.players.find(p => text?.endsWith(p.name))!.id
+    // The auto-picked 4-3-3 puts DEF1 (the only LATERAL_ESQUERDO) in slot 4 — the LE slot.
+    expect(tokenAt(4).textContent).toContain('Defensor Um')
+    const toText = tokenAt(9).textContent
+    const toName = squad.players.find(p => toText?.endsWith(p.name))!.name
+
+    // Drag slot 4 (left-back, center 336/474 in 4-3-3) onto slot 9 (striker, 200/192).
+    fireEvent.pointerDown(tokenAt(4), { pointerId: 1, clientX: 336, clientY: 474 })
+    fireEvent.pointerMove(tokenAt(4), { pointerId: 1, clientX: 200, clientY: 192 })
+    fireEvent.pointerUp(tokenAt(4), { pointerId: 1, clientX: 200, clientY: 192 })
+
+    // The two tokens swapped on the pitch (shirt numbers follow the slot, so match by name)…
+    await waitFor(() => expect(tokenAt(9).textContent).toContain('Defensor Um'))
+    expect(tokenAt(4).textContent).toContain(toName)
+    // …and the lateral in the striker slot is flagged out of position.
+    expect(tokenAt(9).querySelector('[data-out-of-position="true"]')).not.toBeNull()
+
+    // Saving from the pitch's own button sends the swapped permutation.
+    const saveButtons = screen.getAllByRole('button', { name: /salvar escala/i })
+    fireEvent.click(saveButtons[saveButtons.length - 1])
+    await waitFor(() => expect(mockSetLineup).toHaveBeenCalled())
+    const req = mockSetLineup.mock.calls[0][2]
+    const slotOf = (playerId: string) =>
+      req.starters.find((s: { playerId: string }) => s.playerId === playerId)?.slotIndex
+    const slotIndexes = req.starters.map((s: { slotIndex?: number | null }) => s.slotIndex)
+    expect([...slotIndexes].sort((a, b) => (a ?? -1) - (b ?? -1)))
+      .toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    // The dragged pair really exchanged indexes.
+    expect(slotOf(DEF1.id)).toBe(9)
+    expect(slotOf(idOfToken(toText))).toBe(4)
+  })
+
+  it('re-derives slot assignments when the formation changes and keeps saving enabled', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    const xi = [GK, DEF1, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]
+    for (const player of xi) {
+      fireEvent.click(pickBtn(player.name))
+    }
+    expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
+
+    // Under slot-based validation a 4-DEF XI still fits 3-5-2: the 4th defender lands in a
+    // midfield slot (out of position, penalised — but saveable).
+    fireEvent.change(screen.getByLabelText(/formação/i), { target: { value: '3-5-2' } })
+    expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
