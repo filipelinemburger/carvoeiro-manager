@@ -245,8 +245,14 @@ export function SquadPage() {
       setInstructions(Object.fromEntries(lineup.starters.map(s => [s.playerId, s.instruction ?? ''])))
       setBench((lineup.bench ?? []).map(s => s.playerId))
       if (lineup.starters.every(s => s.slotIndex != null)) {
+        // A saved starter can reference a player who has since left the squad (transferred,
+        // released, retired). Drop them here too — the fallback branch below already does the
+        // same via its `.filter(Boolean)` — so `validate`'s permutation-size check (which exists
+        // specifically to catch "a saved starter no longer in the squad") sees fewer than 11
+        // slots and blocks saving, instead of `toStarter` throwing on a ghost id at save time.
+        const existing = lineup.starters.filter(s => data.players.some(p => p.id === s.playerId))
         setSlotByPlayerId(Object.fromEntries(
-          lineup.starters.map(s => [s.playerId, s.slotIndex as number])))
+          existing.map(s => [s.playerId, s.slotIndex as number])))
       } else {
         // Legacy lineup without persisted slots: derive the same default the engine would.
         const xi = lineup.starters
@@ -833,10 +839,12 @@ export function SquadPage() {
             <TacticsPanel
               saveGameId={saveGameId}
               clubId={clubId}
-              starters={selected.map(id => {
-                const p = players.find(pp => pp.id === id)!
-                return { id, name: p.name }
-              })}
+              starters={selected
+                .map(id => players.find(pp => pp.id === id))
+                // A selected id can outlive its player (e.g. a saved starter who has since left
+                // the squad) until validate blocks the save; drop it here rather than crash.
+                .filter((p): p is PlayerResponse => Boolean(p))
+                .map(p => ({ id: p.id, name: p.name }))}
             />
           </Box>
           {pitchTeam && (

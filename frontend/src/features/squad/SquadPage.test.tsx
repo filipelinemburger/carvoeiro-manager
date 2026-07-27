@@ -870,6 +870,37 @@ describe('SquadPage', () => {
     expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
   })
 
+  it('blocks saving when a saved starter with a persisted slotIndex is no longer in the squad', async () => {
+    // Regression: the verbatim hydration branch (every starter carries a slotIndex) must drop a
+    // departed player's slot the same way the legacy fallback branch already does (via its own
+    // `.filter(Boolean)`), so validate's permutation-size check catches it — instead of `toStarter`
+    // throwing on a ghost id at save time.
+    mockGetLineup.mockResolvedValue({
+      lineupId: 'l-4', clubId: 'club-1', formation: '4-3-3',
+      starters: [
+        { playerId: GK.id, role: 'GOALKEEPER', instruction: null, slotIndex: 0 },
+        { playerId: DEF1.id, role: 'FULL_BACK', instruction: null, slotIndex: 1 },
+        { playerId: DEF2.id, role: 'FULL_BACK', instruction: null, slotIndex: 2 },
+        { playerId: DEF3.id, role: 'FULL_BACK', instruction: null, slotIndex: 3 },
+        { playerId: DEF4.id, role: 'FULL_BACK', instruction: null, slotIndex: 4 },
+        { playerId: MID1.id, role: 'BOX_TO_BOX', instruction: null, slotIndex: 5 },
+        { playerId: MID2.id, role: 'BOX_TO_BOX', instruction: null, slotIndex: 6 },
+        { playerId: MID3.id, role: 'BOX_TO_BOX', instruction: null, slotIndex: 7 },
+        { playerId: ATT1.id, role: 'POACHER', instruction: null, slotIndex: 8 },
+        { playerId: ATT2.id, role: 'POACHER', instruction: null, slotIndex: 9 },
+        // Transferred out since the lineup was saved — not in `squad.players` anymore.
+        { playerId: 'p-departed', role: 'POACHER', instruction: null, slotIndex: 10 },
+      ],
+      bench: [],
+    })
+    renderWithProviders()
+    await waitFor(() => expect(screen.getByLabelText(/formação/i)).toHaveValue('4-3-3'))
+    // The departed player's slot never lands in slotByPlayerId, so the permutation is short by
+    // one — validate blocks saving instead of letting a save attempt reach `toStarter` and throw.
+    expect(screen.getByRole('button', { name: /salvar escala/i })).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent(/posição no campo/i)
+  })
+
   it('dragging on the tactics pitch swaps the two players in the save payload', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Teste'))
