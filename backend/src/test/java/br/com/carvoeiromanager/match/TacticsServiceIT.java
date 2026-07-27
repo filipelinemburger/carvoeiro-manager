@@ -180,4 +180,81 @@ class TacticsServiceIT {
         assertThat(profileB.formation()).isEqualTo(clubB.getDefaultFormation());
         assertThat(profileA).isNotEqualTo(profileB);
     }
+
+    @Test
+    void honorsPersistedSlotIndexesInTheTacticalProfile() {
+        Career career = createCareer();
+        UUID save = career.save().id();
+        UUID club = career.save().managedClubId();
+        List<Player> squad = playerRepository.findByClubId(club);
+        Player gk = squad.stream().filter(p -> p.getPosition() == br.com.carvoeiromanager.player.Position.GK)
+                .findFirst().orElseThrow();
+        List<Player> outfield = squad.stream().filter(p -> p != gk).limit(10).toList();
+        List<Player> xi = new ArrayList<>();
+        xi.add(gk);
+        xi.addAll(outfield);
+
+        Lineup lineup = Lineup.create(save, club, "4-3-3");
+        lineupRepository.save(lineup);
+        // Persist GK -> slot 0, then the outfielders in REVERSE order into slots 1..10, so the
+        // arrangement cannot coincide with what greedy would pick.
+        LineupPlayer gkRow = LineupPlayer.create(lineup.getId(), gk.getId(), true, PlayerRole.GOALKEEPER);
+        gkRow.setSlotIndex(0);
+        lineupPlayerRepository.save(gkRow);
+        for (int i = 0; i < outfield.size(); i++) {
+            Player p = outfield.get(outfield.size() - 1 - i);
+            LineupPlayer row = LineupPlayer.create(lineup.getId(), p.getId(), true,
+                    PlayerRole.defaultFor(p.getPosition()));
+            row.setSlotIndex(i + 1);
+            lineupPlayerRepository.save(row);
+        }
+
+        TacticalProfile profile = tacticsService.profileFor(save, club, xi);
+
+        List<FormationSlots.Slot> slots = FormationSlots.of("4-3-3");
+        assertThat(profile.slotAssignments().get(gk.getId())).isEqualTo(slots.get(0));
+        for (int i = 0; i < outfield.size(); i++) {
+            Player p = outfield.get(outfield.size() - 1 - i);
+            assertThat(profile.slotAssignments().get(p.getId()))
+                    .as("player pinned to slot %d", i + 1)
+                    .isEqualTo(slots.get(i + 1));
+        }
+    }
+
+    @Test
+    void substituteWithoutPersistedSlotInheritsTheVacatedSlot() {
+        Career career = createCareer();
+        UUID save = career.save().id();
+        UUID club = career.save().managedClubId();
+        List<Player> squad = playerRepository.findByClubId(club);
+        Player gk = squad.stream().filter(p -> p.getPosition() == br.com.carvoeiromanager.player.Position.GK)
+                .findFirst().orElseThrow();
+        List<Player> outfield = squad.stream().filter(p -> p != gk).limit(11).toList();
+        // Persist a full XI (gk + first 10 outfielders) with slots 0..10 …
+        Lineup lineup = Lineup.create(save, club, "4-3-3");
+        lineupRepository.save(lineup);
+        LineupPlayer gkRow = LineupPlayer.create(lineup.getId(), gk.getId(), true, PlayerRole.GOALKEEPER);
+        gkRow.setSlotIndex(0);
+        lineupPlayerRepository.save(gkRow);
+        for (int i = 0; i < 10; i++) {
+            LineupPlayer row = LineupPlayer.create(lineup.getId(), outfield.get(i).getId(), true,
+                    PlayerRole.defaultFor(outfield.get(i).getPosition()));
+            row.setSlotIndex(i + 1);
+            lineupPlayerRepository.save(row);
+        }
+        // …but the LIVE XI has the 11th outfielder on for the player who held slot 5.
+        Player replaced = outfield.get(4); // slot 5
+        Player sub = outfield.get(10);     // no lineup row at all
+        List<Player> liveXi = new ArrayList<>();
+        liveXi.add(gk);
+        for (int i = 0; i < 10; i++) {
+            liveXi.add(outfield.get(i) == replaced ? sub : outfield.get(i));
+        }
+
+        TacticalProfile profile = tacticsService.profileFor(save, club, liveXi);
+
+        assertThat(profile.slotAssignments().get(sub.getId()))
+                .isEqualTo(FormationSlots.of("4-3-3").get(5));
+        assertThat(profile.slotAssignments()).doesNotContainKey(replaced.getId());
+    }
 }

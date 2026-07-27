@@ -94,6 +94,7 @@ public class TacticsService {
     private TacticalProfile fromLineup(Lineup lineup, List<Player> xi) {
         Map<UUID, PlayerRole> persisted = new HashMap<>();
         Map<UUID, PlayerInstruction> instructions = new HashMap<>();
+        Map<UUID, Integer> pinnedSlots = new HashMap<>();
         lineupPlayerRepository.findByLineupId(lineup.getId()).stream()
                 .filter(LineupPlayer::isStarting)
                 .forEach(lp -> {
@@ -103,16 +104,19 @@ public class TacticsService {
                     if (lp.getInstruction() != null) {
                         instructions.put(lp.getPlayerId(), lp.getInstruction());
                     }
+                    if (lp.getSlotIndex() != null) {
+                        pinnedSlots.put(lp.getPlayerId(), lp.getSlotIndex());
+                    }
                 });
         // Fill any XI member missing a persisted role with its band default.
         Map<UUID, PlayerRole> roles = new HashMap<>();
         for (Player p : xi) {
             roles.put(p.getId(), persisted.getOrDefault(p.getId(), PlayerRole.defaultFor(p.getPosition())));
         }
-        // Grade each starter against the lineup's formation; a balanced managed XI assigns all-exact
-        // (→ x1.0), a surplus at one position forces a same-band/cross-band slot and is penalised.
+        // Persisted (drag-and-drop) slots are honored verbatim; XI members without one — subs
+        // who came on, legacy lineups — fill the remaining slots greedily.
         Map<UUID, FormationSlots.Slot> slotAssignments =
-                SlotAssigner.assignToSlots(xi, lineup.getFormation());
+                SlotAssigner.assignToSlots(xi, lineup.getFormation(), pinnedSlots);
         return new TacticalProfile(
                 lineup.getMentality(), lineup.getGameStyle(), lineup.getAttackZone(), lineup.getFormation(),
                 lineup.getPressing(), lineup.getMarking(),

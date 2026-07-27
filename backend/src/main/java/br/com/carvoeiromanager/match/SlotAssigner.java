@@ -7,6 +7,7 @@ import br.com.carvoeiromanager.player.Position;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -21,7 +22,8 @@ import java.util.UUID;
  * detailed position, tier 2 = same coarse band, tier 3 = anyone left — breaking ties within a tier by
  * the supplied comparator. Scarcity is computed once over the initial pool, so the whole assignment is
  * a pure, deterministic function of {@code (slots, pool)}: called twice with the same inputs it returns
- * the identical result.
+ * the identical result — except for the pinned variant of {@link #assignToSlots(List, String, Map)},
+ * where explicit pinned indexes are honored verbatim and only the leftovers go through this greedy fit.
  *
  * <p>Both {@code LineupService#bestXi} (via {@link #assign}) and {@code TacticsService#profileFor}
  * (via {@link #assignToSlots}) share this logic so the selection and the position-grading never drift.
@@ -74,14 +76,41 @@ final class SlotAssigner {
      * extra players are simply left unassigned, and any player absent from the map grades to x1.0.
      */
     static Map<UUID, FormationSlots.Slot> assignToSlots(List<Player> xi, String formation) {
+        return assignToSlots(xi, formation, Map.of());
+    }
+
+    /**
+     * Like {@link #assignToSlots(List, String)} but honoring explicit pinned assignments first:
+     * every XI member present in {@code pinnedSlotIndexes} (with a valid, unclaimed index) gets
+     * exactly that slot; everyone else is greedily assigned to the remaining slots. A substitute
+     * who came on mid-match is the common leftover — he inherits the vacated slot.
+     */
+    static Map<UUID, FormationSlots.Slot> assignToSlots(List<Player> xi, String formation,
+                                                        Map<UUID, Integer> pinnedSlotIndexes) {
         List<FormationSlots.Slot> slots = FormationSlots.of(formation);
+        Map<UUID, FormationSlots.Slot> assignments = new HashMap<>();
+        Set<Integer> taken = new HashSet<>();
+        List<Player> leftovers = new ArrayList<>();
+        for (Player p : xi) {
+            Integer idx = pinnedSlotIndexes.get(p.getId());
+            if (idx != null && idx >= 0 && idx < slots.size() && taken.add(idx)) {
+                assignments.put(p.getId(), slots.get(idx));
+            } else {
+                leftovers.add(p);
+            }
+        }
+        List<FormationSlots.Slot> freeSlots = new ArrayList<>();
+        for (int i = 0; i < slots.size(); i++) {
+            if (!taken.contains(i)) {
+                freeSlots.add(slots.get(i));
+            }
+        }
         Comparator<Player> byRating =
                 Comparator.comparingInt(Player::getOverall).thenComparing(Player::getId);
-        Player[] picked = assign(slots, xi, byRating);
-        Map<UUID, FormationSlots.Slot> assignments = new HashMap<>();
+        Player[] picked = assign(freeSlots, leftovers, byRating);
         for (int i = 0; i < picked.length; i++) {
             if (picked[i] != null) {
-                assignments.put(picked[i].getId(), slots.get(i));
+                assignments.put(picked[i].getId(), freeSlots.get(i));
             }
         }
         return assignments;

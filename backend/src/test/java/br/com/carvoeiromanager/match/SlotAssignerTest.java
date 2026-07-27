@@ -76,6 +76,49 @@ class SlotAssignerTest {
                 .isEqualTo(SlotAssigner.assignToSlots(xi, "4-4-2"));
     }
 
+    @Test
+    void pinnedAssignmentsAreHonoredVerbatimEvenOutOfPosition() {
+        List<Player> xi = wellFormed442();
+        // Pin a natural ZAGUEIRO into the last slot (a striker slot in 4-4-2): greedy would
+        // never do this while his exact slot is free, so honoring it proves the override.
+        Player zagueiro = xi.stream()
+                .filter(p -> p.getDetailedPosition() == DetailedPosition.ZAGUEIRO)
+                .findFirst().orElseThrow();
+        Map<UUID, Integer> pinned = Map.of(zagueiro.getId(), 10);
+
+        Map<UUID, FormationSlots.Slot> assignments = SlotAssigner.assignToSlots(xi, "4-4-2", pinned);
+
+        assertThat(assignments).hasSize(11);
+        assertThat(assignments.get(zagueiro.getId()))
+                .isEqualTo(FormationSlots.of("4-4-2").get(10));
+        assertThat(assignments.get(zagueiro.getId()).accepted())
+                .contains(DetailedPosition.ATACANTE);
+    }
+
+    @Test
+    void leftoverPlayerInheritsTheSingleVacatedSlot() {
+        List<Player> xi = wellFormed442();
+        // Pin 10 of the 11 to slots 0..9; the unpinned one must get slot 10.
+        Map<UUID, Integer> pinned = new java.util.HashMap<>();
+        for (int i = 0; i < 10; i++) {
+            pinned.put(xi.get(i).getId(), i);
+        }
+        Player leftover = xi.get(10);
+
+        Map<UUID, FormationSlots.Slot> assignments = SlotAssigner.assignToSlots(xi, "4-4-2", pinned);
+
+        assertThat(assignments).hasSize(11);
+        assertThat(assignments.get(leftover.getId()))
+                .isEqualTo(FormationSlots.of("4-4-2").get(10));
+    }
+
+    @Test
+    void emptyPinnedMapMatchesTheLegacyGreedyAssignment() {
+        List<Player> xi = wellFormed442();
+        assertThat(SlotAssigner.assignToSlots(xi, "4-4-2", Map.of()))
+                .isEqualTo(SlotAssigner.assignToSlots(xi, "4-4-2"));
+    }
+
     // ---- helpers ----
 
     private static List<Player> wellFormed442() {
