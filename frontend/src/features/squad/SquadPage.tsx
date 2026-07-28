@@ -13,7 +13,7 @@ import { getSquad, getLineup, setLineup, setTraining, renewContract, listPlayer,
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
-import type { PlayerResponse, PlayerRole, PlayerInstruction, LineupStarter, TrainableAttribute, TrainingIntensity, TrainingAssignment, SquadResponse } from '../../api/types'
+import type { PlayerResponse, RoleArchetype, DetailedPosition, PlayerInstruction, LineupStarter, TrainableAttribute, TrainingIntensity, TrainingAssignment, SquadResponse } from '../../api/types'
 import { TacticsPanel } from './TacticsPanel'
 import { PlayerDetails } from './PlayerDetails'
 import { FitnessBar } from './FitnessBar'
@@ -24,6 +24,7 @@ import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
 import { FORMATION_CODES, pitchSlots } from '../pitch/pitchSlots'
 import { assignSlots, type AssignablePlayer } from '../pitch/slotAssign'
 import { positionShort } from '../players/positionLabels'
+import { ARCHETYPE_LABEL, defaultArchetypeFor } from '../players/roleLabels'
 import { CARBON, ovrBadgeSx } from '../../muiTheme'
 
 const FORMATIONS = FORMATION_CODES
@@ -56,33 +57,26 @@ export const FORMATION_SHAPE: Record<string, Record<OutfieldPosition, number>> =
 // Display order for the squad list: goalkeepers, then defenders, midfielders, attackers.
 const POSITION_ORDER: Record<PlayerResponse['position'], number> = { GK: 0, DEF: 1, MID: 2, ATT: 3 }
 
-const ROLES_BY_POSITION: Record<PlayerResponse['position'], PlayerRole[]> = {
+// The 10 legacy-mapped RoleArchetype names (same value ranges/weights as the retired PlayerRole),
+// still grouped by coarse band for this select — a detailed-position-aware role picker (12
+// positions × the full 30-archetype MATRIX) is the next task; this keeps today's behavior
+// compiling against the new type unchanged.
+const ROLES_BY_POSITION: Record<PlayerResponse['position'], RoleArchetype[]> = {
   GK: ['GOALKEEPER'],
-  DEF: ['STOPPER', 'FULL_BACK', 'BALL_PLAYING_DEF'],
-  MID: ['HOLDING_MID', 'BOX_TO_BOX', 'PLAYMAKER'],
-  ATT: ['POACHER', 'TARGET_MAN', 'WINGER'],
+  DEF: ['STOPPER', 'FULLBACK', 'BALL_PLAYING_DEFENDER'],
+  MID: ['HOLDING', 'BOX_TO_BOX', 'PLAYMAKER'],
+  ATT: ['POACHER', 'TARGET_FORWARD', 'WINGER'],
 }
 
-const DEFAULT_ROLE: Record<PlayerResponse['position'], PlayerRole> = {
-  GK: 'GOALKEEPER',
-  DEF: 'FULL_BACK',
-  MID: 'BOX_TO_BOX',
-  ATT: 'POACHER',
+// Representative detailed position per coarse band, for a player without one (legacy payloads) —
+// feeds defaultArchetypeFor since a single archetype per LINE is no longer valid (e.g. FULLBACK
+// isn't valid for a ZAGUEIRO).
+const BAND_FALLBACK_POSITION: Record<PlayerResponse['position'], DetailedPosition> = {
+  GK: 'GOLEIRO', DEF: 'ZAGUEIRO', MID: 'MEIA_CENTRAL', ATT: 'ATACANTE',
 }
 
-// Human-readable Portuguese labels for the tactical roles. The <option> value stays the
-// enum (what the API expects); only the displayed text changes.
-const ROLE_LABEL: Record<PlayerRole, string> = {
-  GOALKEEPER: 'Goleiro',
-  STOPPER: 'Zagueiro',
-  FULL_BACK: 'Lateral',
-  BALL_PLAYING_DEF: 'Zagueiro construtor',
-  HOLDING_MID: 'Volante',
-  BOX_TO_BOX: 'Meia box a box',
-  PLAYMAKER: 'Armador',
-  POACHER: 'Finalizador',
-  TARGET_MAN: 'Centroavante',
-  WINGER: 'Ponta',
+function defaultRoleFor(player: PlayerResponse): RoleArchetype {
+  return defaultArchetypeFor(player.detailedPosition ?? BAND_FALLBACK_POSITION[player.position])
 }
 
 // Human-readable Portuguese labels for the optional per-player instruction. The <option> value
@@ -192,7 +186,7 @@ export function SquadPage() {
   // Bench is slotted: index i is "Sub i+1"; a null is an empty slot left by a removal, so
   // removing a substitute never renumbers the others — the hole is reused on the next add.
   const [bench, setBench] = useState<(string | null)[]>([])
-  const [roles, setRoles] = useState<Record<string, PlayerRole>>({})
+  const [roles, setRoles] = useState<Record<string, RoleArchetype>>({})
   // Per-player instruction keyed by playerId; '' is "Nenhuma" (no instruction). Kept in step with
   // `roles`: every place that seeds or clears a role does the same to the instruction.
   const [instructions, setInstructions] = useState<Record<string, PlayerInstruction | ''>>({})
@@ -289,7 +283,7 @@ export function SquadPage() {
         const player = players.find(p => p.id === id)!
         return {
           playerId: id,
-          role: roles[id] ?? DEFAULT_ROLE[player.position],
+          role: roles[id] ?? defaultRoleFor(player),
           instruction: instructions[id] || null,
           slotIndex,
         }
@@ -437,7 +431,7 @@ export function SquadPage() {
     if (slotIndex !== null) {
       setSelected(prev => [...prev, player.id])
       setSlotByPlayerId(prev => ({ ...prev, [player.id]: slotIndex }))
-      setRoles(prev => ({ ...prev, [player.id]: DEFAULT_ROLE[player.position] }))
+      setRoles(prev => ({ ...prev, [player.id]: defaultRoleFor(player) }))
       return
     }
     // Starting band full → take the next free bench place: reuse the lowest empty slot (a
@@ -453,11 +447,11 @@ export function SquadPage() {
         }
         return [...prev, player.id]
       })
-      setRoles(prev => ({ ...prev, [player.id]: DEFAULT_ROLE[player.position] }))
+      setRoles(prev => ({ ...prev, [player.id]: defaultRoleFor(player) }))
     }
   }
 
-  function changeRole(player: PlayerResponse, role: PlayerRole) {
+  function changeRole(player: PlayerResponse, role: RoleArchetype) {
     setRoles(prev => ({ ...prev, [player.id]: role }))
   }
 
@@ -499,7 +493,7 @@ export function SquadPage() {
     setSelected(pickedIds)
     // Any bench player promoted into the XI vacates their bench slot (keeps the rest stable).
     setBench(prev => prev.map(id => (id !== null && pickedIds.includes(id) ? null : id)))
-    setRoles(Object.fromEntries(picked.map(p => [p.id, DEFAULT_ROLE[p.position]])))
+    setRoles(Object.fromEntries(picked.map(p => [p.id, defaultRoleFor(p)])))
     // Fresh auto-pick: every picked player starts with no personal instruction.
     setInstructions(Object.fromEntries(picked.map(p => [p.id, ''])))
     setSlotByPlayerId(assignSlots(picked.map(toAssignable), formation))
@@ -624,13 +618,13 @@ export function SquadPage() {
   function roleSelect(player: PlayerResponse) {
     return (
       <NativeSelect
-        value={roles[player.id] ?? DEFAULT_ROLE[player.position]}
-        onChange={e => changeRole(player, e.target.value as PlayerRole)}
+        value={roles[player.id] ?? defaultRoleFor(player)}
+        onChange={e => changeRole(player, e.target.value as RoleArchetype)}
         inputProps={{ 'aria-label': `Função de ${player.name}` }}
         sx={{ fontSize: '0.85rem' }}
       >
         {ROLES_BY_POSITION[player.position].map(r => (
-          <option key={r} value={r}>{ROLE_LABEL[r]}</option>
+          <option key={r} value={r}>{ARCHETYPE_LABEL[r]}</option>
         ))}
       </NativeSelect>
     )

@@ -195,8 +195,8 @@ describe('SquadPage', () => {
       lineupId: 'l-1', clubId: 'club-1', formation: '4-4-2',
       starters: [
         { playerId: GK.id, role: 'GOALKEEPER', instruction: null },
-        { playerId: DEF1.id, role: 'FULL_BACK', instruction: null }, { playerId: DEF2.id, role: 'FULL_BACK', instruction: null },
-        { playerId: DEF3.id, role: 'FULL_BACK', instruction: null }, { playerId: DEF4.id, role: 'FULL_BACK', instruction: null },
+        { playerId: DEF1.id, role: 'FULLBACK', instruction: null }, { playerId: DEF2.id, role: 'FULLBACK', instruction: null },
+        { playerId: DEF3.id, role: 'FULLBACK', instruction: null }, { playerId: DEF4.id, role: 'FULLBACK', instruction: null },
         { playerId: MID1.id, role: 'BOX_TO_BOX', instruction: null }, { playerId: MID2.id, role: 'BOX_TO_BOX', instruction: null },
         { playerId: MID3.id, role: 'BOX_TO_BOX', instruction: null }, { playerId: MID4.id, role: 'BOX_TO_BOX', instruction: null },
         { playerId: ATT1.id, role: 'POACHER', instruction: null }, { playerId: ATT2.id, role: 'POACHER', instruction: null },
@@ -521,9 +521,11 @@ describe('SquadPage', () => {
     const select = screen.getByRole('combobox', { name: /função de defensor um/i })
     expect(select).toBeInTheDocument()
     // Options are scoped to the player's position band (DEF), not all roles, and shown with
-    // readable Portuguese labels (the underlying value stays the enum).
+    // readable Portuguese labels (the underlying value stays the enum). STOPPER's canonical
+    // label is "Xerife" (the backend RoleArchetype label), not the retired PlayerRole's old
+    // ad-hoc "Zagueiro" translation.
     const options = within(select).getAllByRole('option').map(o => o.textContent)
-    expect(options).toEqual(['Zagueiro', 'Lateral', 'Zagueiro construtor'])
+    expect(options).toEqual(['Xerife', 'Lateral', 'Zagueiro construtor'])
   })
 
   it('rehydrates the saved formation and starters on load', async () => {
@@ -531,10 +533,10 @@ describe('SquadPage', () => {
       lineupId: 'l-1', clubId: 'club-1', formation: '4-4-2',
       starters: [
         { playerId: GK.id, role: 'GOALKEEPER', instruction: null },
-        { playerId: DEF1.id, role: 'FULL_BACK', instruction: null },
-        { playerId: DEF2.id, role: 'FULL_BACK', instruction: null },
-        { playerId: DEF3.id, role: 'FULL_BACK', instruction: null },
-        { playerId: DEF4.id, role: 'FULL_BACK', instruction: null },
+        { playerId: DEF1.id, role: 'FULLBACK', instruction: null },
+        { playerId: DEF2.id, role: 'FULLBACK', instruction: null },
+        { playerId: DEF3.id, role: 'FULLBACK', instruction: null },
+        { playerId: DEF4.id, role: 'FULLBACK', instruction: null },
         { playerId: MID1.id, role: 'BOX_TO_BOX', instruction: null },
         { playerId: MID2.id, role: 'BOX_TO_BOX', instruction: null },
         { playerId: MID3.id, role: 'BOX_TO_BOX', instruction: null },
@@ -561,10 +563,10 @@ describe('SquadPage', () => {
       lineupId: 'l-2', clubId: 'club-1', formation: '4-3-3',
       starters: [
         { playerId: GK.id, role: 'GOALKEEPER', instruction: null },
-        { playerId: DEF1.id, role: 'FULL_BACK', instruction: null },
-        { playerId: DEF2.id, role: 'FULL_BACK', instruction: null },
-        { playerId: DEF3.id, role: 'FULL_BACK', instruction: null },
-        { playerId: DEF4.id, role: 'FULL_BACK', instruction: null },
+        { playerId: DEF1.id, role: 'FULLBACK', instruction: null },
+        { playerId: DEF2.id, role: 'FULLBACK', instruction: null },
+        { playerId: DEF3.id, role: 'FULLBACK', instruction: null },
+        { playerId: DEF4.id, role: 'FULLBACK', instruction: null },
         { playerId: MID1.id, role: 'BOX_TO_BOX', instruction: null },
         { playerId: MID2.id, role: 'BOX_TO_BOX', instruction: null },
         { playerId: SUSPENDED.id, role: 'BOX_TO_BOX', instruction: null },
@@ -711,10 +713,10 @@ describe('SquadPage', () => {
       lineupId: 'l-bench', clubId: 'club-1', formation: '4-3-3',
       starters: [
         { playerId: GK.id, role: 'GOALKEEPER', instruction: null },
-        { playerId: DEF1.id, role: 'FULL_BACK', instruction: null },
-        { playerId: DEF2.id, role: 'FULL_BACK', instruction: null },
-        { playerId: DEF3.id, role: 'FULL_BACK', instruction: null },
-        { playerId: DEF4.id, role: 'FULL_BACK', instruction: null },
+        { playerId: DEF1.id, role: 'FULLBACK', instruction: null },
+        { playerId: DEF2.id, role: 'FULLBACK', instruction: null },
+        { playerId: DEF3.id, role: 'FULLBACK', instruction: null },
+        { playerId: DEF4.id, role: 'FULLBACK', instruction: null },
         { playerId: MID1.id, role: 'BOX_TO_BOX', instruction: null },
         { playerId: MID2.id, role: 'BOX_TO_BOX', instruction: null },
         { playerId: MID3.id, role: 'BOX_TO_BOX', instruction: null },
@@ -849,10 +851,10 @@ describe('SquadPage', () => {
       lineupId: 'l-3', clubId: 'club-1', formation: '4-3-3',
       starters: [
         { playerId: GK.id, role: 'GOALKEEPER', instruction: null, slotIndex: 0 },
-        { playerId: DEF1.id, role: 'FULL_BACK', instruction: null, slotIndex: 1 },
-        { playerId: DEF2.id, role: 'FULL_BACK', instruction: null, slotIndex: 2 },
-        { playerId: DEF3.id, role: 'FULL_BACK', instruction: null, slotIndex: 3 },
-        { playerId: DEF4.id, role: 'FULL_BACK', instruction: null, slotIndex: 4 },
+        { playerId: DEF1.id, role: 'FULLBACK', instruction: null, slotIndex: 1 },
+        { playerId: DEF2.id, role: 'FULLBACK', instruction: null, slotIndex: 2 },
+        { playerId: DEF3.id, role: 'FULLBACK', instruction: null, slotIndex: 3 },
+        { playerId: DEF4.id, role: 'FULLBACK', instruction: null, slotIndex: 4 },
         { playerId: MID2.id, role: 'BOX_TO_BOX', instruction: null, slotIndex: 5 },
         { playerId: MID3.id, role: 'BOX_TO_BOX', instruction: null, slotIndex: 6 },
         { playerId: ATT1.id, role: 'POACHER', instruction: null, slotIndex: 7 },
@@ -879,10 +881,10 @@ describe('SquadPage', () => {
       lineupId: 'l-4', clubId: 'club-1', formation: '4-3-3',
       starters: [
         { playerId: GK.id, role: 'GOALKEEPER', instruction: null, slotIndex: 0 },
-        { playerId: DEF1.id, role: 'FULL_BACK', instruction: null, slotIndex: 1 },
-        { playerId: DEF2.id, role: 'FULL_BACK', instruction: null, slotIndex: 2 },
-        { playerId: DEF3.id, role: 'FULL_BACK', instruction: null, slotIndex: 3 },
-        { playerId: DEF4.id, role: 'FULL_BACK', instruction: null, slotIndex: 4 },
+        { playerId: DEF1.id, role: 'FULLBACK', instruction: null, slotIndex: 1 },
+        { playerId: DEF2.id, role: 'FULLBACK', instruction: null, slotIndex: 2 },
+        { playerId: DEF3.id, role: 'FULLBACK', instruction: null, slotIndex: 3 },
+        { playerId: DEF4.id, role: 'FULLBACK', instruction: null, slotIndex: 4 },
         { playerId: MID1.id, role: 'BOX_TO_BOX', instruction: null, slotIndex: 5 },
         { playerId: MID2.id, role: 'BOX_TO_BOX', instruction: null, slotIndex: 6 },
         { playerId: MID3.id, role: 'BOX_TO_BOX', instruction: null, slotIndex: 7 },

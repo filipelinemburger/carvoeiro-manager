@@ -72,11 +72,28 @@ export type GameStyle = 'EQUILIBRADO' | 'JOGO_DE_PASSES' | 'CONTRA_ATAQUE' | 'JO
 export type AttackZone = 'LATERAIS' | 'CENTRO' | 'MISTO'
 export type Pressing = 'LOW' | 'MEDIUM' | 'HIGH'
 export type Marking = 'ZONAL' | 'MAN_TIGHT'
-export type PlayerRole =
-  | 'GOALKEEPER'
-  | 'STOPPER' | 'FULL_BACK' | 'BALL_PLAYING_DEF'
-  | 'HOLDING_MID' | 'BOX_TO_BOX' | 'PLAYMAKER'
-  | 'POACHER' | 'TARGET_MAN' | 'WINGER'
+/**
+ * The tactical archetype (EAFC-style role) a player is assigned, valid for a subset of
+ * {@link DetailedPosition}s; mirrors the backend `RoleArchetype` enum exactly. The wire field
+ * carrying this stays named `role` (backend-compatible), but the type itself is no longer the
+ * retired `PlayerRole` — that 10-value union has been superseded end-to-end by this 30-value one.
+ */
+export type RoleArchetype =
+  | 'GOALKEEPER' | 'STOPPER' | 'FULLBACK' | 'BALL_PLAYING_DEFENDER'
+  | 'HOLDING' | 'BOX_TO_BOX' | 'PLAYMAKER'
+  | 'POACHER' | 'TARGET_FORWARD' | 'WINGER'
+  | 'SWEEPER_KEEPER' | 'BALL_PLAYING_KEEPER'
+  | 'WINGBACK' | 'FALSEBACK' | 'ATTACKING_WINGBACK' | 'INVERTED_WINGBACK'
+  | 'DEFENDER' | 'WIDE_BACK'
+  | 'DEEP_LYING_PLAYMAKER' | 'CENTRE_HALF' | 'WIDE_HALF' | 'BOX_CRASHER'
+  | 'HALF_WINGER' | 'SHADOW_STRIKER' | 'CLASSIC_10'
+  | 'WIDE_PLAYMAKER' | 'WIDE_MIDFIELDER' | 'INSIDE_FORWARD'
+  | 'ADVANCED_FORWARD' | 'FALSE_9'
+
+/** The focus dimension of a role (a tactical "lean" on top of the archetype); mirrors `RoleFocus`. */
+export type RoleFocus =
+  | 'DEFEND' | 'BALANCED' | 'ATTACK' | 'BUILD_UP' | 'SUPPORT'
+  | 'ROAMING' | 'VERSATILE' | 'AGGRESSIVE' | 'BALL_WINNING' | 'WIDE'
 
 /** Optional per-player "instrução pessoal" layered on top of the tactical role. */
 export type PlayerInstruction =
@@ -87,12 +104,15 @@ export type PlayerInstruction =
 export type DetailedPosition =
   | 'GOLEIRO'
   | 'ZAGUEIRO'
-  | 'LATERAL_ESQUERDO'
   | 'LATERAL_DIREITO'
+  | 'LATERAL_ESQUERDO'
   | 'VOLANTE'
+  | 'MEIA_CENTRAL'
   | 'MEIA_ARMADOR'
-  | 'PONTA'
-  | 'FALSO_9'
+  | 'MEIA_DIREITA'
+  | 'MEIA_ESQUERDA'
+  | 'PONTA_DIREITA'
+  | 'PONTA_ESQUERDA'
   | 'ATACANTE'
 
 export type PlayerResponse = {
@@ -117,7 +137,16 @@ export type PlayerResponse = {
   suspensionRemaining: number
   injuryMatches: number
   eligible: boolean
-  role: PlayerRole | null
+  role: RoleArchetype | null
+  /** The role's focus (RoleFocus name); null means the archetype's canonical default focus.
+   * Optional here only to keep older test fixtures compiling. */
+  focus?: RoleFocus | null
+  /** 0–2 alternate detailed positions the player can also fill. Optional here only to keep
+   * older test fixtures compiling. */
+  altPositions?: DetailedPosition[]
+  /** Generation-time familiar archetypes (e.g. "WINGER++", "FALSEBACK+"). Optional here only to
+   * keep older test fixtures compiling. */
+  familiarRoles?: string[]
   contractYears: number
   /** Market value (fee guidance) computed by the backend from overall + age. */
   value: number
@@ -147,7 +176,10 @@ export type AttributeView = {
 
 export type LineupStarter = {
   playerId: string
-  role: PlayerRole
+  role: RoleArchetype
+  /** Optional focus for the role; null (or omitted) means the archetype's canonical default.
+   * Optional here only to keep older test fixtures compiling. */
+  focus?: RoleFocus | null
   /** Optional per-player instruction; null (or omitted) means none. */
   instruction: PlayerInstruction | null
   /**
