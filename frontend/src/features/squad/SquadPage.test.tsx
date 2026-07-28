@@ -528,6 +528,30 @@ describe('SquadPage', () => {
     expect(options).toEqual(['Xerife', 'Lateral', 'Zagueiro construtor'])
   })
 
+  it('shows a role selector for a selected midfielder', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Meio Um'))
+    fireEvent.click(pickBtn('meio um'))
+    const select = screen.getByRole('combobox', { name: /função de meio um/i })
+    expect(select).toBeInTheDocument()
+    // MID band roles come from the canonical RoleArchetype labels, not the retired PlayerRole's
+    // old ad-hoc translations ("Volante", "Meia box a box").
+    const options = within(select).getAllByRole('option').map(o => o.textContent)
+    expect(options).toEqual(['Primeiro volante', 'Box-to-box', 'Armador'])
+  })
+
+  it('shows a role selector for a selected attacker', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Atacante Um'))
+    fireEvent.click(pickBtn('atacante um'))
+    const select = screen.getByRole('combobox', { name: /função de atacante um/i })
+    expect(select).toBeInTheDocument()
+    // ATT band roles come from the canonical RoleArchetype labels, not the retired PlayerRole's
+    // old ad-hoc translations ("Finalizador", "Centroavante").
+    const options = within(select).getAllByRole('option').map(o => o.textContent)
+    expect(options).toEqual(['Oportunista', 'Pivô', 'Ponta'])
+  })
+
   it('rehydrates the saved formation and starters on load', async () => {
     mockGetLineup.mockResolvedValue({
       lineupId: 'l-1', clubId: 'club-1', formation: '4-4-2',
