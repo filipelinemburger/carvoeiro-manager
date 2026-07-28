@@ -122,6 +122,52 @@ describe('explicit slot placement', () => {
   })
 })
 
+describe('out-of-position tint uses natural-vs-improvised (primary + alt positions)', () => {
+  const kit = { primary: '#f7d417', secondary: '#111111' }
+
+  it('does not warn when only the player\'s ALTERNATE position matches the slot', () => {
+    // Slot 1 (4-3-3) accepts LATERAL_DIREITO only. This player's primary is ZAGUEIRO (not
+    // accepted) but an alt position IS accepted — the picker would call this natural, so the
+    // pitch tint must agree.
+    const home: TeamOnPitch = {
+      formation: '4-3-3', kit, showNames: true,
+      players: [{
+        id: 'p1', surname: 'Alt', position: 'DEF', fitness: 100, slotIndex: 1,
+        detailedPosition: 'ZAGUEIRO', altPositions: ['LATERAL_DIREITO'],
+      }],
+    }
+    const { container } = render(<Pitch home={home} />)
+    const token = container.querySelector('[data-slot-index="1"] [data-testid="player-token"]')!
+    expect(token).not.toHaveAttribute('data-out-of-position', 'true')
+  })
+
+  it('still warns when neither the primary nor any alternate position matches the slot', () => {
+    const home: TeamOnPitch = {
+      formation: '4-3-3', kit, showNames: true,
+      players: [{
+        id: 'p1', surname: 'Fora', position: 'DEF', fitness: 100, slotIndex: 1,
+        detailedPosition: 'ZAGUEIRO', altPositions: ['MEIA_CENTRAL'],
+      }],
+    }
+    const { container } = render(<Pitch home={home} />)
+    const token = container.querySelector('[data-slot-index="1"] [data-testid="player-token"]')!
+    expect(token).toHaveAttribute('data-out-of-position', 'true')
+  })
+
+  it('still warns exactly as before for a player with no alternate positions at all', () => {
+    const home: TeamOnPitch = {
+      formation: '4-3-3', kit, showNames: true,
+      players: [{
+        id: 'p1', surname: 'Fora', position: 'DEF', fitness: 100, slotIndex: 1,
+        detailedPosition: 'ZAGUEIRO',
+      }],
+    }
+    const { container } = render(<Pitch home={home} />)
+    const token = container.querySelector('[data-slot-index="1"] [data-testid="player-token"]')!
+    expect(token).toHaveAttribute('data-out-of-position', 'true')
+  })
+})
+
 describe('line-zip overflow (assign fallback)', () => {
   it('places an overflow player (more players on a line than the formation has slots for) into a remaining empty slot instead of dropping them', () => {
     const mk = (id: string, position: 'GK' | 'DEF' | 'MID' | 'ATT'): PlacedPlayer =>
@@ -304,6 +350,21 @@ describe('tap vs drag (onSlotClick)', () => {
     expect(token(9)).toHaveAttribute('data-drop-candidate', 'true')
     fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
     expect(onSwap).toHaveBeenCalledWith(1, 9)
+  })
+
+  it('a drag that travels away then returns near the origin still resolves as a drag, not a tap (tracks total distance travelled, not net displacement)', () => {
+    const { onSwap, onSlotClick, token } = renderTappable()
+    fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+    // Move well past the click threshold...
+    fireEvent.pointerMove(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
+    // ...then bring it back to (approximately) where it started before releasing. Net
+    // displacement is now ~0, but the interaction genuinely was a drag.
+    fireEvent.pointerMove(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+    fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+    expect(onSlotClick).not.toHaveBeenCalled()
+    // The release point coincides with the origin slot, which is never its own drop candidate,
+    // so it snaps back silently rather than firing onSwap.
+    expect(onSwap).not.toHaveBeenCalled()
   })
 
   it('onSlotClick is never fired by tapping a mirrored away-team token', () => {

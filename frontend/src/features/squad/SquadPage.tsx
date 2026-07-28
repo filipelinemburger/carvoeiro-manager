@@ -398,7 +398,7 @@ export function SquadPage() {
       .filter((p): p is PlayerResponse => Boolean(p))
       .map((p): PlacedPlayer => ({
         id: p.id, surname: p.name, position: p.position,
-        detailedPosition: p.detailedPosition, fitness: p.fitness,
+        detailedPosition: p.detailedPosition, altPositions: p.altPositions, fitness: p.fitness,
         slotIndex: slotByPlayerId[p.id],
       })),
   } : null
@@ -590,6 +590,16 @@ export function SquadPage() {
     const pickedSlot = slotByPlayerId[player.id]
     const pickedBenchIndex = bench.indexOf(player.id)
 
+    // The picked player has no "home" of their own (not a starter elsewhere, not on the bench)
+    // — so if there's an occupant to displace, their only possible destination is a free bench
+    // place. When the bench is already full (no hole, at the 9-slot cap), there's nowhere to put
+    // them: bail out entirely rather than perform a partial swap that drops them from the squad
+    // — same precedent as `cyclePlayer`'s `benchHasRoom` no-op above.
+    if (occupantId && pickedSlot === undefined && pickedBenchIndex < 0) {
+      const benchHasRoom = bench.some(id => id === null) || bench.length < 9
+      if (!benchHasRoom) { setPickerSlot(null); return }
+    }
+
     const nextSlotByPlayerId = { ...slotByPlayerId, [player.id]: slotIndex }
     let nextSelected = selected.includes(player.id) ? selected : [...selected, player.id]
     const nextBench = [...bench]
@@ -597,11 +607,13 @@ export function SquadPage() {
 
     if (occupantId) {
       if (pickedSlot !== undefined) {
-        // The picked player was a starter elsewhere: a genuine swap of formation slots.
+        // The picked player was a starter elsewhere: a genuine swap of formation slots — neither
+        // player touches the bench.
         nextSlotByPlayerId[occupantId] = pickedSlot
       } else {
-        // Nowhere to hand the slot back — the displaced occupant is bumped to the bench
-        // (the picked player's own bench spot, if they had one) instead of dropped outright.
+        // The displaced occupant takes the picked player's previous place: their own bench slot
+        // if they came from the bench, else the next free bench place (room guaranteed by the
+        // early-exit check above) — never dropped outright.
         delete nextSlotByPlayerId[occupantId]
         nextSelected = nextSelected.filter(id => id !== occupantId)
         if (pickedBenchIndex >= 0) {
@@ -609,7 +621,7 @@ export function SquadPage() {
         } else {
           const hole = nextBench.findIndex(id => id === null)
           if (hole >= 0) nextBench[hole] = occupantId
-          else if (nextBench.length < 9) nextBench.push(occupantId)
+          else nextBench.push(occupantId)
         }
       }
     }

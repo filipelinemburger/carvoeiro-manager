@@ -1120,6 +1120,134 @@ describe('SquadPage — slot picker and Função/Foco selects', () => {
     expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
   })
 
+  it('picking a BENCH player from the slot picker swaps them into the slot, sending the displaced starter to the bench spot the picked player vacated', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+
+    // Auto-pick fills only 3 of the 6 MID-eligible fixtures; send one of the leftovers to the
+    // bench explicitly so we have a genuine bench player to pick.
+    const midPool = [MID1, MID2, MID3, MID4, LOW_FITNESS, LISTED]
+    const leftOutMid = midPool.find(p => pickBtn(p.name).textContent === '+')!
+    fireEvent.click(pickBtn(leftOutMid.name))
+    expect(pickBtn(leftOutMid.name)).toHaveTextContent('Sub 1')
+
+    fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
+    const pitch = screen.getByTestId('pitch')
+    // Slot 5 is the first MID slot in the default 4-3-3 (GK=0, DEF=1-4, MID=5-7, ATT=8-10) —
+    // tie-break-agnostic: whichever MID starter auto-pick placed there is our occupant.
+    const slot5 = pitch.querySelector('[data-slot-index="5"]')!
+    const occupantName = midPool.find(p => p.id !== leftOutMid.id && slot5.textContent?.endsWith(p.name))!.name
+
+    fireEvent.pointerDown(slot5, { pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerUp(slot5, { pointerId: 1, clientX: 0, clientY: 0 })
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByText(leftOutMid.name))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    // The bench player now starts in that slot...
+    expect(pitch.querySelector('[data-slot-index="5"]')).toHaveTextContent(leftOutMid.name)
+    expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
+
+    // ...and the displaced starter takes over the bench spot the picked player vacated (Sub 1) —
+    // nobody drops out of the squad. (Plantel's status buttons are only accessible-by-role while
+    // that tab panel is the visible one, so switch back before querying them.)
+    fireEvent.click(screen.getByRole('tab', { name: 'Plantel' }))
+    expect(pickBtn(occupantName)).toHaveTextContent('Sub 1')
+    expect(pickBtn(leftOutMid.name)).not.toHaveTextContent(/sub/i)
+  })
+
+  it('does not lose the displaced occupant when the bench is already full (no-ops instead of dropping them)', async () => {
+    // A dedicated, larger squad: exactly enough DEF/ATT/GK to fill their bands with nothing
+    // left over, plus 13 MID-eligible players — 3 starters, 9 to fill the bench solid, and one
+    // more left completely unpicked to attempt the doomed pick.
+    const mk = (id: string, name: string, position: 'GK' | 'DEF' | 'MID' | 'ATT'): PlayerResponse => ({
+      id, name, position, age: 24, overall: 70, pace: 60, finishing: 50, passing: 55,
+      tackling: 50, goalkeeping: position === 'GK' ? 70 : 10, stamina: 65, ...STATE,
+    })
+    // Zero-padded indexes: "escalar bf meio 1" would otherwise ambiguously match "BF Meio 1",
+    // "BF Meio 10", "BF Meio 11" and "BF Meio 12" under pickBtn's unanchored name regex.
+    const pad = (i: number) => String(i).padStart(2, '0')
+    const gk = mk('bf-gk', 'BF Goleiro', 'GK')
+    const defs = Array.from({ length: 4 }, (_, i) => mk(`bf-d${i}`, `BF Def ${pad(i)}`, 'DEF'))
+    const atts = Array.from({ length: 3 }, (_, i) => mk(`bf-a${i}`, `BF Ata ${pad(i)}`, 'ATT'))
+    const mids = Array.from({ length: 13 }, (_, i) => mk(`bf-m${i}`, `BF Meio ${pad(i)}`, 'MID'))
+    mockGetSquad.mockResolvedValueOnce({
+      players: [gk, ...defs, ...atts, ...mids], primaryColor: '#f7d417', secondaryColor: '#111111',
+    })
+
+    renderWithProviders()
+    await waitFor(() => screen.getByText('BF Goleiro'))
+
+    // Build the exact 4-3-3 XI: GK, 4 DEF, 3 ATT, and the first 3 MID fixtures.
+    for (const p of [gk, ...defs, ...atts, ...mids.slice(0, 3)]) {
+      fireEvent.click(pickBtn(p.name))
+    }
+    expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
+
+    // Send the next 9 MID fixtures to the bench — it fills solid (Sub 1..Sub 9), no holes.
+    const benched = mids.slice(3, 12)
+    for (const p of benched) fireEvent.click(pickBtn(p.name))
+    for (let i = 0; i < benched.length; i++) {
+      expect(pickBtn(benched[i].name)).toHaveTextContent(`Sub ${i + 1}`)
+    }
+    // One MID fixture (mids[12]) is left completely unpicked — neither a starter nor benched.
+    const extra = mids[12]
+    expect(pickBtn(extra.name)).toHaveTextContent('+')
+
+    fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
+    const pitch = screen.getByTestId('pitch')
+    const slot5 = pitch.querySelector('[data-slot-index="5"]')! // a MID starter's slot
+    const occupantName = mids.slice(0, 3).find(p => slot5.textContent?.endsWith(p.name))!.name
+
+    // Attempt to pick the fully-unplaced extra player into the occupied MID slot: the occupant
+    // has nowhere to go (not the picked player's own bench spot — there isn't one — and the
+    // bench has no hole and is already at its 9-slot cap).
+    fireEvent.pointerDown(slot5, { pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerUp(slot5, { pointerId: 1, clientX: 0, clientY: 0 })
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByText(extra.name))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    // Nobody vanished: the original occupant is still exactly where they were...
+    expect(pitch.querySelector('[data-slot-index="5"]')).toHaveTextContent(occupantName)
+    expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
+
+    // ...the extra player is still simply unpicked (not silently added anywhere), and the whole
+    // bench is untouched. (Switch back to Plantel — its status buttons aren't accessible-by-role
+    // while that panel is hidden.)
+    fireEvent.click(screen.getByRole('tab', { name: 'Plantel' }))
+    expect(pickBtn(extra.name)).toHaveTextContent('+')
+    for (let i = 0; i < benched.length; i++) {
+      expect(pickBtn(benched[i].name)).toHaveTextContent(`Sub ${i + 1}`)
+    }
+  })
+
+  it('does not flag a player as out-of-position on the pitch when only their ALTERNATE position matches the slot they were picked into', async () => {
+    const altPlayer: PlayerResponse = {
+      ...makeOutfield('p-alt', 'Alt Lateral', 'DEF'),
+      detailedPosition: 'ZAGUEIRO',
+      altPositions: ['LATERAL_DIREITO'],
+    }
+    mockGetSquad.mockResolvedValueOnce({ ...squad, players: [...squad.players, altPlayer] })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
+
+    const pitch = screen.getByTestId('pitch')
+    const slot1 = pitch.querySelector('[data-slot-index="1"]')! // LD — accepts LATERAL_DIREITO only
+    fireEvent.pointerDown(slot1, { pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerUp(slot1, { pointerId: 1, clientX: 0, clientY: 0 })
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByText('Alt Lateral'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    expect(pitch.querySelector('[data-slot-index="1"]')).toHaveTextContent('Alt Lateral')
+    // Natural via altPositions (LATERAL_DIREITO), even though the player's primary detailed
+    // position (ZAGUEIRO) is not accepted by this slot — no amber warn tint.
+    expect(pitch.querySelector('[data-slot-index="1"] [data-out-of-position="true"]')).toBeNull()
+  })
+
   it('"Selecionar melhores" gives each auto-picked player their best familiar archetype and its default focus', async () => {
     // DEF1 (LATERAL_ESQUERDO) is familiar (++) with WINGBACK — a non-clone copy so the shared
     // module-level DEF1 fixture used by every other test in this file stays untouched.

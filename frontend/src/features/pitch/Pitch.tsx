@@ -3,7 +3,7 @@ import { Box } from '@mui/material'
 import { pitchSlots, type Slot, type Line } from './pitchSlots'
 import { PlayerToken, type TokenBadges } from './PlayerToken'
 import { tokenColors, type Kit } from './kit'
-import { DETAILED_POSITION_SHORT } from '../players/positionLabels'
+import { DETAILED_POSITION_SHORT, isNatural } from '../players/positionLabels'
 import type { DetailedPosition } from '../../api/types'
 
 // A drop lands on the nearest droppable slot whose center is within this fraction of the
@@ -20,6 +20,12 @@ export type PlacedPlayer = {
   position: 'GK' | 'DEF' | 'MID' | 'ATT'
   /** Fine-grained position; when set and not accepted by the slot, the token gets a warn tint. */
   detailedPosition?: DetailedPosition | null
+  /**
+   * Alternate playable positions. A player is natural for a slot when EITHER `detailedPosition`
+   * OR any of these is accepted — mirrors `isNatural` (positionLabels.ts), the same rule the
+   * slot picker uses, so the pitch tint never contradicts it.
+   */
+  altPositions?: DetailedPosition[] | null
   /**
    * Explicit formation slot (index into pitchSlots(formation)). When EVERY player of a team
    * carries one, placement uses it; otherwise the legacy line-zip below runs.
@@ -79,7 +85,9 @@ function place(team: TeamOnPitch): Positioned[] {
   return team.players.every(p => p.slotIndex != null) ? placeExplicit(team) : assign(team)
 }
 
-type Drag = { fromSlot: number; startX: number; startY: number; x: number; y: number }
+// `maxMoved` tracks the farthest the pointer has travelled from `startX/Y` at any point during
+// the interaction (not just its final resting spot) — see the tap-vs-drag resolution below.
+type Drag = { fromSlot: number; startX: number; startY: number; x: number; y: number; maxMoved: number }
 
 function TeamLayer({ team, mirror, onSwap, onSlotClick, containerRef }: {
   team: TeamOnPitch
@@ -117,10 +125,13 @@ function TeamLayer({ team, mirror, onSwap, onSlotClick, containerRef }: {
       {positioned.map(({ slot, number, player }, i) => {
         const yPct = (mirror ? 1 - slot.y : slot.y) * 100
         const xPct = (mirror ? 1 - slot.x : slot.x) * 100
-        // The slot's primary accepted position labels the token; a player whose detailed position
-        // isn't in the slot's accepted set gets the out-of-position warn tint.
+        // The slot's primary accepted position labels the token; a player who isn't NATURAL for
+        // the slot — neither their primary detailedPosition nor any altPositions is accepted —
+        // gets the out-of-position warn tint. Same rule as the slot picker (`isNatural`), so a
+        // multi-position player fielded in an alternate position is never flagged as improvised
+        // when the picker itself would call them natural.
         const posLabel = DETAILED_POSITION_SHORT[slot.accepted[0]]
-        const outOfPosition = !!player?.detailedPosition && !slot.accepted.includes(player.detailedPosition)
+        const outOfPosition = !!player?.detailedPosition && !isNatural(player, slot.accepted)
         const draggable = Boolean(onSwap) && !mirror && i !== 0 && player !== null
         // Any slot (including GK and empties) is tappable when a click handler is supplied; a
         // tap is resolved below by movement distance, not by whether the slot is draggable.
@@ -134,14 +145,23 @@ function TeamLayer({ team, mirror, onSwap, onSlotClick, containerRef }: {
             data-drop-candidate={dropCandidate === i ? 'true' : undefined}
             onPointerDown={interactive ? e => {
               e.currentTarget.setPointerCapture?.(e.pointerId)
-              setDrag({ fromSlot: i, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY })
+              setDrag({ fromSlot: i, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, maxMoved: 0 })
             } : undefined}
             onPointerMove={interactive ? e => {
-              setDrag(d => (d && d.fromSlot === i ? { ...d, x: e.clientX, y: e.clientY } : d))
+              setDrag(d => {
+                if (!d || d.fromSlot !== i) return d
+                const moved = Math.hypot(e.clientX - d.startX, e.clientY - d.startY)
+                return { ...d, x: e.clientX, y: e.clientY, maxMoved: Math.max(d.maxMoved, moved) }
+              })
             } : undefined}
             onPointerUp={interactive ? e => {
               if (!drag || drag.fromSlot !== i) return
-              const moved = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY)
+              // Resolve tap-vs-drag by the farthest the pointer travelled during the WHOLE
+              // interaction, not just the net start→release displacement — a user who drags a
+              // token away and deliberately brings it back near its origin (changing their mind)
+              // must still be treated as a (cancelled) drag, not a tap that pops the picker open.
+              const upMoved = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY)
+              const moved = Math.max(drag.maxMoved, upMoved)
               setDrag(null)
               if (moved <= CLICK_MOVE_THRESHOLD) {
                 onSlotClick?.(i)
