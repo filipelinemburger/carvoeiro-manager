@@ -425,7 +425,7 @@ public class LineupService {
         return eligible.stream().max(byKeeping)
                 .or(() -> allPlayers.stream().max(byKeeping))
                 .orElseThrow(() -> new ApiException(ErrorCode.NO_GK_FOUND,
-                        "Club " + clubId + " has no players at all to field a goalkeeper"));
+                        "O clube " + clubId + " não tem nenhum jogador para atuar no gol"));
     }
 
     /** The formation a club plays when no explicit lineup is set: its default, else 4-4-2. */

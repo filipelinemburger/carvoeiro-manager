@@ -15,16 +15,21 @@ import java.util.UUID;
 /**
  * Shared greedy best-fit assignment of players to a formation's ordered {@link FormationSlots.Slot}s.
  *
- * <p>The routine is natural-first: slots are processed scarcest-first (fewest NATURAL candidates in
- * the initial pool — any of {@link Player#positions()}, primary or alternate, accepted by the slot —
- * ties by slot index), and each slot takes the best remaining NATURAL candidate by the supplied
- * comparator. A genuine natural always beats a higher-rated improviser. Only when no natural candidate
- * remains does a slot fall back to the closest player by tactical distance ({@link DetailedPosition#distance}
- * between the player's positions and the slot's accepted set), ties broken by the comparator. Scarcity
- * is computed once over the initial pool, so the whole assignment is a pure, deterministic function of
- * {@code (slots, pool)}: called twice with the same inputs it returns the identical result — except for
- * the pinned variant of {@link #assignToSlots(List, String, Map)}, where explicit pinned indexes are
- * honored verbatim and only the leftovers go through this greedy fit.
+ * <p>The routine is natural-first: fillable slots are processed scarcest-first (fewest NATURAL
+ * candidates in the initial pool — any of {@link Player#positions()}, primary or alternate, accepted
+ * by the slot — ties by slot index), and each slot takes the best remaining NATURAL candidate by the
+ * supplied comparator. A genuine natural always beats a higher-rated improviser. Only when no natural
+ * candidate remains does a slot fall back to the closest player by tactical distance
+ * ({@link DetailedPosition#distance} between the player's positions and the slot's accepted set), ties
+ * broken by the comparator. A slot with ZERO natural candidates in the initial pool (e.g. the GK slot
+ * against a keeper-less XI) is processed LAST, not first: "scarcest first" exists to stop a fillable
+ * specialist slot from being starved of its only candidate(s), which does not apply to a slot nothing
+ * can ever naturally fill — sorting it first would only let its fallback pick steal a genuine natural
+ * away from a slot that still needs it. Scarcity is computed once over the initial pool, so the whole
+ * assignment is a pure, deterministic function of {@code (slots, pool)}: called twice with the same
+ * inputs it returns the identical result — except for the pinned variant of
+ * {@link #assignToSlots(List, String, Map)}, where explicit pinned indexes are honored verbatim and
+ * only the leftovers go through this greedy fit.
  *
  * <p>Both {@code LineupService#bestXi} (via {@link #assign}) and {@code TacticsService#profileFor}
  * (via {@link #assignToSlots}) share this logic so the selection and the position-grading never drift.
@@ -52,7 +57,20 @@ final class SlotAssigner {
             FormationSlots.Slot slot = slots.get(i);
             tier1Count.put(i, pool.stream().filter(p -> isNatural(p, slot)).count());
         }
-        order.sort(Comparator.<Integer>comparingLong(tier1Count::get).thenComparing(Comparator.naturalOrder()));
+        // "Scarcest first" protects a slot that COULD be starved of its only candidate(s) by a
+        // generalist grabbing them first — that only makes sense for a slot that has at least one
+        // natural. A slot with ZERO natural candidates is not scarce, it's unfillable: nothing can
+        // starve it (there is nothing to steal), so letting it sort first only lets its distance
+        // fallback steal a genuine natural OTHER slots need, before their turn (see
+        // SlotAssignerNaturalFirstTest / TacticsServiceIT for the keeper-less-XI regression this
+        // guards against). Sort zero-natural slots to the very end instead — every fillable slot
+        // gets first pick of the pool, and a zero-natural slot's fallback then only ever sees
+        // genuine leftovers. Slots with >=1 natural keep the original ascending-count order (ties by
+        // index), so a well-formed all-natural pool (no zero-count slot exists) is unaffected.
+        order.sort(Comparator.<Integer>comparingLong(i -> {
+                    long count = tier1Count.get(i);
+                    return count == 0 ? Long.MAX_VALUE : count;
+                }).thenComparing(Comparator.naturalOrder()));
 
         Player[] picked = new Player[slots.size()];
         List<Player> available = new ArrayList<>(pool);

@@ -350,4 +350,80 @@ class TacticsServiceIT {
         p.setPositions(detailedPosition, List.of());
         return p;
     }
+
+    /**
+     * Reproduces the Task-5 review finding: a club with no goalkeeper at all (the scenario
+     * {@code LineupService#improvisedKeeper} now handles instead of throwing NO_GK_FOUND) hands
+     * {@code SlotAssigner.assignToSlots} an XI in which NO player's {@link Player#positions()}
+     * contains GOLEIRO — the GK slot has zero natural candidates. Before the fix, the scarcest-first
+     * sort treated "zero candidates" as the MOST scarce slot and processed it first; its distance
+     * fallback (every outfielder is equidistant — {@code DetailedPosition#distance} to GOLEIRO is a
+     * constant 3) then degenerated into "pick the highest-overall player in the whole XI", which can
+     * steal a genuine natural (here, the sole MEIA_DIREITA) out of its own slot before that slot's
+     * turn — cascading into a garbled assignment. The unfillable GK slot should never be able to
+     * outrank a slot it cannot protect anything from.
+     */
+    @Test
+    void keeperlessXiDoesNotLetTheUnfillableGkSlotStealANaturalFromItsSlot() {
+        Player ld = player(Position.DEF, DetailedPosition.LATERAL_DIREITO, 70);
+        Player zagA = player(Position.DEF, DetailedPosition.ZAGUEIRO, 70);
+        Player zagB = player(Position.DEF, DetailedPosition.ZAGUEIRO, 70);
+        // A third ZAGUEIRO: an over-represented specialist with no ZAG slot left once zagA/zagB
+        // naturally fill both — the genuinely "spare" player who should end up improvising in the
+        // unfillable GK slot, NOT the natural MD below.
+        Player zagC = player(Position.DEF, DetailedPosition.ZAGUEIRO, 60);
+        Player le = player(Position.DEF, DetailedPosition.LATERAL_ESQUERDO, 70);
+        // Rated highest in the whole XI so the pre-fix bug (GK slot processed first; its distance
+        // fallback ties every outfielder at 3, so it degenerates to "highest overall wins") grabs
+        // THIS player — the sole natural for the MD slot — instead of leaving him there.
+        Player md = player(Position.MID, DetailedPosition.MEIA_DIREITA, 95);
+        Player vol = player(Position.MID, DetailedPosition.VOLANTE, 70);
+        Player mc = player(Position.MID, DetailedPosition.MEIA_CENTRAL, 70);
+        Player me = player(Position.MID, DetailedPosition.MEIA_ESQUERDA, 70);
+        Player stA = player(Position.ATT, DetailedPosition.ATACANTE, 70);
+        Player stB = player(Position.ATT, DetailedPosition.ATACANTE, 70);
+        List<Player> xi = List.of(ld, zagA, zagB, zagC, le, md, vol, mc, me, stA, stB);
+        assertThat(xi).hasSize(11);
+        assertThat(xi).noneMatch(p -> p.positions().contains(DetailedPosition.GOLEIRO));
+
+        // AI/default profile path — same SlotAssigner.assignToSlots(xi, formation) full-11 call
+        // bestXi-originated managed-club XIs go through too (TacticsService#fromLineup's un-pinned
+        // branch).
+        TacticalProfile profile = tacticsService.defaultProfile(UUID.randomUUID(), xi);
+
+        List<FormationSlots.Slot> slots = FormationSlots.of("4-4-2");
+        // The genuine MD natural must stay in the MD slot...
+        assertThat(profile.slotAssignments().get(md.getId())).isEqualTo(slots.get(5));
+        assertThat(profile.roles().get(md.getId()).archetype().validFor(DetailedPosition.MEIA_DIREITA))
+                .as("MD natural must NOT be graded with a goalkeeper archetype").isTrue();
+        // ...and so must every other genuine natural.
+        assertThat(profile.slotAssignments().get(ld.getId())).isEqualTo(slots.get(1));
+        assertThat(profile.slotAssignments().get(le.getId())).isEqualTo(slots.get(4));
+        assertThat(profile.slotAssignments().get(vol.getId())).isEqualTo(slots.get(6));
+        assertThat(profile.slotAssignments().get(mc.getId())).isEqualTo(slots.get(7));
+        assertThat(profile.slotAssignments().get(me.getId())).isEqualTo(slots.get(8));
+        // ZAG (idx 2/3) and ST (idx 9/10) are each backed by the SAME shared FormationSlots.Slot
+        // instance at both indexes (FormationSlots reuses the ZAG/ST constants), so the two indexes
+        // are equal by value — checking accepted() membership (rather than Set.of, which would
+        // reject the "duplicate" equal elements) is the correct way to prove both landed on a
+        // natural ZAG/ST slot instead of one of them being displaced.
+        assertThat(profile.slotAssignments().get(zagA.getId()).accepted())
+                .containsExactly(DetailedPosition.ZAGUEIRO);
+        assertThat(profile.slotAssignments().get(zagB.getId()).accepted())
+                .containsExactly(DetailedPosition.ZAGUEIRO);
+        assertThat(profile.slotAssignments().get(stA.getId()).accepted())
+                .containsExactly(DetailedPosition.ATACANTE);
+        assertThat(profile.slotAssignments().get(stB.getId()).accepted())
+                .containsExactly(DetailedPosition.ATACANTE);
+        // The spare (3rd) zagueiro — the only player left over once every natural slot is filled —
+        // is the one who ends up improvising in the unfillable GK slot, not a stolen natural.
+        assertThat(profile.slotAssignments().get(zagC.getId())).isEqualTo(slots.get(0));
+    }
+
+    private static Player player(Position pos, DetailedPosition detailedPosition, int overall) {
+        Player p = Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", pos, 25, "BRA",
+                70, 70, 70, 70, pos == Position.GK ? 70 : 10, 70, overall);
+        p.setPositions(detailedPosition, List.of());
+        return p;
+    }
 }
