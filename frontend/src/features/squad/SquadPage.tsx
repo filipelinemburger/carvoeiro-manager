@@ -24,7 +24,7 @@ import { SlotPickerDialog } from './SlotPickerDialog'
 import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
 import { FORMATION_CODES, pitchSlots } from '../pitch/pitchSlots'
 import { assignSlots, type AssignablePlayer } from '../pitch/slotAssign'
-import { positionShort } from '../players/positionLabels'
+import { DETAILED_POSITION_SHORT, positionShort } from '../players/positionLabels'
 import {
   ARCHETYPE_LABEL, FOCUS_LABEL, ARCHETYPES_FOR_POSITION, FOCUSES_FOR, defaultArchetypeFor,
   parseFamiliarRoles, archetypesByFamiliarity, bestFamiliarArchetypeFor,
@@ -103,9 +103,6 @@ const INTENSITY_LABEL: Record<TrainingIntensity, string> = {
   NORMAL: 'Normal',
   INTENSA: 'Intensa',
 }
-
-// Championship-Manager-style squad-slot abbreviation shown on the selection button.
-const POS_ABBR: Record<PlayerResponse['position'], string> = { GK: 'GK', DEF: 'DC', MID: 'MC', ATT: 'AT' }
 
 // Criciúma yellow — every starter's selection button.
 const CRICIUMA_YELLOW = '#f7d417'
@@ -682,8 +679,11 @@ export function SquadPage() {
     return <Chip size="small" color="warning" label="Listado" sx={{ ml: 0.75, height: 20 }} />
   }
 
-  // The squad-selection button: a starter is Criciúma yellow with their slot label
-  // (GK/DC/MC/AT); a substitute is grey ("Sub N"); an unpicked player is white with a "+".
+  // The squad-selection button: a starter is Criciúma yellow with the label of the SLOT they
+  // occupy; a substitute is grey ("Sub N"); an unpicked player is white with a "+".
+  // The slot label — not the player's own position — is what makes an improvised starter
+  // legible here: a ZAG fielded at left-back reads "LE" in this column and "ZAG" in Pos, the
+  // same mismatch the pitch marks with its amber "Fora de posição" tint.
   function statusButton(player: PlayerResponse) {
     const inv = involvementOf(player.id)
     const base = { minWidth: 60, px: 1, fontWeight: 800 }
@@ -691,7 +691,7 @@ export function SquadPage() {
       return (
         <Button size="small" variant="contained" onClick={() => cyclePlayer(player)} aria-label={`Escalar ${player.name}`}
           sx={{ ...base, bgcolor: CRICIUMA_YELLOW, color: '#111', '&:hover': { bgcolor: '#e3c200' } }}>
-          {positionShort(player, POS_ABBR)}
+          {DETAILED_POSITION_SHORT[positionForRole(player)]}
         </Button>
       )
     }

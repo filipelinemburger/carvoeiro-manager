@@ -43,13 +43,18 @@ function distanceToSlot(p: AssignablePlayer, accepted: DetailedPosition[]): numb
  * primary or alternate, accepted by the slot — in the initial pool, ties by slot index); each
  * slot takes the best remaining NATURAL candidate by overall desc then id desc — a genuine
  * natural always beats a higher-rated improviser. Only when no natural candidate remains does a
- * slot fall back to the closest player by tactical distance (same tie-break). Deterministic for a
- * given (players, formation).
+ * slot fall back to the closest player by tactical distance (same tie-break). A slot with ZERO
+ * naturals sorts LAST, not first: it is unfillable rather than scarce, so nothing can starve it,
+ * and letting it go first only lets its distance fallback steal a natural another slot needs.
+ * Deterministic for a given (players, formation).
  */
 export function assignSlots(players: AssignablePlayer[], formation: string): Record<string, number> {
   const slots = pitchSlots(formation)
   const tier1Count = slots.map(slot => players.filter(p => isNatural(p, slot.accepted)).length)
-  const order = slots.map((_, i) => i).sort((a, b) => tier1Count[a] - tier1Count[b] || a - b)
+  // Mirrors SlotAssigner's comparator exactly: zero-natural slots are pushed past every
+  // fillable slot; slots with >=1 natural keep ascending-count order, ties by slot index.
+  const rank = (i: number) => (tier1Count[i] === 0 ? Number.MAX_SAFE_INTEGER : tier1Count[i])
+  const order = slots.map((_, i) => i).sort((a, b) => rank(a) - rank(b) || a - b)
   const byRating = (a: AssignablePlayer, b: AssignablePlayer) =>
     b.overall - a.overall || b.id.localeCompare(a.id)
   const available = [...players]

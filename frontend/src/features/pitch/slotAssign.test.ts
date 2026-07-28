@@ -83,8 +83,10 @@ describe('assignSlots', () => {
   })
 
   it('falls back to the tactically closest player when no natural candidate exists for a slot', () => {
-    // Remove the only natural VOLANTE; the highest-rated ZAGUEIRO (tactical distance 1) fills
-    // the VOL slot via distance fallback instead of an arbitrary "anyone" pick.
+    // Remove the only natural VOLANTE, so the VOL slot has zero naturals and is filled last from
+    // whoever is left. The leftover here is a ZAGUEIRO (tactical distance 1) rather than an
+    // attacker — the fallback still picks the closest player, just from genuine leftovers, and
+    // the two real zagueiros keep the centre-back slots they are natural for.
     const players: AssignablePlayer[] = [
       ...wellFormed442.filter(x => x.id !== 'vol'),
       p('extraZag', 'DEF', 'ZAGUEIRO', 50),
@@ -92,6 +94,33 @@ describe('assignSlots', () => {
     const result = assignSlots(players, '4-4-2')
     const slots = pitchSlots('4-4-2')
     const volSlotIndex = slots.findIndex(s => s.accepted.includes('VOLANTE'))
-    expect(result['z1']).toBe(volSlotIndex)
+    const zagSlots = slots.map((s, i) => ({ s, i })).filter(x => x.s.accepted.includes('ZAGUEIRO')).map(x => x.i)
+
+    expect(result['extraZag']).toBe(volSlotIndex)
+    expect(zagSlots).toContain(result['z1'])
+    expect(zagSlots).toContain(result['z2'])
+  })
+
+  it('a zero-natural slot never steals another slot\'s only natural', () => {
+    // Mirrors the backend SlotAssignerNaturalFirstTest regression: with no keeper in the pool the
+    // GK slot has ZERO naturals. Sorted "scarcest first" by raw count it would run before every
+    // other slot and its distance fallback would grab a genuine natural — here the sole
+    // LATERAL_ESQUERDO — leaving the LE slot to an improviser. Zero-natural slots must sort LAST.
+    // Every outfielder is distance 3 from GOLEIRO, so the GK fallback ties on distance and
+    // breaks by overall desc — making the sole LATERAL_ESQUERDO the top-rated player is what
+    // puts the two rules in conflict.
+    const players: AssignablePlayer[] = [
+      ...wellFormed442.filter(x => x.id !== 'gk' && x.id !== 'le'),
+      p('le', 'DEF', 'LATERAL_ESQUERDO', 99),
+      p('spareZag', 'DEF', 'ZAGUEIRO', 40),
+    ]
+    const result = assignSlots(players, '4-4-2')
+    const slots = pitchSlots('4-4-2')
+    const leSlotIndex = slots.findIndex(s => s.accepted.includes('LATERAL_ESQUERDO'))
+    const gkSlotIndex = slots.findIndex(s => s.accepted.includes('GOLEIRO'))
+
+    expect(result['le']).toBe(leSlotIndex)
+    // The improvised keeper is a leftover, never a slot's only natural.
+    expect(Object.keys(result).find(id => result[id] === gkSlotIndex)).toBe('spareZag')
   })
 })

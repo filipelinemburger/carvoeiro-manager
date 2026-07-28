@@ -190,6 +190,35 @@ describe('SquadPage', () => {
     expect(screen.getAllByText('DEF').length).toBeGreaterThan(0)
   })
 
+  it('labels a starter with the slot they occupy, not their own position', async () => {
+    // DEF1 is a LATERAL_ESQUERDO improvised into slot 2 of 4-3-3 — a centre-back slot. The
+    // Escalação chip must say where he PLAYS ("ZAG"); only the Pos column says what he is ("LE").
+    // Before this, both columns showed "LE" and the improvisation was invisible in the table.
+    mockGetLineup.mockResolvedValue({
+      lineupId: 'l-1', clubId: 'club-1', formation: '4-3-3',
+      starters: [
+        { playerId: GK.id, role: 'GOALKEEPER', instruction: null, slotIndex: 0 },
+        { playerId: DEF2.id, role: 'FULLBACK', instruction: null, slotIndex: 1 },
+        { playerId: DEF1.id, role: 'DEFENDER', instruction: null, slotIndex: 2 },
+        { playerId: DEF3.id, role: 'DEFENDER', instruction: null, slotIndex: 3 },
+        { playerId: DEF4.id, role: 'FULLBACK', instruction: null, slotIndex: 4 },
+        { playerId: MID1.id, role: 'HOLDING', instruction: null, slotIndex: 5 },
+        { playerId: MID2.id, role: 'BOX_TO_BOX', instruction: null, slotIndex: 6 },
+        { playerId: MID3.id, role: 'PLAYMAKER', instruction: null, slotIndex: 7 },
+        { playerId: ATT1.id, role: 'WINGER', instruction: null, slotIndex: 8 },
+        { playerId: ATT2.id, role: 'POACHER', instruction: null, slotIndex: 9 },
+        { playerId: ATT3.id, role: 'WINGER', instruction: null, slotIndex: 10 },
+      ],
+      bench: [],
+    })
+    renderWithProviders()
+
+    await screen.findAllByText('Defensor Um')
+    expect(pickBtn('Defensor Um')).toHaveTextContent('ZAG')
+    // A natural starter still reads as their own position: DEF4 sits in slot 4 (LE).
+    expect(pickBtn('Defensor Quatro')).toHaveTextContent('LE')
+  })
+
   it('renders the formation pitch with the selected XI', async () => {
     mockGetLineup.mockResolvedValue({
       lineupId: 'l-1', clubId: 'club-1', formation: '4-4-2',
@@ -391,7 +420,8 @@ describe('SquadPage', () => {
     for (const player of [ATT1, ATT2, ATT3]) {
       fireEvent.click(pickBtn(player.name))
     }
-    expect(pickBtn('atacante um')).toHaveTextContent('AT')
+    // The chip names the SLOT, so a 4-3-3 attacker reads as one of that line's slots.
+    expect(pickBtn('atacante um')).toHaveTextContent(/^(PD|ATA|PE)$/)
 
     // The attacking line is full, so a 4th attacker can't take a starting slot — the click
     // sends them to the bench instead.
@@ -414,7 +444,7 @@ describe('SquadPage', () => {
     await waitFor(() => screen.getByText('Goleiro Dois'))
 
     fireEvent.click(pickBtn('goleiro teste'))
-    expect(pickBtn('goleiro teste')).toHaveTextContent('GK')
+    expect(pickBtn('goleiro teste')).toHaveTextContent('GOL')
 
     // Only one keeper can start, so clicking a second keeper can't take the GK slot — they go
     // to the bench instead.
@@ -572,11 +602,11 @@ describe('SquadPage', () => {
     renderWithProviders()
     // Once the saved lineup resolves, the formation select reflects it (not the 4-3-3 default).
     await waitFor(() => expect(screen.getByLabelText(/formação/i)).toHaveValue('4-4-2'))
-    expect(pickBtn('goleiro teste')).toHaveTextContent('GK')
-    // DEF1 carries a detailed position (LATERAL_ESQUERDO) → its slot button shows the detailed "LE".
+    expect(pickBtn('goleiro teste')).toHaveTextContent('GOL')
+    // DEF1 is a LATERAL_ESQUERDO, so slot assignment puts him in the left-back slot: "LE".
     expect(pickBtn('defensor um')).toHaveTextContent('LE')
-    // A defender without a detailed position falls back to the coarse slot abbr "DC".
-    expect(pickBtn('defensor dois')).toHaveTextContent('DC')
+    // A defender with no detailed position takes whichever back-four slot is left over.
+    expect(pickBtn('defensor dois')).toHaveTextContent(/^(LD|ZAG|LE)$/)
     // A complete, all-eligible XI → saving is enabled.
     expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
   })
@@ -621,7 +651,7 @@ describe('SquadPage', () => {
     // A complete, valid 4-3-3 is picked, so saving is enabled.
     expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
     // The higher-rated keeper (Goleiro Dois, 75) beats Goleiro Teste (72), so he starts…
-    expect(pickBtn('goleiro dois')).toHaveTextContent('GK')
+    expect(pickBtn('goleiro dois')).toHaveTextContent('GOL')
     // …and Goleiro Teste is left unpicked.
     expect(pickBtn('goleiro teste')).toHaveTextContent('+')
   })
