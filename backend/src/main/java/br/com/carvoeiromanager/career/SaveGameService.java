@@ -10,6 +10,7 @@ import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.finance.FinanceCalculator;
 import br.com.carvoeiromanager.player.AttributeDeriver;
 import br.com.carvoeiromanager.player.Attributes;
+import br.com.carvoeiromanager.player.DetailedPosition;
 import br.com.carvoeiromanager.player.OverallCalculator;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
@@ -154,6 +155,7 @@ public class SaveGameService {
                 Player player = Player.create(
                         saveGame.getId(), club.getId(), seedPlayer.name(), position,
                         seedPlayer.age(), seedPlayer.nationality(), attributes, overall);
+                applyResearchedPositionsAndRoles(player, seedPlayer);
                 player.setWage(financeCalculator.weeklyWage(overall, seedPlayer.age()));
                 entityManager.persist(player);
                 squad.add(player);
@@ -195,6 +197,7 @@ public class SaveGameService {
                             seedPlayer.tackling(), seedPlayer.goalkeeping(), seedPlayer.stamina(), overall);
             Player freeAgent = Player.create(saveGame.getId(), null, seedPlayer.name(), position,
                     seedPlayer.age(), seedPlayer.nationality(), attributes, overall);
+            applyResearchedPositionsAndRoles(freeAgent, seedPlayer);
             entityManager.persist(freeAgent);
         }
 
@@ -286,6 +289,23 @@ public class SaveGameService {
             return "CONTRA_ATAQUE";
         }
         return "EQUILIBRADO";
+    }
+
+    /**
+     * Applies the researched real-world positions/roles (spec §Task 6) on top of a freshly
+     * constructed player, overriding the constructor's id-seeded defaults. A player without
+     * researched data (positions/roles absent or empty in the seed) keeps those defaults —
+     * this is deliberate, not a bug: the setters consume no RNG, so determinism is preserved.
+     */
+    private void applyResearchedPositionsAndRoles(Player player, SeedPlayer seedPlayer) {
+        if (seedPlayer.positions() != null && !seedPlayer.positions().isEmpty()) {
+            List<DetailedPosition> researched = seedPlayer.positions().stream()
+                    .map(DetailedPosition::valueOf).toList();
+            player.setPositions(researched.get(0), researched.subList(1, researched.size()));
+        }
+        if (seedPlayer.roles() != null && !seedPlayer.roles().isEmpty()) {
+            player.setFamiliarRoles(seedPlayer.roles());
+        }
     }
 
     /** All of a user's careers, most-recently-played first (falling back to creation time for
