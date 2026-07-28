@@ -578,11 +578,14 @@ public class LineupService {
     /**
      * Parses and validates each selected player's {@link RoleAssignment} (archetype + optional focus).
      *
-     * <p>An absent focus means "the archetype's canonical default". Validity is measured against the
-     * <b>slot</b> when the starter carries an explicit {@code slotIndex} — the manager may improvise
-     * any player anywhere (spec §5.1), but the role they play must make sense for the spot on the
-     * pitch. Without a slot (legacy requests, bench rows) it is measured against the player's own
-     * playable {@link Player#positions()}.
+     * <p>An absent focus defaults to the archetype's default for the resolved position — see
+     * {@link RoleArchetype#defaultFocusFor(DetailedPosition)} — falling back to the archetype's
+     * position-independent {@link RoleArchetype#canonicalDefaultFocus()} only when no position can be
+     * resolved at all (the defensive empty-candidates edge case below). Validity is measured against
+     * the <b>slot</b> when the starter carries an explicit {@code slotIndex} — the manager may
+     * improvise any player anywhere (spec §5.1), but the role they play must make sense for the spot
+     * on the pitch. Without a slot (legacy requests, bench rows) it is measured against the player's
+     * own playable {@link Player#positions()}.
      */
     private Map<UUID, RoleAssignment> validateAndParseAssignments(List<LineupStarter> starters,
                                                                   List<Player> clubPlayers,
@@ -592,14 +595,13 @@ public class LineupService {
         Map<UUID, RoleAssignment> resolved = new HashMap<>();
         for (LineupStarter starter : starters) {
             RoleArchetype archetype = parseArchetype(starter.role());
-            RoleFocus focus = parseFocus(starter.focus(), archetype);
             // player is guaranteed non-null in practice: validatePlayersOwnedByClub runs before this
             // and rejects any starter not in clubPlayers. The guard is defensive only.
             Player player = byId.get(starter.playerId());
             List<DetailedPosition> against = candidatePositions(starter, player, slots);
-            if (!against.isEmpty()) {
-                validateAgainstPositions(archetype, focus, against);
-            }
+            RoleFocus focus = against.isEmpty()
+                    ? parseFocusOrCanonicalDefault(starter.focus(), archetype)
+                    : resolveAndValidateFocus(archetype, starter.focus(), against);
             resolved.put(starter.playerId(), new RoleAssignment(archetype, focus));
         }
         return resolved;
@@ -618,20 +620,31 @@ public class LineupService {
         return player == null ? List.of() : player.positions();
     }
 
-    /** The archetype must be valid for at least one candidate position, and the focus valid there. */
-    private void validateAgainstPositions(RoleArchetype archetype, RoleFocus focus,
-                                          List<DetailedPosition> candidates) {
+    /**
+     * The archetype must be valid for at least one candidate position. An absent focus resolves to
+     * {@link RoleArchetype#defaultFocusFor(DetailedPosition)} of the first such position (position-
+     * specific defaults can differ from archetype to archetype — e.g. PLAYMAKER defaults to ATTACK at
+     * MEIA_CENTRAL but BALANCED at MEIA_ARMADOR). An explicit focus must still be valid for at least
+     * one playable candidate position, exactly as before.
+     */
+    private RoleFocus resolveAndValidateFocus(RoleArchetype archetype, String rawFocus,
+                                              List<DetailedPosition> candidates) {
         List<DetailedPosition> playable = candidates.stream().filter(archetype::validFor).toList();
         if (playable.isEmpty()) {
             throw new ApiException(ErrorCode.INVALID_ROLE,
                     "Função " + archetype.label() + " não é válida para a posição "
                             + candidates.get(0).label());
         }
+        if (rawFocus == null || rawFocus.isBlank()) {
+            return archetype.defaultFocusFor(playable.get(0));
+        }
+        RoleFocus focus = parseExplicitFocus(rawFocus);
         boolean focusOk = playable.stream().anyMatch(pos -> archetype.focusesFor(pos).contains(focus));
         if (!focusOk) {
             throw new ApiException(ErrorCode.INVALID_ROLE,
                     "Foco " + focus.label() + " não é válido para a função " + archetype.label());
         }
+        return focus;
     }
 
     private RoleArchetype parseArchetype(String raw) {
@@ -642,11 +655,19 @@ public class LineupService {
         }
     }
 
-    /** A null/blank focus falls back to the archetype's canonical default. */
-    private RoleFocus parseFocus(String raw, RoleArchetype archetype) {
+    /**
+     * A null/blank focus falls back to the archetype's canonical default. Used only for the
+     * defensive edge case where no candidate position could be resolved at all — whenever a position
+     * is known, {@link #resolveAndValidateFocus} defaults to the position-specific focus instead.
+     */
+    private RoleFocus parseFocusOrCanonicalDefault(String raw, RoleArchetype archetype) {
         if (raw == null || raw.isBlank()) {
             return archetype.canonicalDefaultFocus();
         }
+        return parseExplicitFocus(raw);
+    }
+
+    private RoleFocus parseExplicitFocus(String raw) {
         try {
             return RoleFocus.valueOf(raw);
         } catch (IllegalArgumentException ex) {

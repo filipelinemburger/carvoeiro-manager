@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Covers {@link RoleArchetype}: the 10 legacy-mapped archetypes' weight-regression contract
- * against the retired {@link PlayerRole}, contribution math, the canonical-default-focus
+ * against the retired {@code PlayerRole}, contribution math, the canonical-default-focus
  * invariant, and {@link RoleFocus} lean bounds. The taxonomy shape itself (valid positions,
  * focus lists, defaults) is covered separately by {@code RoleArchetypeFutbinSyncTest}.
  */
@@ -99,6 +99,18 @@ class RoleArchetypeTest {
                     .as("%s canonicalDefaultFocus() %s should appear in at least one position's focus list",
                             archetype, archetype.canonicalDefaultFocus())
                     .isTrue();
+        }
+    }
+
+    @Test
+    void defaultFocusForEveryValidPositionIsInThatPositionsFocusList() {
+        for (RoleArchetype archetype : RoleArchetype.values()) {
+            for (DetailedPosition position : archetype.validPositions()) {
+                assertThat(archetype.focusesFor(position))
+                        .as("%s defaultFocusFor(%s) should be one of focusesFor(%s)",
+                                archetype, position, position)
+                        .contains(archetype.defaultFocusFor(position));
+            }
         }
     }
 

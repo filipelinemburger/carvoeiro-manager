@@ -295,6 +295,71 @@ class LineupServiceIT {
                 });
     }
 
+    // --- (g.1) An omitted focus defaults to the POSITION-specific default, not the archetype's
+    // canonical default — PLAYMAKER's canonical focus is BALANCED, which is illegal at MEIA_CENTRAL
+    // ([ATTACK, ROAMING]); its MEIA_CENTRAL default is ATTACK. Regression for the bug where an
+    // omitted focus on a PLAYMAKER/MEIA_CENTRAL starter was wrongly rejected with a 422.
+
+    @Test
+    void playmakerWithNoFocusOnAMeiaCentralStarterDefaultsToThePositionFocus() {
+        Career career = createCareer();
+        UUID clubId = career.managedClubId();
+        List<LineupStarter> starters = new java.util.ArrayList<>(buildValidStarters(clubId));
+        int idx = firstNonGkIndex(starters);
+        UUID targetId = starters.get(idx).playerId();
+        Player target = playerRepository.findById(targetId).orElseThrow();
+        target.setPositions(DetailedPosition.MEIA_CENTRAL, List.of());
+        playerRepository.save(target);
+        // No focus supplied -> must default to PLAYMAKER's MEIA_CENTRAL default (ATTACK), not the
+        // archetype's canonical default (BALANCED, illegal here).
+        starters.set(idx, new LineupStarter(targetId, "PLAYMAKER"));
+
+        lineupService.setLineup(career.id(), clubId,
+                new SetLineupRequest("4-4-2", starters, null), career.userId());
+
+        // setLineup's response echoes the raw request (a separate, known, out-of-scope asymmetry);
+        // read back via getLineup to see what was actually resolved and persisted.
+        LineupResponse loaded = lineupService.getLineup(career.id(), clubId, career.userId()).orElseThrow();
+        LineupStarter persisted = loaded.starters().stream()
+                .filter(s -> s.playerId().equals(targetId)).findFirst().orElseThrow();
+        assertThat(persisted.role()).isEqualTo("PLAYMAKER");
+        assertThat(persisted.focus()).isEqualTo("ATTACK");
+    }
+
+    @Test
+    void explicitlyIllegalFocusForThePositionIsStillRejected() {
+        Career career = createCareer();
+        UUID clubId = career.managedClubId();
+        List<LineupStarter> starters = new java.util.ArrayList<>(buildValidStarters(clubId));
+        int idx = firstNonGkIndex(starters);
+        UUID targetId = starters.get(idx).playerId();
+        Player target = playerRepository.findById(targetId).orElseThrow();
+        target.setPositions(DetailedPosition.MEIA_CENTRAL, List.of());
+        playerRepository.save(target);
+        // BALANCED is PLAYMAKER's canonical default, but explicitly requesting it at MEIA_CENTRAL
+        // (only [ATTACK, ROAMING] are legal there) must still be rejected.
+        starters.set(idx, new LineupStarter(targetId, "PLAYMAKER", "BALANCED", null, null));
+
+        assertThatThrownBy(() -> lineupService.setLineup(career.id(), clubId,
+                new SetLineupRequest("4-4-2", starters, null), career.userId()))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException apiEx = (ApiException) ex;
+                    assertThat(apiEx.getCode()).isEqualTo(ErrorCode.INVALID_ROLE);
+                    assertThat(apiEx.getStatus().value()).isEqualTo(422);
+                });
+    }
+
+    /** The index of the first starter whose player is not the goalkeeper. */
+    private int firstNonGkIndex(List<LineupStarter> starters) {
+        for (int i = 0; i < starters.size(); i++) {
+            if (!isGk(starters.get(i).playerId())) {
+                return i;
+            }
+        }
+        throw new IllegalStateException("No non-GK starter found");
+    }
+
     // --- (h) getLineup returns the saved formation + starters with roles ---
 
     @Test
