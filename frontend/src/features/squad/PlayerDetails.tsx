@@ -161,7 +161,7 @@ export function PlayerDetails({ player, onClose, saveGameId, lineupControl, inst
 
             {lineupControl && (
               <Box sx={{ mb: 1.5 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.25 }}>Função</Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.25 }}>Escalação</Typography>
                 {lineupControl}
               </Box>
             )}

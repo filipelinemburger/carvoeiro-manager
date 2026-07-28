@@ -10,6 +10,10 @@ import type { DetailedPosition } from '../../api/types'
 // pitch's rendered width; farther away, the token snaps back.
 const DROP_RADIUS_FRACTION = 0.12
 
+// A pointer interaction that moves less than this many pixels between down and up resolves as a
+// tap (fires onSlotClick) rather than a drag (fires onSwap).
+const CLICK_MOVE_THRESHOLD = 6
+
 export type PlacedPlayer = {
   id: string
   surname: string
@@ -77,10 +81,11 @@ function place(team: TeamOnPitch): Positioned[] {
 
 type Drag = { fromSlot: number; startX: number; startY: number; x: number; y: number }
 
-function TeamLayer({ team, mirror, onSwap, containerRef }: {
+function TeamLayer({ team, mirror, onSwap, onSlotClick, containerRef }: {
   team: TeamOnPitch
   mirror: boolean
   onSwap?: (fromSlot: number, toSlot: number) => void
+  onSlotClick?: (slotIndex: number) => void
   containerRef?: React.RefObject<HTMLDivElement | null>
 }) {
   const colors = tokenColors(team.kit)
@@ -117,26 +122,36 @@ function TeamLayer({ team, mirror, onSwap, containerRef }: {
         const posLabel = DETAILED_POSITION_SHORT[slot.accepted[0]]
         const outOfPosition = !!player?.detailedPosition && !slot.accepted.includes(player.detailedPosition)
         const draggable = Boolean(onSwap) && !mirror && i !== 0 && player !== null
+        // Any slot (including GK and empties) is tappable when a click handler is supplied; a
+        // tap is resolved below by movement distance, not by whether the slot is draggable.
+        const tappable = Boolean(onSlotClick) && !mirror
+        const interactive = draggable || tappable
         const dragging = drag?.fromSlot === i
         return (
           <Box
             key={player?.id ?? `slot-${number}`}
             data-slot-index={i}
             data-drop-candidate={dropCandidate === i ? 'true' : undefined}
-            onPointerDown={draggable ? e => {
+            onPointerDown={interactive ? e => {
               e.currentTarget.setPointerCapture?.(e.pointerId)
               setDrag({ fromSlot: i, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY })
             } : undefined}
-            onPointerMove={draggable ? e => {
+            onPointerMove={interactive ? e => {
               setDrag(d => (d && d.fromSlot === i ? { ...d, x: e.clientX, y: e.clientY } : d))
             } : undefined}
-            onPointerUp={draggable ? e => {
+            onPointerUp={interactive ? e => {
               if (!drag || drag.fromSlot !== i) return
-              const target = dropTarget(e.clientX, e.clientY, i)
+              const moved = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY)
               setDrag(null)
+              if (moved <= CLICK_MOVE_THRESHOLD) {
+                onSlotClick?.(i)
+                return
+              }
+              if (!draggable) return
+              const target = dropTarget(e.clientX, e.clientY, i)
               if (target !== null) onSwap?.(i, target)
             } : undefined}
-            onPointerCancel={draggable ? () => setDrag(null) : undefined}
+            onPointerCancel={interactive ? () => setDrag(null) : undefined}
             sx={{
               position: 'absolute',
               left: `${xPct}%`,
@@ -145,8 +160,8 @@ function TeamLayer({ team, mirror, onSwap, containerRef }: {
                 ? `translate(-50%, -50%) translate(${drag.x - drag.startX}px, ${drag.y - drag.startY}px)`
                 : 'translate(-50%, -50%)',
               zIndex: dragging ? 10 : undefined,
-              cursor: draggable ? 'grab' : undefined,
-              touchAction: draggable ? 'none' : undefined,
+              cursor: draggable ? 'grab' : tappable ? 'pointer' : undefined,
+              touchAction: interactive ? 'none' : undefined,
               ...(dropCandidate === i && { borderRadius: 1, boxShadow: '0 0 0 3px #f7d417' }),
             }}
           >
@@ -171,7 +186,7 @@ function TeamLayer({ team, mirror, onSwap, containerRef }: {
   )
 }
 
-export function Pitch({ home, away, onSwap }: {
+export function Pitch({ home, away, onSwap, onSlotClick }: {
   home: TeamOnPitch
   away?: TeamOnPitch
   /**
@@ -179,6 +194,12 @@ export function Pitch({ home, away, onSwap }: {
    * target slot indexes on a successful drop; the parent decides swap-vs-move.
    */
   onSwap?: (fromSlot: number, toSlot: number) => void
+  /**
+   * Fired with a home-team slot index on a TAP — a pointer interaction that resolves as a click
+   * rather than a drag (see `CLICK_MOVE_THRESHOLD`). Fires for every home slot, including the GK
+   * slot and empty placeholders; dragging (via `onSwap`) is unaffected.
+   */
+  onSlotClick?: (slotIndex: number) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   return (
@@ -196,7 +217,7 @@ export function Pitch({ home, away, onSwap }: {
           <rect x={28} y={129} width={44} height={18} />
         </g>
       </Box>
-      <TeamLayer team={home} mirror={false} onSwap={onSwap} containerRef={containerRef} />
+      <TeamLayer team={home} mirror={false} onSwap={onSwap} onSlotClick={onSlotClick} containerRef={containerRef} />
       {away && <TeamLayer team={away} mirror />}
     </Box>
   )

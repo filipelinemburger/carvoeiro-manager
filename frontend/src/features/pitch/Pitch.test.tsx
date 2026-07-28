@@ -234,3 +234,89 @@ describe('drag and drop', () => {
     expect(container.querySelector('[data-drop-candidate="true"]')).toBeNull()
   })
 })
+
+describe('tap vs drag (onSlotClick)', () => {
+  const kit = { primary: '#f7d417', secondary: '#111111' }
+
+  function fullXi(): PlacedPlayer[] {
+    const mk = (id: string, position: 'GK' | 'DEF' | 'MID' | 'ATT', slotIndex: number): PlacedPlayer =>
+      ({ id, surname: id, position, detailedPosition: null, fitness: 100, slotIndex })
+    return [
+      mk('gk', 'GK', 0),
+      mk('d1', 'DEF', 1), mk('d2', 'DEF', 2), mk('d3', 'DEF', 3), mk('d4', 'DEF', 4),
+      mk('m1', 'MID', 5), mk('m2', 'MID', 6), mk('m3', 'MID', 7),
+      mk('a1', 'ATT', 8), mk('a2', 'ATT', 9), mk('a3', 'ATT', 10),
+    ]
+  }
+
+  function renderTappable(players = fullXi(), onSwap = vi.fn()) {
+    const onSlotClick = vi.fn()
+    const { container } = render(
+      <Pitch home={{ formation: '4-3-3', kit, showNames: true, players }} onSwap={onSwap} onSlotClick={onSlotClick} />,
+    )
+    const pitch = screen.getByTestId('pitch')
+    vi.spyOn(pitch, 'getBoundingClientRect').mockReturnValue({
+      left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0,
+      toJSON: () => ({}),
+    } as DOMRect)
+    const token = (slot: number) => container.querySelector(`[data-slot-index="${slot}"]`)!
+    return { onSwap, onSlotClick, container, token }
+  }
+
+  it('a tap (down/up with no meaningful movement) on an outfield slot fires onSlotClick, not onSwap', () => {
+    const { onSwap, onSlotClick, token } = renderTappable()
+    fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+    fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+    expect(onSlotClick).toHaveBeenCalledWith(1)
+    expect(onSwap).not.toHaveBeenCalled()
+  })
+
+  it('a tap on the GK slot fires onSlotClick even though the GK token is never draggable', () => {
+    const { onSwap, onSlotClick, token } = renderTappable()
+    fireEvent.pointerDown(token(0), { pointerId: 1, clientX: 200, clientY: 564 })
+    fireEvent.pointerUp(token(0), { pointerId: 1, clientX: 200, clientY: 564 })
+    expect(onSlotClick).toHaveBeenCalledWith(0)
+    expect(onSwap).not.toHaveBeenCalled()
+  })
+
+  it('a tap on an empty slot fires onSlotClick', () => {
+    const players = fullXi().filter(p => p.id !== 'a3') // striker slot (10) left empty
+    const { onSwap, onSlotClick, token } = renderTappable(players)
+    fireEvent.pointerDown(token(10), { pointerId: 1, clientX: 200, clientY: 192 })
+    fireEvent.pointerUp(token(10), { pointerId: 1, clientX: 200, clientY: 192 })
+    expect(onSlotClick).toHaveBeenCalledWith(10)
+    expect(onSwap).not.toHaveBeenCalled()
+  })
+
+  it('a genuine drag (movement past the click threshold) still fires onSwap, not onSlotClick', () => {
+    const { onSwap, onSlotClick, token } = renderTappable()
+    fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+    fireEvent.pointerMove(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
+    fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
+    expect(onSwap).toHaveBeenCalledWith(1, 9)
+    expect(onSlotClick).not.toHaveBeenCalled()
+  })
+
+  it('dragging still works exactly as before when onSlotClick is also supplied', () => {
+    const { onSwap, token } = renderTappable()
+    fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+    fireEvent.pointerMove(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
+    expect(token(9)).toHaveAttribute('data-drop-candidate', 'true')
+    fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
+    expect(onSwap).toHaveBeenCalledWith(1, 9)
+  })
+
+  it('onSlotClick is never fired by tapping a mirrored away-team token', () => {
+    const onSlotClick = vi.fn()
+    const away = { formation: '4-3-3', kit: { primary: '#003399', secondary: '#fff' }, showNames: true, players: fullXi() }
+    const { container } = render(
+      <Pitch home={{ formation: '4-3-3', kit, showNames: true, players: fullXi() }} away={away} onSlotClick={onSlotClick} />,
+    )
+    // Home renders first, away second — both share `data-slot-index`, so the second match for
+    // slot 1 is the away (mirrored) token.
+    const awayToken = container.querySelectorAll('[data-slot-index="1"]')[1]
+    fireEvent.pointerDown(awayToken, { pointerId: 1, clientX: 64, clientY: 474 })
+    fireEvent.pointerUp(awayToken, { pointerId: 1, clientX: 64, clientY: 474 })
+    expect(onSlotClick).not.toHaveBeenCalled()
+  })
+})

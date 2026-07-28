@@ -206,6 +206,52 @@ export function FOCUSES_FOR(archetype: RoleArchetype, position: DetailedPosition
   return MATRIX[archetype][position] ?? [CANONICAL_DEFAULT_FOCUS[archetype]]
 }
 
+/** archetype → familiarity level (2 = "++", 1 = "+"); absent = not familiar. */
+export type FamiliarityMap = Partial<Record<RoleArchetype, number>>
+
+/**
+ * Parses `PlayerResponse.familiarRoles` CSV-style tokens (e.g. "WINGBACK++", "FULLBACK+") into an
+ * archetype → familiarity level map. Mirrors the backend `Player.familiarRoles()` parsing exactly
+ * (level 2 for a "++" suffix, level 1 for a lone "+").
+ */
+export function parseFamiliarRoles(tokens?: string[] | null): FamiliarityMap {
+  const out: FamiliarityMap = {}
+  for (const token of tokens ?? []) {
+    const level = token.endsWith('++') ? 2 : 1
+    const archetype = token.replace(/\+{1,2}$/, '') as RoleArchetype
+    out[archetype] = level
+  }
+  return out
+}
+
+/**
+ * `ARCHETYPES_FOR_POSITION[position]`, reordered so familiar archetypes (per `familiarity`) come
+ * first — "++" before "+" before unfamiliar — ties keeping the underlying enum order. Used by the
+ * Função select so a player's own familiar roles surface at the top of their options.
+ */
+export function archetypesByFamiliarity(position: DetailedPosition, familiarity: FamiliarityMap): RoleArchetype[] {
+  return [...ARCHETYPES_FOR_POSITION[position]].sort((a, b) => (familiarity[b] ?? 0) - (familiarity[a] ?? 0))
+}
+
+/**
+ * The best FAMILIAR archetype valid for `position` from raw `familiarRoles` tokens: prefer "++"
+ * over "+"; among equal familiarity, the token listed first wins (ties broken by source order, not
+ * enum order). Falls back to `defaultArchetypeFor(position)` when no token is both familiar and
+ * valid for the position — used by "Selecionar melhores" to give each auto-picked player their
+ * best familiar role for the slot they land in.
+ */
+export function bestFamiliarArchetypeFor(tokens: string[] | undefined | null, position: DetailedPosition): RoleArchetype {
+  const valid = ARCHETYPES_FOR_POSITION[position]
+  let best: { archetype: RoleArchetype; level: number } | null = null
+  for (const token of tokens ?? []) {
+    const level = token.endsWith('++') ? 2 : 1
+    const archetype = token.replace(/\+{1,2}$/, '') as RoleArchetype
+    if (!valid.includes(archetype)) continue
+    if (!best || level > best.level) best = { archetype, level }
+  }
+  return best ? best.archetype : defaultArchetypeFor(position)
+}
+
 /**
  * The vanilla archetype a position falls back to when nothing is persisted/familiar. Mirrors the
  * backend `RoleArchetype.defaultFor` switch exactly.

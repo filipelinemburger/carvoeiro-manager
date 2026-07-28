@@ -13,18 +13,22 @@ import { getSquad, getLineup, setLineup, setTraining, renewContract, listPlayer,
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
-import type { PlayerResponse, RoleArchetype, DetailedPosition, PlayerInstruction, LineupStarter, TrainableAttribute, TrainingIntensity, TrainingAssignment, SquadResponse } from '../../api/types'
+import type { PlayerResponse, RoleArchetype, RoleFocus, DetailedPosition, PlayerInstruction, LineupStarter, TrainableAttribute, TrainingIntensity, TrainingAssignment, SquadResponse } from '../../api/types'
 import { TacticsPanel } from './TacticsPanel'
 import { PlayerDetails } from './PlayerDetails'
 import { FitnessBar } from './FitnessBar'
 import { MoodChip } from './MoodChip'
 import { teamMorale } from './morale'
 import { SEVERITY_LABEL } from './injurySeverity'
+import { SlotPickerDialog } from './SlotPickerDialog'
 import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
 import { FORMATION_CODES, pitchSlots } from '../pitch/pitchSlots'
 import { assignSlots, type AssignablePlayer } from '../pitch/slotAssign'
 import { positionShort } from '../players/positionLabels'
-import { ARCHETYPE_LABEL, defaultArchetypeFor } from '../players/roleLabels'
+import {
+  ARCHETYPE_LABEL, FOCUS_LABEL, ARCHETYPES_FOR_POSITION, FOCUSES_FOR, defaultArchetypeFor,
+  parseFamiliarRoles, archetypesByFamiliarity, bestFamiliarArchetypeFor,
+} from '../players/roleLabels'
 import { CARBON, ovrBadgeSx } from '../../muiTheme'
 
 const FORMATIONS = FORMATION_CODES
@@ -56,17 +60,6 @@ export const FORMATION_SHAPE: Record<string, Record<OutfieldPosition, number>> =
 
 // Display order for the squad list: goalkeepers, then defenders, midfielders, attackers.
 const POSITION_ORDER: Record<PlayerResponse['position'], number> = { GK: 0, DEF: 1, MID: 2, ATT: 3 }
-
-// The 10 legacy-mapped RoleArchetype names (same value ranges/weights as the retired PlayerRole),
-// still grouped by coarse band for this select — a detailed-position-aware role picker (12
-// positions × the full 30-archetype MATRIX) is the next task; this keeps today's behavior
-// compiling against the new type unchanged.
-const ROLES_BY_POSITION: Record<PlayerResponse['position'], RoleArchetype[]> = {
-  GK: ['GOALKEEPER'],
-  DEF: ['STOPPER', 'FULLBACK', 'BALL_PLAYING_DEFENDER'],
-  MID: ['HOLDING', 'BOX_TO_BOX', 'PLAYMAKER'],
-  ATT: ['POACHER', 'TARGET_FORWARD', 'WINGER'],
-}
 
 // Representative detailed position per coarse band, for a player without one (legacy payloads) —
 // feeds defaultArchetypeFor since a single archetype per LINE is no longer valid (e.g. FULLBACK
@@ -187,6 +180,9 @@ export function SquadPage() {
   // removing a substitute never renumbers the others — the hole is reused on the next add.
   const [bench, setBench] = useState<(string | null)[]>([])
   const [roles, setRoles] = useState<Record<string, RoleArchetype>>({})
+  // The role's focus, keyed by playerId; an absent entry falls back to the archetype's default
+  // for the player's (slot-derived) position — see `effectiveFocus`.
+  const [focuses, setFocuses] = useState<Record<string, RoleFocus>>({})
   // Per-player instruction keyed by playerId; '' is "Nenhuma" (no instruction). Kept in step with
   // `roles`: every place that seeds or clears a role does the same to the instruction.
   const [instructions, setInstructions] = useState<Record<string, PlayerInstruction | ''>>({})
@@ -200,6 +196,8 @@ export function SquadPage() {
   // playerId -> formation slot index (0 = GK). Keys ⊆ selected; values unique. The pitch
   // renders from this map and drag-and-drop edits it.
   const [slotByPlayerId, setSlotByPlayerId] = useState<Record<string, number>>({})
+  // The pitch slot index a tap opened the picker for; null when the picker is closed.
+  const [pickerSlot, setPickerSlot] = useState<number | null>(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['squad', saveGameId, clubId],
@@ -213,6 +211,32 @@ export function SquadPage() {
 
   const toAssignable = (p: PlayerResponse): AssignablePlayer =>
     ({ id: p.id, position: p.position, detailedPosition: p.detailedPosition, overall: p.overall })
+
+  // The detailed position Função/Foco are chosen against: a starter's ASSIGNED SLOT position,
+  // or a bench/unpicked player's own primary position (falling back to the coarse band's
+  // representative position for a legacy payload without one).
+  function positionForRole(player: PlayerResponse): DetailedPosition {
+    const slotIndex = slotByPlayerId[player.id]
+    const slot = slotIndex !== undefined ? slots[slotIndex] : undefined
+    return slot ? slot.accepted[0] : (player.detailedPosition ?? BAND_FALLBACK_POSITION[player.position])
+  }
+
+  // The role actually shown/saved for a player: their stored archetype if still valid for the
+  // position it's being judged against, else that position's vanilla default. Falling back this
+  // way (rather than persisting a correction) means a slot change — drag, swap, formation change,
+  // or the picker — never leaves a stale archetype invalid for the new position.
+  function effectiveArchetype(player: PlayerResponse): RoleArchetype {
+    const position = positionForRole(player)
+    const stored = roles[player.id]
+    return stored && ARCHETYPES_FOR_POSITION[position].includes(stored) ? stored : defaultArchetypeFor(position)
+  }
+
+  function effectiveFocus(player: PlayerResponse): RoleFocus {
+    const position = positionForRole(player)
+    const valid = FOCUSES_FOR(effectiveArchetype(player), position)
+    const stored = focuses[player.id]
+    return stored && valid.includes(stored) ? stored : valid[0]
+  }
 
   // Tracks the query cache (rather than a snapshot taken at click time) so the open dialog
   // reflects updates — e.g. an optimistic contract renewal — without the user closing/reopening.
@@ -243,6 +267,9 @@ export function SquadPage() {
       setFormation(lineup.formation)
       setSelected(lineup.starters.map(s => s.playerId))
       setRoles(Object.fromEntries(lineup.starters.map(s => [s.playerId, s.role])))
+      setFocuses(Object.fromEntries(
+        lineup.starters.filter((s): s is typeof s & { focus: RoleFocus } => Boolean(s.focus))
+          .map(s => [s.playerId, s.focus])))
       setInstructions(Object.fromEntries(lineup.starters.map(s => [s.playerId, s.instruction ?? ''])))
       setBench((lineup.bench ?? []).map(s => s.playerId))
       if (lineup.starters.every(s => s.slotIndex != null)) {
@@ -283,7 +310,8 @@ export function SquadPage() {
         const player = players.find(p => p.id === id)!
         return {
           playerId: id,
-          role: roles[id] ?? defaultRoleFor(player),
+          role: effectiveArchetype(player),
+          focus: effectiveFocus(player),
           instruction: instructions[id] || null,
           slotIndex,
         }
@@ -451,8 +479,16 @@ export function SquadPage() {
     }
   }
 
-  function changeRole(player: PlayerResponse, role: RoleArchetype) {
-    setRoles(prev => ({ ...prev, [player.id]: role }))
+  // Changing Função resets Foco to the new archetype's default for the player's position — an
+  // old focus can be meaningless (or simply not offered) for a different archetype.
+  function changeArchetype(player: PlayerResponse, archetype: RoleArchetype) {
+    setRoles(prev => ({ ...prev, [player.id]: archetype }))
+    const position = positionForRole(player)
+    setFocuses(prev => ({ ...prev, [player.id]: FOCUSES_FOR(archetype, position)[0] }))
+  }
+
+  function changeFocus(player: PlayerResponse, focus: RoleFocus) {
+    setFocuses(prev => ({ ...prev, [player.id]: focus }))
   }
 
   function changeInstruction(player: PlayerResponse, value: PlayerInstruction | '') {
@@ -473,30 +509,36 @@ export function SquadPage() {
     }))
   }
 
-  // Fills the XI with the highest-rated eligible players for each line of the current
-  // formation (1 GK + the formation's DEF/MID/ATT counts).
+  // Fills the XI natural-first: `assignSlots` (the same greedy natural-first best-fit used for
+  // hydration/formation-change) runs over the WHOLE eligible squad, so each slot gets the
+  // highest-rated genuinely natural candidate before falling back to the closest improviser —
+  // rather than the old per-line "top N by overall" cut. Each picked player then gets their best
+  // FAMILIAR archetype for the slot they land in (falling back to the vanilla default), and that
+  // archetype's own default focus.
   function autoPickBestXI() {
     setSaveSuccess(false)
-    const shape = FORMATION_SHAPE[formation]
-    const bestFor = (position: PlayerResponse['position'], count: number) =>
-      players
-        .filter(p => p.eligible && p.position === position)
-        .sort((a, b) => b.overall - a.overall)
-        .slice(0, count)
-    const picked = [
-      ...bestFor('GK', 1),
-      ...bestFor('DEF', shape.DEF),
-      ...bestFor('MID', shape.MID),
-      ...bestFor('ATT', shape.ATT),
-    ]
-    const pickedIds = picked.map(p => p.id)
+    const eligible = players.filter(p => p.eligible)
+    const newSlotByPlayerId = assignSlots(eligible.map(toAssignable), formation)
+    const pickedIds = Object.keys(newSlotByPlayerId)
+    const picked = pickedIds
+      .map(id => players.find(p => p.id === id))
+      .filter((p): p is PlayerResponse => Boolean(p))
     setSelected(pickedIds)
     // Any bench player promoted into the XI vacates their bench slot (keeps the rest stable).
     setBench(prev => prev.map(id => (id !== null && pickedIds.includes(id) ? null : id)))
-    setRoles(Object.fromEntries(picked.map(p => [p.id, defaultRoleFor(p)])))
+    const newRoles: Record<string, RoleArchetype> = {}
+    const newFocuses: Record<string, RoleFocus> = {}
+    for (const p of picked) {
+      const position = slots[newSlotByPlayerId[p.id]].accepted[0]
+      const archetype = bestFamiliarArchetypeFor(p.familiarRoles, position)
+      newRoles[p.id] = archetype
+      newFocuses[p.id] = FOCUSES_FOR(archetype, position)[0]
+    }
+    setRoles(newRoles)
+    setFocuses(newFocuses)
     // Fresh auto-pick: every picked player starts with no personal instruction.
     setInstructions(Object.fromEntries(picked.map(p => [p.id, ''])))
-    setSlotByPlayerId(assignSlots(picked.map(toAssignable), formation))
+    setSlotByPlayerId(newSlotByPlayerId)
   }
 
   // Empties the whole selection.
@@ -504,6 +546,7 @@ export function SquadPage() {
     setSaveSuccess(false)
     setSelected([])
     setRoles({})
+    setFocuses({})
     setInstructions({})
     setBench([])
     setSlotByPlayerId({})
@@ -532,6 +575,49 @@ export function SquadPage() {
       if (toId) next[toId] = fromSlot
       return next
     })
+  }
+
+  // Assigns `player` (from the slot picker) to `slotIndex` — writes into `slotByPlayerId` exactly
+  // like a drop does. If the slot already holds someone, the two SWAP places rather than the
+  // occupant being dropped: a starter elsewhere trades slots; a bench/unpicked player instead
+  // hands the occupant their own spot (the bench slot they came from, or the next free bench
+  // place — capped at 9 — when the picked player wasn't on the pitch or bench at all).
+  function pickForSlot(slotIndex: number, player: PlayerResponse) {
+    setSaveSuccess(false)
+    const occupantId = Object.keys(slotByPlayerId).find(id => slotByPlayerId[id] === slotIndex)
+    if (occupantId === player.id) { setPickerSlot(null); return }
+
+    const pickedSlot = slotByPlayerId[player.id]
+    const pickedBenchIndex = bench.indexOf(player.id)
+
+    const nextSlotByPlayerId = { ...slotByPlayerId, [player.id]: slotIndex }
+    let nextSelected = selected.includes(player.id) ? selected : [...selected, player.id]
+    const nextBench = [...bench]
+    if (pickedBenchIndex >= 0) nextBench[pickedBenchIndex] = null
+
+    if (occupantId) {
+      if (pickedSlot !== undefined) {
+        // The picked player was a starter elsewhere: a genuine swap of formation slots.
+        nextSlotByPlayerId[occupantId] = pickedSlot
+      } else {
+        // Nowhere to hand the slot back — the displaced occupant is bumped to the bench
+        // (the picked player's own bench spot, if they had one) instead of dropped outright.
+        delete nextSlotByPlayerId[occupantId]
+        nextSelected = nextSelected.filter(id => id !== occupantId)
+        if (pickedBenchIndex >= 0) {
+          nextBench[pickedBenchIndex] = occupantId
+        } else {
+          const hole = nextBench.findIndex(id => id === null)
+          if (hole >= 0) nextBench[hole] = occupantId
+          else if (nextBench.length < 9) nextBench.push(occupantId)
+        }
+      }
+    }
+
+    setSlotByPlayerId(nextSlotByPlayerId)
+    setSelected(nextSelected)
+    setBench(nextBench)
+    setPickerSlot(null)
   }
 
   // ── Per-player controls, shared by the desktop table and the mobile cards ──
@@ -615,17 +701,43 @@ export function SquadPage() {
     )
   }
 
-  function roleSelect(player: PlayerResponse) {
+  // Função options: the archetypes valid for the player's position (their ASSIGNED SLOT when a
+  // starter, else their own primary position), familiar ones first — marked ★★ (fully familiar,
+  // a "++" token) or ★ (somewhat, a "+" token).
+  function funcaoSelect(player: PlayerResponse) {
+    const position = positionForRole(player)
+    const familiarity = parseFamiliarRoles(player.familiarRoles)
+    const options = archetypesByFamiliarity(position, familiarity)
     return (
       <NativeSelect
-        value={roles[player.id] ?? defaultRoleFor(player)}
-        onChange={e => changeRole(player, e.target.value as RoleArchetype)}
+        value={effectiveArchetype(player)}
+        onChange={e => changeArchetype(player, e.target.value as RoleArchetype)}
         inputProps={{ 'aria-label': `Função de ${player.name}` }}
         sx={{ fontSize: '0.85rem' }}
       >
-        {ROLES_BY_POSITION[player.position].map(r => (
-          <option key={r} value={r}>{ARCHETYPE_LABEL[r]}</option>
-        ))}
+        {options.map(r => {
+          const level = familiarity[r] ?? 0
+          const star = level === 2 ? ' ★★' : level === 1 ? ' ★' : ''
+          return <option key={r} value={r}>{ARCHETYPE_LABEL[r]}{star}</option>
+        })}
+      </NativeSelect>
+    )
+  }
+
+  // Foco options: the focuses valid for the player's current (effective) archetype at that
+  // same position, default first.
+  function focoSelect(player: PlayerResponse) {
+    const position = positionForRole(player)
+    const archetype = effectiveArchetype(player)
+    const options = FOCUSES_FOR(archetype, position)
+    return (
+      <NativeSelect
+        value={effectiveFocus(player)}
+        onChange={e => changeFocus(player, e.target.value as RoleFocus)}
+        inputProps={{ 'aria-label': `Foco de ${player.name}` }}
+        sx={{ fontSize: '0.85rem' }}
+      >
+        {options.map(f => <option key={f} value={f}>{FOCUS_LABEL[f]}</option>)}
       </NativeSelect>
     )
   }
@@ -791,6 +903,7 @@ export function SquadPage() {
                       <TableCell align="center">Moral</TableCell>
                       <TableCell align="center">Condição</TableCell>
                       <TableCell align="center">Função</TableCell>
+                      <TableCell align="center">Foco</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -815,7 +928,8 @@ export function SquadPage() {
                           <TableCell align="center">{formLabel(player.form)}</TableCell>
                           <TableCell align="center"><MoodChip morale={player.morale} emojiOnly /></TableCell>
                           <TableCell align="center"><FitnessBar fitness={player.fitness} /></TableCell>
-                          <TableCell align="center">{inv.kind === 'TITULAR' && roleSelect(player)}</TableCell>
+                          <TableCell align="center">{inv.kind === 'TITULAR' && funcaoSelect(player)}</TableCell>
+                          <TableCell align="center">{inv.kind === 'TITULAR' && focoSelect(player)}</TableCell>
                         </TableRow>
                       )
                     })}
@@ -850,7 +964,7 @@ export function SquadPage() {
           </Box>
           {pitchTeam && (
             <Box sx={{ flex: 1, minWidth: 0, mb: 2 }}>
-              <Pitch home={pitchTeam} onSwap={swapSlots} />
+              <Pitch home={pitchTeam} onSwap={swapSlots} onSlotClick={slotIndex => setPickerSlot(slotIndex)} />
               <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
                 <Button
                   color="secondary"
@@ -913,13 +1027,36 @@ export function SquadPage() {
         onClose={() => setDetailsPlayerId(null)}
         saveGameId={saveGameId}
         lineupControl={isMobile && detailsPlayer && selected.includes(detailsPlayer.id)
-          ? roleSelect(detailsPlayer)
+          ? (
+            <Stack spacing={1}>
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.25 }}>Função</Typography>
+                {funcaoSelect(detailsPlayer)}
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.25 }}>Foco</Typography>
+                {focoSelect(detailsPlayer)}
+              </Box>
+            </Stack>
+          )
           : undefined}
         instructionControl={isMobile && detailsPlayer && selected.includes(detailsPlayer.id) && detailsPlayer.position !== 'GK'
           ? instructionSelect(detailsPlayer)
           : undefined}
         contractAction={detailsPlayer ? renewButton(detailsPlayer) : undefined}
         listingAction={detailsPlayer ? listingButton(detailsPlayer) : undefined}
+      />
+
+      {/* Opened by tapping a pitch slot in the Táticas tab (spec §5.1/§5.2). */}
+      <SlotPickerDialog
+        open={pickerSlot !== null}
+        onClose={() => setPickerSlot(null)}
+        slot={pickerSlot !== null ? slots[pickerSlot] : null}
+        players={players.filter(p => p.eligible)}
+        currentOccupantId={pickerSlot !== null
+          ? Object.keys(slotByPlayerId).find(id => slotByPlayerId[id] === pickerSlot)
+          : undefined}
+        onPick={player => { if (pickerSlot !== null) pickForSlot(pickerSlot, player) }}
       />
 
       {/* Save outcome shown as a transient toast rather than pinned into the layout. */}

@@ -514,42 +514,41 @@ describe('SquadPage', () => {
     await waitFor(() => expect(mockListPlayer).toHaveBeenCalledWith('sg-1', GK.id, 'test-token'))
   })
 
-  it('shows a role selector for a selected outfield player', async () => {
+  it('shows a role selector scoped to the ASSIGNED SLOT position for a selected outfield player', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Defensor Um'))
     fireEvent.click(pickBtn('defensor um'))
     const select = screen.getByRole('combobox', { name: /função de defensor um/i })
     expect(select).toBeInTheDocument()
-    // Options are scoped to the player's position band (DEF), not all roles, and shown with
-    // readable Portuguese labels (the underlying value stays the enum). STOPPER's canonical
-    // label is "Xerife" (the backend RoleArchetype label), not the retired PlayerRole's old
-    // ad-hoc "Zagueiro" translation.
+    // DEF1 carries LATERAL_ESQUERDO, so the default 4-3-3's "le" slot is its exact match —
+    // options are every archetype valid for LATERAL_ESQUERDO (enum order), not a coarse DEF
+    // band, and use the canonical backend RoleArchetype labels.
     const options = within(select).getAllByRole('option').map(o => o.textContent)
-    expect(options).toEqual(['Xerife', 'Lateral', 'Zagueiro construtor'])
+    expect(options).toEqual(['Lateral', 'Ala', 'Falso lateral', 'Ala ofensivo', 'Ala invertido'])
   })
 
-  it('shows a role selector for a selected midfielder', async () => {
+  it('shows a role selector scoped to the ASSIGNED SLOT position for a selected midfielder', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Meio Um'))
     fireEvent.click(pickBtn('meio um'))
     const select = screen.getByRole('combobox', { name: /função de meio um/i })
     expect(select).toBeInTheDocument()
-    // MID band roles come from the canonical RoleArchetype labels, not the retired PlayerRole's
-    // old ad-hoc translations ("Volante", "Meia box a box").
+    // MID1 has no detailed position, so it lands in the first free MID slot of the default
+    // 4-3-3 (VOLANTE) — options are every archetype valid for VOLANTE, in enum order.
     const options = within(select).getAllByRole('option').map(o => o.textContent)
-    expect(options).toEqual(['Primeiro volante', 'Box-to-box', 'Armador'])
+    expect(options).toEqual(['Primeiro volante', 'Volante armador', 'Terceiro zagueiro', 'Volante ala', 'Volante de chegada'])
   })
 
-  it('shows a role selector for a selected attacker', async () => {
+  it('shows a role selector scoped to the ASSIGNED SLOT position for a selected attacker', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Atacante Um'))
     fireEvent.click(pickBtn('atacante um'))
     const select = screen.getByRole('combobox', { name: /função de atacante um/i })
     expect(select).toBeInTheDocument()
-    // ATT band roles come from the canonical RoleArchetype labels, not the retired PlayerRole's
-    // old ad-hoc translations ("Finalizador", "Centroavante").
+    // ATT1 has no detailed position, so it lands in the first free ATT slot of the default
+    // 4-3-3 (PONTA_DIREITA) — options are every archetype valid for PONTA_DIREITA.
     const options = within(select).getAllByRole('option').map(o => o.textContent)
-    expect(options).toEqual(['Oportunista', 'Pivô', 'Ponta'])
+    expect(options).toEqual(['Ponta', 'Armador aberto', 'Atacante por dentro'])
   })
 
   it('rehydrates the saved formation and starters on load', async () => {
@@ -639,20 +638,25 @@ describe('SquadPage', () => {
   it('keeps bench numbering stable when a substitute is removed', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Teste'))
-    // Auto-pick a full 4-3-3, then send three extras (their bands are full) to the bench.
+    // Auto-pick a full 4-3-3 (Goleiro Teste always loses the GK slot to the higher-rated
+    // Goleiro Dois), then send three extras (their bands are full) to the bench. Auto-pick's
+    // natural-first assignment doesn't guarantee exactly which MID/ATT players it keeps when
+    // several tie on overall — find one leftover of each band generically instead of hardcoding.
     fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
-    fireEvent.click(pickBtn('goleiro teste'))   // GK band full → Sub 1
-    fireEvent.click(pickBtn('meio quatro'))     // MID band full → Sub 2
-    fireEvent.click(pickBtn('atacante quatro')) // ATT band full → Sub 3
+    const leftOutMid = [MID1, MID2, MID3, MID4].find(p => pickBtn(p.name).textContent === '+')!
+    const leftOutAtt = [ATT1, ATT2, ATT3, ATT4].find(p => pickBtn(p.name).textContent === '+')!
+    fireEvent.click(pickBtn('goleiro teste'))       // GK band full → Sub 1
+    fireEvent.click(pickBtn(leftOutMid.name))        // MID band full → Sub 2
+    fireEvent.click(pickBtn(leftOutAtt.name))        // ATT band full → Sub 3
     expect(pickBtn('goleiro teste')).toHaveTextContent('Sub 1')
-    expect(pickBtn('meio quatro')).toHaveTextContent('Sub 2')
-    expect(pickBtn('atacante quatro')).toHaveTextContent('Sub 3')
+    expect(pickBtn(leftOutMid.name)).toHaveTextContent('Sub 2')
+    expect(pickBtn(leftOutAtt.name)).toHaveTextContent('Sub 3')
 
     // Remove the first substitute — the others keep their numbers (no renumbering).
     fireEvent.click(pickBtn('goleiro teste'))
     expect(pickBtn('goleiro teste')).toHaveTextContent('+')
-    expect(pickBtn('meio quatro')).toHaveTextContent('Sub 2')
-    expect(pickBtn('atacante quatro')).toHaveTextContent('Sub 3')
+    expect(pickBtn(leftOutMid.name)).toHaveTextContent('Sub 2')
+    expect(pickBtn(leftOutAtt.name)).toHaveTextContent('Sub 3')
 
     // The freed slot (Sub 1) is reused by the next player sent to the bench.
     fireEvent.click(pickBtn('goleiro teste'))
@@ -697,22 +701,21 @@ describe('SquadPage', () => {
   })
 
   it('sends the selected bench players when saving the lineup', async () => {
-    // "Selecionar melhores" with 4-3-3 picks: GK2, DEF1-4, MID1-3, ATT1-3.
-    // MID4 ("Meio Quatro", id "p-m4") is eligible and won't be in the auto-picked XI.
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Teste'))
     fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
 
-    // The MID line is full after auto-pick, so clicking Meio Quatro can't start him — he
-    // drops to the bench (one unified list, no separate bench control).
-    fireEvent.click(pickBtn('meio quatro'))
-    expect(pickBtn('meio quatro')).toHaveTextContent(/sub/i)
+    // The MID line is full after auto-pick, so a MID-band player left out of the XI can't
+    // start — he drops to the bench (one unified list, no separate bench control).
+    const leftOutMid = [MID1, MID2, MID3, MID4].find(p => pickBtn(p.name).textContent === '+')!
+    fireEvent.click(pickBtn(leftOutMid.name))
+    expect(pickBtn(leftOutMid.name)).toHaveTextContent(/sub/i)
     fireEvent.click(screen.getByRole('button', { name: /salvar escalação/i }))
 
     await waitFor(() =>
       expect(setLineup).toHaveBeenCalledWith(
         'sg-1', 'club-1',
-        expect.objectContaining({ bench: expect.arrayContaining([expect.objectContaining({ playerId: 'p-m4' })]) }),
+        expect.objectContaining({ bench: expect.arrayContaining([expect.objectContaining({ playerId: leftOutMid.id })]) }),
         'test-token',
       ),
     )
@@ -1032,5 +1035,158 @@ describe('SquadPage', () => {
     fireEvent.change(screen.getByLabelText(/formação/i), { target: { value: '3-5-2' } })
     expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+describe('SquadPage — slot picker and Função/Foco selects', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetSquad.mockResolvedValue(squad)
+    mockGetLineup.mockResolvedValue(null)
+    mockSetLineup.mockResolvedValue({ lineupId: 'l-1', clubId: 'club-1', formation: '4-3-3', starters: [], bench: [] })
+    vi.mocked(getTactics).mockResolvedValue({
+      mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', attackZone: 'MISTO', pressing: 'MEDIUM', marking: 'ZONAL',
+      penaltyTakerId: null, freekickTakerId: null, cornerTakerId: null,
+    })
+    localStorage.setItem('carvoeiro_manager_token', 'test-token')
+    localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
+  })
+
+  function mockRect() {
+    return {
+      left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0,
+      toJSON: () => ({}),
+    } as DOMRect
+  }
+
+  it('tapping a pitch slot opens the slot picker dialog naming the slot', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+    fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
+
+    const pitch = screen.getByTestId('pitch')
+    vi.spyOn(pitch, 'getBoundingClientRect').mockReturnValue(mockRect())
+    // Slot 4 ("le", LATERAL_ESQUERDO) center in the default 4-3-3 layout.
+    const slot4 = pitch.querySelector('[data-slot-index="4"]')!
+
+    fireEvent.pointerDown(slot4, { pointerId: 1, clientX: 336, clientY: 474 })
+    fireEvent.pointerUp(slot4, { pointerId: 1, clientX: 336, clientY: 474 })
+
+    expect(await screen.findByText('Quem joga aqui? (LE)')).toBeInTheDocument()
+  })
+
+  it('does not open the picker when the pointer interaction resolves as a drag', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+    fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
+
+    const pitch = screen.getByTestId('pitch')
+    vi.spyOn(pitch, 'getBoundingClientRect').mockReturnValue(mockRect())
+    const slot4 = pitch.querySelector('[data-slot-index="4"]')!
+
+    fireEvent.pointerDown(slot4, { pointerId: 1, clientX: 336, clientY: 474 })
+    fireEvent.pointerMove(slot4, { pointerId: 1, clientX: 200, clientY: 192 })
+    fireEvent.pointerUp(slot4, { pointerId: 1, clientX: 200, clientY: 192 })
+
+    // The drag still moved the player (existing behavior) but no picker opened.
+    await waitFor(() => expect(pitch.querySelector('[data-slot-index="9"]')).toHaveTextContent('Defensor Um'))
+    expect(screen.queryByText(/Quem joga aqui\?/)).not.toBeInTheDocument()
+  })
+
+  it('picking a player from the slot picker swaps them with the slot\'s current occupant', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+    fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
+
+    const pitch = screen.getByTestId('pitch')
+    vi.spyOn(pitch, 'getBoundingClientRect').mockReturnValue(mockRect())
+    const slot4 = pitch.querySelector('[data-slot-index="4"]')! // LE — auto-pick always puts DEF1 here
+    expect(slot4).toHaveTextContent('Defensor Um')
+    const slot9 = pitch.querySelector('[data-slot-index="9"]')!
+    const otherName = squad.players.find(p => slot9.textContent?.endsWith(p.name))!.name
+
+    fireEvent.pointerDown(slot4, { pointerId: 1, clientX: 336, clientY: 474 })
+    fireEvent.pointerUp(slot4, { pointerId: 1, clientX: 336, clientY: 474 })
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByText(otherName))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    // The two players swapped places rather than one dropping off the pitch.
+    expect(pitch.querySelector('[data-slot-index="4"]')).toHaveTextContent(otherName)
+    expect(pitch.querySelector('[data-slot-index="9"]')).toHaveTextContent('Defensor Um')
+    expect(screen.getByRole('button', { name: /salvar escala/i })).not.toBeDisabled()
+  })
+
+  it('"Selecionar melhores" gives each auto-picked player their best familiar archetype and its default focus', async () => {
+    // DEF1 (LATERAL_ESQUERDO) is familiar (++) with WINGBACK — a non-clone copy so the shared
+    // module-level DEF1 fixture used by every other test in this file stays untouched.
+    const def1WithFamiliar = { ...DEF1, familiarRoles: ['WINGBACK++'] }
+    mockGetSquad.mockResolvedValueOnce({
+      ...squad,
+      players: squad.players.map(p => (p.id === DEF1.id ? def1WithFamiliar : p)),
+    })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+
+    // WINGBACK ("Ala") beats the vanilla FULLBACK ("Lateral") default because it's familiar.
+    expect(screen.getByRole('combobox', { name: /função de defensor um/i })).toHaveValue('WINGBACK')
+    // WINGBACK's default focus for LATERAL_ESQUERDO (MATRIX order) is BALANCED.
+    expect(screen.getByRole('combobox', { name: /foco de defensor um/i })).toHaveValue('BALANCED')
+  })
+
+  it('falls back to the vanilla default archetype when the player has no familiar role for their slot', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+
+    // DEF1 (in the base fixtures) carries no familiarRoles at all → FULLBACK, the vanilla
+    // default for LATERAL_ESQUERDO.
+    expect(screen.getByRole('combobox', { name: /função de defensor um/i })).toHaveValue('FULLBACK')
+  })
+
+  it('resets Foco to the new archetype\'s default when Função changes', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Defensor Um'))
+    fireEvent.click(pickBtn('defensor um')) // lands in the exact "le" (LATERAL_ESQUERDO) slot
+
+    const funcaoSelect = screen.getByRole('combobox', { name: /função de defensor um/i })
+    const focoSelect = screen.getByRole('combobox', { name: /foco de defensor um/i })
+    // FULLBACK's default focus for LATERAL_ESQUERDO is BALANCED.
+    expect(focoSelect).toHaveValue('BALANCED')
+
+    fireEvent.change(funcaoSelect, { target: { value: 'ATTACKING_WINGBACK' } })
+    // ATTACKING_WINGBACK's default focus for LATERAL_ESQUERDO (MATRIX order) is SUPPORT.
+    expect(focoSelect).toHaveValue('SUPPORT')
+  })
+
+  it('sends the chosen focus in the setLineup payload', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Defensor Um'))
+    fireEvent.click(pickBtn('defensor um'))
+    fireEvent.change(
+      screen.getByRole('combobox', { name: /função de defensor um/i }),
+      { target: { value: 'ATTACKING_WINGBACK' } },
+    )
+    // Complete the XI so saving is enabled.
+    for (const player of [GK, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]) {
+      fireEvent.click(pickBtn(player.name))
+    }
+    fireEvent.click(screen.getByRole('button', { name: /salvar escalação/i }))
+
+    await waitFor(() =>
+      expect(mockSetLineup).toHaveBeenCalledWith(
+        'sg-1', 'club-1',
+        expect.objectContaining({
+          starters: expect.arrayContaining([
+            expect.objectContaining({ playerId: DEF1.id, role: 'ATTACKING_WINGBACK', focus: 'SUPPORT' }),
+          ]),
+        }),
+        'test-token',
+      ),
+    )
   })
 })
