@@ -26,14 +26,22 @@ class LineupServiceSlotFillTest {
     private static Player player(String name, Position pos, DetailedPosition dp, int overall) {
         Player p = Player.create(UUID.randomUUID(), UUID.randomUUID(), name, pos, 25, "BRA",
                 70, 70, 70, 70, pos == Position.GK ? 70 : 10, 70, overall);
-        p.setDetailedPosition(dp);
+        // setPositions (not the bare setDetailedPosition setter) so no stale, randomly-generated
+        // alternate from construction survives to make this player "natural" for an unintended slot
+        // under Task 5's natural-first tiering.
+        p.setPositions(dp, List.of());
         return p;
     }
 
     @Test
     void exactDetailedMatchWinsItsSlotOverAHigherRatedSameBandPlayer() {
         // Given a back-4's leftmost slot accepts LATERAL_DIREITO. A low-rated LATERAL_DIREITO and a
-        // high-rated ZAGUEIRO (same DEF band) both compete for it.
+        // high-rated ZAGUEIRO (same DEF band, but not natural for this slot) both compete for it.
+        // The other three 4-4-2 MID slots (MD, MC, ME) each get their own exact natural occupant —
+        // MEIA_ARMADOR isn't a 4-4-2 slot at all, so leaving them MEIA_ARMADOR would starve MD/MC/ME
+        // of any natural candidate and let their distance-fallback poach lowLateral (MEIA_DIREITA is
+        // itself adjacent to LATERAL_DIREITO) before the LD slot's own turn — an incidental
+        // cross-contamination this fixture must avoid to isolate the tier-vs-overall behaviour below.
         Player lowLateral = player("Lateral", Position.DEF, DetailedPosition.LATERAL_DIREITO, 60);
         Player highZagueiro = player("Zaga-A", Position.DEF, DetailedPosition.ZAGUEIRO, 90);
         List<Player> pool = new ArrayList<>(List.of(
@@ -42,9 +50,9 @@ class LineupServiceSlotFillTest {
                 player("Zaga-B", Position.DEF, DetailedPosition.ZAGUEIRO, 75),
                 player("LatEsq", Position.DEF, DetailedPosition.LATERAL_ESQUERDO, 70),
                 player("Volante", Position.MID, DetailedPosition.VOLANTE, 70),
-                player("Meia-1", Position.MID, DetailedPosition.MEIA_ARMADOR, 70),
-                player("Meia-2", Position.MID, DetailedPosition.MEIA_ARMADOR, 68),
-                player("Meia-3", Position.MID, DetailedPosition.MEIA_ARMADOR, 66),
+                player("Meia-1", Position.MID, DetailedPosition.MEIA_DIREITA, 70),
+                player("Meia-2", Position.MID, DetailedPosition.MEIA_CENTRAL, 68),
+                player("Meia-3", Position.MID, DetailedPosition.MEIA_ESQUERDA, 66),
                 player("Atk-1", Position.ATT, DetailedPosition.ATACANTE, 72),
                 player("Atk-2", Position.ATT, DetailedPosition.ATACANTE, 71)));
 

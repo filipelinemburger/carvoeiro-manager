@@ -534,23 +534,27 @@ class LineupServiceIT {
                 DetailedPosition.MEIA_DIREITA, DetailedPosition.VOLANTE,
                 DetailedPosition.MEIA_CENTRAL, DetailedPosition.MEIA_ESQUERDA,
                 DetailedPosition.PONTA_DIREITA, DetailedPosition.ATACANTE, DetailedPosition.PONTA_ESQUERDA};
+        // setPositions (not the bare setDetailedPosition setter) on every forced player below, so no
+        // stale, randomly-generated alternate from original generation survives to make a player
+        // "natural" for a slot other than the one this scenario deliberately assigns it — load-bearing
+        // now that Task 5's natural-first tiering consults Player#positions().
         for (int i = 0; i < 8; i++) {
             outfield.get(i).setOverall(75);
-            outfield.get(i).setDetailedPosition(eightFixedSlots[i]);
+            outfield.get(i).setPositions(eightFixedSlots[i], List.of());
             playerRepository.save(outfield.get(i));
         }
 
         // Fresh boundary player: overall 60, default fitness 100, no lastMatchDate → rating 60.0.
         Player freshPlayer = outfield.get(8);
         freshPlayer.setOverall(60);
-        freshPlayer.setDetailedPosition(DetailedPosition.ZAGUEIRO);
+        freshPlayer.setPositions(DetailedPosition.ZAGUEIRO, List.of());
         playerRepository.save(freshPlayer);
 
         // Drained boundary player: overall 60, base fitness 10, lastMatchDate = matchDate (no recovery)
         // → effectiveFitness 10, rating 60 × 0.82 = 49.2 on the date path (60.0 on the no-date path).
         Player drainedPlayer = outfield.get(9);
         drainedPlayer.setOverall(60);
-        drainedPlayer.setDetailedPosition(DetailedPosition.ZAGUEIRO);
+        drainedPlayer.setPositions(DetailedPosition.ZAGUEIRO, List.of());
         drainedPlayer.recordAppearance(10, matchDate);
         playerRepository.save(drainedPlayer);
 
@@ -558,7 +562,7 @@ class LineupServiceIT {
         // but above the drained-60's 49.2 on the date path (date includes it, benching the drained one).
         Player fillerPlayer = outfield.get(10);
         fillerPlayer.setOverall(55);
-        fillerPlayer.setDetailedPosition(DetailedPosition.ZAGUEIRO);
+        fillerPlayer.setPositions(DetailedPosition.ZAGUEIRO, List.of());
         playerRepository.save(fillerPlayer);
 
         // Everyone else clearly out.
@@ -668,9 +672,13 @@ class LineupServiceIT {
                 DetailedPosition.MEIA_DIREITA, DetailedPosition.VOLANTE,
                 DetailedPosition.MEIA_CENTRAL, DetailedPosition.MEIA_ESQUERDA,
                 DetailedPosition.PONTA_DIREITA, DetailedPosition.ATACANTE, DetailedPosition.PONTA_ESQUERDA};
+        // setPositions (not the bare setDetailedPosition setter), so no stale, randomly-generated
+        // alternate from original generation survives to make a player "natural" for a slot other
+        // than the one this scenario deliberately assigns it — load-bearing now that Task 5's
+        // natural-first tiering consults Player#positions().
         for (int i = 0; i < 10; i++) {
             outfield.get(i).setOverall(90);
-            outfield.get(i).setDetailedPosition(tenOutfieldSlots[i]);
+            outfield.get(i).setPositions(tenOutfieldSlots[i], List.of());
             playerRepository.save(outfield.get(i));
         }
         // Next 6 outfield players are the expected bench (clear, descending overalls).
@@ -749,6 +757,38 @@ class LineupServiceIT {
                 .containsExactlyInAnyOrder(keep1.getId(), keep2.getId());
         assertThat(bench).noneMatch(Player::isYouthProspect);
         assertThat(bench).allMatch(Player::isEligible);
+    }
+
+    // --- (k) A club left without a single keeper still fields an XI (improvised keeper) ---
+
+    @Test
+    void bestXiImprovisesAnOutfielderInGoalWhenTheClubHasNoKeeperLeft() {
+        // GIVEN a club whose every goalkeeper's contract lapsed at rollover (they became free
+        // agents). This is reachable in a real save: rollover releases EVERY final-year player,
+        // and no AI renewal pass covers the managed club.
+        Career career = createCareer();
+        UUID clubId = career.managedClubId();
+        List<Player> keepers = playerRepository.findByClubIdAndYouthProspectFalse(clubId).stream()
+                .filter(p -> p.getPosition() == Position.GK)
+                .collect(Collectors.toList());
+        assertThat(keepers).isNotEmpty();
+        keepers.forEach(p -> p.setClubId(null));
+        playerRepository.saveAll(keepers);
+
+        // WHEN the engine resolves the club's XI
+        List<Player> xi = lineupService.bestXi(clubId);
+
+        // THEN it improvises instead of crashing the save: a full XI, no real keeper in it, and
+        // the man between the posts is the outfielder with the best goalkeeping attribute —
+        // exactly what setLineup already lets a manager do (spec §5.1).
+        assertThat(xi).hasSize(11);
+        assertThat(xi).noneMatch(p -> p.getPosition() == Position.GK);
+        assertThat(xi.stream().map(Player::getId).distinct()).hasSize(11);
+        int bestKeeping = playerRepository.findByClubIdAndYouthProspectFalse(clubId).stream()
+                .filter(Player::isEligible)
+                .mapToInt(Player::getGoalkeeping)
+                .max().orElseThrow();
+        assertThat(xi.get(0).getGoalkeeping()).isEqualTo(bestKeeping);
     }
 
     // --- Private helpers ---

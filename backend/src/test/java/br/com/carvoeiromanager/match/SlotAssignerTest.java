@@ -34,22 +34,29 @@ class SlotAssignerTest {
     }
 
     @Test
-    void surplusAtOnePositionForcesADeterministicSameBandAssignment() {
+    void surplusAtOnePositionForcesADeterministicDistanceFallbackAssignment() {
         // A 4-4-2 back line is LD, ZAG, ZAG, LE. Field FOUR zagueiros and NO laterals: the two
-        // full-back slots have no tier-1 (exact) candidate, so each must take a zagueiro instead
-        // (same DEF band, wrong detailed). Two zagueiros still land in the ZAG slots exactly.
+        // full-back slots have no natural candidate, so each falls back to the closest player —
+        // ZAGUEIRO is adjacent (distance 1) to both LATERAL_DIREITO and LATERAL_ESQUERDO, so a
+        // zagueiro takes each. Two zagueiros still land in the ZAG slots exactly.
+        //
+        // Every other slot (MD, VOL, MC, ME, both ST) has its own exact natural occupant, rated
+        // BELOW the zagueiros, so the LD/LE fallback can never prefer them over a zagueiro even
+        // though MEIA_DIREITA and MEIA_ESQUERDA are themselves adjacent to LATERAL_DIREITO and
+        // LATERAL_ESQUERDO respectively — this isolates the zagueiro-surplus behaviour under test
+        // from that incidental adjacency.
         List<Player> xi = new ArrayList<>();
-        xi.add(detailed(Position.GK, DetailedPosition.GOLEIRO));
-        xi.add(detailed(Position.DEF, DetailedPosition.ZAGUEIRO));
-        xi.add(detailed(Position.DEF, DetailedPosition.ZAGUEIRO));
-        xi.add(detailed(Position.DEF, DetailedPosition.ZAGUEIRO));
-        xi.add(detailed(Position.DEF, DetailedPosition.ZAGUEIRO));
-        xi.add(detailed(Position.MID, DetailedPosition.VOLANTE));
-        xi.add(detailed(Position.MID, DetailedPosition.MEIA_ARMADOR));
-        xi.add(detailed(Position.MID, DetailedPosition.MEIA_ARMADOR));
-        xi.add(detailed(Position.MID, DetailedPosition.MEIA_ARMADOR));
-        xi.add(detailed(Position.ATT, DetailedPosition.ATACANTE));
-        xi.add(detailed(Position.ATT, DetailedPosition.ATACANTE));
+        xi.add(detailed(Position.GK, DetailedPosition.GOLEIRO, 70));
+        xi.add(detailed(Position.DEF, DetailedPosition.ZAGUEIRO, 75));
+        xi.add(detailed(Position.DEF, DetailedPosition.ZAGUEIRO, 74));
+        xi.add(detailed(Position.DEF, DetailedPosition.ZAGUEIRO, 73));
+        xi.add(detailed(Position.DEF, DetailedPosition.ZAGUEIRO, 72));
+        xi.add(detailed(Position.MID, DetailedPosition.VOLANTE, 60));
+        xi.add(detailed(Position.MID, DetailedPosition.MEIA_DIREITA, 61));
+        xi.add(detailed(Position.MID, DetailedPosition.MEIA_CENTRAL, 62));
+        xi.add(detailed(Position.MID, DetailedPosition.MEIA_ESQUERDA, 63));
+        xi.add(detailed(Position.ATT, DetailedPosition.ATACANTE, 65));
+        xi.add(detailed(Position.ATT, DetailedPosition.ATACANTE, 66));
 
         Map<UUID, FormationSlots.Slot> assignments = SlotAssigner.assignToSlots(xi, "4-4-2");
         assertThat(assignments).hasSize(11);
@@ -139,9 +146,16 @@ class SlotAssignerTest {
     }
 
     private static Player detailed(Position pos, DetailedPosition detailed) {
+        return detailed(pos, detailed, 70);
+    }
+
+    private static Player detailed(Position pos, DetailedPosition detailed, int overall) {
         Player p = Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", pos, 25, "BRA",
-                70, 70, 70, 70, pos == Position.GK ? 70 : 10, 70, 70);
-        p.setDetailedPosition(detailed);
+                70, 70, 70, 70, pos == Position.GK ? 70 : 10, 70, overall);
+        // setPositions (not the bare setDetailedPosition setter) so no stale, randomly-generated
+        // alternate from construction survives to make this player "natural" for an unintended slot
+        // under Task 5's natural-first tiering.
+        p.setPositions(detailed, List.of());
         return p;
     }
 }

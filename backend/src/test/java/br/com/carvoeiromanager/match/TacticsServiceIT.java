@@ -13,6 +13,7 @@ import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.DetailedPosition;
 import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.player.RoleAssignment;
+import br.com.carvoeiromanager.player.RoleFocus;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
@@ -71,10 +72,21 @@ class TacticsServiceIT {
         UUID bestFinisher = xi.stream().max(java.util.Comparator.comparingInt(Player::getFinishing))
                 .orElseThrow().getId();
         assertThat(profile.penaltyTakerId()).isEqualTo(bestFinisher);
-        assertThat(profile.roles().values())
-                .contains(RoleAssignment.defaultFor(DetailedPosition.GOLEIRO));
-        assertThat(profile.roles().values()).allSatisfy(r ->
-                assertThat(r.focus()).isEqualTo(r.archetype().canonicalDefaultFocus()));
+        // The GK never has alt positions or a promotable familiar role, so it's always the default.
+        Player gk = xi.get(0);
+        assertThat(profile.roles().get(gk.getId()))
+                .isEqualTo(RoleAssignment.defaultFor(DetailedPosition.GOLEIRO));
+        // Every other starter's assignment is valid for whatever slot it actually landed in — a
+        // familiar-aware pick can legitimately deviate from the position's blunt default (Task 5),
+        // so this checks the real invariant (archetype validity + matching focus) rather than
+        // hard-coding a specific archetype that depends on this XI's random detailed positions.
+        for (Player p : xi) {
+            RoleAssignment assignment = profile.roles().get(p.getId());
+            FormationSlots.Slot slot = profile.slotAssignments().get(p.getId());
+            DetailedPosition pos = slot != null ? slot.accepted().iterator().next() : p.getDetailedPosition();
+            assertThat(assignment.archetype().validFor(pos)).as("archetype valid for %s", pos).isTrue();
+            assertThat(assignment.focus()).isEqualTo(assignment.archetype().defaultFocusFor(pos));
+        }
     }
 
     @Test
@@ -98,12 +110,17 @@ class TacticsServiceIT {
         assertThat(profile.roles().get(firstId)).isEqualTo(
                 new RoleAssignment(RoleArchetype.GOALKEEPER, RoleArchetype.GOALKEEPER.canonicalDefaultFocus()));
 
-        // position-default fill: a roster member with no persisted lineup_player row
-        // still gets an assignment — its detailed-position default — not a missing entry.
+        // familiar-aware fill: a roster member with no persisted lineup_player row still gets a
+        // valid assignment for whatever slot it actually landed in — not a missing entry, and not
+        // necessarily its blunt position default now that the fill is familiar-aware (Task 5).
         Player other = xi.get(1);
         assertThat(profile.roles()).containsKey(other.getId());
-        assertThat(profile.roles().get(other.getId()))
-                .isEqualTo(RoleAssignment.defaultFor(other.getDetailedPosition()));
+        RoleAssignment otherAssignment = profile.roles().get(other.getId());
+        FormationSlots.Slot otherSlot = profile.slotAssignments().get(other.getId());
+        DetailedPosition otherPos = otherSlot != null
+                ? otherSlot.accepted().iterator().next() : other.getDetailedPosition();
+        assertThat(otherAssignment.archetype().validFor(otherPos)).isTrue();
+        assertThat(otherAssignment.focus()).isEqualTo(otherAssignment.archetype().defaultFocusFor(otherPos));
     }
 
     @Test
@@ -263,5 +280,74 @@ class TacticsServiceIT {
         assertThat(profile.slotAssignments().get(sub.getId()))
                 .isEqualTo(FormationSlots.of("4-3-3").get(5));
         assertThat(profile.slotAssignments()).doesNotContainKey(replaced.getId());
+    }
+
+    @Test
+    void aiProfilePicksTheBestFamiliarArchetypeValidForTheAssignedSlot() {
+        // A well-formed, hand-crafted 4-4-2 XI (no randomly-drawn detailed positions) so the right
+        // back is unambiguously the sole natural candidate for the LD slot.
+        Player gk = detailed(Position.GK, DetailedPosition.GOLEIRO);
+        Player rightBack = detailed(Position.DEF, DetailedPosition.LATERAL_DIREITO);
+        rightBack.setFamiliarRoles(List.of("WINGBACK++"));
+        Player zagA = detailed(Position.DEF, DetailedPosition.ZAGUEIRO);
+        Player zagB = detailed(Position.DEF, DetailedPosition.ZAGUEIRO);
+        Player leftBack = detailed(Position.DEF, DetailedPosition.LATERAL_ESQUERDO);
+        Player md = detailed(Position.MID, DetailedPosition.MEIA_DIREITA);
+        Player vol = detailed(Position.MID, DetailedPosition.VOLANTE);
+        Player mc = detailed(Position.MID, DetailedPosition.MEIA_CENTRAL);
+        Player me = detailed(Position.MID, DetailedPosition.MEIA_ESQUERDA);
+        Player stA = detailed(Position.ATT, DetailedPosition.ATACANTE);
+        Player stB = detailed(Position.ATT, DetailedPosition.ATACANTE);
+        List<Player> xi = List.of(gk, rightBack, zagA, zagB, leftBack, md, vol, mc, me, stA, stB);
+
+        // No lineup row anywhere -> default (AI) profile, no DB write happens.
+        TacticalProfile profile = tacticsService.defaultProfile(UUID.randomUUID(), xi);
+
+        FormationSlots.Slot ldSlot = FormationSlots.of("4-4-2").get(1);
+        assertThat(profile.slotAssignments().get(rightBack.getId())).isEqualTo(ldSlot);
+        // WINGBACK (familiar ++), not FULLBACK (the blunt LATERAL_DIREITO default) — and its own
+        // default focus for LD, BALANCED, not WINGBACK's canonical default (also BALANCED here, but
+        // resolved via defaultFocusFor(LD) rather than hard-coded).
+        assertThat(profile.roles().get(rightBack.getId())).isEqualTo(
+                new RoleAssignment(RoleArchetype.WINGBACK, RoleArchetype.WINGBACK.defaultFocusFor(DetailedPosition.LATERAL_DIREITO)));
+        assertThat(profile.roles().get(rightBack.getId()).focus()).isEqualTo(RoleFocus.BALANCED);
+    }
+
+    @Test
+    void managedProfileHonoursExplicitSlots() {
+        Career career = createCareer();
+        UUID save = career.save().id();
+        UUID club = career.save().managedClubId();
+        List<Player> squad = playerRepository.findByClubId(club);
+        Player gk = squad.stream().filter(p -> p.getPosition() == Position.GK).findFirst().orElseThrow();
+        List<Player> outfield = squad.stream().filter(p -> p != gk).limit(10).toList();
+        List<Player> xi = new ArrayList<>();
+        xi.add(gk);
+        xi.addAll(outfield);
+
+        Lineup lineup = Lineup.create(save, club, "4-4-2");
+        lineupRepository.save(lineup);
+        LineupPlayer gkRow = LineupPlayer.create(lineup.getId(), gk.getId(), true, RoleArchetype.GOALKEEPER);
+        gkRow.setSlotIndex(0);
+        lineupPlayerRepository.save(gkRow);
+        // Force the first outfielder into a striker slot regardless of his natural position.
+        Player forced = outfield.get(0);
+        LineupPlayer forcedRow = LineupPlayer.create(lineup.getId(), forced.getId(), true,
+                RoleArchetype.defaultFor(forced.getDetailedPosition()));
+        forcedRow.setSlotIndex(9);
+        lineupPlayerRepository.save(forcedRow);
+
+        TacticalProfile profile = tacticsService.profileFor(save, club, xi);
+
+        List<FormationSlots.Slot> slots = FormationSlots.of("4-4-2");
+        assertThat(profile.slotAssignments().get(gk.getId())).isEqualTo(slots.get(0));
+        assertThat(profile.slotAssignments().get(forced.getId())).isEqualTo(slots.get(9));
+    }
+
+    private static Player detailed(Position pos, DetailedPosition detailedPosition) {
+        Player p = Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", pos, 25, "BRA",
+                70, 70, 70, 70, pos == Position.GK ? 70 : 10, 70, 70);
+        p.setPositions(detailedPosition, List.of());
+        return p;
     }
 }

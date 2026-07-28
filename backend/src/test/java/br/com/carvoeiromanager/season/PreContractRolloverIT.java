@@ -20,7 +20,9 @@ import org.springframework.test.context.ActiveProfiles;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -94,8 +96,14 @@ class PreContractRolloverIT {
         Career c = playToSeasonEnd();
         List<Player> all = playerRepository.findBySaveGameId(c.id());
         all.forEach(p -> p.setContractYears(5));
+        // The AI poaches managed-club players throughout the pre-contract window, so the probe must
+        // be someone it did NOT already sign — otherwise the deal under test is not the one that
+        // executes and the test would be asserting the wrong agreement.
+        Set<UUID> alreadyDealt = agreementRepository.findBySaveGameId(c.id()).stream()
+                .map(PreContractAgreement::getPlayerId).collect(Collectors.toSet());
         Player mine = safeProbe(all.stream()
-                .filter(p -> c.clubId().equals(p.getClubId())).toList());
+                .filter(p -> c.clubId().equals(p.getClubId()))
+                .filter(p -> !alreadyDealt.contains(p.getId())).toList());
         mine.setContractYears(1);
         playerRepository.saveAll(all);
         UUID poacher = all.stream().map(Player::getClubId)
@@ -110,6 +118,39 @@ class PreContractRolloverIT {
         assertThat(gone.getClubId()).isEqualTo(poacher);   // incoming threats lock at rollover
         assertThat(r.preContractDepartures()).extracting(SquadChangeResponse::playerName)
                 .contains(mine.getName());
+    }
+
+    @Test
+    void twoLockedDealsOnTheSamePlayerResolveToOneInsteadOfCrashingTheRollover() {
+        // GIVEN a player carrying TWO locked pre-contracts. The schema permits it (V30 indexes
+        // player_id but does not make it unique), so rollover must resolve it rather than blow up.
+        Career c = playToSeasonEnd();
+        List<Player> all = playerRepository.findBySaveGameId(c.id());
+        all.forEach(p -> p.setContractYears(5));
+        Player target = safeProbe(all.stream()
+                .filter(p -> !p.isFreeAgent() && !c.clubId().equals(p.getClubId())).toList());
+        target.setContractYears(1);
+        playerRepository.saveAll(all);
+        UUID rival = all.stream().map(Player::getClubId)
+                .filter(id -> id != null && !id.equals(c.clubId()) && !id.equals(target.getClubId()))
+                .findFirst().orElseThrow();
+        PreContractAgreement toManaged = PreContractAgreement.create(c.id(), target.getId(),
+                target.getClubId(), c.clubId(), new BigDecimal("1000.00"), 3, LocalDate.of(2026, 8, 1));
+        toManaged.lock();
+        PreContractAgreement toRival = PreContractAgreement.create(c.id(), target.getId(),
+                target.getClubId(), rival, new BigDecimal("2000.00"), 2, LocalDate.of(2026, 8, 1));
+        toRival.lock();
+        agreementRepository.saveAll(List.of(toManaged, toRival));
+        // Only one deal can execute; the winner is the lowest-id agreement, the same deterministic
+        // order resolveRemainingAgreements already processes agreements in.
+        PreContractAgreement winner = toManaged.getId().compareTo(toRival.getId()) < 0 ? toManaged : toRival;
+
+        rolloverService.rollover(c.id(), c.userId());
+
+        Player moved = playerRepository.findById(target.getId()).orElseThrow();
+        assertThat(moved.getClubId()).isEqualTo(winner.getToClubId());
+        assertThat(moved.getContractYears()).isEqualTo(winner.getContractYears());
+        assertThat(agreementRepository.findBySaveGameId(c.id())).isEmpty();
     }
 
     @Test

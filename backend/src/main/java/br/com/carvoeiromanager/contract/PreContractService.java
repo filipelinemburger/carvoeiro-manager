@@ -354,9 +354,16 @@ public class PreContractService {
             }
             agreementRepository.save(a);
         }
+        // A player can only join one club, but the schema does not forbid several rows on him
+        // (V30 indexes player_id, it does not make it unique). Keyed naively this threw
+        // IllegalStateException("Duplicate key ...") and aborted the whole rollover, so collapse
+        // duplicates deterministically instead: lowest agreement id wins, the same id order the
+        // resolution loop above walks. The rest are purged with the table moments later.
         return agreementRepository.findBySaveGameIdAndStatus(saveGameId, PreContractStatus.LOCKED)
-                .stream().collect(Collectors.toMap(PreContractAgreement::getPlayerId,
-                        Function.identity()));
+                .stream()
+                .sorted(Comparator.comparing(PreContractAgreement::getId))
+                .collect(Collectors.toMap(PreContractAgreement::getPlayerId,
+                        Function.identity(), (first, duplicate) -> first));
     }
 
     // ---- shared internals ----

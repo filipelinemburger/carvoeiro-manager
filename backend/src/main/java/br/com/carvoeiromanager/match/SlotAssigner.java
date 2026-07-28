@@ -2,7 +2,6 @@ package br.com.carvoeiromanager.match;
 
 import br.com.carvoeiromanager.player.DetailedPosition;
 import br.com.carvoeiromanager.player.Player;
-import br.com.carvoeiromanager.player.Position;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -16,14 +15,16 @@ import java.util.UUID;
 /**
  * Shared greedy best-fit assignment of players to a formation's ordered {@link FormationSlots.Slot}s.
  *
- * <p>The routine mirrors the tiering + scarcity heuristic used to pick a best XI: slots are processed
- * scarcest-first (fewest tier-1 exact-detailed candidates in the initial pool, ties by slot index),
- * and each slot takes the best remaining candidate by tier — tier 1 = the slot accepts the player's
- * detailed position, tier 2 = same coarse band, tier 3 = anyone left — breaking ties within a tier by
- * the supplied comparator. Scarcity is computed once over the initial pool, so the whole assignment is
- * a pure, deterministic function of {@code (slots, pool)}: called twice with the same inputs it returns
- * the identical result — except for the pinned variant of {@link #assignToSlots(List, String, Map)},
- * where explicit pinned indexes are honored verbatim and only the leftovers go through this greedy fit.
+ * <p>The routine is natural-first: slots are processed scarcest-first (fewest NATURAL candidates in
+ * the initial pool — any of {@link Player#positions()}, primary or alternate, accepted by the slot —
+ * ties by slot index), and each slot takes the best remaining NATURAL candidate by the supplied
+ * comparator. A genuine natural always beats a higher-rated improviser. Only when no natural candidate
+ * remains does a slot fall back to the closest player by tactical distance ({@link DetailedPosition#distance}
+ * between the player's positions and the slot's accepted set), ties broken by the comparator. Scarcity
+ * is computed once over the initial pool, so the whole assignment is a pure, deterministic function of
+ * {@code (slots, pool)}: called twice with the same inputs it returns the identical result — except for
+ * the pinned variant of {@link #assignToSlots(List, String, Map)}, where explicit pinned indexes are
+ * honored verbatim and only the leftovers go through this greedy fit.
  *
  * <p>Both {@code LineupService#bestXi} (via {@link #assign}) and {@code TacticsService#profileFor}
  * (via {@link #assignToSlots}) share this logic so the selection and the position-grading never drift.
@@ -39,16 +40,17 @@ final class SlotAssigner {
      * out (fewer players than slots). A player is assigned to at most one slot.
      */
     static Player[] assign(List<FormationSlots.Slot> slots, List<Player> pool, Comparator<Player> byRating) {
-        // Scarcity = number of tier-1 (exact detailed-position) candidates in the INITIAL pool.
-        // Computed once so the processing order never depends on fill progress.
+        // Scarcity = number of NATURAL candidates (any of the player's positions, primary or
+        // alternate, accepted by the slot) in the INITIAL pool. Computed once so the processing
+        // order never depends on fill progress.
         List<Integer> order = new ArrayList<>();
         for (int i = 0; i < slots.size(); i++) {
             order.add(i);
         }
         Map<Integer, Long> tier1Count = new HashMap<>();
         for (int i = 0; i < slots.size(); i++) {
-            Set<DetailedPosition> accepted = slots.get(i).accepted();
-            tier1Count.put(i, pool.stream().filter(p -> accepted.contains(p.getDetailedPosition())).count());
+            FormationSlots.Slot slot = slots.get(i);
+            tier1Count.put(i, pool.stream().filter(p -> isNatural(p, slot)).count());
         }
         order.sort(Comparator.<Integer>comparingLong(tier1Count::get).thenComparing(Comparator.naturalOrder()));
 
@@ -117,14 +119,33 @@ final class SlotAssigner {
     }
 
     /**
-     * Best candidate for a single slot from {@code available}, by tier then {@code byRating}:
-     * tier 1 = detailed position accepted by the slot; tier 2 = same coarse band; tier 3 = anyone.
+     * Best candidate for a single slot from {@code available}: NATURAL candidates (any of the
+     * player's positions, primary or alternate, accepted by the slot) always win, best by
+     * {@code byRating} — a genuine natural beats a higher-rated improviser. When no natural remains,
+     * falls back to the smallest tactical distance between the player's positions and the slot's
+     * accepted set, ties broken by {@code byRating}.
      */
     private static Player pickForSlot(List<Player> available, FormationSlots.Slot slot, Comparator<Player> byRating) {
-        Set<DetailedPosition> accepted = slot.accepted();
-        Position band = slot.coarse();
-        return available.stream().filter(p -> accepted.contains(p.getDetailedPosition())).max(byRating)
-                .or(() -> available.stream().filter(p -> p.getPosition() == band).max(byRating))
-                .orElseGet(() -> available.stream().max(byRating).orElseThrow());
+        return available.stream().filter(p -> isNatural(p, slot)).max(byRating)
+                .orElseGet(() -> available.stream()
+                        .min(Comparator.comparingInt((Player p) -> distanceTo(p, slot))
+                                .thenComparing(byRating.reversed()))
+                        .orElseThrow());
+    }
+
+    /** Whether any of the player's positions (primary or alternate) is accepted by the slot. */
+    private static boolean isNatural(Player p, FormationSlots.Slot slot) {
+        return p.positions().stream().anyMatch(slot.accepted()::contains);
+    }
+
+    /** Smallest tactical distance between any of the player's positions and the slot's accepted set. */
+    private static int distanceTo(Player p, FormationSlots.Slot slot) {
+        int best = Integer.MAX_VALUE;
+        for (DetailedPosition mine : p.positions()) {
+            for (DetailedPosition acc : slot.accepted()) {
+                best = Math.min(best, mine.distance(acc));
+            }
+        }
+        return best;
     }
 }

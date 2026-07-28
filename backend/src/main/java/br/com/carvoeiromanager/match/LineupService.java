@@ -341,16 +341,20 @@ public class LineupService {
      * <p>
      * Eligible players (not suspended, not injured) are preferred. If there are fewer than 11
      * eligible players, ineligible players are used as fallback (ordered by rating) to ensure
-     * the match engine always has a full XI. A missing GK is similarly filled from ineligible GKs.
+     * the match engine always has a full XI. A missing GK is similarly filled from ineligible GKs,
+     * and a club with no keeper on its books at all improvises an outfielder in goal (see
+     * {@link #improvisedKeeper}) rather than failing — this method must never leave a fixture
+     * unplayable.
      *
      * <p>Outfield selection is <b>slot-aware</b>: the club's default formation
-     * (see {@link FormationSlots}) supplies 10 ordered outfield slots and each is filled greedily
-     * by fit — an exact detailed-position match (tier 1) beats a same-coarse-band match (tier 2)
-     * beats anyone left (tier 3), and within a tier the highest rating wins (id tie-break). Slots
-     * are processed scarcest-first (fewest tier-1 candidates), ties broken by slot index, so a
-     * specialist slot is never starved by a generalist grabbing its only candidate. The result is a
-     * pure function of the squad + formation, so the two calls made per fixture (parallel pre-sim at
-     * kickoff, attribution at finish) always return the identical XI.
+     * (see {@link FormationSlots}) supplies 10 ordered outfield slots and each is filled greedily,
+     * natural-first — a slot takes the best remaining player who plays there naturally (any of
+     * {@link Player#positions()}, primary or alternate), and only falls back to the closest player
+     * by tactical distance when no natural remains. Slots are processed scarcest-first (fewest
+     * natural candidates), ties broken by slot index, so a specialist slot is never starved by a
+     * generalist grabbing its only candidate. The result is a pure function of the squad +
+     * formation, so the two calls made per fixture (parallel pre-sim at kickoff, attribution at
+     * finish) always return the identical XI.
      */
     public List<Player> bestXi(UUID clubId, LocalDate onDate) {
         List<Player> allPlayers = playerRepository.findByClubIdAndYouthProspectFalse(clubId);
@@ -366,15 +370,15 @@ public class LineupService {
                 Comparator.comparingDouble((Player p) -> rating(p, onDate))
                         .thenComparing(Player::getId);
 
-        // Try to find an eligible GK; fall back to any GK if none are eligible.
+        // Try to find an eligible GK; fall back to any GK if none are eligible; improvise an
+        // outfielder in goal if the club has no keeper at all.
         Player bestGk = eligible.stream()
                 .filter(p -> p.getPosition() == Position.GK)
                 .max(byRating)
-                .orElseGet(() -> allPlayers.stream()
+                .or(() -> allPlayers.stream()
                         .filter(p -> p.getPosition() == Position.GK)
-                        .max(byRating)
-                        .orElseThrow(() -> new ApiException(
-                                ErrorCode.NO_GK_FOUND, "Club " + clubId + " has no goalkeeper at all")));
+                        .max(byRating))
+                .orElseGet(() -> improvisedKeeper(clubId, eligible, allPlayers, byRating));
 
         // Candidate pool for the 10 outfield slots: prefer eligible, top up from ineligible if the
         // club has fewer than 10 eligible outfielders (graceful fallback, same as before).
@@ -400,6 +404,30 @@ public class LineupService {
         return xi;
     }
 
+    /**
+     * The outfielder who goes in goal when a club has no goalkeeper on its books at all — best
+     * goalkeeping attribute, ties by rating then id (the same deterministic total order the rest of
+     * {@link #bestXi} uses, so repeated calls for one fixture agree). Eligible players first, any
+     * player as a last resort.
+     *
+     * <p>Why this exists: rollover releases EVERY final-year player, managed and AI alike, and no AI
+     * renewal pass covers the managed club — so a manager who forgets to renew can start a season
+     * with zero keepers. Hard-failing there bricked the save (advance threw 422 forever). The engine
+     * already supports a keeper-less XI: {@code validateGkCount} lets a manager improvise an
+     * outfielder in goal (spec §5.1), and {@code TeamStrengthCalculator} simply contributes no
+     * keeper defense. The AI/default path now matches that instead of being stricter than the
+     * manager path.
+     */
+    private Player improvisedKeeper(UUID clubId, List<Player> eligible, List<Player> allPlayers,
+                                    Comparator<Player> byRating) {
+        Comparator<Player> byKeeping =
+                Comparator.comparingInt(Player::getGoalkeeping).thenComparing(byRating);
+        return eligible.stream().max(byKeeping)
+                .or(() -> allPlayers.stream().max(byKeeping))
+                .orElseThrow(() -> new ApiException(ErrorCode.NO_GK_FOUND,
+                        "Club " + clubId + " has no players at all to field a goalkeeper"));
+    }
+
     /** The formation a club plays when no explicit lineup is set: its default, else 4-4-2. */
     private String formationFor(UUID clubId) {
         return clubRepository.findById(clubId)
@@ -409,13 +437,15 @@ public class LineupService {
     }
 
     /**
-     * Fills the formation's 10 outfield slots greedily from {@code pool} (GK slot excluded).
-     * Slots are processed scarcest-first (fewest tier-1 candidates in the initial pool), ties broken
-     * by slot index, so scarce specialist slots pick before generalists can starve them. Each slot
-     * takes the best remaining candidate by tier (exact detailed match &gt; same coarse band &gt;
-     * anyone), and within a tier by {@code byRating}. Deterministic: scarcity is computed once over
-     * the initial pool, so the fill order and every tie-break are a pure function of squad + slots.
-     * Returned in slot order (DEF left→right, then MID, then ATT).
+     * Fills the formation's 10 outfield slots greedily from {@code pool} (GK slot excluded),
+     * natural-first: slots are processed scarcest-first (fewest NATURAL candidates — any of
+     * {@link Player#positions()}, primary or alternate — in the initial pool), ties broken by slot
+     * index, so scarce specialist slots pick before generalists can starve them. Each slot takes the
+     * best remaining NATURAL candidate by {@code byRating}; a genuine natural always beats a
+     * higher-rated improviser. Only when no natural remains does a slot fall back to the closest
+     * candidate by tactical distance, ties broken by {@code byRating}. Deterministic: scarcity is
+     * computed once over the initial pool, so the fill order and every tie-break are a pure function
+     * of squad + slots. Returned in slot order (DEF left→right, then MID, then ATT).
      */
     static List<Player> fillOutfieldSlots(List<Player> pool, String formation, Comparator<Player> byRating) {
         List<FormationSlots.Slot> slots = FormationSlots.of(formation);
