@@ -11,8 +11,9 @@ import { formatBRL } from '../../lib/money'
 import { moraleMood } from './morale'
 import { LISTED_REASON_LABEL } from './listedReason'
 import { CARBON, ovrBadgeSx } from '../../muiTheme'
-import type { PlayerResponse, AttributeView } from '../../api/types'
-import { positionLabel } from '../players/positionLabels'
+import type { PlayerResponse, AttributeView, RoleArchetype } from '../../api/types'
+import { positionLabel, DETAILED_POSITION_SHORT } from '../players/positionLabels'
+import { ARCHETYPE_LABEL, parseFamiliarRoles } from '../players/roleLabels'
 
 const POSITION_LABEL: Record<PlayerResponse['position'], string> = {
   GK: 'Goleiro', DEF: 'Defensor', MID: 'Meio-campo', ATT: 'Atacante',
@@ -22,6 +23,28 @@ const POSITION_LABEL: Record<PlayerResponse['position'], string> = {
 const GROUP_ORDER: AttributeView['group'][] = ['TECNICO', 'MENTAL', 'FISICO', 'GOLEIRO']
 const GROUP_LABEL: Record<AttributeView['group'], string> = {
   TECNICO: 'Técnico', MENTAL: 'Mental', FISICO: 'Físico', GOLEIRO: 'Goleiro',
+}
+
+/**
+ * "PE · ME"-style short-label line for a player's positions (primary first, then `altPositions`,
+ * deduplicated). `null` when the player has no `detailedPosition` at all (legacy payload) — the
+ * fallback coarse label already shows next to "Pos" in that case, so this line just disappears.
+ */
+function positionsShortLabel(player: PlayerResponse): string | null {
+  if (!player.detailedPosition) return null
+  const positions = [player.detailedPosition, ...(player.altPositions ?? [])]
+  return Array.from(new Set(positions)).map(p => DETAILED_POSITION_SHORT[p]).join(' · ')
+}
+
+/**
+ * "Atacante por dentro ★★, Ponta ★"-style line for a player's familiar role archetypes, parsed
+ * from `PlayerResponse.familiarRoles` via the shared `parseFamiliarRoles` helper (★★ for a "++"
+ * token, ★ for a lone "+"). `null` when the player has no familiar roles at all.
+ */
+function familiarRolesLabel(player: PlayerResponse): string | null {
+  const entries = Object.entries(parseFamiliarRoles(player.familiarRoles)) as [RoleArchetype, number][]
+  if (entries.length === 0) return null
+  return entries.map(([archetype, level]) => `${ARCHETYPE_LABEL[archetype]} ${'★'.repeat(level)}`).join(', ')
 }
 
 function formLabel(form: number): string {
@@ -103,6 +126,8 @@ export function PlayerDetails({ player, onClose, saveGameId, lineupControl, inst
   useEffect(() => { setTab(0) }, [player?.id])
 
   const attributes = player?.attributes ?? []
+  const positionsShort = player ? positionsShortLabel(player) : null
+  const rolesLabel = player ? familiarRolesLabel(player) : null
 
   const statsQuery = useQuery({
     queryKey: ['playerStats', saveGameId, player?.id],
@@ -137,6 +162,23 @@ export function PlayerDetails({ player, onClose, saveGameId, lineupControl, inst
               <Stat label="Fôlego" value={player.stamina} />
               <Stat label="Condição" value={`${player.fitness}%`} />
             </Stack>
+
+            {(positionsShort || rolesLabel) && (
+              <Stack spacing={0.75} sx={{ mb: 1.5 }}>
+                {positionsShort && (
+                  <Box>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.25 }}>Posições</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{positionsShort}</Typography>
+                  </Box>
+                )}
+                {rolesLabel && (
+                  <Box>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.25 }}>Funções conhecidas</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{rolesLabel}</Typography>
+                  </Box>
+                )}
+              </Stack>
+            )}
 
             <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', mb: 1.5 }}>
               <Chip size="small" variant="outlined" label={`${player.age} anos`} />

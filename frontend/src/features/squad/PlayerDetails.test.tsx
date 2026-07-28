@@ -52,6 +52,43 @@ describe('PlayerDetails — position label', () => {
   })
 })
 
+describe('PlayerDetails — posições e funções conhecidas', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.setItem('carvoeiro_manager_token', 'test-token')
+    localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
+    vi.mocked(getPlayerStats).mockResolvedValue({
+      seasons: [], totals: { seasonYear: 0, competitionName: 'Total', matchesPlayed: 0, minutesPlayed: 0,
+        goals: 0, assists: 0, fouls: 0, yellowCards: 0, redCards: 0 },
+    })
+  })
+
+  it('shows alternate positions joined by " · ", primary first', async () => {
+    renderDetails({ ...PLAYER, detailedPosition: 'LATERAL_ESQUERDO', altPositions: ['MEIA_ESQUERDA'] })
+    expect(await screen.findByText('LE · ME')).toBeInTheDocument()
+  })
+
+  it('shows just the primary short label when the player has no alternates', async () => {
+    renderDetails({ ...PLAYER, detailedPosition: 'LATERAL_ESQUERDO', altPositions: [] })
+    expect(await screen.findByText('LE')).toBeInTheDocument()
+  })
+
+  it('renders no "Posições" line when detailedPosition is null', async () => {
+    renderDetails({ ...PLAYER, detailedPosition: null, detailedPositionLabel: null, altPositions: [] })
+    expect(screen.queryByText('Posições')).not.toBeInTheDocument()
+  })
+
+  it('shows familiar roles with ★★ for "++" and ★ for "+"', async () => {
+    renderDetails({ ...PLAYER, familiarRoles: ['INSIDE_FORWARD++', 'WINGER+'] })
+    expect(await screen.findByText('Atacante por dentro ★★, Ponta ★')).toBeInTheDocument()
+  })
+
+  it('renders no "Funções conhecidas" line when familiarRoles is empty', async () => {
+    renderDetails({ ...PLAYER, familiarRoles: [] })
+    expect(screen.queryByText('Funções conhecidas')).not.toBeInTheDocument()
+  })
+})
+
 describe('PlayerDetails — Estatísticas tab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
