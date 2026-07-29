@@ -101,6 +101,24 @@ describe('assignSlots', () => {
     expect(zagSlots).toContain(result['z2'])
   })
 
+  it('breaks an overall tie the way Java UUID.compareTo does, not the way strings sort', () => {
+    // Java compares each 64-bit half SIGNED, so an id starting with 8 (negative msb) sorts BELOW
+    // one starting with 0 — the opposite of lexicographic order. byRating takes the greatest id
+    // on a tie, so the backend picks the "0…" keeper; a string compare would pick the "8…" one.
+    const gkSlot = pitchSlots('4-4-2').findIndex(s => s.accepted.includes('GOLEIRO'))
+    const negativeMsb = '8ba7b810-9dad-11d1-80b4-00c04fd430c8'
+    const positiveMsb = '0ba7b810-9dad-11d1-80b4-00c04fd430c8'
+    const players = [
+      p(negativeMsb, 'GK', 'GOLEIRO', 70),
+      p(positiveMsb, 'GK', 'GOLEIRO', 70),
+    ]
+
+    const result = assignSlots(players, '4-4-2')
+
+    expect(result[positiveMsb]).toBe(gkSlot)
+    expect(result[negativeMsb]).not.toBe(gkSlot)
+  })
+
   it('a zero-natural slot never steals another slot\'s only natural', () => {
     // Mirrors the backend SlotAssignerNaturalFirstTest regression: with no keeper in the pool the
     // GK slot has ZERO naturals. Sorted "scarcest first" by raw count it would run before every

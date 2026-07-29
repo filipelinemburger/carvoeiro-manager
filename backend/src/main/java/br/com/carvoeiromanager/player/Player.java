@@ -7,11 +7,13 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +59,17 @@ public class Player {
     /** CSV of familiar role tokens, e.g. "WINGBACK++,FULLBACK+" (spec §2.3). */
     @Column(name = "familiar_roles", nullable = false, length = 120)
     private String familiarRoles = "";
+
+    /**
+     * Lazily parsed views of the two CSV columns above, invalidated by their mutators. Not
+     * persisted, and never part of equality or the entity's identity — purely a decode cache for
+     * the match engine's hot loops (see {@link #positions()} / {@link #familiarRoles()}).
+     */
+    @Transient
+    private List<DetailedPosition> positionsCache;
+
+    @Transient
+    private Map<RoleArchetype, Integer> familiarRolesCache;
 
     @Column(name = "age", nullable = false)
     private int age;
@@ -187,7 +200,11 @@ public class Player {
     public String getName() { return name; }
     public Position getPosition() { return position; }
     public DetailedPosition getDetailedPosition() { return detailedPosition; }
-    public void setDetailedPosition(DetailedPosition detailedPosition) { this.detailedPosition = detailedPosition; }
+
+    public void setDetailedPosition(DetailedPosition detailedPosition) {
+        this.detailedPosition = detailedPosition;
+        this.positionsCache = null;
+    }
 
     /** Alternate positions (may be empty), parsed from the CSV column. */
     public List<DetailedPosition> getAltPositions() {
@@ -197,12 +214,21 @@ public class Player {
         return Arrays.stream(altPositions.split(",")).map(DetailedPosition::valueOf).toList();
     }
 
-    /** All playable positions, primary first. */
+    /**
+     * All playable positions, primary first. Cached because the match engine calls this inside
+     * O(slots × pool) loops — SlotAssigner probes it once per (player, slot) pair for naturality
+     * and again for tactical distance — and each uncached call re-split the CSV and re-parsed
+     * every enum. The cache is dropped by every mutator below; Hibernate writes the columns
+     * directly on load, before anything can read it, so a hydrated entity starts cold.
+     */
     public List<DetailedPosition> positions() {
-        List<DetailedPosition> all = new ArrayList<>(1 + getAltPositions().size());
-        all.add(detailedPosition);
-        all.addAll(getAltPositions());
-        return all;
+        if (positionsCache == null) {
+            List<DetailedPosition> all = new ArrayList<>(1 + getAltPositions().size());
+            all.add(detailedPosition);
+            all.addAll(getAltPositions());
+            positionsCache = List.copyOf(all);
+        }
+        return positionsCache;
     }
 
     /** Replaces primary + alternates (researched seed data or migration backfill). */
@@ -210,19 +236,27 @@ public class Player {
         this.detailedPosition = primary;
         this.altPositions = alternates == null || alternates.isEmpty() ? null
                 : alternates.stream().map(Enum::name).collect(Collectors.joining(","));
+        this.positionsCache = null;
     }
 
-    /** Parses the familiar-role CSV into archetype → familiarity level (2 = ++, 1 = +), insertion-ordered. */
+    /**
+     * Parses the familiar-role CSV into archetype → familiarity level (2 = ++, 1 = +),
+     * insertion-ordered. Cached for the same reason as {@link #positions()}: {@link
+     * #familiarity(RoleArchetype)} is called per player per strength calculation and each call
+     * used to rebuild the whole map just to read one entry.
+     */
     public Map<RoleArchetype, Integer> familiarRoles() {
-        Map<RoleArchetype, Integer> out = new LinkedHashMap<>();
-        if (familiarRoles == null || familiarRoles.isBlank()) {
-            return out;
+        if (familiarRolesCache == null) {
+            Map<RoleArchetype, Integer> out = new LinkedHashMap<>();
+            if (familiarRoles != null && !familiarRoles.isBlank()) {
+                for (String token : familiarRoles.split(",")) {
+                    int level = token.endsWith("++") ? 2 : 1;
+                    out.put(RoleArchetype.valueOf(token.substring(0, token.length() - (level == 2 ? 2 : 1))), level);
+                }
+            }
+            familiarRolesCache = Collections.unmodifiableMap(out);
         }
-        for (String token : familiarRoles.split(",")) {
-            int level = token.endsWith("++") ? 2 : 1;
-            out.put(RoleArchetype.valueOf(token.substring(0, token.length() - (level == 2 ? 2 : 1))), level);
-        }
-        return out;
+        return familiarRolesCache;
     }
 
     public int familiarity(RoleArchetype archetype) {
@@ -238,6 +272,7 @@ public class Player {
             RoleArchetype.valueOf(t.replaceAll("\\+", ""));   // throws on unknown archetype
         }
         this.familiarRoles = String.join(",", tokens);
+        this.familiarRolesCache = null;
     }
 
     public int getAge() { return age; }

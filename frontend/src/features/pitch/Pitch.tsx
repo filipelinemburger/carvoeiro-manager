@@ -3,7 +3,7 @@ import { Box } from '@mui/material'
 import { pitchSlots, type Slot, type Line } from './pitchSlots'
 import { PlayerToken, type TokenBadges } from './PlayerToken'
 import { tokenColors, type Kit } from './kit'
-import { DETAILED_POSITION_SHORT, isNatural } from '../players/positionLabels'
+import { DETAILED_POSITION_SHORT, isNatural, positionsShortLabel } from '../players/positionLabels'
 import type { DetailedPosition } from '../../api/types'
 
 // A drop lands on the nearest droppable slot whose center is within this fraction of the
@@ -195,6 +195,7 @@ function TeamLayer({ team, mirror, onSwap, onSlotClick, containerRef }: {
                 badges={player.badges}
                 posLabel={posLabel}
                 outOfPosition={outOfPosition}
+                naturalPositions={outOfPosition ? positionsShortLabel(player) : null}
               />
             ) : (
               <PlayerToken number={number} empty fill={colors.fill} text={colors.text} fitness={0} posLabel={posLabel} />

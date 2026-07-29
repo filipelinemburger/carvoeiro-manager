@@ -89,4 +89,28 @@ class PlayerFamiliarRolesTest {
         assertThatThrownBy(() -> p.setFamiliarRoles(List.of("WINGBACK")))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void everyMutatorDropsTheDecodeCacheSoLaterReadsSeeTheNewValue() {
+        // familiarRoles()/positions() memoize their CSV parse for the match engine's hot loops.
+        // Reading BEFORE each mutation is the whole point: it primes the cache, so a mutator that
+        // forgot to invalidate would keep serving the stale answer here.
+        Player p = player(Position.DEF);
+
+        p.setFamiliarRoles(List.of("WINGBACK++"));
+        assertThat(p.familiarRoles()).containsExactly(Map.entry(RoleArchetype.WINGBACK, 2));
+        p.setFamiliarRoles(List.of("STOPPER++", "DEFENDER+"));
+        assertThat(p.familiarRoles())
+                .containsExactly(Map.entry(RoleArchetype.STOPPER, 2), Map.entry(RoleArchetype.DEFENDER, 1));
+        assertThat(p.familiarity(RoleArchetype.WINGBACK)).isZero();
+
+        p.setPositions(DetailedPosition.ZAGUEIRO, List.of(DetailedPosition.VOLANTE));
+        assertThat(p.positions()).containsExactly(DetailedPosition.ZAGUEIRO, DetailedPosition.VOLANTE);
+
+        p.setPositions(DetailedPosition.LATERAL_ESQUERDO, List.of());
+        assertThat(p.positions()).containsExactly(DetailedPosition.LATERAL_ESQUERDO);
+
+        p.setDetailedPosition(DetailedPosition.PONTA_ESQUERDA);
+        assertThat(p.positions()).containsExactly(DetailedPosition.PONTA_ESQUERDA);
+    }
 }

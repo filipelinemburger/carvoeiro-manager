@@ -85,17 +85,35 @@ export function positionDistance(a: DetailedPosition, b: DetailedPosition): numb
   return adjacent ? 1 : 2
 }
 
+/** Anything carrying the two-axis position payload — the shape every helper below reads. */
+export type WithPositions = {
+  detailedPosition?: DetailedPosition | null
+  altPositions?: DetailedPosition[] | null
+}
+
+/**
+ * Every position a player counts as natural in — primary first, then alternates, deduplicated.
+ * Mirrors the backend `Player.positions()`. The single definition of "the player's positions":
+ * `isNatural`, the slot assigner and every label below read it, so they cannot drift apart.
+ */
+export function playerPositions(p: WithPositions): DetailedPosition[] {
+  const mine = [p.detailedPosition, ...(p.altPositions ?? [])].filter(
+    (x): x is DetailedPosition => x != null,
+  )
+  return Array.from(new Set(mine))
+}
+
+/** The player's positions as short labels ("ZAG · LD · VOL"); null when they have none. */
+export function positionsShortLabel(p: WithPositions): string | null {
+  const positions = playerPositions(p)
+  return positions.length === 0 ? null : positions.map(pos => DETAILED_POSITION_SHORT[pos]).join(' · ')
+}
+
 /**
  * Whether a player is NATURAL for a slot's accepted positions: any of the player's positions
  * (primary `detailedPosition` or `altPositions`) is in `accepted`. Mirrors the backend
  * `SlotAssigner.isNatural` exactly.
  */
-export function isNatural(
-  p: { detailedPosition?: DetailedPosition | null; altPositions?: DetailedPosition[] | null },
-  accepted: DetailedPosition[],
-): boolean {
-  const mine = [p.detailedPosition, ...(p.altPositions ?? [])].filter(
-    (x): x is DetailedPosition => x != null,
-  )
-  return mine.some(pos => accepted.includes(pos))
+export function isNatural(p: WithPositions, accepted: DetailedPosition[]): boolean {
+  return playerPositions(p).some(pos => accepted.includes(pos))
 }

@@ -36,6 +36,36 @@ function distanceToSlot(p: AssignablePlayer, accepted: DetailedPosition[]): numb
   return best
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** The two halves of a UUID as SIGNED 64-bit values, or null when `id` isn't a UUID. */
+function uuidHalves(id: string): { msb: bigint; lsb: bigint } | null {
+  if (!UUID_RE.test(id)) return null
+  const hex = id.replace(/-/g, '')
+  return {
+    msb: BigInt.asIntN(64, BigInt('0x' + hex.slice(0, 16))),
+    lsb: BigInt.asIntN(64, BigInt('0x' + hex.slice(16))),
+  }
+}
+
+/**
+ * Orders two player ids exactly as Java's `UUID.compareTo` does — the tie-break the backend
+ * SlotAssigner uses when two players share an overall. That comparison is SIGNED on each 64-bit
+ * half, so it is NOT the same as comparing the canonical strings: any id whose first hex digit is
+ * >= 8 has a negative msb and sorts before every id with a positive one, the reverse of
+ * lexicographic order. Roughly half of random UUIDs fall on that side, so a plain string compare
+ * would resolve about half of all overall-ties opposite to the server and hand the client a
+ * different XI. Non-UUID ids (test fixtures) fall back to string order.
+ */
+function compareIds(a: string, b: string): number {
+  const ha = uuidHalves(a)
+  const hb = uuidHalves(b)
+  if (!ha || !hb) return a.localeCompare(b)
+  if (ha.msb !== hb.msb) return ha.msb < hb.msb ? -1 : 1
+  if (ha.lsb !== hb.lsb) return ha.lsb < hb.lsb ? -1 : 1
+  return 0
+}
+
 /**
  * Client-side mirror of the backend SlotAssigner's greedy natural-first best-fit, used for
  * default arrangements (auto-pick, formation change, legacy lineups without persisted slots).
@@ -56,7 +86,7 @@ export function assignSlots(players: AssignablePlayer[], formation: string): Rec
   const rank = (i: number) => (tier1Count[i] === 0 ? Number.MAX_SAFE_INTEGER : tier1Count[i])
   const order = slots.map((_, i) => i).sort((a, b) => rank(a) - rank(b) || a - b)
   const byRating = (a: AssignablePlayer, b: AssignablePlayer) =>
-    b.overall - a.overall || b.id.localeCompare(a.id)
+    b.overall - a.overall || compareIds(b.id, a.id)
   const available = [...players]
   const out: Record<string, number> = {}
   for (const slotIndex of order) {

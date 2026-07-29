@@ -219,6 +219,48 @@ describe('SquadPage', () => {
     expect(pickBtn('Defensor Quatro')).toHaveTextContent('LE')
   })
 
+  it('auto-pick treats an alternate position as natural, not as improvisation', async () => {
+    // Five defenders for the back four, and the ONLY player who can play left-back does it
+    // through an alternate position while being the lowest-rated of them. If altPositions never
+    // reaches assignSlots, the LE slot looks unfillable, sorts last, and its distance fallback
+    // hands the shirt to the higher-rated pure centre-back — benching the one real left-back and
+    // fielding an improviser the server would never pick.
+    const def = (id: string, name: string, overall: number,
+                 detailed: PlayerResponse['detailedPosition'], alts?: PlayerResponse['altPositions']) =>
+      ({ ...makeOutfield(id, name, 'DEF'), overall, detailedPosition: detailed, altPositions: alts })
+    const mid = (id: string, name: string, detailed: PlayerResponse['detailedPosition']) =>
+      ({ ...makeOutfield(id, name, 'MID'), detailedPosition: detailed })
+    const att = (id: string, name: string, detailed: PlayerResponse['detailedPosition']) =>
+      ({ ...makeOutfield(id, name, 'ATT'), detailedPosition: detailed })
+
+    mockGetSquad.mockResolvedValue({
+      players: [
+        { ...GK, detailedPosition: 'GOLEIRO' },
+        def('p-ld', 'Lateral Direito', 75, 'LATERAL_DIREITO'),
+        def('p-zbig', 'Zagueiro Forte', 90, 'ZAGUEIRO'),
+        def('p-z1', 'Zagueiro Um', 80, 'ZAGUEIRO'),
+        def('p-z2', 'Zagueiro Dois', 78, 'ZAGUEIRO'),
+        def('p-zalt', 'Canhoto Versatil', 60, 'ZAGUEIRO', ['LATERAL_ESQUERDO']),
+        mid('p-vol', 'Volante Um', 'VOLANTE'),
+        mid('p-mc', 'Meia Central', 'MEIA_CENTRAL'),
+        mid('p-mei', 'Meia Armador', 'MEIA_ARMADOR'),
+        att('p-pd', 'Ponta Direita', 'PONTA_DIREITA'),
+        att('p-st', 'Centroavante Um', 'ATACANTE'),
+        att('p-pe', 'Ponta Esquerda', 'PONTA_ESQUERDA'),
+      ],
+      primaryColor: '#f7d417',
+      secondaryColor: '#111111',
+    })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Canhoto Versatil'))
+
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+
+    expect(pickBtn('Canhoto Versatil')).toHaveTextContent('LE')
+    // …and the centre-back who would otherwise have been improvised there is the one left out.
+    expect(pickBtn('Zagueiro Dois')).toHaveTextContent('+')
+  })
+
   it('renders the formation pitch with the selected XI', async () => {
     mockGetLineup.mockResolvedValue({
       lineupId: 'l-1', clubId: 'club-1', formation: '4-4-2',

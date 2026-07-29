@@ -23,11 +23,20 @@ export function PlayerToken(props: {
   posLabel?: string
   /** True when the player's detailed position is not accepted by the slot — draws the warn tint. */
   outOfPosition?: boolean
+  /** The improvised player's own positions ("ZAG · VOL"), named in the warn tooltip. */
+  naturalPositions?: string | null
 }) {
-  const { number, surname, fill, text, fitness, badges, empty, posLabel, outOfPosition } = props
+  const { number, surname, fill, text, fitness, badges, empty, posLabel, outOfPosition, naturalPositions } = props
   const ring = ringColor(Math.max(0, Math.min(100, fitness)))
   const warn = !empty && !!outOfPosition
-  const title = empty ? undefined : warn ? 'Fora de posição' : posLabel
+  // An improvised token says WHERE the player actually belongs, not just that something is off —
+  // "Improvisado — posição natural: ZAG · VOL" (spec §5.1). Falls back to the bare word when the
+  // payload carries no detailed positions at all (legacy saves).
+  const title = empty
+    ? undefined
+    : warn
+      ? (naturalPositions ? `Improvisado — posição natural: ${naturalPositions}` : 'Improvisado')
+      : posLabel
   return (
     <Box
       data-testid="player-token"

@@ -206,8 +206,18 @@ export function SquadPage() {
   const players = data?.players ?? []
   const slots = pitchSlots(formation)
 
-  const toAssignable = (p: PlayerResponse): AssignablePlayer =>
-    ({ id: p.id, position: p.position, detailedPosition: p.detailedPosition, overall: p.overall })
+  // altPositions is load-bearing, not decoration: assignSlots counts a player as NATURAL for any
+  // of his positions, so dropping the alternates here would make the client improvise players the
+  // backend places naturally — auto-pick, formation change and hydration would all disagree with
+  // the server's XI, and the pitch (which reads the full payload) would then show no warn tint on
+  // the improviser the client itself chose.
+  const toAssignable = (p: PlayerResponse): AssignablePlayer => ({
+    id: p.id,
+    position: p.position,
+    detailedPosition: p.detailedPosition,
+    altPositions: p.altPositions ?? undefined,
+    overall: p.overall,
+  })
 
   // The detailed position Função/Foco are chosen against: a starter's ASSIGNED SLOT position,
   // or a bench/unpicked player's own primary position (falling back to the coarse band's

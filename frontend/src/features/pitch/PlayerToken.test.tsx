@@ -26,11 +26,19 @@ describe('PlayerToken', () => {
     expect(screen.getByLabelText('Cartão amarelo')).toBeInTheDocument()
   })
 
-  it('draws the out-of-position warn cue when the player is out of position', () => {
+  it('names the improvised player\'s real positions in the warn tooltip', () => {
+    render(<PlayerToken number={4} fill="#f7d417" text="#111111" fitness={80} posLabel="LE"
+      outOfPosition naturalPositions="ZAG · VOL" />)
+    const token = screen.getByTestId('player-token')
+    expect(token).toHaveAttribute('data-out-of-position', 'true')
+    expect(token).toHaveAttribute('title', 'Improvisado — posição natural: ZAG · VOL')
+  })
+
+  it('falls back to the bare warning when the player carries no detailed positions', () => {
     render(<PlayerToken number={4} fill="#f7d417" text="#111111" fitness={80} posLabel="ZAG" outOfPosition />)
     const token = screen.getByTestId('player-token')
     expect(token).toHaveAttribute('data-out-of-position', 'true')
-    expect(token).toHaveAttribute('title', 'Fora de posição')
+    expect(token).toHaveAttribute('title', 'Improvisado')
   })
 
   it('renders normally (no warn cue, shows the slot label) when in position', () => {
