@@ -10,20 +10,28 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Immutable, eagerly-loaded climate normals read once from {@code seed/climate.json}.
+ * Immutable, lazily-loaded climate normals read from {@code seed/climate.json}.
  * Static because the table is game-wide reference data, not per-save state — the same
- * shape as the other static match utilities. A missing or malformed table is a
- * programming error and fails fast at class-init.
+ * shape as the other static match utilities. Loads on first access and re-attempts
+ * on failure, so a missing or malformed table remains diagnosable in running apps
+ * rather than poisoning the class forever.
  */
 public final class ClimateTable {
 
-    private static final Map<ClimateZone, List<MonthProfile>> ZONES = load();
+    private static Map<ClimateZone, List<MonthProfile>> cachedZones;
 
     private ClimateTable() {
     }
 
     public static MonthProfile profileFor(ClimateZone zone, Month month) {
-        return ZONES.get(zone).get(month.getValue() - 1);
+        return getZones().get(zone).get(month.getValue() - 1);
+    }
+
+    private static synchronized Map<ClimateZone, List<MonthProfile>> getZones() {
+        if (cachedZones == null) {
+            cachedZones = load();
+        }
+        return cachedZones;
     }
 
     private record ClimateFile(Map<String, List<MonthProfile>> zones) {

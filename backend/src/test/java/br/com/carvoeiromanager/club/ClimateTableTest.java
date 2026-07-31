@@ -38,4 +38,12 @@ class ClimateTableTest {
                     .isGreaterThanOrEqualTo(18);
         }
     }
+
+    @Test
+    void lazyLoadingCachesSuccessfullyAcrossMultipleCalls() {
+        MonthProfile first = ClimateTable.profileFor(ClimateZone.SUDESTE, Month.JANUARY);
+        MonthProfile second = ClimateTable.profileFor(ClimateZone.SUDESTE, Month.JANUARY);
+        assertThat(first).isEqualTo(second);
+        assertThat(first.month()).isEqualTo(1);
+    }
 }
