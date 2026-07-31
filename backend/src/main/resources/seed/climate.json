@@ -1,0 +1,60 @@
+{
+  "zones": {
+    "SUL": [
+      { "month": 1,  "minC": 19, "maxC": 30, "rainChance": 0.34, "windChance": 0.08 },
+      { "month": 2,  "minC": 19, "maxC": 29, "rainChance": 0.33, "windChance": 0.08 },
+      { "month": 3,  "minC": 18, "maxC": 28, "rainChance": 0.30, "windChance": 0.09 },
+      { "month": 4,  "minC": 15, "maxC": 25, "rainChance": 0.26, "windChance": 0.10 },
+      { "month": 5,  "minC": 12, "maxC": 22, "rainChance": 0.26, "windChance": 0.12 },
+      { "month": 6,  "minC": 10, "maxC": 20, "rainChance": 0.27, "windChance": 0.13 },
+      { "month": 7,  "minC": 9,  "maxC": 19, "rainChance": 0.29, "windChance": 0.14 },
+      { "month": 8,  "minC": 10, "maxC": 20, "rainChance": 0.30, "windChance": 0.15 },
+      { "month": 9,  "minC": 12, "maxC": 21, "rainChance": 0.33, "windChance": 0.15 },
+      { "month": 10, "minC": 14, "maxC": 24, "rainChance": 0.33, "windChance": 0.13 },
+      { "month": 11, "minC": 16, "maxC": 26, "rainChance": 0.30, "windChance": 0.11 },
+      { "month": 12, "minC": 18, "maxC": 28, "rainChance": 0.32, "windChance": 0.09 }
+    ],
+    "SUDESTE": [
+      { "month": 1,  "minC": 20, "maxC": 31, "rainChance": 0.42, "windChance": 0.06 },
+      { "month": 2,  "minC": 20, "maxC": 31, "rainChance": 0.38, "windChance": 0.06 },
+      { "month": 3,  "minC": 19, "maxC": 30, "rainChance": 0.33, "windChance": 0.06 },
+      { "month": 4,  "minC": 17, "maxC": 28, "rainChance": 0.20, "windChance": 0.07 },
+      { "month": 5,  "minC": 14, "maxC": 26, "rainChance": 0.13, "windChance": 0.08 },
+      { "month": 6,  "minC": 12, "maxC": 25, "rainChance": 0.09, "windChance": 0.08 },
+      { "month": 7,  "minC": 12, "maxC": 25, "rainChance": 0.08, "windChance": 0.09 },
+      { "month": 8,  "minC": 13, "maxC": 27, "rainChance": 0.08, "windChance": 0.10 },
+      { "month": 9,  "minC": 15, "maxC": 28, "rainChance": 0.15, "windChance": 0.11 },
+      { "month": 10, "minC": 17, "maxC": 29, "rainChance": 0.26, "windChance": 0.09 },
+      { "month": 11, "minC": 18, "maxC": 30, "rainChance": 0.35, "windChance": 0.07 },
+      { "month": 12, "minC": 19, "maxC": 30, "rainChance": 0.42, "windChance": 0.06 }
+    ],
+    "CENTRO_OESTE": [
+      { "month": 1,  "minC": 22, "maxC": 32, "rainChance": 0.45, "windChance": 0.05 },
+      { "month": 2,  "minC": 22, "maxC": 32, "rainChance": 0.42, "windChance": 0.05 },
+      { "month": 3,  "minC": 22, "maxC": 32, "rainChance": 0.40, "windChance": 0.05 },
+      { "month": 4,  "minC": 21, "maxC": 32, "rainChance": 0.22, "windChance": 0.06 },
+      { "month": 5,  "minC": 19, "maxC": 31, "rainChance": 0.10, "windChance": 0.07 },
+      { "month": 6,  "minC": 18, "maxC": 31, "rainChance": 0.04, "windChance": 0.07 },
+      { "month": 7,  "minC": 17, "maxC": 32, "rainChance": 0.03, "windChance": 0.08 },
+      { "month": 8,  "minC": 19, "maxC": 34, "rainChance": 0.05, "windChance": 0.09 },
+      { "month": 9,  "minC": 21, "maxC": 35, "rainChance": 0.15, "windChance": 0.09 },
+      { "month": 10, "minC": 22, "maxC": 34, "rainChance": 0.32, "windChance": 0.07 },
+      { "month": 11, "minC": 22, "maxC": 33, "rainChance": 0.40, "windChance": 0.06 },
+      { "month": 12, "minC": 22, "maxC": 32, "rainChance": 0.45, "windChance": 0.05 }
+    ],
+    "NORDESTE_LITORAL": [
+      { "month": 1,  "minC": 24, "maxC": 32, "rainChance": 0.20, "windChance": 0.12 },
+      { "month": 2,  "minC": 24, "maxC": 32, "rainChance": 0.25, "windChance": 0.12 },
+      { "month": 3,  "minC": 24, "maxC": 31, "rainChance": 0.35, "windChance": 0.11 },
+      { "month": 4,  "minC": 23, "maxC": 30, "rainChance": 0.42, "windChance": 0.11 },
+      { "month": 5,  "minC": 23, "maxC": 30, "rainChance": 0.45, "windChance": 0.12 },
+      { "month": 6,  "minC": 22, "maxC": 29, "rainChance": 0.45, "windChance": 0.13 },
+      { "month": 7,  "minC": 22, "maxC": 29, "rainChance": 0.40, "windChance": 0.14 },
+      { "month": 8,  "minC": 22, "maxC": 29, "rainChance": 0.28, "windChance": 0.15 },
+      { "month": 9,  "minC": 23, "maxC": 30, "rainChance": 0.18, "windChance": 0.15 },
+      { "month": 10, "minC": 23, "maxC": 31, "rainChance": 0.12, "windChance": 0.14 },
+      { "month": 11, "minC": 24, "maxC": 31, "rainChance": 0.10, "windChance": 0.13 },
+      { "month": 12, "minC": 24, "maxC": 32, "rainChance": 0.14, "windChance": 0.12 }
+    ]
+  }
+}
