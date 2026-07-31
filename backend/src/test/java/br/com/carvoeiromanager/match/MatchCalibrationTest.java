@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.club.ClimateZone;
 import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attributes;
 import br.com.carvoeiromanager.player.GameStyle;
@@ -15,6 +16,7 @@ import br.com.carvoeiromanager.seed.SeedLoader;
 import br.com.carvoeiromanager.seed.SeedPlayer;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -140,5 +142,33 @@ class MatchCalibrationTest {
         }
         double mean = totalGoals / (double) games;
         assertThat(mean).as("mean goals per match").isBetween(2.4, 3.0);
+    }
+
+    /**
+     * Well-spread synthetic fixture id, mirroring {@code WeatherGeneratorTest.fixtureId}.
+     * {@code WeatherGenerator} seeds its RNG from {@code msb ^ lsb}, so a naive {@code new UUID(i, i)}
+     * XORs to a constant 0 seed for every i, and small sequential seeds correlate on the first draw.
+     */
+    private static UUID fixtureId(long i) {
+        return new UUID(i * 0x9E3779B97F4A7C15L, i * 0xC2B2AE3D27D4EB4FL);
+    }
+
+    @Test
+    void meanGoalsPerMatchStayInBandWithRealWeather() {
+        List<SeedClub> ranked = rankedByStrength();
+        TeamMatchInput mid = strength(ranked.get(ranked.size() / 2));
+
+        long totalGoals = 0;
+        int games = 0;
+        for (int i = 0; i < SIMS; i++) {
+            long seed = 21000L + i;
+            LocalDate matchDate = LocalDate.of(2026, 1 + (i % 12), 15);
+            Weather weather = WeatherGenerator.forFixture(fixtureId(seed), ClimateZone.SUL, matchDate);
+            var m = engine.simulate(mid, mid, weather, seed);
+            totalGoals += m.homeGoals() + m.awayGoals();
+            games++;
+        }
+        double mean = totalGoals / (double) games;
+        assertThat(mean).as("mean goals per match with real weather").isBetween(2.4, 3.0);
     }
 }

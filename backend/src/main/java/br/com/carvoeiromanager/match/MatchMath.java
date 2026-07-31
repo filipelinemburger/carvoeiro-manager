@@ -16,7 +16,7 @@ final class MatchMath {
 
     // --- Recalibrated scoring curve (calibrated against the target bands by MatchCalibrationTest) ---
     static final double GAIN = 2.0;         // talent-spread multiplier (1.0 == legacy)
-    static final double ANCHOR = 1.35;      // xG of an average (d == REF) matchup, home bonus excluded
+    static final double ANCHOR = 1.44;      // xG of an average (d == REF) matchup, home bonus excluded
     static final double REF = -6.68;        // average-matchup differential across seeded squads
     static final double HOME_XG = 0.20;     // home-edge xG bonus (home +, away -)
     static final double XG_FLOOR = 0.2;     // lower clamp (unchanged)

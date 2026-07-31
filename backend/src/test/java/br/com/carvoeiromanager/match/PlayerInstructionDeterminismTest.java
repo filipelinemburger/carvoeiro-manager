@@ -41,7 +41,12 @@ class PlayerInstructionDeterminismTest {
             + "49:H:FOUL:6|53:A:FOUL:1|60:A:FOUL:6|61:H:FOUL:2|62:H:FOUL:3|68:H:FOUL:10|76:H:FOUL:5|78:H:FOUL:8|"
             + "83:H:FOUL:9|86:H:FOUL:1";
     // Instant engine (TeamStrengthCalculator -> MatchSimulationService), seeds 0..11.
-    private static final String GOLDEN_INSTANT = "1-3|0-4|1-1|2-2|2-1|2-1|2-1|2-0|2-0|3-2|0-0|0-2|";
+    // Re-baselined when MatchMath.ANCHOR moved 1.35 -> 1.44 in the live-weather calibration task
+    // (MatchCalibrationTest): raising ANCHOR lifts every simulated match's baseline xG, so this is
+    // a legitimate consequence of a global scoring recalibration, not an engine defect. Only the
+    // seed-10 result changed (0-0 -> 0-1); the other eleven seeds are byte-identical to the prior
+    // golden.
+    private static final String GOLDEN_INSTANT = "1-3|0-4|1-1|2-2|2-1|2-1|2-1|2-0|2-0|3-2|0-1|0-2|";
 
     private final br.com.carvoeiromanager.staff.StaffEffectsService staff =
             Mockito.mock(br.com.carvoeiromanager.staff.StaffEffectsService.class);
