@@ -30,11 +30,13 @@ import java.util.function.ToIntFunction;
  * the config with zero RNG. Kept fully separate from {@link MatchSimulationService} so the
  * instant engine (used for all AI/other-club fixtures) stays byte-for-byte unchanged.
  *
- * <p>{@code cfg.weather()} is resolved into a {@link WeatherEffects.Impact} exactly ONCE, up front —
- * never per minute, even though substitutions/tactics changes rebuild {@code homeInput}/{@code
- * awayInput} mid-match. Weather does not change during a match (out of scope), so recomputing per
- * minute would let a mid-match tactical change retroactively alter fatigue. Neutral weather
- * ({@link Weather#neutral()}) is guaranteed a no-op by {@link WeatherEffects}.
+ * <p>{@code cfg.weather()} itself never changes mid-match — the {@link Weather} value passed in
+ * {@link LiveMatchConfig} is fixed for all 90 minutes. But the RESPONSE to that weather depends on
+ * each side's current {@code gameStyle} (see {@link WeatherEffects#of}), and a human manager can
+ * change game style mid-match via a tactics change. So {@code weatherImpact} is recomputed from
+ * {@code homeInput}/{@code awayInput} every time they are rebuilt (substitution, tactics change, or
+ * AI-manager reaction), tracking each side's live game style from that minute forward. Neutral
+ * weather ({@link Weather#neutral()}) is guaranteed a no-op by {@link WeatherEffects}.
  */
 @Service
 public class LiveMatchEngine {
@@ -110,9 +112,9 @@ public class LiveMatchEngine {
         TeamMatchInput awayInput = strength(away, away.currentProfile, cfg);
         away.dirty = false;
 
-        // Computed ONCE for the whole match, not per minute: weather does not change mid-match
-        // (out of scope), so recomputing on every homeInput/awayInput rebuild (e.g. after a
-        // substitution or tactics change) would let a mid-match change retroactively alter fatigue.
+        // Initial state at kickoff, from the starting game styles. Recomputed below whenever
+        // homeInput/awayInput are rebuilt, so the weather response tracks each side's live
+        // game style — cfg.weather() itself stays fixed; only the response to it changes.
         WeatherEffects.Impact weatherImpact = WeatherEffects.of(cfg.weather(), homeInput, awayInput);
 
         int homeGoals = 0;
@@ -128,8 +130,17 @@ public class LiveMatchEngine {
                 reactAiManager(minute, aiSide, aiIdentity, scoreDiff, events);
                 maybeAiSubstitution(minute, aiSide, cfg, events);
             }
+            boolean inputsRebuilt = home.dirty || away.dirty;
             if (home.dirty) { homeInput = strength(home, home.currentProfile, cfg); home.dirty = false; }
             if (away.dirty) { awayInput = strength(away, away.currentProfile, cfg); away.dirty = false; }
+            // Weather itself (cfg.weather()) never changes — only the response to it, which is a
+            // pure, RNG-free function of the current homeInput/awayInput (specifically each side's
+            // live gameStyle). Recomputing here, and only here, means a tactics change that flips a
+            // side's game style changes how weather affects that side starting this minute, without
+            // touching the RNG draw order or minutes already played.
+            if (inputsRebuilt) {
+                weatherImpact = WeatherEffects.of(cfg.weather(), homeInput, awayInput);
+            }
 
             double tempo = (homeInput.tempo() + awayInput.tempo()) / 2.0;
             double homeFf = MatchMath.fitnessFactor(
