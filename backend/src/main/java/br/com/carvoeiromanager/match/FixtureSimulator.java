@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.finance.AttendanceCalculator;
 import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Player;
@@ -55,6 +56,9 @@ public class FixtureSimulator {
     private final ClubRepository clubRepository;
     private final FixtureRepository fixtureRepository;
     private final FitnessCalculator fitnessCalculator;
+    private final AttendanceCalculator attendanceCalculator;
+    private final WeatherService weatherService;
+    private final MatchContextResolver matchContextResolver;
 
     public FixtureSimulator(LineupService lineupService,
                             TacticsService tacticsService,
@@ -66,7 +70,10 @@ public class FixtureSimulator {
                             PlayerRepository playerRepository,
                             ClubRepository clubRepository,
                             FixtureRepository fixtureRepository,
-                            FitnessCalculator fitnessCalculator) {
+                            FitnessCalculator fitnessCalculator,
+                            AttendanceCalculator attendanceCalculator,
+                            WeatherService weatherService,
+                            MatchContextResolver matchContextResolver) {
         this.lineupService = lineupService;
         this.tacticsService = tacticsService;
         this.teamStrengthCalculator = teamStrengthCalculator;
@@ -78,6 +85,9 @@ public class FixtureSimulator {
         this.clubRepository = clubRepository;
         this.fixtureRepository = fixtureRepository;
         this.fitnessCalculator = fitnessCalculator;
+        this.attendanceCalculator = attendanceCalculator;
+        this.weatherService = weatherService;
+        this.matchContextResolver = matchContextResolver;
     }
 
     private record FixtureSim(FixtureResultResponse response, List<Player> homeXi, List<Player> awayXi,
@@ -291,15 +301,26 @@ public class FixtureSimulator {
 
         long seed = seedFor(saveGameId, fixture);
 
+        Club homeClub = clubById.get(homeClubId);
+        Club awayClub = clubById.get(awayClubId);
+
         fixture.recordResult(match.homeGoals(), match.awayGoals());
+        if (homeClub != null && awayClub != null) {
+            fixture.setAttendance(attendanceCalculator.attendance(
+                    homeClub.getStadiumCapacity(),
+                    homeClub.getReputation(),
+                    awayClub.getReputation(),
+                    matchContextResolver.recentFormPoints(saveGameId, fixture.getCompetitionId(), homeClubId, matchDate),
+                    matchContextResolver.leaguePosition(saveGameId, fixture.getCompetitionId(), homeClubId),
+                    matchContextResolver.clubCount(saveGameId, fixture.getCompetitionId()),
+                    weatherService.weatherFor(fixture, homeClub)));
+        }
         fixtureRepository.save(fixture);
 
         List<AttributedEvent> attributed = saveEvents(fixture, match, homeXi, awayXi,
                 homeProfile, awayProfile, homeClubId, awayClubId, seed);
         persistAppearances(fixture, homeXi, awayXi, homeProfile, awayProfile, homeClubId, awayClubId, seed);
 
-        Club homeClub = clubById.get(homeClubId);
-        Club awayClub = clubById.get(awayClubId);
         FixtureResultResponse response = new FixtureResultResponse(
                 fixture.getId(),
                 homeClubId, homeClub != null ? homeClub.getName() : "", shortName(homeClub),

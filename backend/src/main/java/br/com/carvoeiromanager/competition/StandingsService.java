@@ -38,7 +38,16 @@ public class StandingsService {
     public List<StandingRow> getStandings(UUID saveGameId, UUID competitionId, UUID userId) {
         // Enforce save-game ownership before exposing any data.
         saveGameService.requireOwned(saveGameId, userId);
+        return computeStandings(saveGameId, competitionId);
+    }
 
+    /**
+     * Same computation as {@link #getStandings}, without the ownership check — for internal
+     * engine use where there is no authenticated user in context (e.g. match resolution needs a
+     * club's league position while simulating a round). Callers reachable from a controller must
+     * go through {@link #getStandings} instead so ownership is still enforced.
+     */
+    public List<StandingRow> computeStandings(UUID saveGameId, UUID competitionId) {
         // The competition must belong to this save game; otherwise treat as not found
         // (avoids leaking competitions from other save games).
         Competition competition = competitionRepository.findById(competitionId)

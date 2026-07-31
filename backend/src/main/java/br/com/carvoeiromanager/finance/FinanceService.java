@@ -14,7 +14,6 @@ import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.competition.StandingRow;
 import br.com.carvoeiromanager.competition.StandingsCalculator;
-import br.com.carvoeiromanager.match.Weather;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.staff.Staff;
@@ -28,6 +27,7 @@ import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -57,21 +57,9 @@ public class FinanceService {
     private final FixtureRepository fixtureRepository;
     private final FinanceTransactionRepository financeTransactionRepository;
     private final FinanceCalculator financeCalculator;
-    private final AttendanceCalculator attendanceCalculator;
     private final StaffRepository staffRepository;
     private final StaffEffectsService staffEffectsService;
     private final StandingsCalculator standingsCalculator = new StandingsCalculator();
-
-    /**
-     * Holding-measure inputs for {@link AttendanceCalculator} until Task 9 threads real
-     * recent-form, league-position, and weather data through match resolution.
-     * {@code clubCount=1} deliberately hits the calculator's single-club shortcut so the
-     * league-position factor is neutral (1.0) rather than a fabricated position; recent form
-     * uses the midpoint of the 0-15 scale so the form factor is close to neutral too.
-     */
-    private static final int NEUTRAL_RECENT_FORM_POINTS = 8;
-    private static final int NEUTRAL_LEAGUE_POSITION = 1;
-    private static final int NEUTRAL_CLUB_COUNT = 1;
 
     public FinanceService(SaveGameService saveGameService,
                           SaveGameRepository saveGameRepository,
@@ -82,7 +70,6 @@ public class FinanceService {
                           FixtureRepository fixtureRepository,
                           FinanceTransactionRepository financeTransactionRepository,
                           FinanceCalculator financeCalculator,
-                          AttendanceCalculator attendanceCalculator,
                           StaffRepository staffRepository,
                           StaffEffectsService staffEffectsService) {
         this.saveGameService = saveGameService;
@@ -94,7 +81,6 @@ public class FinanceService {
         this.fixtureRepository = fixtureRepository;
         this.financeTransactionRepository = financeTransactionRepository;
         this.financeCalculator = financeCalculator;
-        this.attendanceCalculator = attendanceCalculator;
         this.staffRepository = staffRepository;
         this.staffEffectsService = staffEffectsService;
     }
@@ -150,19 +136,18 @@ public class FinanceService {
 
             BigDecimal gate = BigDecimal.ZERO;
             if (homeClubs.contains(clubId)) {
-                UUID awayId = matchdayFixtures.stream()
+                // Attendance is computed and persisted on the fixture at match-resolution time
+                // (FixtureSimulator / LiveMatchService) — finance just reads the realized
+                // number rather than recomputing it.
+                Integer attendance = matchdayFixtures.stream()
                         .filter(f -> f.getHomeClubId().equals(clubId))
-                        .map(Fixture::getAwayClubId)
+                        .map(Fixture::getAttendance)
+                        .filter(Objects::nonNull)
                         .findFirst()
                         .orElse(null);
-                Club away = awayId != null ? clubById.get(awayId) : null;
-                int awayRep = away != null ? away.getReputation() : 0;
-                // Holding measure: form/position/weather are neutral until Task 9 threads real
-                // season context through match resolution (see NEUTRAL_* constants above).
-                int attendance = attendanceCalculator.attendance(club.getStadiumCapacity(),
-                        club.getReputation(), awayRep, NEUTRAL_RECENT_FORM_POINTS,
-                        NEUTRAL_LEAGUE_POSITION, NEUTRAL_CLUB_COUNT, Weather.neutral());
-                gate = financeCalculator.gateIncome(attendance);
+                gate = attendance != null
+                        ? financeCalculator.gateIncome(attendance)
+                        : BigDecimal.ZERO;
             }
 
             BigDecimal matchCost = playingClubs.contains(clubId)

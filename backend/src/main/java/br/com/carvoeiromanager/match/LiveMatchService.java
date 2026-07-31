@@ -9,6 +9,7 @@ import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.finance.AttendanceCalculator;
 import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Formation;
 import br.com.carvoeiromanager.player.GameStyle;
@@ -69,6 +70,9 @@ public class LiveMatchService {
     private final MatchOutcomeApplier matchOutcomeApplier;
     private final SeasonAdvanceService seasonAdvanceService;
     private final ObjectMapper objectMapper;
+    private final AttendanceCalculator attendanceCalculator;
+    private final WeatherService weatherService;
+    private final MatchContextResolver matchContextResolver;
 
     public LiveMatchService(SaveGameService saveGameService, LineupService lineupService,
                             TacticsService tacticsService, FitnessCalculator fitnessCalculator,
@@ -80,7 +84,8 @@ public class LiveMatchService {
                             PlayerRepository playerRepository, MatchEventRepository matchEventRepository,
                             FixtureAppearanceRepository fixtureAppearanceRepository,
                             MatchOutcomeApplier matchOutcomeApplier, SeasonAdvanceService seasonAdvanceService,
-                            ObjectMapper objectMapper) {
+                            ObjectMapper objectMapper, AttendanceCalculator attendanceCalculator,
+                            WeatherService weatherService, MatchContextResolver matchContextResolver) {
         this.saveGameService = saveGameService;
         this.lineupService = lineupService;
         this.tacticsService = tacticsService;
@@ -99,6 +104,9 @@ public class LiveMatchService {
         this.matchOutcomeApplier = matchOutcomeApplier;
         this.seasonAdvanceService = seasonAdvanceService;
         this.objectMapper = objectMapper;
+        this.attendanceCalculator = attendanceCalculator;
+        this.weatherService = weatherService;
+        this.matchContextResolver = matchContextResolver;
     }
 
     @Transactional
@@ -383,7 +391,23 @@ public class LiveMatchService {
         Fixture fixture = fixtureRepository.findById(lm.getFixtureId()).orElseThrow();
         UUID homeClubId = fixture.getHomeClubId();
         UUID awayClubId = fixture.getAwayClubId();
+
+        Map<UUID, Club> clubs = clubRepository.findBySaveGameId(saveGameId).stream()
+                .collect(Collectors.toMap(Club::getId, c -> c));
+        Club homeClub = clubs.get(homeClubId);
+        Club awayClub = clubs.get(awayClubId);
+
         fixture.recordResult(timeline.homeGoals(), timeline.awayGoals());
+        if (homeClub != null && awayClub != null) {
+            fixture.setAttendance(attendanceCalculator.attendance(
+                    homeClub.getStadiumCapacity(),
+                    homeClub.getReputation(),
+                    awayClub.getReputation(),
+                    matchContextResolver.recentFormPoints(saveGameId, fixture.getCompetitionId(), homeClubId, fixture.getMatchDate()),
+                    matchContextResolver.leaguePosition(saveGameId, fixture.getCompetitionId(), homeClubId),
+                    matchContextResolver.clubCount(saveGameId, fixture.getCompetitionId()),
+                    weatherService.weatherFor(fixture, homeClub)));
+        }
         fixtureRepository.save(fixture);
 
         // Persist real match events (goals + cards), mirroring the instant path's match_events rows.
@@ -432,13 +456,11 @@ public class LiveMatchService {
         }
         playerRepository.saveAll(allPlayed);
 
-        Map<UUID, Club> clubs = clubRepository.findBySaveGameId(saveGameId).stream()
-                .collect(Collectors.toMap(Club::getId, c -> c));
         FixtureResultResponse userResult = new FixtureResultResponse(
                 fixture.getId(),
-                homeClubId, clubs.get(homeClubId).getName(), shortName(clubs.get(homeClubId)), timeline.homeGoals(),
-                awayClubId, clubs.get(awayClubId).getName(), shortName(clubs.get(awayClubId)), timeline.awayGoals(),
-                clubs.get(homeClubId).resolvedStadiumName());
+                homeClubId, homeClub.getName(), shortName(homeClub), timeline.homeGoals(),
+                awayClubId, awayClub.getName(), shortName(awayClub), timeline.awayGoals(),
+                homeClub.resolvedStadiumName());
         Set<UUID> userPlayedIds = allPlayed.stream().map(Player::getId).collect(Collectors.toSet());
 
         List<PlayerRating> playerRatings = managedRatings(lm, cfg, timeline, MINUTES);

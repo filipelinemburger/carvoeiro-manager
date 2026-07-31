@@ -91,6 +91,10 @@ class FinanceMatchdayIT {
 
         int round = 5;
         Fixture fx = Fixture.create(s.getId(), compA.getId(), round, a1.getId(), a2.getId(), MATCH_DATE);
+        // Attendance is now computed and persisted at match-resolution time (FixtureSimulator /
+        // LiveMatchService) rather than by FinanceService — set it directly here since this test
+        // drives processMatchday without going through the simulator.
+        fx.setAttendance(5000);
         fixtureRepository.save(fx);
 
         FinanceRoundResponse breakdown = financeService.processMatchday(s.getId(), compA.getId(), List.of(fx), MATCH_DATE);
