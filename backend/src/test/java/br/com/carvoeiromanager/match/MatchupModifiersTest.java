@@ -170,8 +170,8 @@ class MatchupModifiersTest {
         TeamMatchInput home = input(75, 65, Mentality.BALANCED);
         TeamMatchInput away = input(60, 70, Mentality.BALANCED);
 
-        SimulatedMatch first = engine.simulate(home, away, 123L);
-        SimulatedMatch second = engine.simulate(home, away, 123L);
+        SimulatedMatch first = engine.simulate(home, away, Weather.neutral(), 123L);
+        SimulatedMatch second = engine.simulate(home, away, Weather.neutral(), 123L);
 
         assertThat(first).isEqualTo(second);
     }
@@ -188,8 +188,8 @@ class MatchupModifiersTest {
         long attackingGoals = 0;
         long balancedGoals = 0;
         for (long seed = 0; seed < 200; seed++) {
-            attackingGoals += engine.simulate(attackingHome, weakAway, seed).homeGoals();
-            balancedGoals += engine.simulate(balancedHome, weakAway, seed).homeGoals();
+            attackingGoals += engine.simulate(attackingHome, weakAway, Weather.neutral(), seed).homeGoals();
+            balancedGoals += engine.simulate(balancedHome, weakAway, Weather.neutral(), seed).homeGoals();
         }
 
         double attackingMean = attackingGoals / 200.0;

@@ -531,8 +531,22 @@ public class LiveMatchService {
 
         List<TimedTactics> tacticsSchedule = deserializeTactics(lm.getTacticsSchedule());
 
+        Weather weather = resolveWeather(lm.getFixtureId(), clubOf(homeXi), lm.getMatchDate());
+
         return new LiveMatchConfig(lm.getSeed(), homeXi, awayXi, homeBench, awayBench,
-                homeProfile, awayProfile, fitness, subs, tacticsSchedule, !lm.isManagedIsHome());
+                homeProfile, awayProfile, fitness, subs, tacticsSchedule, !lm.isManagedIsHome(), weather);
+    }
+
+    /**
+     * Weather is always derived from the HOME club's climate zone (per the feature spec) and never
+     * persisted — {@code WeatherGenerator.forFixture} is deterministic given the fixture id, so every
+     * {@code configFor} call for the same live match resolves the identical weather. A missing home
+     * club falls back to {@link Weather#neutral()} rather than throwing.
+     */
+    private Weather resolveWeather(UUID fixtureId, UUID homeClubId, LocalDate matchDate) {
+        return clubRepository.findById(homeClubId)
+                .map(club -> WeatherGenerator.forFixture(fixtureId, club.getClimateZone(), matchDate))
+                .orElseGet(Weather::neutral);
     }
 
     LiveMatchState toState(LiveMatch lm, SaveGame save) {

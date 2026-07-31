@@ -402,7 +402,8 @@ class TeamStrengthCalculatorTest {
         // Well-formed squad: strength is byte-identical to the pre-change baseline, so the fixed-seed
         // match reproduces it exactly. This is the neutral-settings determinism guarantee.
         assertThat(wellFormed).isEqualTo(baseline);
-        assertThat(sim.simulate(wellFormed, opponent, 123L)).isEqualTo(sim.simulate(baseline, opponent, 123L));
+        assertThat(sim.simulate(wellFormed, opponent, Weather.neutral(), 123L))
+                .isEqualTo(sim.simulate(baseline, opponent, Weather.neutral(), 123L));
 
         // Mismatched squad: strength actually drops, and the fixed-seed match diverges for some seed.
         assertThat(mismatched.attack()).isLessThan(baseline.attack());
@@ -412,7 +413,8 @@ class TeamStrengthCalculatorTest {
         // model used POACHER), so divergence needs a few more Poisson draws to surface.
         boolean diverges = false;
         for (long seed = 0; seed < 250 && !diverges; seed++) {
-            diverges = !sim.simulate(mismatched, opponent, seed).equals(sim.simulate(baseline, opponent, seed));
+            diverges = !sim.simulate(mismatched, opponent, Weather.neutral(), seed)
+                    .equals(sim.simulate(baseline, opponent, Weather.neutral(), seed));
         }
         assertThat(diverges).as("a penalised squad diverges from the baseline under some fixed seed").isTrue();
     }

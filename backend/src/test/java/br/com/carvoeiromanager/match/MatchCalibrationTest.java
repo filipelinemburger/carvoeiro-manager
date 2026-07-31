@@ -91,10 +91,10 @@ class MatchCalibrationTest {
         int favWins = 0;
         int games = 0;
         for (int i = 0; i < SIMS; i++) {
-            var atHome = engine.simulate(strong, weak, 1000L + i);   // favorite home
+            var atHome = engine.simulate(strong, weak, Weather.neutral(), 1000L + i);   // favorite home
             if (atHome.homeGoals() > atHome.awayGoals()) favWins++;
             games++;
-            var away = engine.simulate(weak, strong, 5000L + i);     // favorite away
+            var away = engine.simulate(weak, strong, Weather.neutral(), 5000L + i);     // favorite away
             if (away.awayGoals() > away.homeGoals()) favWins++;
             games++;
         }
@@ -110,7 +110,7 @@ class MatchCalibrationTest {
         int homeWins = 0;
         int draws = 0;
         for (int i = 0; i < SIMS; i++) {
-            var m = engine.simulate(mid, mid, 9000L + i);
+            var m = engine.simulate(mid, mid, Weather.neutral(), 9000L + i);
             if (m.homeGoals() > m.awayGoals()) homeWins++;
             else if (m.homeGoals() == m.awayGoals()) draws++;
         }
@@ -131,7 +131,8 @@ class MatchCalibrationTest {
         for (int a = 0; a < teams.size(); a++) {
             for (int b = 0; b < teams.size(); b++) {
                 for (int i = 0; i < SIMS / 4; i++) {
-                    var m = engine.simulate(teams.get(a), teams.get(b), 13000L + a * 100_000L + b * 1000L + i);
+                    var m = engine.simulate(teams.get(a), teams.get(b), Weather.neutral(),
+                            13000L + a * 100_000L + b * 1000L + i);
                     totalGoals += m.homeGoals() + m.awayGoals();
                     games++;
                 }

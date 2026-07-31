@@ -27,12 +27,13 @@ class MatchSimulationServiceTest {
     void sameSeedAndInputsProduceIdenticalResult() {
         TeamMatchInput a = input(70, 65);
         TeamMatchInput b = input(60, 60);
-        assertThat(engine.simulate(a, b, 42L)).isEqualTo(engine.simulate(a, b, 42L));
+        assertThat(engine.simulate(a, b, Weather.neutral(), 42L))
+                .isEqualTo(engine.simulate(a, b, Weather.neutral(), 42L));
     }
 
     @Test
     void goalEventCountMatchesScoreline() {
-        SimulatedMatch m = engine.simulate(input(75, 70), input(55, 50), 7L);
+        SimulatedMatch m = engine.simulate(input(75, 70), input(55, 50), Weather.neutral(), 7L);
         long homeGoals = m.events().stream()
                 .filter(SimulatedEvent::home)
                 .filter(e -> e.type().isGoal())
@@ -49,7 +50,7 @@ class MatchSimulationServiceTest {
     void instantEngineEmitsDistinctSetPieceGoalsAndNeverTheLegacyType() {
         Set<EventType> seen = EnumSet.noneOf(EventType.class);
         for (long seed = 0; seed < 300; seed++) {
-            SimulatedMatch m = engine.simulate(input(), input(), seed);
+            SimulatedMatch m = engine.simulate(input(), input(), Weather.neutral(), seed);
             m.events().forEach(e -> seen.add(e.type()));
             long homeGoalEvents = m.events().stream().filter(e -> e.home() && e.type().isGoal()).count();
             assertThat(m.homeGoals()).isEqualTo((int) homeGoalEvents);   // a missed pen leaves no event and no goal
@@ -60,7 +61,7 @@ class MatchSimulationServiceTest {
 
     @Test
     void eventMinutesAreWithinRegulationTime() {
-        SimulatedMatch m = engine.simulate(input(80, 75), input(50, 45), 99L);
+        SimulatedMatch m = engine.simulate(input(80, 75), input(50, 45), Weather.neutral(), 99L);
         assertThat(m.events()).allSatisfy(e -> assertThat(e.minute()).isBetween(1, 90));
     }
 
@@ -70,7 +71,7 @@ class MatchSimulationServiceTest {
         TeamMatchInput weak = input(45, 40);
         int strongWins = 0;
         for (long seed = 0; seed < 200; seed++) {
-            SimulatedMatch m = engine.simulate(strong, weak, seed);
+            SimulatedMatch m = engine.simulate(strong, weak, Weather.neutral(), seed);
             if (m.homeGoals() > m.awayGoals()) strongWins++;
         }
         assertThat(strongWins).isGreaterThan(120);
@@ -84,7 +85,7 @@ class MatchSimulationServiceTest {
         int firstHalf = 0;
         int secondHalf = 0;
         for (long seed = 0; seed < 400; seed++) {
-            SimulatedMatch m = engine.simulate(tired, fresh, seed);
+            SimulatedMatch m = engine.simulate(tired, fresh, Weather.neutral(), seed);
             for (SimulatedEvent e : m.events()) {
                 if (e.home() && e.type().isGoal()) {
                     if (e.minute() <= 45) firstHalf++; else secondHalf++;
@@ -107,7 +108,7 @@ class MatchSimulationServiceTest {
         long total = 0;
         TeamMatchInput opp = new TeamMatchInput(70, 65, 1.0, 1.0, 0.5, 0.5, 0.82, 0.15, Mentality.BALANCED, GameStyle.EQUILIBRADO);
         for (long seed = 0; seed < 200; seed++) {
-            SimulatedMatch m = engine.simulate(side, opp, seed);
+            SimulatedMatch m = engine.simulate(side, opp, Weather.neutral(), seed);
             total += m.events().stream()
                     .filter(SimulatedEvent::home)
                     .filter(e -> e.type() == EventType.YELLOW_CARD || e.type() == EventType.RED_CARD)

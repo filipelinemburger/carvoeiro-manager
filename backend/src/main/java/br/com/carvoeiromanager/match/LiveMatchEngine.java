@@ -29,6 +29,12 @@ import java.util.function.ToIntFunction;
  * including AI-manager tactics reactions and AI bench substitutions, both derived purely from
  * the config with zero RNG. Kept fully separate from {@link MatchSimulationService} so the
  * instant engine (used for all AI/other-club fixtures) stays byte-for-byte unchanged.
+ *
+ * <p>{@code cfg.weather()} is resolved into a {@link WeatherEffects.Impact} exactly ONCE, up front —
+ * never per minute, even though substitutions/tactics changes rebuild {@code homeInput}/{@code
+ * awayInput} mid-match. Weather does not change during a match (out of scope), so recomputing per
+ * minute would let a mid-match tactical change retroactively alter fatigue. Neutral weather
+ * ({@link Weather#neutral()}) is guaranteed a no-op by {@link WeatherEffects}.
  */
 @Service
 public class LiveMatchEngine {
@@ -104,6 +110,11 @@ public class LiveMatchEngine {
         TeamMatchInput awayInput = strength(away, away.currentProfile, cfg);
         away.dirty = false;
 
+        // Computed ONCE for the whole match, not per minute: weather does not change mid-match
+        // (out of scope), so recomputing on every homeInput/awayInput rebuild (e.g. after a
+        // substitution or tactics change) would let a mid-match change retroactively alter fatigue.
+        WeatherEffects.Impact weatherImpact = WeatherEffects.of(cfg.weather(), homeInput, awayInput);
+
         int homeGoals = 0;
         int awayGoals = 0;
 
@@ -121,8 +132,10 @@ public class LiveMatchEngine {
             if (away.dirty) { awayInput = strength(away, away.currentProfile, cfg); away.dirty = false; }
 
             double tempo = (homeInput.tempo() + awayInput.tempo()) / 2.0;
-            double homeFf = MatchMath.fitnessFactor(homeInput.fitnessDecay(), minute);
-            double awayFf = MatchMath.fitnessFactor(awayInput.fitnessDecay(), minute);
+            double homeFf = MatchMath.fitnessFactor(
+                    homeInput.fitnessDecay() * weatherImpact.homeDecayMult(), minute);
+            double awayFf = MatchMath.fitnessFactor(
+                    awayInput.fitnessDecay() * weatherImpact.awayDecayMult(), minute);
 
             double homeChance = MatchMath.perMinuteScoreChance(homeInput.attack() * homeFf,
                     awayInput.defense() * awayFf, true) * tempo;
@@ -130,14 +143,14 @@ public class LiveMatchEngine {
                     homeInput.defense() * homeFf, false) * tempo;
 
             MatchupModifiers.ChanceMults chanceMults = MatchupModifiers.chanceMults(homeInput, awayInput);
-            homeChance *= chanceMults.home();
-            awayChance *= chanceMults.away();
+            homeChance *= chanceMults.home() * weatherImpact.homeChanceMult();
+            awayChance *= chanceMults.away() * weatherImpact.awayChanceMult();
 
             if (rng.nextDouble() < homeChance) {
-                if (resolveScoringEvent(minute, home, homeInput, rng, attrRng, assistRng, events)) homeGoals++;
+                if (resolveScoringEvent(minute, home, homeInput, weatherImpact, rng, attrRng, assistRng, events)) homeGoals++;
             }
             if (rng.nextDouble() < awayChance) {
-                if (resolveScoringEvent(minute, away, awayInput, rng, attrRng, assistRng, events)) awayGoals++;
+                if (resolveScoringEvent(minute, away, awayInput, weatherImpact, rng, attrRng, assistRng, events)) awayGoals++;
             }
             maybeCard(minute, home, homeInput, rng, attrRng, events);
             maybeCard(minute, away, awayInput, rng, attrRng, events);
@@ -484,9 +497,12 @@ public class LiveMatchEngine {
      * taker rides in {@code playerInId} so commentary can name taker and scorer, and — per the
      * player-stats feature — that taker also counts as the assist at persistence time.
      */
-    private boolean resolveScoringEvent(int minute, Side side, TeamMatchInput input, Random rng,
+    private boolean resolveScoringEvent(int minute, Side side, TeamMatchInput input,
+                                        WeatherEffects.Impact weatherImpact, Random rng,
                                         Random attrRng, Random assistRng, List<LiveTimelineEvent> events) {
-        if (rng.nextDouble() >= SetPieces.share(input.cornerThreat(), input.freeKickThreat())) {
+        if (rng.nextDouble() >= SetPieces.share(
+                input.cornerThreat() * weatherImpact.setPieceMult(),
+                input.freeKickThreat() * weatherImpact.setPieceMult())) {
             // AttackZone re-weights WHO scores/assists this open-play goal. Each pick still draws
             // exactly one nextInt from its stream (weight VALUES change, not the RNG contract). For
             // the neutral MISTO the weights equal the pre-AttackZone formulas → byte-identical.

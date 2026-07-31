@@ -86,7 +86,8 @@ class PlayerInstructionDeterminismTest {
         awayXi.forEach(pl -> fitness.put(pl.getId(), 100));
         homeBench.forEach(pl -> fitness.put(pl.getId(), 100));
         LiveMatchConfig cfg = new LiveMatchConfig(1234L, homeXi, awayXi, homeBench, List.of(),
-                defaultProfile(homeXi), defaultProfile(awayXi), fitness, List.of(), List.of(), null);
+                defaultProfile(homeXi), defaultProfile(awayXi), fitness, List.of(), List.of(), null,
+                Weather.neutral());
         LiveTimeline t = engine.simulate(cfg);
         assertThat(sig(t, EventType.YELLOW_CARD, EventType.RED_CARD)).isEqualTo(GOLDEN_CARDS);
         assertThat(sig(t, EventType.FOUL)).isEqualTo(GOLDEN_FOULS);
@@ -103,7 +104,7 @@ class PlayerInstructionDeterminismTest {
         MatchSimulationService instant = new MatchSimulationService();
         StringBuilder sb = new StringBuilder();
         for (long seed = 0; seed < 12; seed++) {
-            SimulatedMatch m = instant.simulate(hIn, aIn, seed);
+            SimulatedMatch m = instant.simulate(hIn, aIn, Weather.neutral(), seed);
             sb.append(m.homeGoals()).append('-').append(m.awayGoals()).append('|');
         }
         assertThat(sb.toString()).isEqualTo(GOLDEN_INSTANT);

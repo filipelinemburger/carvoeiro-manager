@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Deterministic, seeded match engine. Pure function: simulate(home, away, seed).
+ * Deterministic, seeded match engine. Pure function: simulate(home, away, weather, seed).
  *
  * Per-minute RNG draw order (fixed for reproducibility):
  *   home-goal, [home-set-piece?, home-subtype, home-conversion?], away-goal, [...],
@@ -17,7 +17,10 @@ import java.util.Random;
  * Effective strength declines over the match via fitnessDecay; combined tempo
  * scales the total number of chances; aggression drives the card rate; a share
  * of goals are set-piece goals, split into corner/free-kick/penalty subtypes (typed for
- * downstream scorer attribution).
+ * downstream scorer attribution). {@link WeatherEffects#of} resolves the match's weather into a
+ * per-side chance/decay multiplier plus a shared set-piece multiplier, applied identically to
+ * both sides; neutral weather ({@link Weather#neutral()}) is guaranteed a no-op, so a
+ * fixed-seed match under neutral weather is byte-identical to the pre-weather engine.
  */
 @Service
 public class MatchSimulationService {
@@ -25,11 +28,16 @@ public class MatchSimulationService {
     private static final double BASE_CARD_RATE = 0.02;
     private static final double RED_SHARE = 0.06;
 
-    public SimulatedMatch simulate(TeamMatchInput home, TeamMatchInput away, long seed) {
+    public SimulatedMatch simulate(TeamMatchInput home, TeamMatchInput away, Weather weather, long seed) {
         Random rng = new Random(seed);
+        WeatherEffects.Impact weatherImpact = WeatherEffects.of(weather, home, away);
         double tempoFactor = (home.tempo() + away.tempo()) / 2.0;
-        double homeSetPiece = SetPieces.share(home.cornerThreat(), home.freeKickThreat());
-        double awaySetPiece = SetPieces.share(away.cornerThreat(), away.freeKickThreat());
+        double homeSetPiece = SetPieces.share(
+                home.cornerThreat() * weatherImpact.setPieceMult(),
+                home.freeKickThreat() * weatherImpact.setPieceMult());
+        double awaySetPiece = SetPieces.share(
+                away.cornerThreat() * weatherImpact.setPieceMult(),
+                away.freeKickThreat() * weatherImpact.setPieceMult());
         double homeCardChance = BASE_CARD_RATE * home.aggression();
         double awayCardChance = BASE_CARD_RATE * away.aggression();
 
@@ -38,8 +46,10 @@ public class MatchSimulationService {
         int awayGoals = 0;
 
         for (int minute = 1; minute <= MatchMath.MINUTES; minute++) {
-            double homeFf = MatchMath.fitnessFactor(home.fitnessDecay(), minute);
-            double awayFf = MatchMath.fitnessFactor(away.fitnessDecay(), minute);
+            double homeFf = MatchMath.fitnessFactor(
+                    home.fitnessDecay() * weatherImpact.homeDecayMult(), minute);
+            double awayFf = MatchMath.fitnessFactor(
+                    away.fitnessDecay() * weatherImpact.awayDecayMult(), minute);
 
             double homeChance = MatchMath.perMinuteScoreChance(home.attack() * homeFf,
                     away.defense() * awayFf, true) * tempoFactor;
@@ -47,8 +57,8 @@ public class MatchSimulationService {
                     home.defense() * homeFf, false) * tempoFactor;
 
             MatchupModifiers.ChanceMults chanceMults = MatchupModifiers.chanceMults(home, away);
-            homeChance *= chanceMults.home();
-            awayChance *= chanceMults.away();
+            homeChance *= chanceMults.home() * weatherImpact.homeChanceMult();
+            awayChance *= chanceMults.away() * weatherImpact.awayChanceMult();
 
             if (rng.nextDouble() < homeChance) {
                 if (rng.nextDouble() < homeSetPiece) {

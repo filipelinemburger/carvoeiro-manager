@@ -205,7 +205,9 @@ public class FixtureSimulator {
         TeamMatchInput homeInput = teamStrengthCalculator.compute(homeXi, homeProfile, fitnessMult(homeFitness));
         TeamMatchInput awayInput = teamStrengthCalculator.compute(awayXi, awayProfile, fitnessMult(awayFitness));
 
-        SimulatedMatch match = matchSimulationService.simulate(homeInput, awayInput, seedFor(saveGameId, fixture));
+        Weather weather = resolveWeather(fixture.getId(), homeClubId, matchDate);
+        SimulatedMatch match = matchSimulationService.simulate(
+                homeInput, awayInput, weather, seedFor(saveGameId, fixture));
         return new PrecomputedFixture(match, playerIds(homeXi), playerIds(awayXi));
     }
 
@@ -222,6 +224,18 @@ public class FixtureSimulator {
         return saveGameId.getMostSignificantBits()
                 ^ fixture.getId().getMostSignificantBits()
                 ^ (long) fixture.getRound();
+    }
+
+    /**
+     * Weather is always derived from the HOME club's climate zone (per the feature spec) and never
+     * persisted — recomputed identically every time from the fixture id and match date. A missing
+     * home club (already tolerated elsewhere in this class, e.g. {@code shortName}) falls back to
+     * {@link Weather#neutral()} rather than throwing.
+     */
+    private Weather resolveWeather(UUID fixtureId, UUID homeClubId, LocalDate matchDate) {
+        return clubRepository.findById(homeClubId)
+                .map(club -> WeatherGenerator.forFixture(fixtureId, club.getClimateZone(), matchDate))
+                .orElseGet(Weather::neutral);
     }
 
     private FixtureSim simulateFixture(Fixture fixture, UUID saveGameId, UUID managedClubId,
