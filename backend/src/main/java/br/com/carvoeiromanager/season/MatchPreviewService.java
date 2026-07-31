@@ -8,6 +8,8 @@ import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.competition.StandingRow;
 import br.com.carvoeiromanager.competition.StandingsCalculator;
+import br.com.carvoeiromanager.match.Weather;
+import br.com.carvoeiromanager.match.WeatherService;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.staff.Staff;
@@ -24,6 +26,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -56,6 +59,7 @@ public class MatchPreviewService {
     private final PlayerStatsService playerStatsService;
     private final NewsItemRepository newsItemRepository;
     private final ObjectMapper objectMapper;
+    private final WeatherService weatherService;
     private final StandingsCalculator standingsCalculator = new StandingsCalculator();
 
     public MatchPreviewService(SaveGameRepository saveGameRepository,
@@ -66,7 +70,8 @@ public class MatchPreviewService {
                                StaffRepository staffRepository,
                                PlayerStatsService playerStatsService,
                                NewsItemRepository newsItemRepository,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               WeatherService weatherService) {
         this.saveGameRepository = saveGameRepository;
         this.seasonEventRepository = seasonEventRepository;
         this.fixtureRepository = fixtureRepository;
@@ -76,6 +81,7 @@ public class MatchPreviewService {
         this.playerStatsService = playerStatsService;
         this.newsItemRepository = newsItemRepository;
         this.objectMapper = objectMapper;
+        this.weatherService = weatherService;
     }
 
     @Transactional
@@ -177,12 +183,24 @@ public class MatchPreviewService {
                     opponentAvg - managedAvg, home);
         }
 
+        // The preview is dated the eve of the fixture, so resolving through visibleWeather with
+        // that same date will always be revealed — routed through the service anyway so there is
+        // exactly one reveal rule in the codebase.
+        LocalDate previewDate = fixture.getMatchDate().minusDays(1);
+        Optional<Weather> weather = weatherService.visibleWeather(fixture, venueClub, previewDate);
+        String weatherLabel = weather.map(w -> w.condition().label()).orElse(null);
+        Integer temperatureC = weather.map(Weather::temperatureC).orElse(null);
+        String weatherAdvice = weather.map(MatchPreviewService::weatherAdvice).orElse(null);
+
         return new MatchPreviewData(
                 fixture.getId().toString(),
                 event.getRound(),
                 fixture.getMatchDate().toString(),
                 home,
                 venueClub.resolvedStadiumName(),
+                weatherLabel,
+                temperatureC,
+                weatherAdvice,
                 opponentId.toString(),
                 opponent.getCommonName() != null ? opponent.getCommonName() : opponent.getName(),
                 opponent.getShortName(),
@@ -232,6 +250,32 @@ public class MatchPreviewService {
                 .flatMap(a -> playerRepository.findById(a.playerId())
                         .map(p -> new MatchPreviewData.PreviewTopScorer(p.getName(), a.goals())))
                 .orElse(null);
+    }
+
+    /**
+     * The auxiliar's one-line read on the forecast, in pt-BR. Null for unremarkable weather —
+     * the auxiliar comments when there is something to comment on.
+     */
+    static String weatherAdvice(Weather weather) {
+        return switch (weather.condition()) {
+            case CHUVA_FORTE ->
+                "Chuva forte na véspera: o gramado vai ficar pesado, o jogo de passes perde efeito.";
+            case CHUVA ->
+                "Previsão de chuva: gramado molhado, cuidado com a saída de bola.";
+            case VENTANIA ->
+                "Muito vento previsto: a bola parada e os cruzamentos vão sofrer.";
+            case ENSOLARADO, NUBLADO -> {
+                if (weather.temperatureC() >= 32) {
+                    yield "Calor forte previsto (" + weather.temperatureC()
+                            + "°C): a pressão alta cobra caro no segundo tempo.";
+                }
+                if (weather.temperatureC() <= 10) {
+                    yield "Frio previsto (" + weather.temperatureC()
+                            + "°C): ritmo tende a cair, mas a equipe cansa menos.";
+                }
+                yield null;
+            }
+        };
     }
 
     private int averageOverall(List<Player> players) {

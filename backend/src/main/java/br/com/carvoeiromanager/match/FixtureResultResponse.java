@@ -12,6 +12,9 @@ public record FixtureResultResponse(
         String awayClubName,
         String awayClubShortName,
         int awayGoals,
-        String stadium
+        String stadium,
+        Integer attendance,
+        String weather,
+        Integer temperatureC
 ) {
 }

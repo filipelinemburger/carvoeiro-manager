@@ -9,6 +9,8 @@ import java.util.List;
  * {@code bestPlayers} size and {@code topScorer} depend on Avaliação de Jogadores;
  * {@code tacticalRead} and {@code insights} depend on Conhecimento Tático — absent
  * sections are {@code null} (or a shorter list) and the frontend renders only what exists.
+ * {@code weather}, {@code temperatureC}, and {@code weatherAdvice} are null when the
+ * fixture's forecast is not yet revealed (see {@code WeatherService}'s reveal rule).
  */
 public record MatchPreviewData(
         String fixtureId,
@@ -16,6 +18,9 @@ public record MatchPreviewData(
         String matchDate,
         boolean home,
         String stadiumName,
+        String weather,
+        Integer temperatureC,
+        String weatherAdvice,
         String opponentClubId,
         String opponentName,
         String opponentShortName,

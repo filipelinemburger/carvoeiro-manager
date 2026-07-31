@@ -398,6 +398,9 @@ public class LiveMatchService {
         Club awayClub = clubs.get(awayClubId);
 
         fixture.recordResult(timeline.homeGoals(), timeline.awayGoals());
+        // The match just finished, so the forecast is always revealed — weatherFor is used
+        // directly rather than routing through the eve-of-match visibleWeather gate.
+        Weather weather = homeClub != null ? weatherService.weatherFor(fixture, homeClub) : Weather.neutral();
         if (homeClub != null && awayClub != null) {
             MatchContextResolver.RoundContext roundContext =
                     matchContextResolver.forRound(save, fixture.getCompetitionId(), fixture.getMatchDate());
@@ -408,7 +411,7 @@ public class LiveMatchService {
                     roundContext.recentFormPoints(homeClubId, fixture.getMatchDate()),
                     roundContext.leaguePosition(homeClubId),
                     roundContext.clubCount(),
-                    weatherService.weatherFor(fixture, homeClub)));
+                    weather));
         }
         fixtureRepository.save(fixture);
 
@@ -462,7 +465,8 @@ public class LiveMatchService {
                 fixture.getId(),
                 homeClubId, homeClub.getName(), shortName(homeClub), timeline.homeGoals(),
                 awayClubId, awayClub.getName(), shortName(awayClub), timeline.awayGoals(),
-                homeClub.resolvedStadiumName());
+                homeClub.resolvedStadiumName(),
+                fixture.getAttendance(), weather.condition().label(), weather.temperatureC());
         Set<UUID> userPlayedIds = allPlayed.stream().map(Player::getId).collect(Collectors.toSet());
 
         List<PlayerRating> playerRatings = managedRatings(lm, cfg, timeline, MINUTES);
@@ -656,6 +660,10 @@ public class LiveMatchService {
         KitColors homeClubColors = new KitColors(homeClub.getPrimaryColor(), homeClub.getSecondaryColor());
         KitColors awayClubColors = new KitColors(awayClub.getPrimaryColor(), awayClub.getSecondaryColor());
 
+        // The match is in progress, so weather is always revealed — weatherFor is used directly
+        // rather than routing through the eve-of-match visibleWeather gate.
+        Weather weather = weatherService.weatherFor(fixture, homeClub);
+
         return new LiveMatchState(
                 lm.getFixtureId().toString(), competitionName, lm.getRound(), lm.getMatchDate().toString(),
                 homeClub.resolvedStadiumName(),
@@ -664,7 +672,8 @@ public class LiveMatchService {
                 managedIsHome, minute, timeline.homeGoalsAt(minute), timeline.awayGoalsAt(minute),
                 status, events, onPitch, bench, MAX_SUBS - subsUsed, currentTactics, playerRatings,
                 opponentOnPitch, opponentTactics, opponentPlayerRatings, homeClubColors, awayClubColors,
-                lm.getCompetitionId().toString(), parallelScoresAsOf(lm, minute));
+                lm.getCompetitionId().toString(), parallelScoresAsOf(lm, minute),
+                weather.condition().label(), weather.temperatureC(), fixture.getAttendance());
     }
 
     /**

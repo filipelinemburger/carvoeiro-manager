@@ -38,6 +38,7 @@ public class ClubService {
     private ClubSummaryResponse toSummary(Club club) {
         int squadSize = playerRepository.findByClubIdAndYouthProspectFalse(club.getId()).size();
         return new ClubSummaryResponse(club.getId(), club.getName(), club.getCommonName(), club.getShortName(),
-                club.getPrimaryColor(), club.getSecondaryColor(), club.getReputation(), squadSize);
+                club.getPrimaryColor(), club.getSecondaryColor(), club.getReputation(), squadSize,
+                club.getCity(), club.getState(), club.getStadiumCapacity(), club.resolvedStadiumName());
     }
 }

@@ -6,10 +6,14 @@ import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.match.Weather;
+import br.com.carvoeiromanager.match.WeatherService;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -25,15 +29,18 @@ public class FixtureService {
     private final ClubRepository clubRepository;
     private final CompetitionRepository competitionRepository;
     private final FixtureRepository fixtureRepository;
+    private final WeatherService weatherService;
 
     public FixtureService(SaveGameService saveGameService,
                           ClubRepository clubRepository,
                           CompetitionRepository competitionRepository,
-                          FixtureRepository fixtureRepository) {
+                          FixtureRepository fixtureRepository,
+                          WeatherService weatherService) {
         this.saveGameService = saveGameService;
         this.clubRepository = clubRepository;
         this.competitionRepository = competitionRepository;
         this.fixtureRepository = fixtureRepository;
+        this.weatherService = weatherService;
     }
 
     public List<FixtureEntryResponse> getFixtures(UUID saveGameId, UUID competitionId, UUID userId) {
@@ -57,11 +64,12 @@ public class FixtureService {
         return fixtureRepository.findBySaveGameIdAndCompetitionIdOrderByRound(saveGameId, competition.getId())
                 .stream()
                 .filter(f -> f.getHomeClubId().equals(managedClubId) || f.getAwayClubId().equals(managedClubId))
-                .map(f -> toEntry(f, managedClubId, clubById))
+                .map(f -> toEntry(f, managedClubId, clubById, saveGame.getCurrentDate()))
                 .toList();
     }
 
-    private FixtureEntryResponse toEntry(Fixture fixture, UUID managedClubId, Map<UUID, Club> clubById) {
+    private FixtureEntryResponse toEntry(Fixture fixture, UUID managedClubId, Map<UUID, Club> clubById,
+                                         LocalDate today) {
         boolean home = fixture.getHomeClubId().equals(managedClubId);
         UUID opponentClubId = home ? fixture.getAwayClubId() : fixture.getHomeClubId();
         Club opponent = clubById.get(opponentClubId);
@@ -72,6 +80,16 @@ public class FixtureService {
         if (fixture.isPlayed()) {
             goalsFor = home ? fixture.getHomeGoals() : fixture.getAwayGoals();
             goalsAgainst = home ? fixture.getAwayGoals() : fixture.getHomeGoals();
+        }
+
+        // Gated through visibleWeather so an upcoming fixture more than a day out returns nulls —
+        // that gating is the whole point of the feature.
+        String weatherLabel = null;
+        Integer temperatureC = null;
+        if (homeClub != null) {
+            Optional<Weather> weather = weatherService.visibleWeather(fixture, homeClub, today);
+            weatherLabel = weather.map(w -> w.condition().label()).orElse(null);
+            temperatureC = weather.map(Weather::temperatureC).orElse(null);
         }
 
         return new FixtureEntryResponse(
@@ -85,6 +103,9 @@ public class FixtureService {
                 homeClub != null ? homeClub.resolvedStadiumName() : null,
                 fixture.isPlayed(),
                 goalsFor,
-                goalsAgainst);
+                goalsAgainst,
+                fixture.getAttendance(),
+                weatherLabel,
+                temperatureC);
     }
 }

@@ -314,6 +314,9 @@ public class FixtureSimulator {
         Club awayClub = clubById.get(awayClubId);
 
         fixture.recordResult(match.homeGoals(), match.awayGoals());
+        // The match just finished, so the forecast is always revealed — weatherFor is used
+        // directly rather than routing through the eve-of-match visibleWeather gate.
+        Weather weather = homeClub != null ? weatherService.weatherFor(fixture, homeClub) : Weather.neutral();
         if (homeClub != null && awayClub != null && roundContext != null) {
             fixture.setAttendance(attendanceCalculator.attendance(
                     homeClub.getStadiumCapacity(),
@@ -322,7 +325,7 @@ public class FixtureSimulator {
                     roundContext.recentFormPoints(homeClubId, matchDate),
                     roundContext.leaguePosition(homeClubId),
                     roundContext.clubCount(),
-                    weatherService.weatherFor(fixture, homeClub)));
+                    weather));
         }
         fixtureRepository.save(fixture);
 
@@ -336,7 +339,8 @@ public class FixtureSimulator {
                 match.homeGoals(),
                 awayClubId, awayClub != null ? awayClub.getName() : "", shortName(awayClub),
                 match.awayGoals(),
-                homeClub != null ? homeClub.resolvedStadiumName() : null);
+                homeClub != null ? homeClub.resolvedStadiumName() : null,
+                fixture.getAttendance(), weather.condition().label(), weather.temperatureC());
         return new FixtureSim(response, homeXi, awayXi, match.homeGoals(), match.awayGoals(), attributed,
                 homeFitness, awayFitness);
     }

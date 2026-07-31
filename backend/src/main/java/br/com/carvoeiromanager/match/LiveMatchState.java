@@ -29,5 +29,8 @@ public record LiveMatchState(
         KitColors homeClubColors,
         KitColors awayClubColors,
         String competitionId,
-        List<ParallelScore> parallelScores) {
+        List<ParallelScore> parallelScores,
+        String weather,
+        Integer temperatureC,
+        Integer attendance) {
 }
