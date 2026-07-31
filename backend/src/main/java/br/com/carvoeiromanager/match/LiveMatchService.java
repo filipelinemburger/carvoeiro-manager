@@ -399,13 +399,15 @@ public class LiveMatchService {
 
         fixture.recordResult(timeline.homeGoals(), timeline.awayGoals());
         if (homeClub != null && awayClub != null) {
+            MatchContextResolver.RoundContext roundContext =
+                    matchContextResolver.forRound(save, fixture.getCompetitionId(), fixture.getMatchDate());
             fixture.setAttendance(attendanceCalculator.attendance(
                     homeClub.getStadiumCapacity(),
                     homeClub.getReputation(),
                     awayClub.getReputation(),
-                    matchContextResolver.recentFormPoints(saveGameId, fixture.getCompetitionId(), homeClubId, fixture.getMatchDate()),
-                    matchContextResolver.leaguePosition(saveGameId, fixture.getCompetitionId(), homeClubId),
-                    matchContextResolver.clubCount(saveGameId, fixture.getCompetitionId()),
+                    roundContext.recentFormPoints(homeClubId, fixture.getMatchDate()),
+                    roundContext.leaguePosition(homeClubId),
+                    roundContext.clubCount(),
                     weatherService.weatherFor(fixture, homeClub)));
         }
         fixtureRepository.save(fixture);

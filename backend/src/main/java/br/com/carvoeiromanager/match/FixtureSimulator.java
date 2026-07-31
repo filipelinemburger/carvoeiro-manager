@@ -136,13 +136,21 @@ public class FixtureSimulator {
 
         Map<UUID, Club> clubById = buildClubMap(saveGameId);
 
+        // Built ONCE for the whole round — see MatchContextResolver.RoundContext javadoc for why
+        // this matters both for correctness (as-of-matchDate standings) and for query count (avoids
+        // recomputing the competition's fixture list/standings table per fixture). Every fixture in
+        // `fixtures` belongs to the same round of the same competition and therefore shares a
+        // matchDate (see SeasonCalendarGenerator), so the first fixture's date is representative.
+        MatchContextResolver.RoundContext roundContext = fixtures.isEmpty() ? null
+                : matchContextResolver.forRound(save, competitionId, fixtures.get(0).getMatchDate());
+
         List<FixtureResultResponse> results = new ArrayList<>();
         Set<UUID> playedIds = new HashSet<>();
         MatchOutcomeApplier.Summary summary = new MatchOutcomeApplier.Summary();
         List<Player> toPersist = new ArrayList<>();
 
         for (Fixture fixture : fixtures) {
-            FixtureSim sim = simulateFixture(fixture, saveGameId, managedClubId, clubById, precomputed);
+            FixtureSim sim = simulateFixture(fixture, saveGameId, managedClubId, clubById, precomputed, roundContext);
             results.add(sim.response());
 
             boolean homeManaged = sim.homeXi().stream().anyMatch(p -> p.getClubId().equals(managedClubId));
@@ -249,7 +257,8 @@ public class FixtureSimulator {
     }
 
     private FixtureSim simulateFixture(Fixture fixture, UUID saveGameId, UUID managedClubId,
-                                       Map<UUID, Club> clubById, Map<UUID, PrecomputedFixture> precomputed) {
+                                       Map<UUID, Club> clubById, Map<UUID, PrecomputedFixture> precomputed,
+                                       MatchContextResolver.RoundContext roundContext) {
         final UUID homeClubId = fixture.getHomeClubId();
         final UUID awayClubId = fixture.getAwayClubId();
         final LocalDate matchDate = fixture.getMatchDate();
@@ -305,14 +314,14 @@ public class FixtureSimulator {
         Club awayClub = clubById.get(awayClubId);
 
         fixture.recordResult(match.homeGoals(), match.awayGoals());
-        if (homeClub != null && awayClub != null) {
+        if (homeClub != null && awayClub != null && roundContext != null) {
             fixture.setAttendance(attendanceCalculator.attendance(
                     homeClub.getStadiumCapacity(),
                     homeClub.getReputation(),
                     awayClub.getReputation(),
-                    matchContextResolver.recentFormPoints(saveGameId, fixture.getCompetitionId(), homeClubId, matchDate),
-                    matchContextResolver.leaguePosition(saveGameId, fixture.getCompetitionId(), homeClubId),
-                    matchContextResolver.clubCount(saveGameId, fixture.getCompetitionId()),
+                    roundContext.recentFormPoints(homeClubId, matchDate),
+                    roundContext.leaguePosition(homeClubId),
+                    roundContext.clubCount(),
                     weatherService.weatherFor(fixture, homeClub)));
         }
         fixtureRepository.save(fixture);

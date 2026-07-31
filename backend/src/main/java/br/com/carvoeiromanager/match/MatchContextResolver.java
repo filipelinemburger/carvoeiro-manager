@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.match;
 
+import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.competition.StandingRow;
@@ -13,10 +14,22 @@ import java.util.UUID;
 
 /**
  * Resolves the season-context inputs {@link br.com.carvoeiromanager.finance.AttendanceCalculator}
- * needs — a club's recent form and its league position/club count — shared by the two places a
- * fixture gets finalised: {@link FixtureSimulator} (AI-simulated rounds) and
- * {@link LiveMatchService} (the managed club's live match). Extracted so both call sites compute
- * attendance identically rather than maintaining two copies of this lookup logic.
+ * needs — a club's recent form and its league position/club count, each AS THEY STOOD strictly
+ * BEFORE the fixture being resolved — shared by the two places a fixture gets finalised:
+ * {@link FixtureSimulator} (AI-simulated rounds) and {@link LiveMatchService} (the managed club's
+ * live match). Extracted so both call sites compute attendance identically rather than
+ * maintaining two copies of this lookup logic.
+ *
+ * <p>Every fixture in one round of one competition shares the same {@code matchDate} (see
+ * {@code SeasonCalendarGenerator}), so {@link #forRound} loads the competition's fixture list and
+ * computes its as-of-{@code matchDate} standings table exactly ONCE per round, returning a
+ * {@link RoundContext} whose per-fixture lookups are then pure in-memory work — instead of the ~9
+ * queries and 3 full-season scans PER FIXTURE the naive per-call version cost. The as-of bound is
+ * not just a performance nicety: without it, {@code StandingsService}'s derived query would
+ * auto-flush and see the very match's own just-recorded result (a home side that wins 5-0 climbing
+ * the table before its own crowd is priced), and the two call sites would disagree with each other
+ * depending on how many of the round's other results were already flushed — {@code matchDate}
+ * fixes both by construction.
  */
 @Component
 public class MatchContextResolver {
@@ -36,24 +49,17 @@ public class MatchContextResolver {
     }
 
     /**
-     * {@code clubId}'s points (3 win / 1 draw / 0 loss) from its last {@value #FORM_LOOKBACK}
-     * PLAYED fixtures in {@code competitionId} strictly before {@code matchDate}, capped at
-     * {@value #FORM_MAX_POINTS}. The strict "before" bound excludes the fixture currently being
-     * resolved (and any other same-round fixture sharing its date) even though it may already be
-     * marked played by the time this runs. Fewer than 5 played fixtures simply uses what exists
-     * (early season).
+     * Builds the shared context for resolving every fixture of ONE round of {@code competitionId}
+     * dated {@code matchDate}: the competition's full fixture list (used for recent form) and its
+     * standings table as of strictly before {@code matchDate} (used for league position/club
+     * count), each loaded/computed exactly once. A single fixture (e.g. the managed club's live
+     * match) is simply the degenerate one-fixture case and goes through the same method.
      */
-    public int recentFormPoints(UUID saveGameId, UUID competitionId, UUID clubId, LocalDate matchDate) {
-        List<Fixture> recent = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, competitionId).stream()
-                .filter(Fixture::isPlayed)
-                .filter(f -> f.getHomeClubId().equals(clubId) || f.getAwayClubId().equals(clubId))
-                .filter(f -> f.getMatchDate() != null && matchDate != null && f.getMatchDate().isBefore(matchDate))
-                .sorted(Comparator.comparing(Fixture::getMatchDate).thenComparing(Fixture::getRound).reversed())
-                .limit(FORM_LOOKBACK)
-                .toList();
-
-        int points = recent.stream().mapToInt(f -> pointsFor(f, clubId)).sum();
-        return Math.min(FORM_MAX_POINTS, points);
+    public RoundContext forRound(SaveGame save, UUID competitionId, LocalDate matchDate) {
+        List<Fixture> competitionFixtures =
+                fixtureRepository.findBySaveGameIdAndCompetitionId(save.getId(), competitionId);
+        List<StandingRow> standingsAsOf = standingsService.computeStandings(save, competitionId, matchDate);
+        return new RoundContext(competitionFixtures, standingsAsOf);
     }
 
     private static int pointsFor(Fixture fixture, UUID clubId) {
@@ -65,19 +71,56 @@ public class MatchContextResolver {
         return 0;
     }
 
-    /** {@code clubId}'s 1-based position in {@code competitionId}'s current standings. */
-    public int leaguePosition(UUID saveGameId, UUID competitionId, UUID clubId) {
-        List<StandingRow> table = standingsService.computeStandings(saveGameId, competitionId);
-        for (int i = 0; i < table.size(); i++) {
-            if (table.get(i).clubId().equals(clubId)) {
-                return i + 1;
-            }
-        }
-        return 1;   // club not found in the table (defensive; keeps AttendanceCalculator's position factor sane)
-    }
+    /**
+     * One round's shared lookups (a competition's fixture list, plus its as-of-matchDate standings
+     * table), each computed once by {@link #forRound} and queried per fixture here at zero extra
+     * DB cost.
+     */
+    public static final class RoundContext {
+        private final List<Fixture> competitionFixtures;
+        private final List<StandingRow> standingsAsOf;
 
-    /** The number of clubs competing in {@code competitionId}. */
-    public int clubCount(UUID saveGameId, UUID competitionId) {
-        return standingsService.computeStandings(saveGameId, competitionId).size();
+        private RoundContext(List<Fixture> competitionFixtures, List<StandingRow> standingsAsOf) {
+            this.competitionFixtures = competitionFixtures;
+            this.standingsAsOf = standingsAsOf;
+        }
+
+        /**
+         * {@code clubId}'s points (3 win / 1 draw / 0 loss) from its last {@value #FORM_LOOKBACK}
+         * PLAYED fixtures strictly before {@code matchDate}, capped at {@value #FORM_MAX_POINTS}.
+         * The strict "before" bound excludes the fixture currently being resolved (and any other
+         * same-round fixture sharing its date) even though it may already be marked played by the
+         * time this runs. Fewer than 5 played fixtures simply uses what exists (early season).
+         */
+        public int recentFormPoints(UUID clubId, LocalDate matchDate) {
+            List<Fixture> recent = competitionFixtures.stream()
+                    .filter(Fixture::isPlayed)
+                    .filter(f -> f.getHomeClubId().equals(clubId) || f.getAwayClubId().equals(clubId))
+                    .filter(f -> f.getMatchDate() != null && matchDate != null && f.getMatchDate().isBefore(matchDate))
+                    .sorted(Comparator.comparing(Fixture::getMatchDate).thenComparing(Fixture::getRound).reversed())
+                    .limit(FORM_LOOKBACK)
+                    .toList();
+
+            int points = recent.stream().mapToInt(f -> pointsFor(f, clubId)).sum();
+            return Math.min(FORM_MAX_POINTS, points);
+        }
+
+        /** {@code clubId}'s 1-based position in the as-of-matchDate standings table. */
+        public int leaguePosition(UUID clubId) {
+            for (int i = 0; i < standingsAsOf.size(); i++) {
+                if (standingsAsOf.get(i).clubId().equals(clubId)) {
+                    return i + 1;
+                }
+            }
+            // Defensive: club not found in the table. Fall back to a NEUTRAL mid-table position
+            // rather than 1st — 1 is AttendanceCalculator's maximally favourable position factor,
+            // and a defensive fallback should never be the best case.
+            return standingsAsOf.isEmpty() ? 1 : (standingsAsOf.size() + 1) / 2;
+        }
+
+        /** The number of clubs competing in this competition. */
+        public int clubCount() {
+            return standingsAsOf.size();
+        }
     }
 }
