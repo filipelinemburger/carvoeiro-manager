@@ -48,6 +48,9 @@ public class Fixture {
     @Column(name = "match_date")
     private LocalDate matchDate;
 
+    @Column(name = "attendance")
+    private Integer attendance;
+
     protected Fixture() {
         // for JPA
     }
@@ -82,6 +85,8 @@ public class Fixture {
     public boolean isPlayed() { return played; }
     public LocalDate getMatchDate() { return matchDate; }
     public void setMatchDate(LocalDate matchDate) { this.matchDate = matchDate; }
+    public Integer getAttendance() { return attendance; }
+    public void setAttendance(Integer attendance) { this.attendance = attendance; }
 
     public void recordResult(int homeGoals, int awayGoals) {
         this.homeGoals = homeGoals;

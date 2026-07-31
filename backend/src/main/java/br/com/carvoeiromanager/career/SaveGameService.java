@@ -1,6 +1,7 @@
 package br.com.carvoeiromanager.career;
 
 import br.com.carvoeiromanager.club.Club;
+import br.com.carvoeiromanager.club.ClimateZone;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
@@ -116,6 +117,11 @@ public class SaveGameService {
             club.setCommonName(seedClub.commonName() != null ? seedClub.commonName() : seedClub.name());
             club.setNickname(seedClub.nickname());
             club.setStadiumName(seedClub.stadium());
+            club.setCity(seedClub.city());
+            club.setState(seedClub.state());
+            if (seedClub.climateZone() != null) {
+                club.setClimateZone(ClimateZone.valueOf(seedClub.climateZone()));
+            }
             club.setPrimaryColor(seedClub.primaryColor());
             club.setSecondaryColor(seedClub.secondaryColor());
             club.setDefaultFormation(seedClub.formation());
@@ -163,7 +169,9 @@ public class SaveGameService {
 
             // Financial profile derived from squad strength.
             int reputation = financeCalculator.reputation(squad);
-            int capacity = financeCalculator.stadiumCapacity(reputation);
+            int capacity = seedClub.stadiumCapacity() != null
+                    ? seedClub.stadiumCapacity()
+                    : financeCalculator.stadiumCapacity(reputation);
             club.setReputation(reputation);
             club.setStadiumCapacity(capacity);
             club.setBalance(financeCalculator.startingBalance(reputation));

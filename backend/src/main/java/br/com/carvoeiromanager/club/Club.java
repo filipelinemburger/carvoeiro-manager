@@ -2,6 +2,8 @@ package br.com.carvoeiromanager.club;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -37,6 +39,16 @@ public class Club {
 
     @Column(name = "stadium_name", length = 80)
     private String stadiumName;
+
+    @Column(name = "city", length = 60)
+    private String city;
+
+    @Column(name = "state", length = 2)
+    private String state;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "climate_zone", nullable = false, length = 20)
+    private ClimateZone climateZone = ClimateZone.SUDESTE;
 
     @Column(name = "primary_color", length = 9)
     private String primaryColor;
@@ -108,6 +120,16 @@ public class Club {
     public String resolvedStadiumName() {
         return stadiumName != null ? stadiumName : "Estádio " + name;
     }
+
+    public String getCity() { return city; }
+    public String getState() { return state; }
+    public ClimateZone getClimateZone() { return climateZone; }
+
+    /** Display location for match and club screens: {@code "Criciúma/SC"}, or null when unseeded. */
+    public String resolvedLocation() {
+        return city != null && state != null ? city + "/" + state : null;
+    }
+
     public String getPrimaryColor() { return primaryColor; }
     public String getSecondaryColor() { return secondaryColor; }
     public String getDefaultFormation() { return defaultFormation; }
@@ -120,6 +142,9 @@ public class Club {
     public void setCommonName(String commonName) { this.commonName = commonName; }
     public void setNickname(String nickname) { this.nickname = nickname; }
     public void setStadiumName(String stadiumName) { this.stadiumName = stadiumName; }
+    public void setCity(String city) { this.city = city; }
+    public void setState(String state) { this.state = state; }
+    public void setClimateZone(ClimateZone climateZone) { this.climateZone = climateZone; }
     public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
     public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
     public void setDefaultFormation(String defaultFormation) { this.defaultFormation = defaultFormation; }
