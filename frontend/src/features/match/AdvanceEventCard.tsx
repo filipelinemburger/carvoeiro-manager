@@ -3,7 +3,7 @@ import {
   Box, Button, Card, CardContent, Chip, Divider, List, ListItem, Stack,
   Table, TableBody, TableCell, TableHead, TableRow, Typography,
 } from '@mui/material'
-import { formatBRL } from '../../lib/money'
+import { formatBRL, formatThousandsBR } from '../../lib/money'
 import { formatDatePtBR } from '../../utils/date'
 import type { AdvanceResponse, Mentality, Pressing, Marking } from '../../api/types'
 import { SEVERITY_LABEL } from '../squad/injurySeverity'
@@ -105,6 +105,26 @@ function MatchTimeline({ result, saveGameId, competitionId, managedClubId }: {
                 >
                   {r.stadium}
                 </Typography>
+              )}
+              {/* Attendance/weather are absent on older news payloads — WeatherChip already
+                  renders nothing for a null condition, so only the attendance line needs a guard. */}
+              {(r.weather || r.attendance != null) && (
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  useFlexGap
+                  sx={{ alignItems: 'center', flexWrap: 'wrap', mt: '2px' }}
+                >
+                  <WeatherChip
+                    condition={(r.weather ?? null) as WeatherCondition | null}
+                    temperatureC={r.temperatureC ?? null}
+                  />
+                  {r.attendance != null && (
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      Público: {formatThousandsBR(r.attendance)}
+                    </Typography>
+                  )}
+                </Stack>
               )}
             </TimelineNode>
           )

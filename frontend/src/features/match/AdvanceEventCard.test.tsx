@@ -256,6 +256,37 @@ describe('AdvanceEventCard', () => {
       renderCard(MATCH_RESULT)
       expect(screen.queryByText(/Estádio/)).not.toBeInTheDocument()
     })
+
+    it('renders attendance and weather chip for a result that has both', () => {
+      renderCard({
+        ...MATCH_RESULT,
+        results: [
+          {
+            fixtureId: 'f1', homeClubId: 'c1', homeClubName: 'Criciúma', homeGoals: 2,
+            awayClubId: 'c2', awayClubName: 'Figueirense', awayGoals: 1,
+            stadium: 'Estádio Heriberto Hülse', attendance: 19_300,
+            weather: 'CHUVA_FORTE', temperatureC: 16,
+          },
+        ],
+      })
+      expect(screen.getByText('Público: 19.300')).toBeInTheDocument()
+      expect(screen.getByTestId('weather-chip')).toBeInTheDocument()
+    })
+
+    it('renders neither attendance nor weather when both are null', () => {
+      renderCard({
+        ...MATCH_RESULT,
+        results: [
+          {
+            fixtureId: 'f1', homeClubId: 'c1', homeClubName: 'Criciúma', homeGoals: 2,
+            awayClubId: 'c2', awayClubName: 'Figueirense', awayGoals: 1,
+            stadium: 'Estádio Heriberto Hülse', attendance: null, weather: null, temperatureC: null,
+          },
+        ],
+      })
+      expect(screen.queryByText(/Público/)).not.toBeInTheDocument()
+      expect(screen.queryByTestId('weather-chip')).not.toBeInTheDocument()
+    })
   })
 
   describe('TRANSFER type', () => {
