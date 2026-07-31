@@ -9,11 +9,11 @@ import { getClubs, getSaveGame, getSquad, makeOffer } from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
-import { formatBRL } from '../../lib/money'
+import { formatBRL, formatThousandsBR } from '../../lib/money'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { WatchStar } from '../players/WatchStar'
 import { MakeOfferDialog, type OfferTarget } from '../transfer/MakeOfferDialog'
-import type { PlayerResponse, TransferOffer } from '../../api/types'
+import type { ClubSummary, PlayerResponse, TransferOffer } from '../../api/types'
 import { positionShort } from '../players/positionLabels'
 
 // Display order for the roster: goalkeepers, then defenders, midfielders, attackers.
@@ -25,6 +25,18 @@ const COARSE_POS_SHORT: Record<PlayerResponse['position'], string> = { GK: 'GK',
 /** Short position abbr: detailed when present, else coarse. */
 function positionLabel(player: PlayerResponse): string {
   return positionShort(player, COARSE_POS_SHORT)
+}
+
+/** "Estádio X · Cidade/UF · N lugares", each segment omitted when its data is null so a
+ * club missing city/state (or an unseeded club without stadium data) still renders cleanly
+ * without a dangling separator. Null when nothing is available at all. */
+function clubLocationLine(club: ClubSummary): string | null {
+  const segments: string[] = []
+  if (club.stadiumName) segments.push(club.stadiumName)
+  const place = [club.city, club.state].filter(Boolean).join('/')
+  if (place) segments.push(place)
+  if (club.stadiumCapacity != null) segments.push(`${formatThousandsBR(club.stadiumCapacity)} lugares`)
+  return segments.length > 0 ? segments.join(' · ') : null
 }
 
 /**
@@ -117,6 +129,7 @@ export function ClubViewPage() {
   )
 
   const clubName = club ? (club.commonName ?? club.name) : ''
+  const locationLine = club ? clubLocationLine(club) : null
 
   return (
     <Box>
@@ -126,6 +139,11 @@ export function ClubViewPage() {
       {club && (
         <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
           Reputação {club.reputation} · {club.squadSize} jogadores
+        </Typography>
+      )}
+      {locationLine && (
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          {locationLine}
         </Typography>
       )}
 

@@ -185,6 +185,27 @@ describe('LiveMatchPage', () => {
     expect(screen.queryByText(/Estádio/)).not.toBeInTheDocument()
   })
 
+  it('shows the weather chip and the crowd size when the backend supplies them', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, weather: 'ENSOLARADO', temperatureC: 27, attendance: 19300,
+    } as never)
+    renderPage()
+    await screen.findByText(/GOL! Camisa 9/)
+    expect(screen.getByTestId('weather-chip')).toBeInTheDocument()
+    expect(screen.getByText(/Ensolarado · 27°C/)).toBeInTheDocument()
+    expect(screen.getByText('Público: 19.300')).toBeInTheDocument()
+  })
+
+  it('hides the weather chip and the crowd size before they are revealed (null-safe)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, weather: null, temperatureC: null, attendance: null,
+    } as never)
+    renderPage()
+    await screen.findByText(/GOL! Camisa 9/)
+    expect(screen.queryByTestId('weather-chip')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Público:/)).not.toBeInTheDocument()
+  })
+
   it('at full time, Ver resumo finishes and navigates to the news', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, minute: 90, status: 'FULL_TIME' } as never)
     vi.mocked(finishLiveMatch).mockResolvedValue({ type: 'MATCH' } as never)

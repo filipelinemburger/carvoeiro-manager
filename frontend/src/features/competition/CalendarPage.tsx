@@ -7,6 +7,8 @@ import {
 import { getClubs, getFixtures, getSaveGame } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import { formatDatePtBR } from '../../utils/date'
+import { formatThousandsBR } from '../../lib/money'
+import { WeatherChip, type WeatherCondition } from '../../components/WeatherChip'
 import type { ClubSummary, FixtureEntry, SaveGameResponse } from '../../api/types'
 
 const NEXT_UNPLAYED_BG = 'rgba(0, 100, 200, 0.1)'
@@ -50,6 +52,26 @@ function matchupLabel(fixture: FixtureEntry, managedClubName: string, clubNameBy
   return fixture.home
     ? `${managedClubName} x ${opponentName}`
     : `${opponentName} x ${managedClubName}`
+}
+
+/** Forecast chip for an unplayed fixture (self-hides when the weather isn't revealed yet), or
+ * the crowd count once the fixture has been played. */
+function WeatherCell({ fixture }: { fixture: FixtureEntry }) {
+  if (fixture.played) {
+    return (
+      <TableCell align="center">
+        {fixture.attendance != null ? `Público: ${formatThousandsBR(fixture.attendance)}` : ''}
+      </TableCell>
+    )
+  }
+  return (
+    <TableCell align="center">
+      <WeatherChip
+        condition={(fixture.weather ?? null) as WeatherCondition | null}
+        temperatureC={fixture.temperatureC ?? null}
+      />
+    </TableCell>
+  )
 }
 
 /** The "2x0" / "—" score cell in true home/away order, colored by the managed club's outcome. */
@@ -148,6 +170,7 @@ export function CalendarPage() {
                 <TableCell>CAMPEONATO</TableCell>
                 <TableCell>JOGO</TableCell>
                 <TableCell>ESTÁDIO</TableCell>
+                <TableCell align="center">CLIMA</TableCell>
                 <TableCell align="center">PLACAR</TableCell>
               </TableRow>
             </TableHead>
@@ -167,6 +190,7 @@ export function CalendarPage() {
                     <TableCell>{competitionDisplayName(fixture.competitionName)}</TableCell>
                     <TableCell>{matchupLabel(fixture, managedClubName, clubNameById)}</TableCell>
                     <TableCell>{stadiumDisplayName(fixture.stadiumName)}</TableCell>
+                    <WeatherCell fixture={fixture} />
                     <ScoreCell fixture={fixture} />
                   </TableRow>
                 )

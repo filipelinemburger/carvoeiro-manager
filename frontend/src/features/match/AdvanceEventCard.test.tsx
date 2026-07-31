@@ -356,5 +356,28 @@ describe('AdvanceEventCard', () => {
       renderCard(basic)
       expect(screen.queryByText(/4-3-3/)).not.toBeInTheDocument()
     })
+
+    it('shows the weather chip and the auxiliar’s advice when the forecast is revealed', () => {
+      const withWeather = { ...previewResult, matchPreview: { ...previewResult.matchPreview!,
+        weather: 'CHUVA_FORTE', temperatureC: 16,
+        weatherAdvice: 'Chuva forte prevista — considere um time mais físico.' } }
+      renderCard(withWeather)
+      expect(screen.getByTestId('weather-chip')).toBeInTheDocument()
+      expect(screen.getByText(/Chuva forte · 16°C/)).toBeInTheDocument()
+      expect(screen.getByText('Chuva forte prevista — considere um time mais físico.')).toBeInTheDocument()
+    })
+
+    it('renders neither the chip nor the advice line when the forecast is not yet revealed (null-safe)', () => {
+      renderCard(previewResult)
+      expect(screen.queryByTestId('weather-chip')).not.toBeInTheDocument()
+    })
+
+    it('does not render an advice line when the weather is unremarkable (weatherAdvice null)', () => {
+      const withWeather = { ...previewResult, matchPreview: { ...previewResult.matchPreview!,
+        weather: 'ENSOLARADO', temperatureC: 24, weatherAdvice: null } }
+      renderCard(withWeather)
+      expect(screen.getByTestId('weather-chip')).toBeInTheDocument()
+      expect(screen.queryByText(/considere/)).not.toBeInTheDocument()
+    })
   })
 })

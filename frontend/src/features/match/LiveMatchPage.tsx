@@ -7,6 +7,7 @@ import {
 } from '@mui/material'
 import { useAuth } from '../../auth/AuthContext'
 import { formatDatePtBR } from '../../utils/date'
+import { formatThousandsBR } from '../../lib/money'
 import {
   getLiveMatch, advanceLiveMatch, advanceToLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics,
 } from '../../api/liveMatch'
@@ -19,6 +20,7 @@ import { PreMatchLineups } from './PreMatchLineups'
 import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { WatchStar } from '../players/WatchStar'
+import { WeatherChip, type WeatherCondition } from '../../components/WeatherChip'
 
 /** Builds one side's pitch view-model from its live on-pitch roster. Module-scope (no
  * component state) so it's freely reusable for either side without a closure. */
@@ -269,12 +271,20 @@ export function LiveMatchPage() {
           {state.homeClubShortName} <strong>{state.homeGoals}</strong> — <strong>{state.awayGoals}</strong> {state.awayClubShortName}
         </Typography>
       </Stack>
-      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-        {state.competitionName}{state.round !== null ? ` · Rodada ${state.round + 1}` : ''}
-        {state.matchDate
-          ? ` · ${state.stadiumName ? `${state.stadiumName} · ` : ''}${formatDatePtBR(state.matchDate)}`
-          : ''}
-      </Typography>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          {state.competitionName}{state.round !== null ? ` · Rodada ${state.round + 1}` : ''}
+          {state.matchDate
+            ? ` · ${state.stadiumName ? `${state.stadiumName} · ` : ''}${formatDatePtBR(state.matchDate)}`
+            : ''}
+        </Typography>
+        <WeatherChip condition={state.weather as WeatherCondition | null} temperatureC={state.temperatureC} />
+        {state.attendance !== null && (
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            Público: {formatThousandsBR(state.attendance)}
+          </Typography>
+        )}
+      </Stack>
       {!fullTime && <LinearProgress variant="determinate" value={(state.minute / 90) * 100} sx={{ my: 1 }} />}
 
       {state.status === 'PAUSED_INJURY' && (

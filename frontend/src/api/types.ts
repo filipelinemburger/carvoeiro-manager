@@ -238,6 +238,11 @@ export type ClubSummary = {
   secondaryColor: string | null
   reputation: number
   squadSize: number
+  /** Geography; absent on payloads persisted before these fields existed. */
+  city?: string | null
+  state?: string | null
+  stadiumName?: string | null
+  stadiumCapacity?: number
 }
 
 export type SetLineupRequest = {
@@ -308,6 +313,11 @@ export type FixtureEntry = {
   played: boolean
   goalsFor: number | null
   goalsAgainst: number | null
+  /** Null until the eve of the match (see the backend's reveal rule); absent on payloads persisted before these fields existed. */
+  weather?: string | null
+  temperatureC?: number | null
+  /** Null until the fixture has been played. */
+  attendance?: number | null
 }
 
 export type FixtureResultResponse = {
@@ -322,6 +332,9 @@ export type FixtureResultResponse = {
   awayGoals: number
   /** Home side's stadium (real name, or a generic fallback); absent on payloads persisted before this field existed. */
   stadium?: string | null
+  attendance?: number | null
+  weather?: string | null
+  temperatureC?: number | null
 }
 
 export type FinanceRoundResponse = {
@@ -377,6 +390,11 @@ export type MatchPreviewData = {
   matchDate: string
   home: boolean
   stadiumName: string | null
+  /** Null when the fixture's forecast is not yet revealed (see the backend's reveal rule). */
+  weather?: string | null
+  temperatureC?: number | null
+  /** A pt-BR sentence of advice; null when the weather is unremarkable. */
+  weatherAdvice?: string | null
   opponentClubId: string
   opponentName: string
   opponentShortName: string | null
@@ -786,6 +804,9 @@ export type LiveMatchState = {
   awayClubColors: LiveKitColors
   competitionId: string
   parallelScores: ParallelScore[]
+  weather: string | null
+  temperatureC: number | null
+  attendance: number | null
 }
 
 export type SubstituteRequest = { outPlayerId: string; inPlayerId: string }

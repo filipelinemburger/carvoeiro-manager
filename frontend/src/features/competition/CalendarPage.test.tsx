@@ -224,6 +224,39 @@ describe('CalendarPage', () => {
     expect(dashes.length).toBe(2)
   })
 
+  it('shows a weather chip on an unplayed row when the forecast is revealed', async () => {
+    mockGetFixtures.mockImplementation((_saveGameId, competitionId) => {
+      if (competitionId === 'comp-1') {
+        return Promise.resolve([
+          { ...catarinenseFixtures[2], weather: 'CHUVA', temperatureC: 19 },
+        ])
+      }
+      return Promise.resolve([])
+    })
+    renderWithProviders()
+    await waitFor(() => expect(screen.getByTestId('weather-chip')).toBeInTheDocument())
+    expect(screen.getByText(/Chuva · 19°C/)).toBeInTheDocument()
+  })
+
+  it('shows nothing in the weather column for an unplayed row whose forecast is not yet revealed', async () => {
+    renderWithProviders()
+    await waitFor(() => expect(screen.getAllByText('Heriberto Hülse').length).toBeGreaterThan(0))
+    expect(screen.queryByTestId('weather-chip')).not.toBeInTheDocument()
+  })
+
+  it('shows the crowd size on a played row', async () => {
+    mockGetFixtures.mockImplementation((_saveGameId, competitionId) => {
+      if (competitionId === 'comp-1') {
+        return Promise.resolve([
+          { ...catarinenseFixtures[0], attendance: 19300 },
+        ])
+      }
+      return Promise.resolve([])
+    })
+    renderWithProviders()
+    await waitFor(() => expect(screen.getByText('Público: 19.300')).toBeInTheDocument())
+  })
+
   it('highlights the first unplayed fixture row (by date)', async () => {
     renderWithProviders()
     await waitFor(() =>

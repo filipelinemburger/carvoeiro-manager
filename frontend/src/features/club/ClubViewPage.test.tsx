@@ -86,6 +86,32 @@ describe('ClubViewPage', () => {
     expect(getSquad).toHaveBeenCalledWith('sg-1', OTHER_CLUB_ID, 'test-token')
   })
 
+  it('shows the stadium, city/state, and capacity line when all data is present', async () => {
+    vi.mocked(getClubs).mockResolvedValue([
+      clubs[0],
+      { ...clubs[1], stadiumName: 'Estádio Heriberto Hülse', city: 'Criciúma', state: 'SC', stadiumCapacity: 19300 },
+    ])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    expect(screen.getByText('Estádio Heriberto Hülse · Criciúma/SC · 19.300 lugares')).toBeInTheDocument()
+  })
+
+  it('omits the location line entirely when the club has no stadium data (null-safe)', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    expect(screen.queryByText(/lugares/)).not.toBeInTheDocument()
+  })
+
+  it('renders the location line without a dangling separator when city/state are missing', async () => {
+    vi.mocked(getClubs).mockResolvedValue([
+      clubs[0],
+      { ...clubs[1], stadiumName: 'Estádio Heriberto Hülse', city: null, state: null, stadiumCapacity: 19300 },
+    ])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    expect(screen.getByText('Estádio Heriberto Hülse · 19.300 lugares')).toBeInTheDocument()
+  })
+
   it('shows a "Listado" chip for a transfer-listed player', async () => {
     vi.mocked(getSquad).mockResolvedValue({
       players: [player({ transferListed: true, listedReason: 'FINANCIAL' })],

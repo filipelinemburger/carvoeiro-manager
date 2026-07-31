@@ -9,6 +9,7 @@ import type { AdvanceResponse, Mentality, Pressing, Marking } from '../../api/ty
 import { SEVERITY_LABEL } from '../squad/injurySeverity'
 import { MENTALITY_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
 import { PlayerRatingsList } from './PlayerRatingsList'
+import { WeatherChip, type WeatherCondition } from '../../components/WeatherChip'
 
 const QUALITY_LABEL: Record<string, string> = {
   REGULAR: 'Regular',
@@ -395,6 +396,13 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
                 <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
                   por {p.assistantName}, Auxiliar Técnico
                 </Typography>
+
+                <WeatherChip condition={(p.weather ?? null) as WeatherCondition | null} temperatureC={p.temperatureC ?? null} />
+                {p.weatherAdvice && (
+                  <Typography variant="body2" sx={{ mt: p.weather ? 1 : 0, mb: 1 }}>
+                    {p.weatherAdvice}
+                  </Typography>
+                )}
 
                 {(p.opponentStanding || p.managedStanding) && (
                   <Table size="small" sx={{ maxWidth: 420, mb: 1 }}>
