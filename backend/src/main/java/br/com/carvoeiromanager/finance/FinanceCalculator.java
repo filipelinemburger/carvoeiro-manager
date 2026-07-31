@@ -129,11 +129,12 @@ public class FinanceCalculator {
         return scaled(UPKEEP_PER_SEAT.multiply(BigDecimal.valueOf(stadiumCapacity)));
     }
 
-    public BigDecimal gateIncome(int homeReputation, int awayReputation, int stadiumCapacity) {
-        double fill = 0.40 + homeReputation / 200.0 + awayReputation / 400.0;
-        fill = Math.max(0.25, Math.min(1.0, fill));
-        int attendance = Math.min(stadiumCapacity, (int) Math.round(stadiumCapacity * fill));
-        return scaled(TICKET_PRICE.multiply(BigDecimal.valueOf(attendance)));
+    /**
+     * Gate receipts for a realized crowd. The crowd model itself lives in
+     * {@link AttendanceCalculator} — this method only turns bodies into money.
+     */
+    public BigDecimal gateIncome(int attendance) {
+        return scaled(TICKET_PRICE.multiply(BigDecimal.valueOf(Math.max(0, attendance))));
     }
 
     public BigDecimal prizeMoney(int position, int clubCount) {

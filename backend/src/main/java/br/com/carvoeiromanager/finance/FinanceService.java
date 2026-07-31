@@ -14,6 +14,7 @@ import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.competition.StandingRow;
 import br.com.carvoeiromanager.competition.StandingsCalculator;
+import br.com.carvoeiromanager.match.Weather;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.staff.Staff;
@@ -56,9 +57,21 @@ public class FinanceService {
     private final FixtureRepository fixtureRepository;
     private final FinanceTransactionRepository financeTransactionRepository;
     private final FinanceCalculator financeCalculator;
+    private final AttendanceCalculator attendanceCalculator;
     private final StaffRepository staffRepository;
     private final StaffEffectsService staffEffectsService;
     private final StandingsCalculator standingsCalculator = new StandingsCalculator();
+
+    /**
+     * Holding-measure inputs for {@link AttendanceCalculator} until Task 9 threads real
+     * recent-form, league-position, and weather data through match resolution.
+     * {@code clubCount=1} deliberately hits the calculator's single-club shortcut so the
+     * league-position factor is neutral (1.0) rather than a fabricated position; recent form
+     * uses the midpoint of the 0-15 scale so the form factor is close to neutral too.
+     */
+    private static final int NEUTRAL_RECENT_FORM_POINTS = 8;
+    private static final int NEUTRAL_LEAGUE_POSITION = 1;
+    private static final int NEUTRAL_CLUB_COUNT = 1;
 
     public FinanceService(SaveGameService saveGameService,
                           SaveGameRepository saveGameRepository,
@@ -69,6 +82,7 @@ public class FinanceService {
                           FixtureRepository fixtureRepository,
                           FinanceTransactionRepository financeTransactionRepository,
                           FinanceCalculator financeCalculator,
+                          AttendanceCalculator attendanceCalculator,
                           StaffRepository staffRepository,
                           StaffEffectsService staffEffectsService) {
         this.saveGameService = saveGameService;
@@ -80,6 +94,7 @@ public class FinanceService {
         this.fixtureRepository = fixtureRepository;
         this.financeTransactionRepository = financeTransactionRepository;
         this.financeCalculator = financeCalculator;
+        this.attendanceCalculator = attendanceCalculator;
         this.staffRepository = staffRepository;
         this.staffEffectsService = staffEffectsService;
     }
@@ -142,7 +157,12 @@ public class FinanceService {
                         .orElse(null);
                 Club away = awayId != null ? clubById.get(awayId) : null;
                 int awayRep = away != null ? away.getReputation() : 0;
-                gate = financeCalculator.gateIncome(club.getReputation(), awayRep, club.getStadiumCapacity());
+                // Holding measure: form/position/weather are neutral until Task 9 threads real
+                // season context through match resolution (see NEUTRAL_* constants above).
+                int attendance = attendanceCalculator.attendance(club.getStadiumCapacity(),
+                        club.getReputation(), awayRep, NEUTRAL_RECENT_FORM_POINTS,
+                        NEUTRAL_LEAGUE_POSITION, NEUTRAL_CLUB_COUNT, Weather.neutral());
+                gate = financeCalculator.gateIncome(attendance);
             }
 
             BigDecimal matchCost = playingClubs.contains(clubId)

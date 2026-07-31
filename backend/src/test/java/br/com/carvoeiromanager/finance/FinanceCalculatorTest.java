@@ -90,19 +90,23 @@ class FinanceCalculatorTest {
     }
 
     @Test
-    void gateIncomeNeverExceedsCapacityAndRisesWithReputation() {
-        // fill = 0.40 + 70/200 + 60/400 = 0.90; attendance = round(43000*0.90)=38700; gate=*50
-        assertThat(calc.gateIncome(70, 60, 43000)).isEqualByComparingTo("1935000.00");
-        // a small stadium caps attendance at capacity: fill would be >1 only via clamp; here capacity binds
-        BigDecimalAssertCap(calc, 90, 90, 1000);
-        // higher reputations => higher (or equal) gate for the same capacity
-        assertThat(calc.gateIncome(80, 70, 50000)).isGreaterThan(calc.gateIncome(50, 50, 50000));
-    }
+    void gateIncomeIsAttendanceTimesTicketPriceAndNeverNegative() {
+        // gateIncome now just turns a realized crowd into money (crowd sizing moved to
+        // AttendanceCalculator). Attendance values below reproduce the old formula's outputs
+        // so the expected totals are unchanged.
 
-    private static void BigDecimalAssertCap(FinanceCalculator calc, int homeRep, int awayRep, int capacity) {
-        // attendance can never exceed capacity, so gate <= capacity * 50
-        assertThat(calc.gateIncome(homeRep, awayRep, capacity))
-                .isLessThanOrEqualTo(new java.math.BigDecimal(capacity * 50).setScale(2));
+        // was: fill = 0.40 + 70/200 + 60/400 = 0.90; attendance = round(43000*0.90) = 38700
+        assertThat(calc.gateIncome(38700)).isEqualByComparingTo("1935000.00");
+
+        // was: rep 90/90 in a 1000-seat stadium clamps fill to 1.0, so attendance == capacity
+        assertThat(calc.gateIncome(1000)).isEqualByComparingTo("50000.00");
+
+        // was: rep 80/70 (fill=0.975, attendance=48750) vs rep 50/50 (fill=0.775, attendance=38750)
+        // for the same 50 000-seat capacity — higher attendance => higher (or equal) gate
+        assertThat(calc.gateIncome(48750)).isGreaterThan(calc.gateIncome(38750));
+
+        // gateIncome clamps attendance at zero; it must never return a negative amount
+        assertThat(calc.gateIncome(-100)).isEqualByComparingTo("0.00");
     }
 
     @Test
