@@ -46,10 +46,10 @@ class FinanceCalculatorTest {
 
     @Test
     void monthlySponsorshipIsProportionalToReputation() {
-        // R$130 000 × reputation
-        assertThat(calc.monthlySponsorship(60)).isEqualByComparingTo("7800000.00");
-        assertThat(calc.monthlySponsorship(40)).isEqualByComparingTo("5200000.00");
-        assertThat(calc.monthlySponsorship(90)).isEqualByComparingTo("11700000.00");
+        // R$100 000 × reputation
+        assertThat(calc.monthlySponsorship(60)).isEqualByComparingTo("6000000.00");
+        assertThat(calc.monthlySponsorship(40)).isEqualByComparingTo("4000000.00");
+        assertThat(calc.monthlySponsorship(90)).isEqualByComparingTo("9000000.00");
         // strictly increasing with reputation
         assertThat(calc.monthlySponsorship(70)).isGreaterThan(calc.monthlySponsorship(60));
     }
@@ -85,7 +85,7 @@ class FinanceCalculatorTest {
     void stadiumAndProfileFormulas() {
         assertThat(calc.stadiumCapacity(67)).isEqualTo(41500);        // 8000 + 67*500
         assertThat(calc.startingBalance(67)).isEqualByComparingTo("13400000.00"); // 67*200000
-        assertThat(calc.monthlySponsorship(67)).isEqualByComparingTo("8710000.00"); // 67*130000
+        assertThat(calc.monthlySponsorship(67)).isEqualByComparingTo("6700000.00"); // 67*100000
         assertThat(calc.monthlyUpkeep(41500)).isEqualByComparingTo("249000.00");   // 41500*6
     }
 

@@ -18,7 +18,6 @@ class FinanceSolvencyTest {
     private static final int HOME_MATCHES = 9;
     private static final int TOTAL_MATCHES = 18;
     private static final int SQUAD_SIZE = 22;
-    private static final int AVG_OVERALL = 60;
     private static final int AVG_AGE = 26;
 
     private final FinanceCalculator finance = new FinanceCalculator();
@@ -39,9 +38,17 @@ class FinanceSolvencyTest {
         assertThat(seasonNet(63903, 75)).isGreaterThan(BigDecimal.ZERO);
     }
 
-    /** Net change over a season: sponsorship and prize in, wages, upkeep, and match costs out. */
+    /**
+     * Net change over a season: sponsorship and prize in, wages, upkeep, and match costs out.
+     *
+     * <p>Squad average overall is deliberately set equal to {@code reputation}, not some fixed
+     * value: {@link FinanceCalculator#reputation(java.util.List)} returns the clamped average
+     * squad overall, so reputation and squad quality are the same quantity in this model, not
+     * independent inputs. Decoupling them here would charge/credit a club for a squad it
+     * doesn't have.
+     */
     private BigDecimal seasonNet(int capacity, int reputation) {
-        BigDecimal wages = finance.monthlyWage(AVG_OVERALL, AVG_AGE)
+        BigDecimal wages = finance.monthlyWage(reputation, AVG_AGE)
                 .multiply(BigDecimal.valueOf((long) SQUAD_SIZE * MONTHS));
         BigDecimal sponsorship = finance.monthlySponsorship(reputation)
                 .multiply(BigDecimal.valueOf(MONTHS));

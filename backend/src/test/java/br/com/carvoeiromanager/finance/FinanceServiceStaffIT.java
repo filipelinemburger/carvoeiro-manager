@@ -67,9 +67,9 @@ class FinanceServiceStaffIT {
 
         FinanceTransactionResponse sponsorTx = transactions.stream()
                 .filter(t -> t.type().equals("SPONSOR")).findFirst().orElseThrow();
-        // R$130 000 x reputation x Excelente's 1.1 multiplier (see FinanceCalculator.monthlySponsorship
+        // R$100 000 x reputation x Excelente's 1.1 multiplier (see FinanceCalculator.monthlySponsorship
         // and the Global Constraints' effect table).
-        BigDecimal expectedSponsorship = new BigDecimal("130000")
+        BigDecimal expectedSponsorship = new BigDecimal("100000")
                 .multiply(BigDecimal.valueOf(club.getReputation()))
                 .multiply(new BigDecimal("1.1"))
                 .setScale(2, java.math.RoundingMode.HALF_UP);
