@@ -2,6 +2,7 @@ package br.com.carvoeiromanager.competition;
 
 import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
+import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
@@ -17,6 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -133,6 +135,75 @@ class FixtureServiceIT {
         assertThat(sawUnplayed).isTrue();
         assertThat(sawHome).isTrue();
         assertThat(sawAway).isTrue();
+    }
+
+    /**
+     * Covers the attendance-reveal binding constraint: {@link FixtureService} must route weather
+     * through {@link br.com.carvoeiromanager.match.WeatherService#visibleWeather}, not the ungated
+     * {@code weatherFor} — a manager must not be able to scout the forecast a month ahead.
+     *
+     * <p>Uses the managed club's LAST fixture in the competition rather than its first: a fresh
+     * career's {@code currentDate} is the season start date, and {@code SeasonCalendarGenerator}
+     * dates round 0 of whichever competition sorts first by id exactly ON that start date (0 days
+     * out — itself inside the reveal window) — so "the earliest round" is not reliably far out.
+     * The last round, dozens of {@code MATCH_INTERVAL_DAYS}-spaced rounds later, always is.
+     */
+    @Test
+    void fixtureMoreThanADayOutHasNoWeatherInTheResponse() {
+        Career c = createCareer();
+        UUID competitionId = firstCompetitionId(c.id());
+        UUID managedClubId = c.save().managedClubId();
+
+        Fixture farOut = fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), competitionId).stream()
+                .filter(f -> f.getHomeClubId().equals(managedClubId) || f.getAwayClubId().equals(managedClubId))
+                .max((a, b) -> a.getMatchDate().compareTo(b.getMatchDate()))
+                .orElseThrow();
+
+        LocalDate today = saveGameRepository.findById(c.id()).orElseThrow().getCurrentDate();
+        assertThat(farOut.getMatchDate()).as("sanity check: the last round is more than a day out")
+                .isAfter(today.plusDays(1));
+
+        List<FixtureEntryResponse> entries = fixtureService.getFixtures(c.id(), competitionId, c.userId());
+        FixtureEntryResponse entry = entries.stream()
+                .filter(e -> e.fixtureId().equals(farOut.getId()))
+                .findFirst().orElseThrow();
+
+        assertThat(entry.weather()).as("weather more than a day out").isNull();
+        assertThat(entry.temperatureC()).as("temperature more than a day out").isNull();
+    }
+
+    /**
+     * The other half of the reveal rule: once the save's {@code currentDate} reaches the eve of a
+     * fixture (or match day itself), that fixture's weather becomes visible.
+     */
+    @Test
+    void fixtureOnTheEveOfKickoffHasWeatherInTheResponse() {
+        Career c = createCareer();
+        UUID competitionId = firstCompetitionId(c.id());
+        UUID managedClubId = c.save().managedClubId();
+
+        Fixture target = fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), competitionId).stream()
+                .filter(f -> f.getHomeClubId().equals(managedClubId) || f.getAwayClubId().equals(managedClubId))
+                .min((a, b) -> a.getMatchDate().compareTo(b.getMatchDate()))
+                .orElseThrow();
+
+        SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();
+        save.setCurrentDate(target.getMatchDate().minusDays(1));
+        saveGameRepository.save(save);
+
+        List<FixtureEntryResponse> entries = fixtureService.getFixtures(c.id(), competitionId, c.userId());
+        FixtureEntryResponse entry = entries.stream()
+                .filter(e -> e.fixtureId().equals(target.getId()))
+                .findFirst().orElseThrow();
+
+        assertThat(entry.weather()).as("weather on the eve of kickoff").isNotNull();
+        assertThat(entry.temperatureC()).as("temperature on the eve of kickoff").isNotNull();
+    }
+
+    private UUID firstCompetitionId(UUID saveGameId) {
+        return competitionRepository.findBySaveGameId(saveGameId).stream()
+                .filter(comp -> comp.getName().contains("Catarinense"))
+                .findFirst().orElseThrow().getId();
     }
 
     @Test
