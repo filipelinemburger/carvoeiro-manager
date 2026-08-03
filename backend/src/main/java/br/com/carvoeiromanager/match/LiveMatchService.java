@@ -466,7 +466,7 @@ public class LiveMatchService {
                 homeClubId, homeClub.getName(), shortName(homeClub), timeline.homeGoals(),
                 awayClubId, awayClub.getName(), shortName(awayClub), timeline.awayGoals(),
                 homeClub.resolvedStadiumName(),
-                fixture.getAttendance(), weather.condition().label(), weather.temperatureC());
+                fixture.getAttendance(), weather.condition().name(), weather.temperatureC());
         Set<UUID> userPlayedIds = allPlayed.stream().map(Player::getId).collect(Collectors.toSet());
 
         List<PlayerRating> playerRatings = managedRatings(lm, cfg, timeline, MINUTES);
@@ -559,7 +559,12 @@ public class LiveMatchService {
 
         List<TimedTactics> tacticsSchedule = deserializeTactics(lm.getTacticsSchedule());
 
-        Weather weather = resolveWeather(lm.getFixtureId(), clubOf(homeXi), lm.getMatchDate());
+        // Resolved from the fixture's home club, not clubOf(homeXi) (homeXi.get(0).getClubId()) —
+        // the same source toState()/finish() use — so this and the display/attendance paths are
+        // structurally guaranteed to agree on which club's climate zone the weather comes from,
+        // rather than merely happening to agree today.
+        Fixture fixture = fixtureRepository.findById(lm.getFixtureId()).orElseThrow();
+        Weather weather = resolveWeather(lm.getFixtureId(), fixture.getHomeClubId(), lm.getMatchDate());
 
         return new LiveMatchConfig(lm.getSeed(), homeXi, awayXi, homeBench, awayBench,
                 homeProfile, awayProfile, fitness, subs, tacticsSchedule, !lm.isManagedIsHome(), weather);
@@ -673,7 +678,7 @@ public class LiveMatchService {
                 status, events, onPitch, bench, MAX_SUBS - subsUsed, currentTactics, playerRatings,
                 opponentOnPitch, opponentTactics, opponentPlayerRatings, homeClubColors, awayClubColors,
                 lm.getCompetitionId().toString(), parallelScoresAsOf(lm, minute),
-                weather.condition().label(), weather.temperatureC(), fixture.getAttendance());
+                weather.condition().name(), weather.temperatureC(), fixture.getAttendance());
     }
 
     /**

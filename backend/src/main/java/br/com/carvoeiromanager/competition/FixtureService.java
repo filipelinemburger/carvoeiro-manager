@@ -88,7 +88,7 @@ public class FixtureService {
         Integer temperatureC = null;
         if (homeClub != null) {
             Optional<Weather> weather = weatherService.visibleWeather(fixture, homeClub, today);
-            weatherLabel = weather.map(w -> w.condition().label()).orElse(null);
+            weatherLabel = weather.map(w -> w.condition().name()).orElse(null);
             temperatureC = weather.map(Weather::temperatureC).orElse(null);
         }
 

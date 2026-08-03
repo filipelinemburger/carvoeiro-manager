@@ -105,8 +105,20 @@ public class MatchContextResolver {
             return Math.min(FORM_MAX_POINTS, points);
         }
 
-        /** {@code clubId}'s 1-based position in the as-of-matchDate standings table. */
+        /**
+         * {@code clubId}'s 1-based position in the as-of-matchDate standings table — NEUTRAL
+         * (mid-table) if no fixture in the competition has been played as of {@code matchDate} yet.
+         * Without that guard, matchday 1 has every club level on 0 points, so
+         * {@link br.com.carvoeiromanager.competition.StandingsCalculator}'s final tie-break
+         * (club name) alone decides "1st" vs "last" — and {@code AttendanceCalculator} prices that
+         * arbitrary alphabetical order as if it were a real league position (rank 1 → x1.10, rank
+         * 20 → x0.90), so a club named "AAA" would draw a materially bigger round-1 crowd than one
+         * named "ZZZ" for no footballing reason at all.
+         */
         public int leaguePosition(UUID clubId) {
+            if (noFixturePlayedYet()) {
+                return neutralPosition();
+            }
             for (int i = 0; i < standingsAsOf.size(); i++) {
                 if (standingsAsOf.get(i).clubId().equals(clubId)) {
                     return i + 1;
@@ -115,6 +127,16 @@ public class MatchContextResolver {
             // Defensive: club not found in the table. Fall back to a NEUTRAL mid-table position
             // rather than 1st — 1 is AttendanceCalculator's maximally favourable position factor,
             // and a defensive fallback should never be the best case.
+            return neutralPosition();
+        }
+
+        /** True once every row in the as-of-matchDate table is still on zero played matches. */
+        private boolean noFixturePlayedYet() {
+            return standingsAsOf.stream().allMatch(row -> row.played() == 0);
+        }
+
+        /** The mid-table position: same value for every club, so no club is favoured over another. */
+        private int neutralPosition() {
             return standingsAsOf.isEmpty() ? 1 : (standingsAsOf.size() + 1) / 2;
         }
 

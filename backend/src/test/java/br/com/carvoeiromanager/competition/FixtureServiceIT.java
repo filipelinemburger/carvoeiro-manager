@@ -10,6 +10,7 @@ import br.com.carvoeiromanager.career.SaveGameStatus;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.match.WeatherCondition;
 import br.com.carvoeiromanager.season.SeasonAdvanceService;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
@@ -198,6 +200,16 @@ class FixtureServiceIT {
 
         assertThat(entry.weather()).as("weather on the eve of kickoff").isNotNull();
         assertThat(entry.temperatureC()).as("temperature on the eve of kickoff").isNotNull();
+
+        // Pins the WIRE FORMAT, not just non-nullness: the API must emit the WeatherCondition
+        // enum's name() (e.g. "ENSOLARADO"), which is what WeatherChip.tsx's LABELS/ICONS maps are
+        // keyed by — not condition().label() (e.g. "Ensolarado"), the pt-BR display string. Sending
+        // the label instead of the name is exactly the bug that made every weather surface throw at
+        // render, so this must fail if that regresses.
+        assertThatCode(() -> WeatherCondition.valueOf(entry.weather()))
+                .as("entry.weather() [%s] must be a WeatherCondition enum name, not its pt-BR label",
+                        entry.weather())
+                .doesNotThrowAnyException();
     }
 
     private UUID firstCompetitionId(UUID saveGameId) {

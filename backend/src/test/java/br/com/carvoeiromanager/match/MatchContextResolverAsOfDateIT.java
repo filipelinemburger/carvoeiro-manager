@@ -20,7 +20,10 @@ import org.springframework.test.context.ActiveProfiles;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -109,5 +112,45 @@ class MatchContextResolverAsOfDateIT {
         assertThat(afterRecordingPosition)
                 .as("league position must be as-of matchDate %s, unaffected by same-date results", matchDate)
                 .isEqualTo(baselinePosition);
+    }
+
+    /**
+     * Regression coverage for the Minor review finding: on matchday 1, nothing has been played
+     * yet, so every club in the standings table is level on 0 points and
+     * {@code StandingsCalculator}'s final tie-break (club name) alone decides who is "1st" and who
+     * is "last". {@code AttendanceCalculator} prices that position (rank 1 → x1.10, rank 20 →
+     * x0.90) as if it reflected real form, so — pre-fix — a club whose name sorts first draws a
+     * materially bigger round-1 crowd than one whose name sorts last, for no footballing reason.
+     * {@code leaguePosition} must detect "no fixture played yet" and return the same neutral
+     * position for every club instead.
+     */
+    @Test
+    void matchdayOneGivesEveryClubTheSameNeutralLeaguePosition() {
+        // Given a freshly created career: round 0 is matchday 1 for every club in the competition,
+        // so nothing has been played and every club is tied.
+        SaveGame save = createSave();
+        Competition competition = competitionRepository.findBySaveGameId(save.getId()).stream()
+                .findFirst().orElseThrow();
+        List<Fixture> round0 = fixtureRepository
+                .findBySaveGameIdAndCompetitionIdAndRound(save.getId(), competition.getId(), 0);
+        assertThat(round0).hasSizeGreaterThanOrEqualTo(2);
+        LocalDate matchDate = round0.get(0).getMatchDate();
+
+        MatchContextResolver.RoundContext context =
+                matchContextResolver.forRound(save, competition.getId(), matchDate);
+
+        // When: reading the league position of every club playing in round 0, before anything has
+        // been recorded.
+        Set<Integer> positions = round0.stream()
+                .flatMap(f -> Stream.of(f.getHomeClubId(), f.getAwayClubId()))
+                .map(context::leaguePosition)
+                .collect(Collectors.toSet());
+
+        // Then: every club shares the exact same position — none is favoured or disfavoured by
+        // where its name happens to fall alphabetically. Pre-fix, this table has as many distinct
+        // positions as clubs (1..clubCount), failing hasSize(1) outright.
+        assertThat(positions)
+                .as("every club must share one neutral league position before any match is played")
+                .hasSize(1);
     }
 }

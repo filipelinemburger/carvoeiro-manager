@@ -188,7 +188,7 @@ public class MatchPreviewService {
         // exactly one reveal rule in the codebase.
         LocalDate previewDate = fixture.getMatchDate().minusDays(1);
         Optional<Weather> weather = weatherService.visibleWeather(fixture, venueClub, previewDate);
-        String weatherLabel = weather.map(w -> w.condition().label()).orElse(null);
+        String weatherLabel = weather.map(w -> w.condition().name()).orElse(null);
         Integer temperatureC = weather.map(Weather::temperatureC).orElse(null);
         String weatherAdvice = weather.map(MatchPreviewService::weatherAdvice).orElse(null);
 
