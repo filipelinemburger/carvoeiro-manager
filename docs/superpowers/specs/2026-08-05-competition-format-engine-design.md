@@ -354,12 +354,22 @@ Changes to the pool:
 - **Add 3 clubs:** Joinville, Carlos Renaux, Santa Catarina. Full identity data (name,
   shortName, commonName, nickname, stadium, city, state, `climateZone`, `stadiumCapacity`,
   colours, default tactics) researched when authoring, matching the shape every pool club uses.
-- **Remove Hercílio Luz (`HER`)** from the pool. It is not in the 2026 field, and with no
-  Catarinense second division it would be an orphan — dead weight instantiated into every save.
-  This follows the precedent set by the Série B seed slice, which removed orphaned clubs for the
-  same reason.
+- **Keep Hercílio Luz (`HER`) in the pool**, but drop it from the Catarinense membership. It is
+  not in the real 2026 field, and with no Catarinense second division there is no competition for
+  it to play in. It therefore becomes the pool's **first orphan club**: instantiated into every
+  save with its squad, but playing no fixtures.
 
-Net: Catarinense members 10 → 12; club pool 28 → 30.
+  This is a deliberate departure from the Série B seed slice, which removed orphaned clubs as
+  dead weight. The trade: HER stays present as a transfer-market and scouting presence, and is
+  ready to slot into a Catarinense second division when one exists. The cost is ~22 extra players
+  instantiated per save and a club that appears in club lists with an empty fixture calendar.
+
+Net: Catarinense members 10 → 12; club pool 28 → 31, of which one (HER) belongs to no
+competition.
+
+`SaveGameService.createCareer` already instantiates every pool club and wires memberships
+separately, so an orphan needs **no code change**. But no club has ever existed in this state, so
+the paths that assume a club has fixtures are untested against it — see §11.
 
 ### 9.2 Squad fidelity
 
@@ -415,8 +425,15 @@ rollover; only fixtures and `season_event` rows are regenerated.
 - V47 applied against a pre-V47 database with existing careers — old saves keep their league-only
   Catarinense and remain playable.
 
+**Orphan club (Hercílio Luz)**
+- A pool club belonging to no competition is created with its squad, is browsable, and appears in
+  club and player listings.
+- Every path that assumes a club has fixtures degrades gracefully: club view "next fixture",
+  standings lookups, opponent analysis, finance per matchday, and season rollover.
+
 **Frontend**
 - Phase switching, tie list rendering, aggregate and penalty display.
+- A club with no fixtures renders without error.
 
 **Live verification (not optional)**
 - A live click-through of a knockout tie including extra time and a shootout.
@@ -436,6 +453,7 @@ on first render. Test suites do not cover this seam.
 | Live match UI breaks on the new period/shootout states | Mandatory live click-through, not just test suites |
 | V47 breaks existing careers | Fully additive migration; null `phase_id` falls back to the league path; IT against a pre-V47 database |
 | Season length drift disturbs the Série B interleave | 17 vs 18 match-units; calendar test pins total length |
+| Orphan club (HER) hits a path assuming every club has fixtures | No code change needed to create it, but explicit tests across club view, finance, rollover and opponent analysis |
 
 ---
 
