@@ -212,6 +212,8 @@ public final class LiveCommentary {
                     : corner(playerName, inName, minute);
             case FOUL -> throw new IllegalStateException(
                     "FOUL is never rendered — LiveMatchService.toState() must filter it before calling of()");
+            case EXTRA_TIME_START -> throw new IllegalStateException(
+                    "EXTRA_TIME_START is a match_events-only marker, never emitted into the live timeline");
         };
         if (!type.isGoal()) {
             return base;

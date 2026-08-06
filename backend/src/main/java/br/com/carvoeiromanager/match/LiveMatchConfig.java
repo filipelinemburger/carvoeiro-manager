@@ -16,6 +16,14 @@ import java.util.UUID;
  * produce score-reactive tactics changes for it; {@code null} disables AI reactions entirely.
  * {@code weather} is resolved once by the caller (the home club's climate zone on the fixture's
  * match date) and held fixed for the whole match — weather never changes mid-match.
+ *
+ * <p>{@code knockoutDecider} is true when this match is the second leg of a knockout tie whose
+ * first leg has already been played — i.e. this match is ELIGIBLE to run into extra time.
+ * {@code firstLegHomeGoals}/{@code firstLegAwayGoals} carry that first leg's score (both null
+ * when not eligible) so {@link LiveMatchEngine#simulate} can check, once it knows this match's
+ * own 90-minute score, whether the aggregate is level — the ONLY case that actually extends the
+ * simulated timeline past minute 90. A match that isn't a knockout decider never even evaluates
+ * that check, so its timeline is byte-identical to before these fields existed.
  */
 public record LiveMatchConfig(
         long seed,
@@ -29,5 +37,8 @@ public record LiveMatchConfig(
         List<LiveSub> subSchedule,
         List<TimedTactics> tacticsSchedule,
         Boolean aiHome,
-        Weather weather) {
+        Weather weather,
+        boolean knockoutDecider,
+        Integer firstLegHomeGoals,
+        Integer firstLegAwayGoals) {
 }

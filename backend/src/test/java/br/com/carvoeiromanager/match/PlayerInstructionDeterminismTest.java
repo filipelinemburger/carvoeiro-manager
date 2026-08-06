@@ -92,7 +92,7 @@ class PlayerInstructionDeterminismTest {
         homeBench.forEach(pl -> fitness.put(pl.getId(), 100));
         LiveMatchConfig cfg = new LiveMatchConfig(1234L, homeXi, awayXi, homeBench, List.of(),
                 defaultProfile(homeXi), defaultProfile(awayXi), fitness, List.of(), List.of(), null,
-                Weather.neutral());
+                Weather.neutral(), false, null, null);
         LiveTimeline t = engine.simulate(cfg);
         assertThat(sig(t, EventType.YELLOW_CARD, EventType.RED_CARD)).isEqualTo(GOLDEN_CARDS);
         assertThat(sig(t, EventType.FOUL)).isEqualTo(GOLDEN_FOULS);

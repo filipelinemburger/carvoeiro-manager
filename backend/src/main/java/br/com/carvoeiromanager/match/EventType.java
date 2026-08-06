@@ -6,7 +6,10 @@ import java.util.List;
 public enum EventType {
     GOAL, SET_PIECE_GOAL, YELLOW_CARD, RED_CARD, CHANCE, INJURY, SUBSTITUTION, TACTICS_CHANGE, HALF_TIME,
     // Appended (ordinals above feed LiveCommentary variant selection and must not shift).
-    PENALTY_GOAL, FREE_KICK_GOAL, CORNER_GOAL, PENALTY_MISSED, FOUL;
+    PENALTY_GOAL, FREE_KICK_GOAL, CORNER_GOAL, PENALTY_MISSED, FOUL,
+    // Marks the start of extra time in a knockout tie's match_events; not a goal, never in the
+    // live timeline (see LiveMatchService's finalMinute/status handling instead).
+    EXTRA_TIME_START;
 
     /**
      * True for every type that counts on the scoreboard. SET_PIECE_GOAL is legacy: no longer

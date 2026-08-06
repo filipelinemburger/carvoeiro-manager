@@ -131,7 +131,7 @@ class LiveMatchEngineTest {
         TacticalProfile awayProfile = defaultProfile(awayXi);
 
         return new LiveMatchConfig(seed, homeXi, awayXi, homeBench, List.of(),
-                homeProfile, awayProfile, fitness, subs, tactics, aiHome, Weather.neutral());
+                homeProfile, awayProfile, fitness, subs, tactics, aiHome, Weather.neutral(), false, null, null);
     }
 
     @Test
@@ -458,7 +458,8 @@ class LiveMatchEngineTest {
             homeXi.forEach(pl -> fitness.put(pl.getId(), 100));
             awayXi.forEach(pl -> fitness.put(pl.getId(), 100));
             LiveMatchConfig cfg = new LiveMatchConfig(seed, homeXi, awayXi, List.of(), List.of(),
-                    defaultProfile(homeXi), attackingAway, fitness, List.of(), List.of(), false, Weather.neutral());
+                    defaultProfile(homeXi), attackingAway, fitness, List.of(), List.of(), false, Weather.neutral(),
+                    false, null, null);
             LiveTimeline t = engine.simulate(cfg);
             assertThat(t.events()).as("seed %d", seed)
                     .anyMatch(e -> e.type() == EventType.TACTICS_CHANGE && !e.home()
@@ -541,7 +542,8 @@ class LiveMatchEngineTest {
         boolean sawMiss = false;
         for (long seed = 0; seed < 300; seed++) {
             LiveMatchConfig cfg = new LiveMatchConfig(seed, penHomeXi, penAwayXi, List.of(), List.of(),
-                    homeProfile, awayProfile, fitness, List.of(), List.of(), null, Weather.neutral());
+                    homeProfile, awayProfile, fitness, List.of(), List.of(), null, Weather.neutral(),
+                    false, null, null);
             LiveTimeline t = engine.simulate(cfg);
             for (LiveTimelineEvent e : t.events()) {
                 if (!e.home()) continue;
@@ -576,7 +578,8 @@ class LiveMatchEngineTest {
 
         for (long seed = 0; seed < 300; seed++) {
             LiveMatchConfig cfg = new LiveMatchConfig(seed, attHomeXi, attAwayXi, List.of(), List.of(),
-                    homeProfile, awayProfile, fitness, List.of(), List.of(), null, Weather.neutral());
+                    homeProfile, awayProfile, fitness, List.of(), List.of(), null, Weather.neutral(),
+                    false, null, null);
             LiveTimeline t = engine.simulate(cfg);
             // A designated taker who is sent off (RED_CARD, incl. a second yellow) leaves the pitch,
             // and SetPieces.takerOrFallback then deliberately picks the best available substitute — so
@@ -634,7 +637,7 @@ class LiveMatchEngineTest {
         TacticalProfile awayProfile = defaultProfile(awayXi);
 
         return new LiveMatchConfig(seed, homeXi, awayXi, homeBench, awayBench,
-                homeProfile, awayProfile, fitness, subs, List.of(), aiHome, Weather.neutral());
+                homeProfile, awayProfile, fitness, subs, List.of(), aiHome, Weather.neutral(), false, null, null);
     }
 
     @Test

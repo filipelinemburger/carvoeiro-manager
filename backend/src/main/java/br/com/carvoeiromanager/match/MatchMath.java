@@ -11,6 +11,15 @@ final class MatchMath {
     }
 
     static final int MINUTES = 90;
+
+    /**
+     * Last minute of extra time. NOTE: {@link #MINUTES} stays 90 — it is the per-minute rate
+     * divisor for {@link #perMinuteScoreChance} and the normalizer in {@link #fitnessFactor},
+     * not a loop bound. A minute of extra time carries the same scoring rate as a minute of
+     * normal time, and fitnessFactor keeps decaying past 90 (frac > 1) down to FITNESS_FLOOR.
+     */
+    static final int EXTRA_TIME_END = 120;
+
     static final double BASE = 50.0;
     static final double FITNESS_FLOOR = 0.75;
 

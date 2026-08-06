@@ -120,7 +120,14 @@ public class LiveMatchEngine {
         int homeGoals = 0;
         int awayGoals = 0;
 
-        for (int minute = 1; minute <= MatchMath.MINUTES; minute++) {
+        // Starts as a normal 90-minute match; extended to EXTRA_TIME_END below, in the loop
+        // body, the instant this match's own 90-minute score is known to be level on aggregate
+        // with a knockout tie's already-played first leg. Mutating the loop's own upper bound
+        // (rather than extracting/duplicating the body) means a non-decider match's loop is
+        // untouched byte-for-byte — the block that mutates it below never even evaluates unless
+        // cfg.knockoutDecider().
+        int finalMinute = MatchMath.MINUTES;
+        for (int minute = 1; minute <= finalMinute; minute++) {
             applyTacticChanges(cfg, minute, home, events);
             applyTacticChanges(cfg, minute, away, events);
             applySubs(cfg, minute, home, events);
@@ -187,10 +194,25 @@ public class LiveMatchEngine {
                 UUID carrier = home.onPitch.isEmpty() ? null : home.onPitch.get(0);
                 events.add(new LiveTimelineEvent(45, EventType.HALF_TIME, true, carrier, null, null, null));
             }
+
+            // Decide, once and only once — right as minute 90 finishes, with this match's own
+            // 90-minute score now final — whether to extend into extra time. Consumes zero RNG
+            // (plain arithmetic on scores already drawn this minute), so a non-decider match (or
+            // one whose first leg isn't known/played) is completely unaffected: the loop simply
+            // ends at 90 exactly as before. Crossover: this match's home club was the AWAY club
+            // in leg 1, so leg 1's away goals add to this club's aggregate.
+            if (minute == MatchMath.MINUTES && cfg.knockoutDecider()
+                    && cfg.firstLegHomeGoals() != null && cfg.firstLegAwayGoals() != null) {
+                int aggHome = homeGoals + cfg.firstLegAwayGoals();
+                int aggAway = awayGoals + cfg.firstLegHomeGoals();
+                if (aggHome == aggAway) {
+                    finalMinute = MatchMath.EXTRA_TIME_END;
+                }
+            }
         }
 
-        finalizeMinutes(home);
-        finalizeMinutes(away);
+        finalizeMinutes(home, finalMinute);
+        finalizeMinutes(away, finalMinute);
         events.sort(Comparator.comparingInt(LiveTimelineEvent::minute));
 
         int hg = (int) events.stream().filter(e -> e.home() && isGoal(e.type())).count();
@@ -199,7 +221,7 @@ public class LiveMatchEngine {
         Map<UUID, Integer> minutes = new LinkedHashMap<>();
         putMinutes(home, minutes);
         putMinutes(away, minutes);
-        return new LiveTimeline(hg, ag, List.copyOf(events), Map.copyOf(minutes), List.copyOf(injuries));
+        return new LiveTimeline(hg, ag, List.copyOf(events), Map.copyOf(minutes), List.copyOf(injuries), finalMinute);
     }
 
     // ---- side setup & minutes ----
@@ -211,15 +233,20 @@ public class LiveMatchEngine {
         return s;
     }
 
-    private void finalizeMinutes(Side s) {
+    /**
+     * @param finalMinute this match's actual last simulated minute (90, or 120 for a genuine
+     *                    extra-time decider) — a player still on the pitch is credited through
+     *                    exactly that minute, never a hardcoded 90.
+     */
+    private void finalizeMinutes(Side s, int finalMinute) {
         for (UUID id : s.entryMinute.keySet()) {
-            s.exitMinute.putIfAbsent(id, MatchMath.MINUTES);
+            s.exitMinute.putIfAbsent(id, finalMinute);
         }
     }
 
     private void putMinutes(Side s, Map<UUID, Integer> out) {
         for (UUID id : s.entryMinute.keySet()) {
-            int played = Math.max(0, s.exitMinute.getOrDefault(id, MatchMath.MINUTES) - s.entryMinute.get(id));
+            int played = Math.max(0, s.exitMinute.get(id) - s.entryMinute.get(id));
             out.put(id, played);
         }
     }

@@ -155,9 +155,10 @@ class WeatherEngineIntegrationTest {
         int seeds = 1500;
         for (long seed = 0; seed < seeds; seed++) {
             LiveMatchConfig switchCfg = new LiveMatchConfig(seed, homeXi, awayXi, List.of(), List.of(),
-                    passesProfile, awayProfile, fitness, List.of(), List.of(switchToDireto), null, heavyRain);
+                    passesProfile, awayProfile, fitness, List.of(), List.of(switchToDireto), null, heavyRain,
+                    false, null, null);
             LiveMatchConfig alwaysCfg = new LiveMatchConfig(seed, homeXi, awayXi, List.of(), List.of(),
-                    diretoProfile, awayProfile, fitness, List.of(), List.of(), null, heavyRain);
+                    diretoProfile, awayProfile, fitness, List.of(), List.of(), null, heavyRain, false, null, null);
 
             switchedSecondHalfGoals += secondHalfHomeGoals(liveEngine.simulate(switchCfg));
             alwaysDiretoSecondHalfGoals += secondHalfHomeGoals(liveEngine.simulate(alwaysCfg));

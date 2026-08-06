@@ -224,9 +224,42 @@ public class FixtureSimulator {
         TeamMatchInput awayInput = teamStrengthCalculator.compute(awayXi, awayProfile, fitnessMult(awayFitness));
 
         Weather weather = resolveWeather(fixture.getId(), homeClubId, matchDate);
-        SimulatedMatch match = matchSimulationService.simulate(
-                homeInput, awayInput, weather, seedFor(saveGameId, fixture));
+        long seed = seedFor(saveGameId, fixture);
+        SimulatedMatch match = matchSimulationService.simulate(homeInput, awayInput, weather, seed);
+        // The 90-minute score is now known; only a knockout tie's second leg, level on
+        // aggregate, asks for the extended (deterministic — same seed) re-run. Re-simulating
+        // with the SAME seed reproduces the IDENTICAL minutes 1-90 (Random(seed) always replays
+        // from the start), so this can never perturb the already-computed result — it only
+        // extends it.
+        if (needsExtraTime(fixture, match.homeGoals(), match.awayGoals())) {
+            match = matchSimulationService.simulate(homeInput, awayInput, weather, seed, MatchMath.EXTRA_TIME_END);
+        }
         return new PrecomputedFixture(match, playerIds(homeXi), playerIds(awayXi));
+    }
+
+    /**
+     * True when this fixture must produce a winner: a knockout tie's second leg that is level on
+     * aggregate after 90. League fixtures, first legs, and ties whose first leg hasn't been
+     * played return false, so no extra-time RNG is ever drawn for them and their results stay
+     * byte-identical to the pre-knockout engine. Crossover: this fixture's home club was the
+     * AWAY club in leg 1, so leg 1's awayGoals add to this club's aggregate.
+     */
+    private boolean needsExtraTime(Fixture fixture, int homeGoals, int awayGoals) {
+        if (fixture.getTieId() == null) {
+            return false;                       // league fixture
+        }
+        if (fixture.getLeg() == null || fixture.getLeg() == 1) {
+            return false;                       // first legs never go to extra time
+        }
+        Fixture firstLeg = fixtureRepository.findByTieId(fixture.getTieId()).stream()
+                .filter(f -> f.getLeg() != null && f.getLeg() == 1)
+                .findFirst().orElse(null);
+        if (firstLeg == null || !firstLeg.isPlayed()) {
+            return false;
+        }
+        int aggHome = homeGoals + firstLeg.getAwayGoals();
+        int aggAway = awayGoals + firstLeg.getHomeGoals();
+        return aggHome == aggAway;
     }
 
     private static List<UUID> playerIds(List<Player> players) {
@@ -360,6 +393,19 @@ public class FixtureSimulator {
         Set<UUID> booked = new HashSet<>();
         Set<UUID> sentOff = new HashSet<>();
         for (SimulatedEvent event : match.events()) {
+            if (event.type() == EventType.EXTRA_TIME_START) {
+                // No natural scorer/carrier for this marker — attribute it to a "harmless"
+                // carrier player, the same convention LiveMatchEngine uses for TACTICS_CHANGE/
+                // HALF_TIME (see its javadoc): match_events.player_id/club_id are NOT NULL, and
+                // this event has no real player behind it. Skips the attribution switch below
+                // entirely (not a goal/card, no assist).
+                Player carrier = !homeXi.isEmpty() ? homeXi.get(0) : (!awayXi.isEmpty() ? awayXi.get(0) : null);
+                if (carrier != null) {
+                    matchEventRepository.save(MatchEvent.create(fixture.getId(), event.minute(),
+                            EventType.EXTRA_TIME_START.name(), carrier.getId(), homeClubId));
+                }
+                continue;
+            }
             List<Player> xi = event.home() ? homeXi : awayXi;
             TacticalProfile profile = event.home() ? homeProfile : awayProfile;
             UUID clubId = event.home() ? homeClubId : awayClubId;
@@ -384,7 +430,8 @@ public class FixtureSimulator {
                 // instruction is byte-identical to the pre-instruction pick.
                 case YELLOW_CARD, RED_CARD -> pickByWeight(available,
                         p -> cardWeight(p, profile.instructionFor(p.getId())), rng);
-                case CHANCE, INJURY, SUBSTITUTION, TACTICS_CHANGE, HALF_TIME, PENALTY_MISSED, SET_PIECE_GOAL, FOUL ->
+                case CHANCE, INJURY, SUBSTITUTION, TACTICS_CHANGE, HALF_TIME, PENALTY_MISSED, SET_PIECE_GOAL, FOUL,
+                     EXTRA_TIME_START ->
                         throw new IllegalStateException("Instant simulation does not emit " + event.type());
             };
             matchEventRepository.save(

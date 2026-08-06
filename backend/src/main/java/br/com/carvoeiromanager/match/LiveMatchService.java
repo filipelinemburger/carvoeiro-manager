@@ -191,18 +191,18 @@ public class LiveMatchService {
     public LiveMatchState substitute(UUID saveGameId, UUID userId, SubstituteBatchRequest req) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         LiveMatch lm = requireLive(saveGameId);
-        if (lm.getCommittedMinute() >= MINUTES) {
+        LiveMatchConfig cfg = configFor(lm);
+        LiveTimeline timeline = liveMatchEngine.simulate(cfg);
+        if (lm.getCommittedMinute() >= timeline.finalMinute()) {
             throw new ApiException(ErrorCode.MATCH_OVER, "The match has ended");
         }
 
-        LiveMatchConfig cfg = configFor(lm);
-        LiveTimeline timeline = liveMatchEngine.simulate(cfg);
         List<Player> managedXi = lm.isManagedIsHome() ? cfg.homeXi() : cfg.awayXi();
         List<Player> managedBench = lm.isManagedIsHome() ? cfg.homeBench() : cfg.awayBench();
         OnPitch managed = onPitchManaged(lm, timeline, lm.getCommittedMinute(), managedXi);
 
         int used = (int) cfg.subSchedule().stream().filter(s -> s.home() == lm.isManagedIsHome()).count();
-        if (used + req.subs().size() > MAX_SUBS) {
+        if (used + req.subs().size() > maxSubsAt(lm.getCommittedMinute())) {
             throw new ApiException(ErrorCode.NO_SUBS_REMAINING, "No substitutions remaining");
         }
 
@@ -224,7 +224,7 @@ public class LiveMatchService {
             usedIn.add(sub.inPlayerId());
         }
 
-        int minute = Math.min(MINUTES, lm.getCommittedMinute() + 1);
+        int minute = Math.min(timeline.finalMinute(), lm.getCommittedMinute() + 1);
         List<LiveSub> subs = new ArrayList<>(cfg.subSchedule());
         for (SubstituteRequest sub : req.subs()) {
             subs.add(new LiveSub(minute, lm.isManagedIsHome(), sub.outPlayerId(), sub.inPlayerId()));
@@ -238,7 +238,9 @@ public class LiveMatchService {
     public LiveMatchState changeTactics(UUID saveGameId, UUID userId, LiveTacticsRequest req) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         LiveMatch lm = requireLive(saveGameId);
-        if (lm.getCommittedMinute() >= MINUTES) {
+        LiveMatchConfig precheckCfg = configFor(lm);
+        LiveTimeline precheckTimeline = liveMatchEngine.simulate(precheckCfg);
+        if (lm.getCommittedMinute() >= precheckTimeline.finalMinute()) {
             throw new ApiException(ErrorCode.MATCH_OVER, "The match has ended");
         }
 
@@ -249,7 +251,7 @@ public class LiveMatchService {
         Marking marking = parseMarking(req.marking());
         String formation = parseFormation(req.formation());
 
-        int minute = Math.min(MINUTES, lm.getCommittedMinute() + 1);
+        int minute = Math.min(precheckTimeline.finalMinute(), lm.getCommittedMinute() + 1);
         List<TimedTactics> tactics = new ArrayList<>(deserializeTactics(lm.getTacticsSchedule()));
         // A null gameStyle/attackZone (client omitted it) records "keep current" in the schedule entry.
         tactics.add(new TimedTactics(minute, lm.isManagedIsHome(), mentality, gameStyle, attackZone,
@@ -313,19 +315,22 @@ public class LiveMatchService {
     public LiveMatchState advance(UUID saveGameId, UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         LiveMatch lm = requireLive(saveGameId);
-        if (lm.getCommittedMinute() >= MINUTES) {
-            return toState(lm, save);   // already at full time — no-op
+        LiveMatchConfig cfg = configFor(lm);
+        LiveTimeline timeline = liveMatchEngine.simulate(cfg);
+        if (lm.getCommittedMinute() >= timeline.finalMinute()) {
+            return toState(lm, save, cfg, timeline);   // already at full time — no-op
         }
-        StepResult step = advanceOneStep(lm);
+        lm.setCommittedMinute(timeline.nextEventMinute(lm.getCommittedMinute()));
         liveMatchRepository.save(lm);
-        return toState(lm, save, step.cfg(), step.timeline());
+        return toState(lm, save, cfg, timeline);
     }
 
     /**
-     * Skips the live match forward, server-side, to {@code HALF_TIME} or {@code FULL_TIME} —
-     * looping the SAME single-step advance {@link #advanceOneStep} uses so scheduled subs/tactics
-     * apply identically and the RNG is consumed in the exact same order as calling {@link #advance}
-     * repeatedly. PAUSED_INJURY/PAUSED_RED never halt the loop (skipping = play on); only the
+     * Skips the live match forward, server-side, to {@code HALF_TIME} or {@code FULL_TIME},
+     * advancing {@code committedMinute} minute-by-minute the same way {@link #advance} does, off
+     * a single {@code cfg}/{@code timeline} pair (a pure, deterministic function of {@code cfg} —
+     * re-simulating it mid-loop would reproduce the identical timeline, so it's simulated once
+     * and reused). PAUSED_INJURY/PAUSED_RED never halt the loop (skipping = play on); only the
      * requested checkpoint (or full time, always) does. Idempotent: if the match is already at or
      * past the target, returns the current state unchanged without stepping.
      */
@@ -334,33 +339,27 @@ public class LiveMatchService {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         LiveMatch lm = requireLive(saveGameId);
 
-        int targetMinute = target == AdvanceTarget.HALF_TIME ? MINUTES / 2 : MINUTES;
+        // cfg (and therefore timeline) is invariant for the rest of this method: nothing here
+        // touches subSchedule/tacticsSchedule, the only lm fields configFor reads besides the
+        // fixed kickoff XI/bench/fitness/weather. One simulate() call is reused for the whole
+        // skip instead of re-simulating (a pure, deterministic function of cfg) on every minute.
+        LiveMatchConfig cfg = configFor(lm);
+        LiveTimeline timeline = liveMatchEngine.simulate(cfg);
+
+        int targetMinute = target == AdvanceTarget.HALF_TIME ? MINUTES / 2 : timeline.finalMinute();
         if (lm.getCommittedMinute() >= targetMinute) {
-            return toState(lm, save);   // already at/past the target — idempotent no-op
+            return toState(lm, save, cfg, timeline);   // already at/past the target — idempotent no-op
         }
 
-        StepResult step = null;
-        while (lm.getCommittedMinute() < MINUTES) {
-            step = advanceOneStep(lm);
-            String status = statusAt(lm, step.timeline(), lm.getCommittedMinute());
+        while (lm.getCommittedMinute() < timeline.finalMinute()) {
+            lm.setCommittedMinute(timeline.nextEventMinute(lm.getCommittedMinute()));
+            String status = statusAt(lm, timeline, lm.getCommittedMinute());
             if (isAdvanceToStopStatus(target, status)) {
                 break;
             }
         }
         liveMatchRepository.save(lm);
-        return toState(lm, save, step.cfg(), step.timeline());
-    }
-
-    /** Single-step advance: the ONLY place committedMinute moves, shared by {@link #advance} and
-     * {@link #advanceTo} so both consume the RNG in the exact same order for a given seed. */
-    private StepResult advanceOneStep(LiveMatch lm) {
-        LiveMatchConfig cfg = configFor(lm);
-        LiveTimeline timeline = liveMatchEngine.simulate(cfg);
-        lm.setCommittedMinute(timeline.nextEventMinute(lm.getCommittedMinute()));
-        return new StepResult(cfg, timeline);
-    }
-
-    private record StepResult(LiveMatchConfig cfg, LiveTimeline timeline) {
+        return toState(lm, save, cfg, timeline);
     }
 
     /**
@@ -380,12 +379,12 @@ public class LiveMatchService {
     public AdvanceResponse finish(UUID saveGameId, UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         LiveMatch lm = requireLive(saveGameId);
-        if (lm.getCommittedMinute() < MINUTES) {
+        LiveMatchConfig cfg = configFor(lm);
+        LiveTimeline timeline = liveMatchEngine.simulate(cfg);
+        if (lm.getCommittedMinute() < timeline.finalMinute()) {
             throw new ApiException(ErrorCode.MATCH_NOT_FINISHED, "The match has not reached full time");
         }
 
-        LiveMatchConfig cfg = configFor(lm);
-        LiveTimeline timeline = liveMatchEngine.simulate(cfg);
         Map<UUID, Player> byId = indexAll(cfg);
 
         Fixture fixture = fixtureRepository.findById(lm.getFixtureId()).orElseThrow();
@@ -566,8 +565,23 @@ public class LiveMatchService {
         Fixture fixture = fixtureRepository.findById(lm.getFixtureId()).orElseThrow();
         Weather weather = resolveWeather(lm.getFixtureId(), fixture.getHomeClubId(), lm.getMatchDate());
 
+        boolean knockoutDecider = false;
+        Integer firstLegHomeGoals = null;
+        Integer firstLegAwayGoals = null;
+        if (fixture.getTieId() != null && fixture.getLeg() != null && fixture.getLeg() == 2) {
+            Fixture firstLeg = fixtureRepository.findByTieId(fixture.getTieId()).stream()
+                    .filter(f -> f.getLeg() != null && f.getLeg() == 1)
+                    .findFirst().orElse(null);
+            if (firstLeg != null && firstLeg.isPlayed()) {
+                knockoutDecider = true;
+                firstLegHomeGoals = firstLeg.getHomeGoals();
+                firstLegAwayGoals = firstLeg.getAwayGoals();
+            }
+        }
+
         return new LiveMatchConfig(lm.getSeed(), homeXi, awayXi, homeBench, awayBench,
-                homeProfile, awayProfile, fitness, subs, tacticsSchedule, !lm.isManagedIsHome(), weather);
+                homeProfile, awayProfile, fitness, subs, tacticsSchedule, !lm.isManagedIsHome(), weather,
+                knockoutDecider, firstLegHomeGoals, firstLegAwayGoals);
     }
 
     /**
@@ -675,7 +689,7 @@ public class LiveMatchService {
                 homeClub.getName(), shortName(homeClub),
                 awayClub.getName(), shortName(awayClub),
                 managedIsHome, minute, timeline.homeGoalsAt(minute), timeline.awayGoalsAt(minute),
-                status, events, onPitch, bench, MAX_SUBS - subsUsed, currentTactics, playerRatings,
+                status, events, onPitch, bench, maxSubsAt(minute) - subsUsed, currentTactics, playerRatings,
                 opponentOnPitch, opponentTactics, opponentPlayerRatings, homeClubColors, awayClubColors,
                 lm.getCompetitionId().toString(), parallelScoresAsOf(lm, minute),
                 weather.condition().name(), weather.temperatureC(), fixture.getAttendance());
@@ -983,10 +997,17 @@ public class LiveMatchService {
         return new OnPitch(onPitch, hobbled, usedIn);
     }
 
+    /** Five substitutions in normal time; a sixth becomes available once extra time begins. */
+    private int maxSubsAt(int minute) {
+        return minute > MINUTES ? MAX_SUBS + 1 : MAX_SUBS;
+    }
+
     private String statusAt(LiveMatch lm, LiveTimeline timeline, int minute) {
-        if (minute >= MINUTES) return "FULL_TIME";
+        if (minute >= timeline.finalMinute()) return "FULL_TIME";
         // A forced pause happens when the LAST revealed event at the committed minute is a special marker.
-        // HALF_TIME is appended last at minute 45 and therefore wins when present.
+        // HALF_TIME is appended last at minute 45 and therefore wins when present. Checked
+        // identically whether this minute is normal or extra time — a red card/injury still
+        // pauses play past 90.
         List<LiveTimelineEvent> revealed = timeline.eventsThrough(minute);
         for (int i = revealed.size() - 1; i >= 0; i--) {
             LiveTimelineEvent e = revealed.get(i);
@@ -995,7 +1016,7 @@ public class LiveMatchService {
             if (e.home() == lm.isManagedIsHome() && e.type() == EventType.INJURY) return "PAUSED_INJURY";
             if (e.home() == lm.isManagedIsHome() && e.type() == EventType.RED_CARD) return "PAUSED_RED";
         }
-        return "IN_PROGRESS";
+        return minute > MINUTES ? "EXTRA_TIME" : "IN_PROGRESS";
     }
 
     private LivePlayerResponse livePlayer(Player p, LiveMatchConfig cfg, TacticalProfile profile,

@@ -28,7 +28,21 @@ public class MatchSimulationService {
     private static final double BASE_CARD_RATE = 0.02;
     private static final double RED_SHARE = 0.06;
 
+    /** Existing entry point: a normal 90-minute match. */
     public SimulatedMatch simulate(TeamMatchInput home, TeamMatchInput away, Weather weather, long seed) {
+        return simulate(home, away, weather, seed, MatchMath.MINUTES);
+    }
+
+    /**
+     * @param finalMinute the last minute to simulate: {@link MatchMath#MINUTES} normally, or
+     *                    {@link MatchMath#EXTRA_TIME_END} for a knockout decider that is level
+     *                    at 90. Minutes past 90 use the same per-minute rates — MINUTES stays
+     *                    the rate divisor and is never changed. The 4-arg overload always passes
+     *                    {@code MatchMath.MINUTES}, so a league match runs the IDENTICAL loop
+     *                    with the IDENTICAL RNG draws as before this parameter existed.
+     */
+    public SimulatedMatch simulate(TeamMatchInput home, TeamMatchInput away, Weather weather,
+                                   long seed, int finalMinute) {
         Random rng = new Random(seed);
         WeatherEffects.Impact weatherImpact = WeatherEffects.of(weather, home, away);
         double tempoFactor = (home.tempo() + away.tempo()) / 2.0;
@@ -45,7 +59,7 @@ public class MatchSimulationService {
         int homeGoals = 0;
         int awayGoals = 0;
 
-        for (int minute = 1; minute <= MatchMath.MINUTES; minute++) {
+        for (int minute = 1; minute <= finalMinute; minute++) {
             double homeFf = MatchMath.fitnessFactor(
                     home.fitnessDecay() * weatherImpact.homeDecayMult(), minute);
             double awayFf = MatchMath.fitnessFactor(
@@ -109,6 +123,15 @@ public class MatchSimulationService {
             if (rng.nextDouble() < awayCardChance) {
                 EventType type = rng.nextDouble() < RED_SHARE ? EventType.RED_CARD : EventType.YELLOW_CARD;
                 events.add(new SimulatedEvent(minute, type, false));
+            }
+
+            // Marks the extension into extra time. Consumes zero RNG (plain arithmetic on the
+            // score already drawn this minute) so it can never perturb the draw order. Only
+            // reachable when the caller asked for finalMinute > MINUTES (i.e. via the 5-arg
+            // overload with EXTRA_TIME_END) — the 4-arg overload always passes MINUTES, so this
+            // block never executes for a league match.
+            if (minute == MatchMath.MINUTES && finalMinute > MatchMath.MINUTES) {
+                events.add(new SimulatedEvent(MatchMath.MINUTES, EventType.EXTRA_TIME_START, true));
             }
         }
         return new SimulatedMatch(homeGoals, awayGoals, List.copyOf(events));
