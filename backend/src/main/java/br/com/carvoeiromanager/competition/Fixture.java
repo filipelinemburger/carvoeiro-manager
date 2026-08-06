@@ -51,6 +51,27 @@ public class Fixture {
     @Column(name = "attendance")
     private Integer attendance;
 
+    @Column(name = "phase_id")
+    private UUID phaseId;
+
+    /** 1 or 2 within a knockout tie; null for league fixtures. */
+    @Column(name = "leg")
+    private Integer leg;
+
+    /** Shared by the two legs of one knockout tie; null for league fixtures. */
+    @Column(name = "tie_id")
+    private UUID tieId;
+
+    /** 0-based pairing index within the phase; preserves seeded bracket order. */
+    @Column(name = "tie_order")
+    private Integer tieOrder;
+
+    @Column(name = "penalty_home")
+    private Integer penaltyHome;
+
+    @Column(name = "penalty_away")
+    private Integer penaltyAway;
+
     protected Fixture() {
         // for JPA
     }
@@ -87,6 +108,24 @@ public class Fixture {
     public void setMatchDate(LocalDate matchDate) { this.matchDate = matchDate; }
     public Integer getAttendance() { return attendance; }
     public void setAttendance(Integer attendance) { this.attendance = attendance; }
+
+    public UUID getPhaseId() { return phaseId; }
+    public void setPhaseId(UUID phaseId) { this.phaseId = phaseId; }
+
+    public Integer getLeg() { return leg; }
+    public void setLeg(Integer leg) { this.leg = leg; }
+
+    public UUID getTieId() { return tieId; }
+    public void setTieId(UUID tieId) { this.tieId = tieId; }
+
+    public Integer getTieOrder() { return tieOrder; }
+    public void setTieOrder(Integer tieOrder) { this.tieOrder = tieOrder; }
+
+    public Integer getPenaltyHome() { return penaltyHome; }
+    public void setPenaltyHome(Integer penaltyHome) { this.penaltyHome = penaltyHome; }
+
+    public Integer getPenaltyAway() { return penaltyAway; }
+    public void setPenaltyAway(Integer penaltyAway) { this.penaltyAway = penaltyAway; }
 
     public void recordResult(int homeGoals, int awayGoals) {
         this.homeGoals = homeGoals;

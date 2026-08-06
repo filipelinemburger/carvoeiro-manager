@@ -16,4 +16,8 @@ public interface FixtureRepository extends JpaRepository<Fixture, UUID> {
     List<Fixture> findBySaveGameIdAndMatchDate(UUID saveGameId, LocalDate matchDate);
 
     List<Fixture> findBySaveGameId(UUID saveGameId);
+
+    List<Fixture> findBySaveGameIdAndPhaseId(UUID saveGameId, UUID phaseId);
+
+    List<Fixture> findByTieId(UUID tieId);
 }

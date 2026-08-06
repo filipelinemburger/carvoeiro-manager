@@ -24,6 +24,7 @@ public class SeasonEvent {
     @Column(name = "round") private Integer round;
     @Column(name = "sequence", nullable = false) private int sequence;
     @Column(name = "processed", nullable = false) private boolean processed;
+    @Column(name = "phase_id") private UUID phaseId;
 
     protected SeasonEvent() { }
 
@@ -45,6 +46,17 @@ public class SeasonEvent {
                 null, null, sequence);
     }
 
+    /**
+     * A MATCH event for a knockout round: dated and ordered at generation, but with no
+     * fixtures until {@code PhaseResolver} materializes them.
+     */
+    public static SeasonEvent createKnockout(UUID saveGameId, LocalDate eventDate, UUID competitionId,
+                                             UUID phaseId, int round, int sequence) {
+        SeasonEvent event = createMatch(saveGameId, eventDate, competitionId, round, sequence);
+        event.setPhaseId(phaseId);
+        return event;
+    }
+
     public void markProcessed() { this.processed = true; }
 
     public UUID getId() { return id; }
@@ -55,4 +67,6 @@ public class SeasonEvent {
     public Integer getRound() { return round; }
     public int getSequence() { return sequence; }
     public boolean isProcessed() { return processed; }
+    public UUID getPhaseId() { return phaseId; }
+    public void setPhaseId(UUID phaseId) { this.phaseId = phaseId; }
 }
