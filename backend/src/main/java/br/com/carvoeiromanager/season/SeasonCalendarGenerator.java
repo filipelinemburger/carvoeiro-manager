@@ -100,7 +100,7 @@ public class SeasonCalendarGenerator {
             }
             entityManager.persist(unit.phaseId() == null
                     ? SeasonEvent.createMatch(saveGameId, date, unit.competitionId(), unit.round(), 0)
-                    : SeasonEvent.createKnockout(saveGameId, date, unit.competitionId(),
+                    : SeasonEvent.createPhased(saveGameId, date, unit.competitionId(),
                             unit.phaseId(), unit.round(), 0));
         }
 

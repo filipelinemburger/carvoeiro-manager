@@ -47,11 +47,19 @@ public class SeasonEvent {
     }
 
     /**
-     * A MATCH event for a knockout round: dated and ordered at generation, but with no
-     * fixtures until {@code PhaseResolver} materializes them.
+     * A MATCH event belonging to a competition phase.
+     *
+     * <p>Whether the event already has fixtures depends on its phase's kind, NOT on this
+     * factory: a ROUND_ROBIN phase's events are created alongside their fixtures at generation,
+     * while a KNOCKOUT phase's events are reserved with none — their participants are unknown
+     * until the preceding phase finishes, and {@code fixtures.home_club_id} is NOT NULL so
+     * placeholders are impossible. {@code PhaseResolver} materializes those later.
+     *
+     * <p>Do not infer "has no fixtures" from a phase id alone; check the phase's kind, or check
+     * for fixtures directly.
      */
-    public static SeasonEvent createKnockout(UUID saveGameId, LocalDate eventDate, UUID competitionId,
-                                             UUID phaseId, int round, int sequence) {
+    public static SeasonEvent createPhased(UUID saveGameId, LocalDate eventDate, UUID competitionId,
+                                           UUID phaseId, int round, int sequence) {
         SeasonEvent event = createMatch(saveGameId, eventDate, competitionId, round, sequence);
         event.setPhaseId(phaseId);
         return event;
