@@ -98,7 +98,7 @@ class SeedLoaderTest {
     void everyPoolPlayerCarriesAuthoredAttributes() {
         SeedCareer data = new SeedLoader().loadCareer();
 
-        // After the Catarinense data-realism pass, every one of the 28 pool clubs has a
+        // After the Catarinense data-realism pass, every one of the 31 pool clubs has a
         // hand-authored roster — there are no more derived-attribute players in the seed.
         assertThat(data.clubPool()).allSatisfy(club -> assertThat(club.players())
                 .allSatisfy(p -> assertThat(p.attributes())
