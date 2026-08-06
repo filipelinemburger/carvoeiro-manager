@@ -13,13 +13,15 @@ import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClubRepository;
+import br.com.carvoeiromanager.competition.CompetitionPhase;
+import br.com.carvoeiromanager.competition.CompetitionPhaseRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.competition.StandingRow;
 import br.com.carvoeiromanager.competition.StandingsCalculator;
+import br.com.carvoeiromanager.competition.StandingsService;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -51,6 +53,8 @@ class SeasonAdvanceServiceIT {
     @Autowired CompetitionClubRepository competitionClubRepository;
     @Autowired FixtureRepository fixtureRepository;
     @Autowired SeasonEventRepository seasonEventRepository;
+    @Autowired CompetitionPhaseRepository competitionPhaseRepository;
+    @Autowired StandingsService standingsService;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -131,21 +135,26 @@ class SeasonAdvanceServiceIT {
     }
 
     @Test
-    @Disabled("Task 4: the Catarinense now ends in 6 reserved (fixture-less) knockout MATCH "
-            + "events, so standings.played() can never reach totalRounds (17) — every club only "
-            + "plays the 11-round round-robin phase until Task 6's PhaseResolver materializes the "
-            + "knockout fixtures. Re-enable once knockout rounds are actually played.")
     void advancingToTheEndFinishesTheSeasonAndAwardsPrize() {
         // Given a fresh career
         Career c = createCareer();
-        // Scope to Catarinense: 12 members / 17 match-units (11 round-robin + 6 reserved knockout)
+        // Scope to Catarinense: 12 members / 17 match-units (11 round-robin + 6 knockout).
+        // Task 6 only materializes round-robin -> knockout (the quarterfinals); semifinals and
+        // the final stay reserved (fixture-less) until Task 9 supplies tie winners via extra
+        // time and penalties, so this test's assertions are scoped to what Task 6 delivers:
+        // the round-robin phase plus the quarterfinals are actually played, the later two
+        // knockout rounds remain empty, and the season still reaches FINISHED regardless.
         Competition catarinense = competitionRepository.findBySaveGameId(c.id()).stream()
                 .filter(comp -> comp.getName().contains("Catarinense"))
                 .findFirst().orElseThrow();
-        int catarinenseTotalRounds = catarinense.getTotalRounds(); // 17
-        int catarinenseClubCount = competitionRepository.findBySaveGameId(c.id()).stream()
-                .filter(comp -> comp.getName().contains("Catarinense"))
-                .findFirst().orElseThrow().getTotalRounds() / 2 + 1; // = 12
+        int catarinenseTotalRounds = catarinense.getTotalRounds(); // 17 match-units
+
+        List<CompetitionPhase> catarinensePhases = competitionPhaseRepository
+                .findByCompetitionIdOrderByOrdinalAsc(catarinense.getId());
+        CompetitionPhase firstPhase = catarinensePhases.get(0); // Primeira Fase: ROUND_ROBIN, 8 qualifiers
+        CompetitionPhase quarterFinalPhase = catarinensePhases.get(1); // KNOCKOUT, materialized by Task 6
+        CompetitionPhase semifinalPhase = catarinensePhases.get(2); // KNOCKOUT, still reserved (Task 9)
+        CompetitionPhase finalPhase = catarinensePhases.get(3); // KNOCKOUT, still reserved (Task 9)
 
         // When advancing until the season is FINISHED (guard 500 covers both competitions: 17 + 38 = 55 rounds + transfer events)
         AdvanceResponse last = null;
@@ -160,7 +169,9 @@ class SeasonAdvanceServiceIT {
             status = saveGameRepository.findById(c.id()).orElseThrow().getStatus();
         }
 
-        // Then exactly catarinenseTotalRounds MATCH advances for Catarinense occurred
+        // Then exactly catarinenseTotalRounds MATCH advances for Catarinense occurred — this
+        // counts calendar match-units, not played fixtures, so it holds whether or not a given
+        // round's fixtures were actually materialized.
         assertThat(catarinenseMatches).hasSize(catarinenseTotalRounds);
         assertThat(last).isNotNull();
         assertThat(last.type()).isEqualTo("MATCH");
@@ -170,16 +181,35 @@ class SeasonAdvanceServiceIT {
         SaveGame saved = saveGameRepository.findById(c.id()).orElseThrow();
         assertThat(saved.getStatus()).isEqualTo(SaveGameStatus.FINISHED);
 
-        // Every Catarinense fixture is played and the table is zero-sum
+        // The quarterfinals were materialized (4 ties = 8 fixtures) and fully played...
+        List<Fixture> quarterFinals = fixtureRepository
+                .findBySaveGameIdAndPhaseId(c.id(), quarterFinalPhase.getId());
+        assertThat(quarterFinals).hasSize(8);
+        assertThat(quarterFinals).allMatch(Fixture::isPlayed);
+
+        // ...but the semifinals and final are still reserved with no fixtures — that is Task 9's job.
+        assertThat(fixtureRepository.findBySaveGameIdAndPhaseId(c.id(), semifinalPhase.getId())).isEmpty();
+        assertThat(fixtureRepository.findBySaveGameIdAndPhaseId(c.id(), finalPhase.getId())).isEmpty();
+
+        // The 8 clubs that qualified out of the round-robin phase played 11 (round-robin) + 2
+        // (quarterfinal legs) = 13 matches; the 4 that didn't qualify stop at 11.
+        List<UUID> qualifiers = standingsService
+                .computeStandings(saved, catarinense.getId(), firstPhase.getId(), null)
+                .stream().map(StandingRow::clubId).limit(firstPhase.getQualifiers()).toList();
+
         List<Fixture> all = fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), catarinense.getId());
-        assertThat(all).allMatch(Fixture::isPlayed);
         Set<UUID> catMemberIds = competitionClubRepository.findByCompetitionId(catarinense.getId()).stream()
                 .map(cc -> cc.getClubId()).collect(Collectors.toSet());
         List<Club> clubs = clubRepository.findBySaveGameId(c.id()).stream()
                 .filter(cl -> catMemberIds.contains(cl.getId())).toList();
         List<StandingRow> standings = new StandingsCalculator().compute(clubs, all);
         assertThat(standings).hasSize(12); // Catarinense has 12 clubs
-        assertThat(standings).allMatch(row -> row.played() == catarinenseTotalRounds);
+        assertThat(standings.stream().filter(row -> qualifiers.contains(row.clubId())))
+                .allMatch(row -> row.played() == 13);
+        assertThat(standings.stream().filter(row -> !qualifiers.contains(row.clubId())))
+                .allMatch(row -> row.played() == 11);
+
+        // The whole competition's played fixtures remain zero-sum.
         int totalGF = standings.stream().mapToInt(StandingRow::goalsFor).sum();
         int totalGA = standings.stream().mapToInt(StandingRow::goalsAgainst).sum();
         assertThat(totalGF).isEqualTo(totalGA);

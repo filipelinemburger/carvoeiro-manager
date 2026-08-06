@@ -11,6 +11,7 @@ import br.com.carvoeiromanager.contract.PreContractService;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.competition.PhaseResolver;
 import br.com.carvoeiromanager.finance.FinanceRoundResponse;
 import br.com.carvoeiromanager.finance.FinanceService;
 import br.com.carvoeiromanager.match.FixtureResultResponse;
@@ -85,6 +86,7 @@ public class SeasonAdvanceService {
     private final TrainingService trainingService;
     private final PreContractService preContractService;
     private final MatchPreviewService matchPreviewService;
+    private final PhaseResolver phaseResolver;
 
     public SeasonAdvanceService(SaveGameService saveGameService,
                                 SaveGameRepository saveGameRepository,
@@ -100,7 +102,8 @@ public class SeasonAdvanceService {
                                 ObjectMapper objectMapper,
                                 TrainingService trainingService,
                                 PreContractService preContractService,
-                                MatchPreviewService matchPreviewService) {
+                                MatchPreviewService matchPreviewService,
+                                PhaseResolver phaseResolver) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.seasonEventRepository = seasonEventRepository;
@@ -116,6 +119,7 @@ public class SeasonAdvanceService {
         this.trainingService = trainingService;
         this.preContractService = preContractService;
         this.matchPreviewService = matchPreviewService;
+        this.phaseResolver = phaseResolver;
     }
 
     @Transactional
@@ -205,6 +209,12 @@ public class SeasonAdvanceService {
 
         FinanceRoundResponse matchdayFinance =
                 financeService.processMatchday(saveGameId, competitionId, fixtures, eventDate);
+
+        // If this round just finished a round-robin phase, materialize the knockout phase after
+        // it (seeded from this phase's final standings) before the season-finished check below —
+        // otherwise a newly materialized knockout's still-unprocessed events would be missed and
+        // this round would incorrectly read as the season's last one.
+        phaseResolver.resolveIfPhaseComplete(save, event);
 
         // The season finishes when this was the last unprocessed MATCH event.
         boolean seasonFinished = noMoreMatchEvents(saveGameId, event.getId());
