@@ -1461,9 +1461,49 @@ Expected: FAIL — `EventType.EXTRA_TIME_START` does not exist.
 
 In `backend/src/main/java/br/com/carvoeiromanager/match/EventType.java`, add `EXTRA_TIME_START` to the enum constant list.
 
-- [ ] **Step 5: Make `FixtureSimulator` period-aware**
+- [ ] **Step 5: Make the instant path period-aware**
 
-The scoring loop currently runs `for (int minute = 1; minute <= 90; minute++)`. Extract the loop body into a method that takes a minute range, then call it twice — the second call **only** when extra time is required:
+**Correction to this plan (2026-08-06).** An earlier draft said the instant scoring loop lives in `FixtureSimulator` at the `minute <= 90` line. That is wrong — that line is inside `foulCounts`, a *separate* per-minute foul draw. There are three minute loops in the match package:
+
+| Location | What it is |
+|---|---|
+| `MatchSimulationService:48` | **the instant scoring loop** — this is the one extra time extends |
+| `LiveMatchEngine:123` | the live scoring loop |
+| `FixtureSimulator:593` | `foulCounts` — a separate foul draw, not scoring |
+
+`FixtureSimulator` does not score matches itself; it calls `matchSimulationService.simulate(home, away, weather, seed)` at line 227.
+
+`MatchSimulationService.simulate` has no access to the fixture or its tie, so it cannot decide whether extra time is needed. Give it the bound instead, and let the caller decide:
+
+```java
+    /** Existing entry point: a normal 90-minute match. */
+    public SimulatedMatch simulate(TeamMatchInput home, TeamMatchInput away, Weather weather, long seed) {
+        return simulate(home, away, weather, seed, MatchMath.MINUTES);
+    }
+
+    /**
+     * @param finalMinute the last minute to simulate: {@link MatchMath#MINUTES} normally, or
+     *                    {@link MatchMath#EXTRA_TIME_END} for a knockout decider that is level
+     *                    at 90. Minutes past 90 use the same per-minute rates — MINUTES stays
+     *                    the rate divisor and is never changed.
+     */
+    public SimulatedMatch simulate(TeamMatchInput home, TeamMatchInput away, Weather weather,
+                                   long seed, int finalMinute) {
+```
+
+Then change only the loop bound, `for (int minute = 1; minute <= finalMinute; minute++)`, leaving every `MatchMath.MINUTES` reference inside the body untouched — those are rate normalizers.
+
+**The determinism contract falls out of this shape for free:** the 4-arg overload passes `MINUTES`, so every league match runs the identical loop with the identical RNG draws as before. Extra time cannot perturb a league result because it never executes.
+
+`FixtureSimulator` decides whether to ask for it:
+
+```java
+        int finalMinute = needsExtraTime(fixture) ? MatchMath.EXTRA_TIME_END : MatchMath.MINUTES;
+        SimulatedMatch match = matchSimulationService.simulate(
+                homeInput, awayInput, weather, seed, finalMinute);
+```
+
+**Note on `foulCounts`:** it draws fouls over a hard-coded 1..90 and is keyed to that range. Extending it to 120 would change foul totals for extra-time matches only. Leave it at 90 for this task and say so in your report — an extra-time match simply records no fouls from minutes 91–120. Fixing that is a follow-up, not a silent side effect of this task.
 
 ```java
     /**

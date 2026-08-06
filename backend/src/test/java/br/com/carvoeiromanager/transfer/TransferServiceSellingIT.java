@@ -25,6 +25,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -69,9 +70,21 @@ class TransferServiceSellingIT {
         return transferOfferRepository.save(offer);
     }
 
+    /**
+     * A senior outfielder from the managed squad.
+     *
+     * <p>Youth prospects are excluded deliberately: {@code generateIncomingOffers} builds its
+     * candidate list from {@code findByClubIdAndYouthProspectFalse}, so a youth player can be
+     * listed but will never draw a bid — which made {@code listedManagedPlayersDrawBoostedBids}
+     * fail whenever DB row order happened to put a youth outfielder first. {@code findByClubId}
+     * has no ORDER BY, so "first" moves whenever the seed data changes; pick the lowest id
+     * instead, which is stable.
+     */
     private Player aManagedOutfielder(Career c) {
         return playerRepository.findByClubId(c.clubId()).stream()
-                .filter(p -> p.getPosition() != Position.GK).findFirst().orElseThrow();
+                .filter(p -> p.getPosition() != Position.GK)
+                .filter(p -> !p.isYouthProspect())
+                .min(Comparator.comparing(Player::getId)).orElseThrow();
     }
 
     @Test
