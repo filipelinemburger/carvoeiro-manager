@@ -96,11 +96,13 @@ class SaveGameServiceIT {
                 .filter(c -> c.getName().contains("Catarinense"))
                 .findFirst().orElseThrow();
         int catarinenseClubCount = 12;
-        assertThat(catarinense.getTotalRounds()).isEqualTo(2 * (catarinenseClubCount - 1));
+        // totalRounds is now the phase-round sum: 11 (round robin) + 2 + 2 + 2 (knockouts) = 17.
+        assertThat(catarinense.getTotalRounds()).isEqualTo(17);
 
-        // Fixtures for Catarinense: 12 * 11 = 132 fixtures, all unplayed
+        // Fixtures for Catarinense: 12 * 11 = 66 fixtures (single round-robin first phase only;
+        // the knockout phases are reserved but not materialized until Task 6's PhaseResolver).
         var allFixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, catarinense.getId());
-        int expectedFixtures = catarinenseClubCount * (catarinenseClubCount - 1); // 132 for 12 clubs
+        int expectedFixtures = catarinenseClubCount * (catarinenseClubCount - 1) / 2; // 66 for 12 clubs
         assertThat(allFixtures).hasSize(expectedFixtures);
         assertThat(allFixtures).allMatch(f -> !f.isPlayed());
         assertThat(allFixtures).allMatch(f -> f.getHomeGoals() == null);

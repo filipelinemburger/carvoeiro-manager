@@ -55,7 +55,9 @@ class CareerCreationCalendarIT {
 
         // All fixtures have a match_date set (routed through SeasonCalendarGenerator)
         var fixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, catarinense.getId());
-        assertThat(fixtures).hasSize(132); // 12 clubs * 11 opponents * 2 legs
+        // 12 clubs, single round-robin first phase only: knockout phases are reserved but not
+        // materialized until PhaseResolver runs (Task 6).
+        assertThat(fixtures).hasSize(66); // 12 clubs * 11 opponents, single leg
         assertThat(fixtures).allMatch(f -> f.getMatchDate() != null,
                 "Every fixture must have a match_date assigned by SeasonCalendarGenerator");
 
@@ -65,13 +67,14 @@ class CareerCreationCalendarIT {
         LocalDate seasonStart = LocalDate.of(response.seasonYear(), 1, 15);
         assertThat(fixtureRepository.findBySaveGameIdAndMatchDate(saveGameId, seasonStart)).isNotEmpty();
 
-        // MATCH season events exist (one per round of the Catarinense = 22 rounds for 12 clubs)
+        // MATCH season events exist (one per match-unit of the Catarinense: 11 round-robin
+        // rounds + 6 reserved knockout rounds = 17 match-units)
         var events = seasonEventRepository.findBySaveGameId(saveGameId);
         var matchEvents = events.stream()
                 .filter(e -> e.getType() == SeasonEventType.MATCH)
                 .filter(e -> catarinense.getId().equals(e.getCompetitionId()))
                 .toList();
-        assertThat(matchEvents).hasSize(22); // 2*(12-1) = 22 rounds
+        assertThat(matchEvents).hasSize(17); // 11 + 2 + 2 + 2 = 17 match-units
 
         // TRANSFER season events exist
         var transferEvents = events.stream()

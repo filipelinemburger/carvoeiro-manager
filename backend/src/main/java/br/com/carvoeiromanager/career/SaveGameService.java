@@ -220,15 +220,11 @@ public class SaveGameService {
         //    (the generator reads memberships via competitionClubRepository to build the fixture schedule).
         List<Competition> competitions = new ArrayList<>();
         for (SeedCompetition seedComp : seed.competitions()) {
-            // totalRounds stays the legacy double-round-robin count for every competition, phased
-            // or not, because SeasonCalendarGenerator is not yet phase-aware (that's Task 4):
-            // it still materializes every competition as one doubleRoundRobin(memberCount) sized
-            // exactly to (memberCount - 1) * 2 rounds. Sizing totalRounds to the phases' round sum
-            // here (11 + 2 + 2 + 2 = 17 for the 12-club Catarinense) would undersize the generator's
-            // per-round bucket list against the 22 rounds doubleRoundRobin(12) actually produces,
-            // crashing career creation with an IndexOutOfBoundsException. Once Task 4 makes the
-            // generator phase-aware, totalRounds can switch to the phase-sum for phased competitions.
-            int totalRounds = (seedComp.memberShortNames().size() - 1) * 2;
+            // A phased competition's length is the sum of its phases' match-units; an unphased
+            // one keeps the legacy double-round-robin count.
+            int totalRounds = (seedComp.phases() == null || seedComp.phases().isEmpty())
+                    ? (seedComp.memberShortNames().size() - 1) * 2
+                    : seedComp.phases().stream().mapToInt(SeedPhase::rounds).sum();
 
             Competition competition = Competition.create(
                     saveGame.getId(), seedComp.name(), seedComp.type(), seedComp.seasonYear(), totalRounds);

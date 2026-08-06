@@ -98,7 +98,7 @@ class SeasonRolloverServiceIT {
         lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi, null), c.userId());
         finishSeason(c);
 
-        // Scope to Catarinense: 12 members / 22 rounds; Criciúma (managed) is in both competitions
+        // Scope to Catarinense: 12 members / 17 match-units; Criciúma (managed) is in both competitions
         Competition competition = competitionRepository.findBySaveGameId(c.id()).stream()
                 .filter(comp -> comp.getName().contains("Catarinense"))
                 .findFirst().orElseThrow();
@@ -140,7 +140,9 @@ class SeasonRolloverServiceIT {
         assertThat(rolled.getSeasonYear()).isEqualTo(oldYear + 1);
         assertThat(rolled.getTotalRounds()).isEqualTo(totalRounds);
         List<Fixture> fixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), competitionId);
-        assertThat(fixtures).hasSize(clubCount * (clubCount - 1)); // 12 * 11 = 132
+        // Only the round-robin first phase materializes fixtures; the knockout phases stay
+        // reserved until Task 6's PhaseResolver runs.
+        assertThat(fixtures).hasSize(clubCount * (clubCount - 1) / 2); // 12 * 11 / 2 = 66
         assertThat(fixtures).allMatch(f -> !f.isPlayed());
         assertThat(fixtures).allMatch(f -> f.getHomeGoals() == null && f.getAwayGoals() == null);
 

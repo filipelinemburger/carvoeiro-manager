@@ -9,9 +9,12 @@ import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClub;
 import br.com.carvoeiromanager.competition.CompetitionClubRepository;
+import br.com.carvoeiromanager.competition.CompetitionPhase;
+import br.com.carvoeiromanager.competition.CompetitionPhaseRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.competition.PhaseKind;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +24,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -36,6 +40,7 @@ class SeasonCalendarGeneratorIT {
     @Autowired ClubRepository clubRepository;
     @Autowired CompetitionRepository competitionRepository;
     @Autowired CompetitionClubRepository competitionClubRepository;
+    @Autowired CompetitionPhaseRepository competitionPhaseRepository;
     @Autowired FixtureRepository fixtureRepository;
     @Autowired SeasonEventRepository seasonEventRepository;
     @Autowired SeasonCalendarGenerator generator;
@@ -49,6 +54,34 @@ class SeasonCalendarGeneratorIT {
             competitionClubRepository.save(CompetitionClub.create(save, c.getId(), club.getId()));
         }
         return c;
+    }
+
+    /** Holds the competition plus the id of its first (round-robin) phase, needed by assertions. */
+    private record PhasedCompetition(Competition competition, UUID firstPhaseId) { }
+
+    /**
+     * A 12-club competition seeded with the four Catarinense phases: Primeira Fase
+     * (ROUND_ROBIN, 1 leg, 11 rounds, 8 qualifiers) then three KNOCKOUT phases
+     * (Quartas de final / Semifinal / Final), each 2 legs / 2 rounds. totalRounds is
+     * set to the phase-round sum (17), matching the switch SaveGameService makes.
+     */
+    private PhasedCompetition makePhasedComp(UUID save, String name, int seasonYear) {
+        Competition c = Competition.create(save, name, "LEAGUE", seasonYear, 17);
+        competitionRepository.save(c);
+        for (int i = 0; i < 12; i++) {
+            Club club = Club.create(save, name + " Club " + i, name.substring(0, 1) + i);
+            clubRepository.save(club);
+            competitionClubRepository.save(CompetitionClub.create(save, c.getId(), club.getId()));
+        }
+        CompetitionPhase firstPhase = competitionPhaseRepository.save(CompetitionPhase.create(
+                save, c.getId(), 0, "Primeira Fase", PhaseKind.ROUND_ROBIN, 1, 11, 8));
+        competitionPhaseRepository.save(CompetitionPhase.create(
+                save, c.getId(), 1, "Quartas de final", PhaseKind.KNOCKOUT, 2, 2, null));
+        competitionPhaseRepository.save(CompetitionPhase.create(
+                save, c.getId(), 2, "Semifinal", PhaseKind.KNOCKOUT, 2, 2, null));
+        competitionPhaseRepository.save(CompetitionPhase.create(
+                save, c.getId(), 3, "Final", PhaseKind.KNOCKOUT, 2, 2, null));
+        return new PhasedCompetition(c, firstPhase.getId());
     }
 
     @Test
@@ -95,6 +128,73 @@ class SeasonCalendarGeneratorIT {
             boolean mid = !t.getEventDate().isBefore(start.plusDays(140)) && t.getEventDate().isBefore(start.plusDays(168));
             return pre || mid;
         });
+    }
+
+    @Test
+    void aPhasedCompetitionMaterializesTheRoundRobinAndReservesTheKnockout() {
+        // Given: a 12-club competition with the four Catarinense phases
+        User u = User.create("phased_" + UUID.randomUUID(), "h");
+        userRepository.save(u);
+        SaveGame s = SaveGame.create(u.getId(), 2026);
+        saveGameRepository.save(s);
+        PhasedCompetition pc = makePhasedComp(s.getId(), "Catarinense", 2026);
+        UUID saveGameId = s.getId();
+        UUID firstPhaseId = pc.firstPhaseId();
+
+        // When
+        generator.generate(saveGameId, 2026, List.of(pc.competition()));
+
+        // Then: the first phase's 66 fixtures exist across rounds 0..10
+        List<Fixture> fixtures = fixtureRepository.findBySaveGameId(saveGameId);
+        assertThat(fixtures).hasSize(66);
+        assertThat(fixtures).allSatisfy(f -> assertThat(f.getRound()).isBetween(0, 10));
+        assertThat(fixtures).allSatisfy(f -> assertThat(f.getPhaseId()).isEqualTo(firstPhaseId));
+
+        // And: rounds 11..16 are reserved as MATCH events carrying a phase but no fixtures
+        List<SeasonEvent> events = seasonEventRepository.findBySaveGameId(saveGameId).stream()
+                .filter(e -> e.getType() == SeasonEventType.MATCH)
+                .sorted(Comparator.comparing(SeasonEvent::getEventDate)).toList();
+        assertThat(events).hasSize(17);
+        assertThat(events.subList(11, 17)).allSatisfy(e ->
+                assertThat(e.getPhaseId()).isNotNull());
+        assertThat(fixtures).noneSatisfy(f -> assertThat(f.getRound()).isGreaterThan(10));
+    }
+
+    @Test
+    void matchDatesRemainFiveDaysApartAcrossAllSeventeenUnits() {
+        User u = User.create("phased_" + UUID.randomUUID(), "h");
+        userRepository.save(u);
+        SaveGame s = SaveGame.create(u.getId(), 2026);
+        saveGameRepository.save(s);
+        PhasedCompetition pc = makePhasedComp(s.getId(), "Catarinense", 2026);
+        UUID saveGameId = s.getId();
+
+        generator.generate(saveGameId, 2026, List.of(pc.competition()));
+
+        List<LocalDate> dates = seasonEventRepository.findBySaveGameId(saveGameId).stream()
+                .filter(e -> e.getType() == SeasonEventType.MATCH)
+                .map(SeasonEvent::getEventDate).sorted().toList();
+
+        assertThat(dates).hasSize(17);
+        assertThat(dates.get(0)).isEqualTo(LocalDate.of(2026, 1, 15));
+        assertThat(dates.get(16)).isEqualTo(LocalDate.of(2026, 1, 15).plusDays(16L * 5));
+    }
+
+    @Test
+    void aCompetitionWithNoPhasesGeneratesExactlyAsBefore() {
+        // Given a 20-club competition with no phase rows (Série B)
+        User u = User.create("nophase_" + UUID.randomUUID(), "h");
+        userRepository.save(u);
+        SaveGame s = SaveGame.create(u.getId(), 2026);
+        saveGameRepository.save(s);
+        Competition serieB = makeComp(s.getId(), "SerieB", 2026, 20);
+        UUID saveGameId = s.getId();
+
+        generator.generate(saveGameId, 2026, List.of(serieB));
+
+        List<Fixture> fixtures = fixtureRepository.findBySaveGameId(saveGameId);
+        assertThat(fixtures).hasSize(380);          // 20 clubs, double round-robin
+        assertThat(fixtures).allSatisfy(f -> assertThat(f.getPhaseId()).isNull());
     }
 
 }

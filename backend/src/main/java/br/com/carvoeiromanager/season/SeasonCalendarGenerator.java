@@ -2,8 +2,12 @@ package br.com.carvoeiromanager.season;
 
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClubRepository;
+import br.com.carvoeiromanager.competition.CompetitionPhase;
+import br.com.carvoeiromanager.competition.CompetitionPhaseRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureScheduler;
+import br.com.carvoeiromanager.competition.PhaseKind;
+import br.com.carvoeiromanager.competition.ScheduledFixture;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
@@ -32,6 +36,7 @@ public class SeasonCalendarGenerator {
     static final int PRE_CONTRACT_WINDOW_START_DAYS = 181; // July 15 = Jan 15 + 181 days
 
     private final CompetitionClubRepository competitionClubRepository;
+    private final CompetitionPhaseRepository competitionPhaseRepository;
     private final FixtureScheduler fixtureScheduler = new FixtureScheduler();
 
     // Fixtures and season events are inserted via persist() (not repository.save()) so the
@@ -40,12 +45,14 @@ public class SeasonCalendarGenerator {
     @PersistenceContext
     private EntityManager entityManager;
 
-    public SeasonCalendarGenerator(CompetitionClubRepository competitionClubRepository) {
+    public SeasonCalendarGenerator(CompetitionClubRepository competitionClubRepository,
+                                   CompetitionPhaseRepository competitionPhaseRepository) {
         this.competitionClubRepository = competitionClubRepository;
+        this.competitionPhaseRepository = competitionPhaseRepository;
     }
 
     /** A scheduled match-unit: one competition's round, to be dated and persisted. */
-    private record MatchUnit(UUID competitionId, int round, List<Fixture> fixtures) { }
+    private record MatchUnit(UUID competitionId, UUID phaseId, int round, List<Fixture> fixtures) { }
 
     // Persists via the EntityManager, so it needs an active transaction. In production it joins
     // createCareer()/rollover's existing transaction (REQUIRED); called standalone it opens its own.
@@ -62,23 +69,13 @@ public class SeasonCalendarGenerator {
         for (Competition comp : comps) {
             List<UUID> memberIds = competitionClubRepository.findByCompetitionId(comp.getId()).stream()
                     .map(cc -> cc.getClubId()).sorted().toList();
-            int count = memberIds.size();
-            // round -> its fixtures
-            List<List<Fixture>> byRound = new ArrayList<>();
-            for (int r = 0; r < comp.getTotalRounds(); r++) {
-                byRound.add(new ArrayList<>());
-            }
-            fixtureScheduler.doubleRoundRobin(count).forEach(scheduled -> {
-                UUID home = memberIds.get(scheduled.homeIndex());
-                UUID away = memberIds.get(scheduled.awayIndex());
-                // matchDate filled when the match-unit is dated below; create with null placeholder then set.
-                Fixture fx = Fixture.create(saveGameId, comp.getId(), scheduled.round(), home, away, null);
-                byRound.get(scheduled.round()).add(fx);
-            });
-            List<MatchUnit> units = new ArrayList<>();
-            for (int r = 0; r < byRound.size(); r++) {
-                units.add(new MatchUnit(comp.getId(), r, byRound.get(r)));
-            }
+            List<CompetitionPhase> phases =
+                    competitionPhaseRepository.findByCompetitionIdOrderByOrdinalAsc(comp.getId());
+
+            List<MatchUnit> units = phases.isEmpty()
+                    ? legacyLeagueUnits(saveGameId, comp, memberIds)
+                    : phasedUnits(saveGameId, comp, memberIds, phases);
+
             roundsByComp.add(units);
             maxRounds = Math.max(maxRounds, units.size());
         }
@@ -101,8 +98,10 @@ public class SeasonCalendarGenerator {
                 fx.setMatchDate(date);
                 entityManager.persist(fx);
             }
-            entityManager.persist(
-                    SeasonEvent.createMatch(saveGameId, date, unit.competitionId(), unit.round(), 0));
+            entityManager.persist(unit.phaseId() == null
+                    ? SeasonEvent.createMatch(saveGameId, date, unit.competitionId(), unit.round(), 0)
+                    : SeasonEvent.createKnockout(saveGameId, date, unit.competitionId(),
+                            unit.phaseId(), unit.round(), 0));
         }
 
         // 4. TRANSFER events inside each window range (sequence 1), plus pre-contract
@@ -113,6 +112,67 @@ public class SeasonCalendarGenerator {
         addTransferEvents(saveGameId, seasonStart, MID_WINDOW_START_DAYS, MID_WINDOW_END_DAYS);
         int lastMatchOffset = (ordered.size() - 1) * MATCH_INTERVAL_DAYS;
         addTransferEvents(saveGameId, seasonStart, PRE_CONTRACT_WINDOW_START_DAYS, lastMatchOffset + 1);
+    }
+
+    /** Pre-V47 behaviour: one double round-robin over all members, no phases. */
+    private List<MatchUnit> legacyLeagueUnits(UUID saveGameId, Competition comp, List<UUID> memberIds) {
+        List<List<Fixture>> byRound = new ArrayList<>();
+        for (int r = 0; r < comp.getTotalRounds(); r++) {
+            byRound.add(new ArrayList<>());
+        }
+        fixtureScheduler.doubleRoundRobin(memberIds.size()).forEach(scheduled -> {
+            UUID home = memberIds.get(scheduled.homeIndex());
+            UUID away = memberIds.get(scheduled.awayIndex());
+            byRound.get(scheduled.round()).add(
+                    Fixture.create(saveGameId, comp.getId(), scheduled.round(), home, away, null));
+        });
+        List<MatchUnit> units = new ArrayList<>();
+        for (int r = 0; r < byRound.size(); r++) {
+            units.add(new MatchUnit(comp.getId(), null, r, byRound.get(r)));
+        }
+        return units;
+    }
+
+    /**
+     * Phase-aware units. A ROUND_ROBIN phase materializes its fixtures now; a KNOCKOUT phase
+     * only reserves its match-units — participants are unknown until the previous phase ends,
+     * and fixtures.home_club_id is NOT NULL so placeholders are impossible. PhaseResolver fills
+     * these in during the season.
+     */
+    private List<MatchUnit> phasedUnits(UUID saveGameId, Competition comp, List<UUID> memberIds,
+                                        List<CompetitionPhase> phases) {
+        List<MatchUnit> units = new ArrayList<>();
+        int roundOffset = 0;
+        for (CompetitionPhase phase : phases) {
+            if (phase.getKind() == PhaseKind.ROUND_ROBIN) {
+                List<List<Fixture>> byRound = new ArrayList<>();
+                for (int r = 0; r < phase.getRounds(); r++) {
+                    byRound.add(new ArrayList<>());
+                }
+                List<ScheduledFixture> scheduled = phase.getLegs() == 1
+                        ? fixtureScheduler.singleRoundRobin(memberIds.size())
+                        : fixtureScheduler.doubleRoundRobin(memberIds.size());
+                final int offset = roundOffset;
+                scheduled.forEach(s -> {
+                    UUID home = memberIds.get(s.homeIndex());
+                    UUID away = memberIds.get(s.awayIndex());
+                    Fixture fx = Fixture.create(saveGameId, comp.getId(),
+                            offset + s.round(), home, away, null);
+                    fx.setPhaseId(phase.getId());
+                    byRound.get(s.round()).add(fx);
+                });
+                for (int r = 0; r < byRound.size(); r++) {
+                    units.add(new MatchUnit(comp.getId(), phase.getId(), roundOffset + r, byRound.get(r)));
+                }
+            } else {
+                // Reserved: dated and ordered, but no fixtures yet.
+                for (int r = 0; r < phase.getRounds(); r++) {
+                    units.add(new MatchUnit(comp.getId(), phase.getId(), roundOffset + r, List.of()));
+                }
+            }
+            roundOffset += phase.getRounds();
+        }
+        return units;
     }
 
     private void addTransferEvents(UUID saveGameId, LocalDate seasonStart, int startOffset, int endOffset) {
