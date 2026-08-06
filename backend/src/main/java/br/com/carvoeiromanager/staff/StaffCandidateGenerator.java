@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -39,6 +40,9 @@ public class StaffCandidateGenerator {
                 .collect(Collectors.groupingBy(SeedStaff::role));
     }
 
+    /** Redraw budget before falling back to a suffixed name; the pool has 682 combinations. */
+    private static final int MAX_NAME_DRAWS = 200;
+
     public List<StaffCandidate> generate(UUID saveGameId, UUID clubId, StaffRole role,
                                          LocalDate onDate, int count, Set<String> excludedNames) {
         long seed = saveGameId.getMostSignificantBits()
@@ -62,9 +66,35 @@ public class StaffCandidateGenerator {
         }
 
         StaffQuality[] tiers = StaffQuality.values();
+        // Names already spoken for: the authored candidates just offered, plus everyone the
+        // caller excluded (already-hired staff, and the authored pool when it is exhausted).
+        Set<String> taken = new HashSet<>(excludedNames);
+        candidates.forEach(c -> taken.add(c.name()));
+
         while (candidates.size() < count) {
-            String name = firstNames.get(rng.nextInt(firstNames.size()))
-                    + " " + lastNames.get(rng.nextInt(lastNames.size()));
+            // Generated names are drawn from the same Brazilian first/last name pools the real
+            // staff come from (31 x 22 = 682 combinations), so a draw can land exactly on a real
+            // staff member's name — "Henrique Lima" is in both. Redraw rather than offer a
+            // duplicate or someone the caller explicitly excluded.
+            String name = null;
+            for (int attempt = 0; attempt < MAX_NAME_DRAWS && name == null; attempt++) {
+                String drawn = firstNames.get(rng.nextInt(firstNames.size()))
+                        + " " + lastNames.get(rng.nextInt(lastNames.size()));
+                if (taken.add(drawn)) {
+                    name = drawn;
+                }
+            }
+            if (name == null) {
+                // The 682-name space is far larger than any realistic candidate count, but never
+                // spin forever: fall back to a suffixed name that cannot collide.
+                String base = firstNames.get(rng.nextInt(firstNames.size()))
+                        + " " + lastNames.get(rng.nextInt(lastNames.size()));
+                int suffix = 2;
+                while (!taken.add(base + " " + suffix)) {
+                    suffix++;
+                }
+                name = base + " " + suffix;
+            }
             StaffQuality quality = tiers[rng.nextInt(tiers.length)];
             int primary = rollAttribute(quality, rng);
             int secondary = rollAttribute(quality, rng);
