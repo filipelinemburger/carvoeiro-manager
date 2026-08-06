@@ -1,6 +1,8 @@
 package br.com.carvoeiromanager.competition;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -39,43 +41,51 @@ class FixtureSchedulerTest {
         }
     }
 
-    @Test
-    void singleRoundRobinPlaysEveryPairExactlyOnce() {
-        // Given a 12-club field
-        List<ScheduledFixture> fixtures = new FixtureScheduler().singleRoundRobin(12);
+    // Covers the state-championship-sized fields (4) through Série D groups (4) up to Série C (20),
+    // plus common intermediate sizes, so a greedy that only balances at one teamCount can't hide.
+    @ParameterizedTest
+    @ValueSource(ints = {4, 6, 8, 10, 12, 16, 20})
+    void singleRoundRobinPlaysEveryPairExactlyOnce(int teamCount) {
+        List<ScheduledFixture> fixtures = new FixtureScheduler().singleRoundRobin(teamCount);
 
-        // Then: 12*11/2 = 66 matches over 11 rounds, each pair once in either orientation
-        assertThat(fixtures).hasSize(66);
-        assertThat(fixtures).extracting(ScheduledFixture::round)
-                .containsOnly(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+        int expectedMatches = teamCount * (teamCount - 1) / 2;
+        assertThat(fixtures).as("teamCount %d", teamCount).hasSize(expectedMatches);
 
         Set<Set<Integer>> pairs = fixtures.stream()
                 .map(f -> Set.of(f.homeIndex(), f.awayIndex()))
                 .collect(Collectors.toSet());
-        assertThat(pairs).hasSize(66);
+        assertThat(pairs).as("teamCount %d", teamCount).hasSize(expectedMatches);
     }
 
-    @Test
-    void singleRoundRobinGivesEveryClubOneMatchPerRound() {
-        List<ScheduledFixture> fixtures = new FixtureScheduler().singleRoundRobin(12);
+    @ParameterizedTest
+    @ValueSource(ints = {4, 6, 8, 10, 12, 16, 20})
+    void singleRoundRobinGivesEveryClubOneMatchPerRound(int teamCount) {
+        List<ScheduledFixture> fixtures = new FixtureScheduler().singleRoundRobin(teamCount);
 
-        for (int round = 0; round <= 10; round++) {
+        int expectedRounds = teamCount - 1;
+        assertThat(fixtures.stream().map(ScheduledFixture::round).distinct().count())
+                .as("teamCount %d", teamCount).isEqualTo((long) expectedRounds);
+
+        for (int round = 0; round < expectedRounds; round++) {
             final int r = round;
             List<Integer> clubs = fixtures.stream().filter(f -> f.round() == r)
                     .flatMap(f -> Stream.of(f.homeIndex(), f.awayIndex())).sorted().toList();
-            assertThat(clubs).as("round %d", r).hasSize(12).doesNotHaveDuplicates();
+            assertThat(clubs).as("teamCount %d round %d", teamCount, r)
+                    .hasSize(teamCount).doesNotHaveDuplicates();
         }
     }
 
-    @Test
-    void singleRoundRobinBalancesHomeAndAwayWithinOne() {
-        List<ScheduledFixture> fixtures = new FixtureScheduler().singleRoundRobin(12);
+    @ParameterizedTest
+    @ValueSource(ints = {4, 6, 8, 10, 12, 16, 20})
+    void singleRoundRobinBalancesHomeAndAwayWithinOne(int teamCount) {
+        List<ScheduledFixture> fixtures = new FixtureScheduler().singleRoundRobin(teamCount);
 
-        for (int club = 0; club < 12; club++) {
+        for (int club = 0; club < teamCount; club++) {
             final int c = club;
             long home = fixtures.stream().filter(f -> f.homeIndex() == c).count();
             long away = fixtures.stream().filter(f -> f.awayIndex() == c).count();
-            assertThat(Math.abs(home - away)).as("club %d home=%d away=%d", c, home, away)
+            assertThat(Math.abs(home - away))
+                    .as("teamCount %d club %d home=%d away=%d", teamCount, c, home, away)
                     .isLessThanOrEqualTo(1);
         }
     }
