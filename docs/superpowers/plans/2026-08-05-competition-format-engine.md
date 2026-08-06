@@ -959,6 +959,26 @@ Add the two builders. `legacyLeagueUnits` is the current code moved verbatim so 
     }
 ```
 
+- [ ] **Step 3b: Switch `totalRounds` to the phase sum (deferred from Task 3)**
+
+Task 3 deliberately left `SaveGameService` computing `totalRounds = (memberCount - 1) * 2` for **every** competition, phased or not, with a comment explaining why: until this task, the generator materialized every competition as one `doubleRoundRobin(memberCount)`, so a phase-sum of 17 would have undersized the round-bucket list against the 22 rounds `doubleRoundRobin(12)` actually produces and crashed career creation with `IndexOutOfBoundsException`.
+
+Now that `phasedUnits` exists, make the switch in `SaveGameService`:
+
+```java
+            // A phased competition's length is the sum of its phases' match-units; an unphased
+            // one keeps the legacy double-round-robin count.
+            int totalRounds = (seedComp.phases() == null || seedComp.phases().isEmpty())
+                    ? (seedComp.memberShortNames().size() - 1) * 2
+                    : seedComp.phases().stream().mapToInt(SeedPhase::rounds).sum();
+```
+
+Delete the deferral comment when you make the change.
+
+**This flips existing test expectations again.** Task 3 updated the Catarinense assertions to 22 rounds / 132 fixtures (a 12-club double round-robin). With phases live they become **17 match-units** and **66 first-phase fixtures** (12-club single round-robin), with the knockout rounds carrying no fixtures until `PhaseResolver` runs in Task 6. Update `CareerCreationCalendarIT`, `SaveGameServiceIT`, `TwoCompetitionCareerIT`, `SeasonAdvanceServiceIT`, `SeasonHistoryServiceIT` and `SeasonRolloverServiceIT` accordingly — these are count assertions, not behaviour.
+
+Be aware that a season now ends with six unplayable knockout events until Task 6 lands, so any test that advances the Catarinense to completion will not reach `FINISHED` yet. Mark such a test `@Disabled` with a comment naming Task 6, and re-enable it there — do not delete it and do not weaken it.
+
 - [ ] **Step 4: Persist the phase on the event**
 
 In step 3 of `generate`, replace the event creation so a unit carrying a phase produces a phase-stamped event:

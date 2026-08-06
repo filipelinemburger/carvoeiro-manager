@@ -98,14 +98,14 @@ class SeasonRolloverServiceIT {
         lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-3-3", xi, null), c.userId());
         finishSeason(c);
 
-        // Scope to Catarinense: 10 members / 18 rounds; Criciúma (managed) is in both competitions
+        // Scope to Catarinense: 12 members / 22 rounds; Criciúma (managed) is in both competitions
         Competition competition = competitionRepository.findBySaveGameId(c.id()).stream()
                 .filter(comp -> comp.getName().contains("Catarinense"))
                 .findFirst().orElseThrow();
         UUID competitionId = competition.getId();
         int oldYear = competition.getSeasonYear();
         int totalRounds = competition.getTotalRounds();
-        int clubCount = 10; // Catarinense member count
+        int clubCount = 12; // Catarinense member count
         List<Club> clubs = clubRepository.findBySaveGameId(c.id());
         List<StandingRow> finalTable = standingsService.getStandings(c.id(), competitionId, c.userId());
         String championName = finalTable.get(0).clubName();
@@ -140,7 +140,7 @@ class SeasonRolloverServiceIT {
         assertThat(rolled.getSeasonYear()).isEqualTo(oldYear + 1);
         assertThat(rolled.getTotalRounds()).isEqualTo(totalRounds);
         List<Fixture> fixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), competitionId);
-        assertThat(fixtures).hasSize(clubCount * (clubCount - 1)); // 10 * 9 = 90
+        assertThat(fixtures).hasSize(clubCount * (clubCount - 1)); // 12 * 11 = 132
         assertThat(fixtures).allMatch(f -> !f.isPlayed());
         assertThat(fixtures).allMatch(f -> f.getHomeGoals() == null && f.getAwayGoals() == null);
 

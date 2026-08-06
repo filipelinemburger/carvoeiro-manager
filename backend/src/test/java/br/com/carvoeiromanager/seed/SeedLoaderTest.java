@@ -18,12 +18,14 @@ class SeedLoaderTest {
             "BOT", "FOR", "AME", "ATH", "ATG", "CUI", "JUV", "LON", "NAU", "SBE");
 
     @Test
-    void loadsCatarinenseWithEvenNumberOfClubsIncludingCriciuma() {
+    void loadsCatarinenseWithClubPoolIncludingCriciuma() {
         SeedCareer data = new SeedLoader().loadCareer();
 
         assertThat(data.competitions().get(0).name()).isEqualTo("Campeonato Catarinense");
         assertThat(data.clubPool()).isNotEmpty();
-        assertThat(data.clubPool().size() % 2).isZero();
+        // Pool size is no longer even: 31 clubs (28 + JOI/CAR/SCA from the real 12-club
+        // Catarinense field), with the lone orphan HER not tied to any competition's parity.
+        assertThat(data.clubPool()).hasSize(31);
         assertThat(data.clubPool()).anyMatch(c -> c.shortName().equals("CRI"));
         // Every club — Série B and Catarinense-only alike — now carries a full authored
         // squad (>= 18 players); no club is left at the old thin 14-15 placeholder size.
@@ -42,17 +44,24 @@ class SeedLoaderTest {
     }
 
     @Test
-    void clubPoolHasTwentyEightClubsAllInSomeCompetition() {
+    void clubPoolHasThirtyOneClubsAllInSomeCompetitionExceptTheOrphanHercilioLuz() {
         SeedCareer data = new SeedLoader().loadCareer();
 
-        assertThat(data.clubPool()).hasSize(28);
+        assertThat(data.clubPool()).hasSize(31);
 
         Set<String> members = data.competitions().stream()
                 .flatMap(c -> c.memberShortNames().stream())
                 .collect(Collectors.toSet());
-        assertThat(data.clubPool()).allSatisfy(c ->
+        // HER is the pool's deliberate orphan (spec §Task 11): it stays in clubPool but plays
+        // no competition, so it's the one club allowed to be absent from `members`.
+        assertThat(data.clubPool()).allSatisfy(c -> {
+            if (c.shortName().equals("HER")) {
+                assertThat(members).as("HER must stay an orphan").doesNotContain("HER");
+            } else {
                 assertThat(members).as("club %s has no competition", c.shortName())
-                        .contains(c.shortName()));
+                        .contains(c.shortName());
+            }
+        });
         Set<String> pool = data.clubPool().stream()
                 .map(SeedClub::shortName).collect(Collectors.toSet());
         assertThat(members).allSatisfy(m ->
@@ -200,5 +209,48 @@ class SeedLoaderTest {
 
         assertThat(clubNames).as("free agent names must not collide with any club roster player")
                 .doesNotContainAnyElementsOf(freeAgentNames);
+    }
+
+    @Test
+    void catarinenseHasTwelveMembersAndFourPhases() {
+        SeedCareer career = new SeedLoader().loadCareer();
+
+        SeedCompetition cat = career.competitions().stream()
+                .filter(c -> c.name().equals("Campeonato Catarinense")).findFirst().orElseThrow();
+
+        assertThat(cat.memberShortNames()).hasSize(12)
+                .contains("JOI", "CAR", "SCA")
+                .doesNotContain("HER");
+
+        assertThat(cat.phases()).extracting(SeedPhase::name)
+                .containsExactly("Primeira Fase", "Quartas de final", "Semifinal", "Final");
+        assertThat(cat.phases().get(0).kind()).isEqualTo("ROUND_ROBIN");
+        assertThat(cat.phases().get(0).rounds()).isEqualTo(11);
+        assertThat(cat.phases().get(0).qualifiers()).isEqualTo(8);
+        assertThat(cat.phases().get(1).kind()).isEqualTo("KNOCKOUT");
+        assertThat(cat.phases().get(1).legs()).isEqualTo(2);
+        assertThat(cat.phases().get(1).rounds()).isEqualTo(2);
+    }
+
+    @Test
+    void hercilioLuzStaysInThePoolAsAnOrphan() {
+        SeedCareer career = new SeedLoader().loadCareer();
+
+        assertThat(career.clubPool()).extracting(SeedClub::shortName).contains("HER");
+
+        boolean inAnyCompetition = career.competitions().stream()
+                .anyMatch(c -> c.memberShortNames().contains("HER"));
+        assertThat(inAnyCompetition).isFalse();
+    }
+
+    @Test
+    void serieBRemainsAPlainLeagueWithNoPhases() {
+        SeedCareer career = new SeedLoader().loadCareer();
+
+        SeedCompetition serieB = career.competitions().stream()
+                .filter(c -> c.name().equals("Série B")).findFirst().orElseThrow();
+
+        assertThat(serieB.memberShortNames()).hasSize(20);
+        assertThat(serieB.phases()).isNullOrEmpty();
     }
 }

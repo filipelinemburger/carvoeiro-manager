@@ -102,7 +102,7 @@ class SeasonAdvanceServiceIT {
     void aMatchAdvanceSimulatesItsRoundAndCarriesFinance() {
         // Given a fresh career
         Career c = createCareer();
-        int clubCount = clubRepository.findBySaveGameId(c.id()).size(); // 10
+        int clubCount = clubRepository.findBySaveGameId(c.id()).size(); // 31
 
         // When advancing to the first MATCH event
         AdvanceResponse match = advanceToNextMatch(c);
@@ -133,16 +133,16 @@ class SeasonAdvanceServiceIT {
     void advancingToTheEndFinishesTheSeasonAndAwardsPrize() {
         // Given a fresh career
         Career c = createCareer();
-        // Scope to Catarinense: 10 members / 18 rounds
+        // Scope to Catarinense: 12 members / 22 rounds
         Competition catarinense = competitionRepository.findBySaveGameId(c.id()).stream()
                 .filter(comp -> comp.getName().contains("Catarinense"))
                 .findFirst().orElseThrow();
-        int catarinenseTotalRounds = catarinense.getTotalRounds(); // 18
+        int catarinenseTotalRounds = catarinense.getTotalRounds(); // 22
         int catarinenseClubCount = competitionRepository.findBySaveGameId(c.id()).stream()
                 .filter(comp -> comp.getName().contains("Catarinense"))
-                .findFirst().orElseThrow().getTotalRounds() / 2 + 1; // = 10
+                .findFirst().orElseThrow().getTotalRounds() / 2 + 1; // = 12
 
-        // When advancing until the season is FINISHED (guard 500 covers both competitions: 18 + 38 = 56 rounds + transfer events)
+        // When advancing until the season is FINISHED (guard 500 covers both competitions: 22 + 38 = 60 rounds + transfer events)
         AdvanceResponse last = null;
         List<AdvanceResponse> catarinenseMatches = new ArrayList<>();
         int guard = 0;
@@ -173,7 +173,7 @@ class SeasonAdvanceServiceIT {
         List<Club> clubs = clubRepository.findBySaveGameId(c.id()).stream()
                 .filter(cl -> catMemberIds.contains(cl.getId())).toList();
         List<StandingRow> standings = new StandingsCalculator().compute(clubs, all);
-        assertThat(standings).hasSize(10); // Catarinense has 10 clubs
+        assertThat(standings).hasSize(12); // Catarinense has 12 clubs
         assertThat(standings).allMatch(row -> row.played() == catarinenseTotalRounds);
         int totalGF = standings.stream().mapToInt(StandingRow::goalsFor).sum();
         int totalGA = standings.stream().mapToInt(StandingRow::goalsAgainst).sum();

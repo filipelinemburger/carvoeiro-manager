@@ -69,12 +69,12 @@ class SeasonHistoryServiceIT {
         assertThat(history).hasSize(2);
         // Both are for the rolled-over year
         assertThat(history).allMatch(s -> s.seasonYear() == firstYear);
-        // The Catarinense summary has a valid managed position (10-club competition)
+        // The Catarinense summary has a valid managed position (12-club competition)
         SeasonSummaryResponse catSummary = history.stream()
                 .filter(s -> s.competitionName().contains("Catarinense"))
                 .findFirst().orElseThrow();
         assertThat(catSummary.championClubName()).isNotBlank();
-        assertThat(catSummary.managedClubPosition()).isBetween(1, 10);
+        assertThat(catSummary.managedClubPosition()).isBetween(1, 12);
         assertThat(catSummary.topScorerGoals()).isGreaterThanOrEqualTo(1);
     }
 
@@ -87,9 +87,9 @@ class SeasonHistoryServiceIT {
         // When fetching the season detail
         SeasonDetailResponse detail = historyService.getSeason(c.id(), year, c.userId());
 
-        // Then the full table (10 clubs, ordered) and scorers are present
+        // Then the full table (12 clubs, ordered) and scorers are present
         assertThat(detail.seasonYear()).isEqualTo(year);
-        assertThat(detail.table()).hasSize(10);
+        assertThat(detail.table()).hasSize(12);
         assertThat(detail.table().get(0).position()).isEqualTo(1);
         assertThat(detail.topScorers()).isNotEmpty();
     }

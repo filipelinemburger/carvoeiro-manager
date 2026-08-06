@@ -40,6 +40,32 @@ class MatchCalibrationTest {
     private final TeamStrengthCalculator strengthCalc = new TeamStrengthCalculator();
     private final MatchSimulationService engine = new MatchSimulationService();
 
+    /**
+     * The reference squad for the "average matchup" bands, pinned by name rather than by
+     * position in the pool.
+     *
+     * <p>These bands were tuned against Náutico, which happened to be {@code
+     * rankedByStrength().get(size / 2)} when the pool held 28 clubs. Indexing into the pool makes
+     * the reference drift with the seed data: adding the three 2026 Catarinense clubs moved the
+     * median to São Bernardo, a weaker squad, which dropped mean goals to 1.90 against a 2.4–3.0
+     * band and pushed the draw rate to 0.307 against 0.24–0.28 — with the engine completely
+     * unchanged. Retuning the constants to chase that would have altered real match balance to
+     * compensate for a test-sampling artefact.
+     *
+     * <p>Pinning by name keeps these tests measuring the engine. It matters increasingly: the
+     * roadmap adds Série A, C, D and further state championships, and every one of those would
+     * otherwise re-anchor this test.
+     */
+    private static final String REFERENCE_CLUB = "NAU";
+
+    private SeedClub referenceClub() {
+        return seedLoader.loadCareer().clubPool().stream()
+                .filter(c -> REFERENCE_CLUB.equals(c.shortName()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Calibration reference club " + REFERENCE_CLUB + " is no longer in the seed pool"));
+    }
+
     private List<SeedClub> rankedByStrength() {
         return seedLoader.loadCareer().clubPool().stream()
                 .sorted(Comparator.comparingDouble(this::squadAvgOverall).reversed())
@@ -106,8 +132,7 @@ class MatchCalibrationTest {
 
     @Test
     void equalTeamsHaveRealisticHomeEdge() {
-        List<SeedClub> ranked = rankedByStrength();
-        TeamMatchInput mid = strength(ranked.get(ranked.size() / 2));
+        TeamMatchInput mid = strength(referenceClub());
 
         int homeWins = 0;
         int draws = 0;
@@ -155,8 +180,7 @@ class MatchCalibrationTest {
 
     @Test
     void meanGoalsPerMatchStayInBandWithRealWeather() {
-        List<SeedClub> ranked = rankedByStrength();
-        TeamMatchInput mid = strength(ranked.get(ranked.size() / 2));
+        TeamMatchInput mid = strength(referenceClub());
 
         long totalGoals = 0;
         int games = 0;

@@ -7,7 +7,10 @@ import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClub;
+import br.com.carvoeiromanager.competition.CompetitionPhase;
+import br.com.carvoeiromanager.competition.CompetitionPhaseRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
+import br.com.carvoeiromanager.competition.PhaseKind;
 import br.com.carvoeiromanager.finance.FinanceCalculator;
 import br.com.carvoeiromanager.player.AttributeDeriver;
 import br.com.carvoeiromanager.player.Attributes;
@@ -21,6 +24,7 @@ import br.com.carvoeiromanager.seed.SeedCareer;
 import br.com.carvoeiromanager.seed.SeedClub;
 import br.com.carvoeiromanager.seed.SeedCompetition;
 import br.com.carvoeiromanager.seed.SeedLoader;
+import br.com.carvoeiromanager.seed.SeedPhase;
 import br.com.carvoeiromanager.seed.SeedPlayer;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -47,6 +51,7 @@ public class SaveGameService {
     private final ClubRepository clubRepository;
     private final PlayerRepository playerRepository;
     private final CompetitionRepository competitionRepository;
+    private final CompetitionPhaseRepository competitionPhaseRepository;
     private final SeasonCalendarGenerator seasonCalendarGenerator;
     private final OverallCalculator overallCalculator;
     private final FinanceCalculator financeCalculator;
@@ -68,6 +73,7 @@ public class SaveGameService {
                            ClubRepository clubRepository,
                            PlayerRepository playerRepository,
                            CompetitionRepository competitionRepository,
+                           CompetitionPhaseRepository competitionPhaseRepository,
                            SeasonCalendarGenerator seasonCalendarGenerator,
                            OverallCalculator overallCalculator,
                            FinanceCalculator financeCalculator,
@@ -78,6 +84,7 @@ public class SaveGameService {
         this.clubRepository = clubRepository;
         this.playerRepository = playerRepository;
         this.competitionRepository = competitionRepository;
+        this.competitionPhaseRepository = competitionPhaseRepository;
         this.seasonCalendarGenerator = seasonCalendarGenerator;
         this.overallCalculator = overallCalculator;
         this.financeCalculator = financeCalculator;
@@ -213,8 +220,16 @@ public class SaveGameService {
         //    (the generator reads memberships via competitionClubRepository to build the fixture schedule).
         List<Competition> competitions = new ArrayList<>();
         for (SeedCompetition seedComp : seed.competitions()) {
-            int memberCount = seedComp.memberShortNames().size();
-            int totalRounds = 2 * (memberCount - 1);
+            // totalRounds stays the legacy double-round-robin count for every competition, phased
+            // or not, because SeasonCalendarGenerator is not yet phase-aware (that's Task 4):
+            // it still materializes every competition as one doubleRoundRobin(memberCount) sized
+            // exactly to (memberCount - 1) * 2 rounds. Sizing totalRounds to the phases' round sum
+            // here (11 + 2 + 2 + 2 = 17 for the 12-club Catarinense) would undersize the generator's
+            // per-round bucket list against the 22 rounds doubleRoundRobin(12) actually produces,
+            // crashing career creation with an IndexOutOfBoundsException. Once Task 4 makes the
+            // generator phase-aware, totalRounds can switch to the phase-sum for phased competitions.
+            int totalRounds = (seedComp.memberShortNames().size() - 1) * 2;
+
             Competition competition = Competition.create(
                     saveGame.getId(), seedComp.name(), seedComp.type(), seedComp.seasonYear(), totalRounds);
             entityManager.persist(competition);
@@ -224,6 +239,16 @@ public class SaveGameService {
                 UUID clubId = clubIdByShortName.get(shortName);
                 entityManager.persist(
                         CompetitionClub.create(saveGame.getId(), competition.getId(), clubId));
+            }
+
+            if (seedComp.phases() != null) {
+                int ordinal = 0;
+                for (SeedPhase phase : seedComp.phases()) {
+                    competitionPhaseRepository.save(CompetitionPhase.create(
+                            saveGame.getId(), competition.getId(), ordinal++, phase.name(),
+                            PhaseKind.valueOf(phase.kind()), phase.legs(), phase.rounds(),
+                            phase.qualifiers()));
+                }
             }
         }
 

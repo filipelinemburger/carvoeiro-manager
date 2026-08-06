@@ -72,9 +72,10 @@ class SaveGameServiceIT {
         // SaveGame persisted in DB
         assertThat(saveGameRepository.findById(saveGameId)).isPresent();
 
-        // All clubs from the pool are created (28 clubs: 20 Série B + 8 Catarinense-only, CRI/AVA in both)
+        // All clubs from the pool are created (31 clubs: 20 Série B + 11 Catarinense-only —
+        // including the orphan HER, which plays no competition — with CRI/AVA shared by both)
         var clubs = clubRepository.findBySaveGameId(saveGameId);
-        assertThat(clubs).hasSize(28);
+        assertThat(clubs).hasSize(31);
 
         // Every club has at least one player
         clubs.forEach(club ->
@@ -94,12 +95,12 @@ class SaveGameServiceIT {
         var catarinense = competitions.stream()
                 .filter(c -> c.getName().contains("Catarinense"))
                 .findFirst().orElseThrow();
-        int catarinenseClubCount = 10;
+        int catarinenseClubCount = 12;
         assertThat(catarinense.getTotalRounds()).isEqualTo(2 * (catarinenseClubCount - 1));
 
-        // Fixtures for Catarinense: 10 * 9 = 90 fixtures, all unplayed
+        // Fixtures for Catarinense: 12 * 11 = 132 fixtures, all unplayed
         var allFixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, catarinense.getId());
-        int expectedFixtures = catarinenseClubCount * (catarinenseClubCount - 1); // 90 for 10 clubs
+        int expectedFixtures = catarinenseClubCount * (catarinenseClubCount - 1); // 132 for 12 clubs
         assertThat(allFixtures).hasSize(expectedFixtures);
         assertThat(allFixtures).allMatch(f -> !f.isPlayed());
         assertThat(allFixtures).allMatch(f -> f.getHomeGoals() == null);

@@ -373,10 +373,17 @@ the paths that assume a club has fixtures are untested against it — see §11.
 
 ### 9.2 Squad fidelity
 
-The three new clubs follow the **Catarinense-only convention** established by the Série B seed
-spec: real rosters with real player names, attributes **derived** via `AttributeDeriver` rather
-than hand-authored. Hand-authored 28-attribute profiles are reserved for Série B clubs and for
-the national divisions when those slices arrive.
+The three new clubs get real rosters with real player names and a full authored `attributes`
+block per player, matching **every** club currently in the pool.
+
+**Correction (2026-08-06):** an earlier draft of this section said Catarinense-only clubs use
+attributes *derived* via `AttributeDeriver`. That was carried over from the July Série B seed
+spec and is now stale — the research-backfill work since then authored attributes for the whole
+pool. Verified at implementation time: all 28 pool clubs have a 100% authored rate, Catarinense-only
+clubs included. The new clubs follow the pool, not the outdated spec.
+
+Calibration still holds: these are state-level sides and their anchor values sit clearly below
+the Série B clubs, with Criciúma's squad as the reference scale.
 
 ---
 

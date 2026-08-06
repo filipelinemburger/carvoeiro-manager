@@ -7,6 +7,8 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.career.SaveGameStatus;
 import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.player.Player;
+import br.com.carvoeiromanager.contract.PreContractAgreement;
+import br.com.carvoeiromanager.contract.PreContractAgreementRepository;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
@@ -15,8 +17,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,6 +36,7 @@ class RolloverContractsIT {
     @Autowired SeasonAdvanceService seasonAdvanceService;
     @Autowired SeasonRolloverService rolloverService;
     @Autowired PlayerRepository playerRepository;
+    @Autowired PreContractAgreementRepository preContractAgreementRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -43,12 +49,26 @@ class RolloverContractsIT {
      * player is DELETED, so findById would throw and the test would flake on whichever player
      * happened to sit first in DB order. Age &lt;= 33 (34 after the tick) has zero retirement
      * probability. Youth prospects follow a separate develop/depart path, so skip them too.
+     *
+     * <p>Two further guards, added after the 2026 Catarinense seed expansion broke this test:
+     * <ul>
+     *   <li>A player holding a pre-contract agreement does NOT lapse into free agency at
+     *       rollover — {@link SeasonRolloverService} moves him to his new club instead, leaving
+     *       {@code isFreeAgent()} false. Skip those.
+     *   <li>{@code findByClubId} has no ORDER BY, so "first in DB order" changes whenever the
+     *       seed does. Pick the lowest id instead, which is stable across seed changes.
+     * </ul>
      */
-    private static Player probePlayer(List<Player> squad) {
+    private Player probePlayer(UUID saveGameId, List<Player> squad) {
+        Set<UUID> preContracted = preContractAgreementRepository.findBySaveGameId(saveGameId).stream()
+                .map(PreContractAgreement::getPlayerId)
+                .collect(Collectors.toSet());
         return squad.stream()
                 .filter(p -> !p.isYouthProspect())
                 .filter(p -> p.getAge() <= 33)
-                .findFirst().orElseThrow();
+                .filter(p -> !preContracted.contains(p.getId()))
+                .min(Comparator.comparing(Player::getId))
+                .orElseThrow();
     }
 
     private Career playToSeasonEnd() {
@@ -69,7 +89,7 @@ class RolloverContractsIT {
         // Force one managed player's contract to expire this rollover; keep the rest safe.
         List<Player> squad = playerRepository.findByClubId(c.clubId());
         squad.forEach(p -> p.setContractYears(5));
-        Player expiring = probePlayer(squad);
+        Player expiring = probePlayer(c.id(), squad);
         expiring.setContractYears(1); // -> 0 after tick -> lapses
         playerRepository.saveAll(squad);
 
@@ -90,7 +110,7 @@ class RolloverContractsIT {
                 .findFirst().orElseThrow();
         List<Player> aiSquad = playerRepository.findByClubId(aiClub);
         aiSquad.forEach(p -> p.setContractYears(5));
-        Player expiring = probePlayer(aiSquad);
+        Player expiring = probePlayer(c.id(), aiSquad);
         expiring.setContractYears(1); // released by his club, unsigned by anyone
         playerRepository.saveAll(aiSquad);
 

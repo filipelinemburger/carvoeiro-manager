@@ -41,7 +41,7 @@ class TwoCompetitionCareerIT {
                 .filter(c -> c.getName().contains("Catarinense"))
                 .findFirst().orElseThrow();
         assertThat(competitionClubRepository.findByCompetitionId(serieB.getId())).hasSize(20);
-        assertThat(competitionClubRepository.findByCompetitionId(cat.getId())).hasSize(10);
+        assertThat(competitionClubRepository.findByCompetitionId(cat.getId())).hasSize(12);
         // Criciúma (managed) is a member of BOTH.
         UUID managed = save.managedClubId();
         assertThat(competitionClubRepository.findBySaveGameIdAndClubId(save.id(), managed)).hasSize(2);

@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Guards the researched real-player data (Task 6) against drift from the {@link DetailedPosition}
- * / {@link RoleArchetype} enums: every one of the 804 seeded players (625 club + 179 free agent)
+ * / {@link RoleArchetype} enums: every one of the 863 seeded players (684 club + 179 free agent)
  * must carry researched {@code positions}/{@code roles} that are internally consistent and valid
  * per the live enums — not a hand-copied snapshot of them.
  */
@@ -37,12 +37,14 @@ class SeedResearchValidationTest {
     private record LabeledPlayer(String label, SeedPlayer player) {}
 
     @Test
-    void clubPoolHasTwentyEightClubsWithSixHundredTwentyFivePlayersTotal() {
+    void clubPoolHasThirtyOneClubsWithSixHundredEightyFourPlayersTotal() {
         SeedCareer career = loader.loadCareer();
 
-        assertThat(career.clubPool()).hasSize(28);
+        // 28 + 3 (JOI/CAR/SCA, the real 12-club 2026 Catarinense field) = 31 clubs;
+        // 625 + 59 (21 + 20 + 18 new players) = 684 players.
+        assertThat(career.clubPool()).hasSize(31);
         int total = career.clubPool().stream().mapToInt(c -> c.players().size()).sum();
-        assertThat(total).isEqualTo(625);
+        assertThat(total).isEqualTo(684);
     }
 
     @Test
