@@ -38,9 +38,17 @@ public class StandingsService {
     }
 
     public List<StandingRow> getStandings(UUID saveGameId, UUID competitionId, UUID userId) {
+        return getStandings(saveGameId, competitionId, null, userId);
+    }
+
+    /**
+     * Same as {@link #getStandings(UUID, UUID, UUID)}, scoped to a single phase's fixtures.
+     * A null {@code phaseId} means "the whole competition" — today's behaviour.
+     */
+    public List<StandingRow> getStandings(UUID saveGameId, UUID competitionId, UUID phaseId, UUID userId) {
         // Enforce save-game ownership before exposing any data.
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
-        return computeStandings(save, competitionId, null);
+        return computeStandings(save, competitionId, phaseId, null);
     }
 
     /**
@@ -64,6 +72,21 @@ public class StandingsService {
      *                  (today's full, current table — what {@link #getStandings} exposes).
      */
     public List<StandingRow> computeStandings(SaveGame save, UUID competitionId, LocalDate asOfDate) {
+        return computeStandings(save, competitionId, null, asOfDate);
+    }
+
+    /**
+     * Standings over a single phase's fixtures, or over the whole competition when
+     * {@code phaseId} is null (a plain league, or a caller that wants the aggregate).
+     * A knockout phase has no meaningful table; callers should render its ties instead —
+     * that is Task 12's job, not this method's.
+     *
+     * @param phaseId when non-null, only fixtures belonging to this phase count toward the
+     *                 table. Null means every fixture in the competition — today's behaviour.
+     * @param asOfDate see {@link #computeStandings(SaveGame, UUID, LocalDate)}.
+     */
+    public List<StandingRow> computeStandings(SaveGame save, UUID competitionId, UUID phaseId,
+                                               LocalDate asOfDate) {
         UUID saveGameId = save.getId();
         // The competition must belong to this save game; otherwise treat as not found
         // (avoids leaking competitions from other save games).
@@ -80,8 +103,10 @@ public class StandingsService {
                 .toList();
         List<Fixture> allFixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(
                 saveGameId, competition.getId());
-        List<Fixture> countedFixtures = asOfDate == null ? allFixtures
-                : allFixtures.stream()
+        List<Fixture> scoped = phaseId == null ? allFixtures
+                : allFixtures.stream().filter(f -> phaseId.equals(f.getPhaseId())).toList();
+        List<Fixture> countedFixtures = asOfDate == null ? scoped
+                : scoped.stream()
                         .filter(f -> f.getMatchDate() != null && f.getMatchDate().isBefore(asOfDate))
                         .toList();
         return standingsCalculator.compute(clubs, countedFixtures);

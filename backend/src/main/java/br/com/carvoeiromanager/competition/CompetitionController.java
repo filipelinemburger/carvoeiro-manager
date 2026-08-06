@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -23,15 +24,17 @@ public class CompetitionController {
     }
 
     /**
-     * Returns the current league table for a competition.
-     * Only played fixtures are counted; unplayed fixtures are ignored.
+     * Returns the current league table for a competition, or for a single phase of it when
+     * {@code phaseId} is given. Only played fixtures are counted; unplayed fixtures are ignored.
+     * A knockout phase has no meaningful table — callers should render its ties instead.
      */
     @GetMapping("/{competitionId}/standings")
     public ResponseEntity<List<StandingRow>> getStandings(
             @PathVariable UUID saveGameId,
             @PathVariable UUID competitionId,
+            @RequestParam(required = false) UUID phaseId,
             @CurrentUser UUID userId) {
-        List<StandingRow> standings = standingsService.getStandings(saveGameId, competitionId, userId);
+        List<StandingRow> standings = standingsService.getStandings(saveGameId, competitionId, phaseId, userId);
         return ResponseEntity.ok(standings);
     }
 
