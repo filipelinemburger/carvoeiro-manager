@@ -22,18 +22,21 @@ public class StandingsService {
     private final CompetitionRepository competitionRepository;
     private final CompetitionClubRepository competitionClubRepository;
     private final FixtureRepository fixtureRepository;
+    private final CompetitionPhaseRepository competitionPhaseRepository;
     private final StandingsCalculator standingsCalculator;
 
     public StandingsService(SaveGameService saveGameService,
                              ClubRepository clubRepository,
                              CompetitionRepository competitionRepository,
                              CompetitionClubRepository competitionClubRepository,
-                             FixtureRepository fixtureRepository) {
+                             FixtureRepository fixtureRepository,
+                             CompetitionPhaseRepository competitionPhaseRepository) {
         this.saveGameService = saveGameService;
         this.clubRepository = clubRepository;
         this.competitionRepository = competitionRepository;
         this.competitionClubRepository = competitionClubRepository;
         this.fixtureRepository = fixtureRepository;
+        this.competitionPhaseRepository = competitionPhaseRepository;
         this.standingsCalculator = new StandingsCalculator();
     }
 
@@ -93,6 +96,19 @@ public class StandingsService {
         Competition competition = competitionRepository.findById(competitionId)
                 .filter(c -> c.getSaveGameId().equals(saveGameId))
                 .orElseThrow(() -> new ApiException(ErrorCode.COMPETITION_NOT_FOUND, "Competition not found"));
+
+        // A phase must belong to this competition. Without this, an unknown or foreign phase id
+        // filters every fixture out and returns a full table with played=0 for everyone — a
+        // silently wrong answer where the competition guard above would have raised NOT_FOUND.
+        if (phaseId != null) {
+            boolean belongs = competitionPhaseRepository
+                    .findByCompetitionIdOrderByOrdinalAsc(competition.getId()).stream()
+                    .anyMatch(p -> p.getId().equals(phaseId));
+            if (!belongs) {
+                throw new ApiException(ErrorCode.COMPETITION_NOT_FOUND,
+                        "Phase not found in competition " + competition.getId());
+            }
+        }
 
         // Only include clubs that are members of this specific competition.
         Set<UUID> memberIds = competitionClubRepository.findByCompetitionId(competition.getId()).stream()
