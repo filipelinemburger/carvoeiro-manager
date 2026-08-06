@@ -840,4 +840,90 @@ class LiveMatchEngineTest {
             });
         }
     }
+
+    // --- Extra time (live engine) ------------------------------------------------------------
+    //
+    // The live engine reaches extra time through a mutated loop bound rather than a second
+    // simulate() call, so it needs its own coverage: nothing else in the suite constructs a
+    // LiveMatchConfig with knockoutDecider = true.
+
+    /** A knockout second leg. The higher seed hosts leg 2, so THIS match's home side was away in leg 1. */
+    private LiveMatchConfig deciderConfig(long seed, int firstLegHome, int firstLegAway) {
+        LiveMatchConfig base = config(seed, List.of());
+        return new LiveMatchConfig(base.seed(), base.homeXi(), base.awayXi(), base.homeBench(),
+                base.awayBench(), base.homeProfile(), base.awayProfile(), base.fitness(),
+                base.subSchedule(), base.tacticsSchedule(), base.aiHome(), base.weather(),
+                true, firstLegHome, firstLegAway);
+    }
+
+    @Test
+    void aKnockoutDeciderLevelOnAggregateRunsToOneHundredTwenty() {
+        long seed = 4242L;
+        // Learn this seed's 90-minute score, then pick a first leg that makes the tie exactly level.
+        // Aggregate crossover: this match's home club was the away club in leg 1, so choosing
+        // firstLegHome = h and firstLegAway = a gives both sides h + a.
+        LiveTimeline ninety = engine.simulate(config(seed, List.of()));
+        int h = ninety.homeGoals();
+        int a = ninety.awayGoals();
+
+        LiveTimeline extended = engine.simulate(deciderConfig(seed, h, a));
+
+        // The live path signals extra time through finalMinute, NOT through an EXTRA_TIME_START
+        // event: that marker is match_events-only, and LiveCommentary throws if it ever reaches
+        // the live timeline (see LiveCommentary's EXTRA_TIME_START branch).
+        assertThat(extended.finalMinute()).isEqualTo(120);
+        assertThat(extended.events()).noneMatch(e -> e.type() == EventType.EXTRA_TIME_START);
+        assertThat(extended.events()).allSatisfy(e -> assertThat(e.minute()).isLessThanOrEqualTo(120));
+    }
+
+    @Test
+    void extraTimeIsActuallySimulatedAndNotJustReportedAsOneHundredTwenty() {
+        // finalMinute alone would pass even if minutes 91-120 were never played. Across a spread
+        // of seeds, at least some deciders must produce real events after minute 90.
+        int seedsWithExtraTimeEvents = 0;
+        for (long seed = 0; seed < 40; seed++) {
+            LiveTimeline ninety = engine.simulate(config(seed, List.of()));
+            LiveTimeline extended =
+                    engine.simulate(deciderConfig(seed, ninety.homeGoals(), ninety.awayGoals()));
+            assertThat(extended.finalMinute()).as("seed %d", seed).isEqualTo(120);
+            if (extended.events().stream().anyMatch(e -> e.minute() > 90)) {
+                seedsWithExtraTimeEvents++;
+            }
+        }
+        assertThat(seedsWithExtraTimeEvents).isGreaterThan(0);
+    }
+
+    @Test
+    void extraTimeLeavesTheFirstNinetyMinutesUntouched() {
+        long seed = 4242L;
+        LiveTimeline ninety = engine.simulate(config(seed, List.of()));
+        LiveTimeline extended = engine.simulate(deciderConfig(seed, ninety.homeGoals(), ninety.awayGoals()));
+
+        // Everything up to 90 must be identical -- extra time appends, it never re-rolls the match.
+        assertThat(extended.eventsThrough(90)).isEqualTo(ninety.events());
+        assertThat(extended.homeGoalsAt(90)).isEqualTo(ninety.homeGoals());
+        assertThat(extended.awayGoalsAt(90)).isEqualTo(ninety.awayGoals());
+    }
+
+    @Test
+    void aKnockoutDeciderAlreadyDecidedOnAggregateStopsAtNinety() {
+        long seed = 4242L;
+        LiveTimeline ninety = engine.simulate(config(seed, List.of()));
+        // Give the away side a three-goal first-leg cushion: the tie cannot be level at 90.
+        LiveTimeline decided = engine.simulate(
+                deciderConfig(seed, ninety.homeGoals() + 3, ninety.awayGoals()));
+
+        assertThat(decided.finalMinute()).isEqualTo(90);
+        assertThat(decided.events()).noneMatch(e -> e.type() == EventType.EXTRA_TIME_START);
+        assertThat(decided.events()).isEqualTo(ninety.events());
+    }
+
+    @Test
+    void aLeagueMatchNeverReachesExtraTimeAtAnySeed() {
+        for (long seed = 0; seed < 200; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            assertThat(t.finalMinute()).as("seed %d", seed).isEqualTo(90);
+            assertThat(t.events()).noneMatch(e -> e.type() == EventType.EXTRA_TIME_START);
+        }
+    }
 }
