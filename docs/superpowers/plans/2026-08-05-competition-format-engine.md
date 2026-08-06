@@ -158,9 +158,11 @@ class CompetitionPhaseIT {
 
     @Test
     void phasesAreReadBackInOrdinalOrder() {
-        // Given: three phases of one competition, saved out of order
-        UUID saveGameId = UUID.randomUUID();
-        UUID competitionId = UUID.randomUUID();
+        // Given: three phases of one competition, saved out of order.
+        // NOTE: competition_phase.save_game_id has a FK to save_games, so a random UUID
+        // would violate it. Create a real save first, the way other ITs in this package do.
+        UUID saveGameId = createSaveGame().getId();
+        UUID competitionId = UUID.randomUUID();   // no FK on this column
         repository.save(CompetitionPhase.create(
                 saveGameId, competitionId, 2, "Final", PhaseKind.KNOCKOUT, 2, 2, null));
         repository.save(CompetitionPhase.create(
@@ -2435,8 +2437,9 @@ Spec §7.5 requires phase transitions to generate news. `NewsItem.create(UUID sa
     void theChampionIsAnnounced() {
         advanceToSeasonEnd(saveGameId);
 
+        // "CHAMPION", not "COMPETITION_CHAMPION" — news_item.type is VARCHAR(16).
         assertThat(newsItemRepository.findBySaveGameId(saveGameId))
-                .anySatisfy(n -> assertThat(n.getType()).isEqualTo("COMPETITION_CHAMPION"));
+                .anySatisfy(n -> assertThat(n.getType()).isEqualTo("CHAMPION"));
     }
 ```
 
@@ -2446,7 +2449,9 @@ In `PhaseResolver`, after materializing a phase, emit one item per managed-club-
 
 - `PHASE_QUALIFIED` / `PHASE_ELIMINATED` when a round-robin phase completes — whichever applies to the managed club.
 - `KNOCKOUT_DRAW` naming the managed club's opponent, when its tie is created.
-- `COMPETITION_CHAMPION` when the final's winner is known.
+- `CHAMPION` when the final's winner is known.
+
+**`news_item.type` is `VARCHAR(16)`** — every type string above fits (`PHASE_ELIMINATED` is exactly 16). Do not use `COMPETITION_CHAMPION`; at 20 characters it overflows the column and fails at insert. Update the Step 5 test to assert `"CHAMPION"` accordingly.
 
 Reuse `NewsService`'s existing sequence handling rather than assigning `seq` by hand.
 
