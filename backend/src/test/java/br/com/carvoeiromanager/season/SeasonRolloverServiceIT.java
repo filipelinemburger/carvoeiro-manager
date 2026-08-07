@@ -12,11 +12,12 @@ import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.Competition;
+import br.com.carvoeiromanager.competition.CompetitionPhase;
+import br.com.carvoeiromanager.competition.CompetitionPhaseRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
-import br.com.carvoeiromanager.competition.StandingRow;
-import br.com.carvoeiromanager.competition.StandingsService;
+import br.com.carvoeiromanager.competition.TieResolver;
 import br.com.carvoeiromanager.match.FixtureAppearance;
 import br.com.carvoeiromanager.match.FixtureAppearanceRepository;
 import br.com.carvoeiromanager.match.LineupService;
@@ -52,7 +53,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class SeasonRolloverServiceIT {
 
     @Autowired SeasonRolloverService rolloverService;
-    @Autowired StandingsService standingsService;
     @Autowired SeasonAdvanceService seasonAdvanceService;
     @Autowired LineupService lineupService;
     @Autowired SaveGameService saveGameService;
@@ -61,6 +61,7 @@ class SeasonRolloverServiceIT {
     @Autowired ClubRepository clubRepository;
     @Autowired PlayerRepository playerRepository;
     @Autowired CompetitionRepository competitionRepository;
+    @Autowired CompetitionPhaseRepository competitionPhaseRepository;
     @Autowired FixtureRepository fixtureRepository;
     @Autowired LineupRepository lineupRepository;
     @Autowired SeasonRepository seasonRepository;
@@ -107,8 +108,16 @@ class SeasonRolloverServiceIT {
         int totalRounds = competition.getTotalRounds();
         int clubCount = 12; // Catarinense member count
         List<Club> clubs = clubRepository.findBySaveGameId(c.id());
-        List<StandingRow> finalTable = standingsService.getStandings(c.id(), competitionId, c.userId());
-        String championName = finalTable.get(0).clubName();
+        // Champion is the knockout winner (Task 10), not the table leader — read it straight off
+        // the final's tie, exactly like SeasonAdvanceServiceIT does, before rollover purges fixtures.
+        List<CompetitionPhase> catarinensePhases = competitionPhaseRepository
+                .findByCompetitionIdOrderByOrdinalAsc(competitionId);
+        CompetitionPhase finalPhase = catarinensePhases.get(catarinensePhases.size() - 1);
+        List<Fixture> finalFixtures = fixtureRepository.findBySaveGameIdAndPhaseId(c.id(), finalPhase.getId());
+        UUID championClubId = TieResolver.winner(TieResolver.tiesOf(finalFixtures).get(0));
+        String championName = clubs.stream()
+                .filter(cl -> cl.getId().equals(championClubId))
+                .findFirst().orElseThrow().getName();
         Map<UUID, Integer> agesBefore = playerRepository.findBySaveGameId(c.id()).stream()
                 .collect(Collectors.toMap(Player::getId, Player::getAge));
         // Contracts must not interfere with the retirement/newgen invariants under test.

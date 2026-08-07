@@ -9,9 +9,13 @@ import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.Competition;
+import br.com.carvoeiromanager.competition.CompetitionPhase;
+import br.com.carvoeiromanager.competition.CompetitionPhaseRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
+import br.com.carvoeiromanager.competition.FinalClassification;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.competition.PhaseKind;
 import br.com.carvoeiromanager.competition.StandingRow;
 import br.com.carvoeiromanager.competition.StandingsService;
 import br.com.carvoeiromanager.competition.TopScorerRow;
@@ -60,6 +64,7 @@ public class SeasonRolloverService {
     private final SaveGameService saveGameService;
     private final SaveGameRepository saveGameRepository;
     private final CompetitionRepository competitionRepository;
+    private final CompetitionPhaseRepository competitionPhaseRepository;
     private final FixtureRepository fixtureRepository;
     private final MatchEventRepository matchEventRepository;
     private final ClubRepository clubRepository;
@@ -95,6 +100,7 @@ public class SeasonRolloverService {
     public SeasonRolloverService(SaveGameService saveGameService,
                                  SaveGameRepository saveGameRepository,
                                  CompetitionRepository competitionRepository,
+                                 CompetitionPhaseRepository competitionPhaseRepository,
                                  FixtureRepository fixtureRepository,
                                  MatchEventRepository matchEventRepository,
                                  br.com.carvoeiromanager.match.FixtureAppearanceRepository fixtureAppearanceRepository,
@@ -124,6 +130,7 @@ public class SeasonRolloverService {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.competitionRepository = competitionRepository;
+        this.competitionPhaseRepository = competitionPhaseRepository;
         this.fixtureRepository = fixtureRepository;
         this.matchEventRepository = matchEventRepository;
         this.fixtureAppearanceRepository = fixtureAppearanceRepository;
@@ -352,15 +359,29 @@ public class SeasonRolloverService {
 
     private void archive(UUID saveGameId, UUID userId, Competition competition, int finishingYear,
                          UUID managedClubId, Map<UUID, String> clubNameById) {
-        List<StandingRow> table = standingsService.getStandings(saveGameId, competition.getId(), userId);
+        // SeasonStanding archives the first phase's table — the honest league record. For a
+        // phase-less competition (e.g. Série B), phases is empty and phaseId is null, which is
+        // today's "whole competition" behaviour, unchanged.
+        List<CompetitionPhase> phases = competitionPhaseRepository
+                .findByCompetitionIdOrderByOrdinalAsc(competition.getId());
+        UUID firstPhaseId = phases.isEmpty() ? null : phases.get(0).getId();
+        List<StandingRow> table = standingsService.getStandings(
+                saveGameId, competition.getId(), firstPhaseId, userId);
         List<TopScorerRow> scorers = topScorersService.getTopScorers(saveGameId, competition.getId(), userId);
 
-        StandingRow champion = table.get(0);
-        int managedPosition = positionOf(table, managedClubId);
+        // Season.championClubId/managedClubPosition come from the final classification — the
+        // knockout winner, not the (now purely-league) table leader.
+        List<UUID> finalOrder = finalClassificationOrder(saveGameId, competition.getId(), phases, table);
+        UUID championClubId = finalOrder.get(0);
+        String championClubName = clubNameById.getOrDefault(championClubId, "");
+        int managedPosition = finalOrder.indexOf(managedClubId) + 1;
+        if (managedPosition == 0) {
+            managedPosition = finalOrder.size(); // defensive: managed club should always be present
+        }
         String managedName = clubNameById.getOrDefault(managedClubId, "");
 
         Season season = Season.create(saveGameId, competition.getId(), finishingYear,
-                competition.getName(), champion.clubId(), champion.clubName(),
+                competition.getName(), championClubId, championClubName,
                 managedClubId, managedName, managedPosition);
         seasonRepository.save(season);
 
@@ -392,12 +413,31 @@ public class SeasonRolloverService {
         }
     }
 
-    private int positionOf(List<StandingRow> table, UUID managedClubId) {
-        for (int i = 0; i < table.size(); i++) {
-            if (table.get(i).clubId().equals(managedClubId)) {
-                return i + 1;
-            }
+    /**
+     * The Brazilian classificação final for archiving: champion, runner-up, then each knockout
+     * round's losers, then non-qualifiers. Falls back to the plain table order when the
+     * competition has no knockout phases (a plain league), or — defensively, this should never
+     * happen once {@code SaveGameStatus.FINISHED} — when a knockout phase exists but hasn't
+     * actually been materialized yet.
+     */
+    private List<UUID> finalClassificationOrder(UUID saveGameId, UUID competitionId,
+                                                 List<CompetitionPhase> phases,
+                                                 List<StandingRow> firstPhaseTable) {
+        List<CompetitionPhase> knockoutPhases = phases.stream()
+                .filter(p -> p.getKind() == PhaseKind.KNOCKOUT)
+                .toList();
+        if (knockoutPhases.isEmpty()) {
+            return firstPhaseTable.stream().map(StandingRow::clubId).toList();
         }
-        return table.size(); // defensive: managed club should always be present
+        List<Fixture> allFixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, competitionId);
+        Map<UUID, List<Fixture>> fixturesByPhase = allFixtures.stream()
+                .filter(f -> f.getPhaseId() != null)
+                .collect(Collectors.groupingBy(Fixture::getPhaseId));
+        boolean allMaterialized = knockoutPhases.stream()
+                .allMatch(p -> !fixturesByPhase.getOrDefault(p.getId(), List.of()).isEmpty());
+        if (!allMaterialized) {
+            return firstPhaseTable.stream().map(StandingRow::clubId).toList();
+        }
+        return FinalClassification.compute(firstPhaseTable, knockoutPhases, fixturesByPhase);
     }
 }

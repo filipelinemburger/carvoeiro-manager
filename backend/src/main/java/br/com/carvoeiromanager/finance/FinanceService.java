@@ -9,9 +9,13 @@ import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClubRepository;
+import br.com.carvoeiromanager.competition.CompetitionPhase;
+import br.com.carvoeiromanager.competition.CompetitionPhaseRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
+import br.com.carvoeiromanager.competition.FinalClassification;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.competition.PhaseKind;
 import br.com.carvoeiromanager.competition.StandingRow;
 import br.com.carvoeiromanager.competition.StandingsCalculator;
 import br.com.carvoeiromanager.player.Player;
@@ -54,6 +58,7 @@ public class FinanceService {
     private final PlayerRepository playerRepository;
     private final CompetitionRepository competitionRepository;
     private final CompetitionClubRepository competitionClubRepository;
+    private final CompetitionPhaseRepository competitionPhaseRepository;
     private final FixtureRepository fixtureRepository;
     private final FinanceTransactionRepository financeTransactionRepository;
     private final FinanceCalculator financeCalculator;
@@ -67,6 +72,7 @@ public class FinanceService {
                           PlayerRepository playerRepository,
                           CompetitionRepository competitionRepository,
                           CompetitionClubRepository competitionClubRepository,
+                          CompetitionPhaseRepository competitionPhaseRepository,
                           FixtureRepository fixtureRepository,
                           FinanceTransactionRepository financeTransactionRepository,
                           FinanceCalculator financeCalculator,
@@ -78,6 +84,7 @@ public class FinanceService {
         this.playerRepository = playerRepository;
         this.competitionRepository = competitionRepository;
         this.competitionClubRepository = competitionClubRepository;
+        this.competitionPhaseRepository = competitionPhaseRepository;
         this.fixtureRepository = fixtureRepository;
         this.financeTransactionRepository = financeTransactionRepository;
         this.financeCalculator = financeCalculator;
@@ -264,15 +271,25 @@ public class FinanceService {
                 .toList();
 
         Competition competition = competitionRepository.findById(competitionId).orElseThrow();
-        List<Fixture> played = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, competitionId);
-        List<StandingRow> table = standingsCalculator.compute(memberClubs, played);
+        List<Fixture> allFixtures = fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, competitionId);
+        List<CompetitionPhase> phases = competitionPhaseRepository
+                .findByCompetitionIdOrderByOrdinalAsc(competitionId);
+        UUID firstPhaseId = phases.isEmpty() ? null : phases.get(0).getId();
+        List<Fixture> firstPhaseFixtures = firstPhaseId == null ? allFixtures
+                : allFixtures.stream().filter(f -> firstPhaseId.equals(f.getPhaseId())).toList();
+        List<StandingRow> firstPhaseTable = standingsCalculator.compute(memberClubs, firstPhaseFixtures);
+
+        // Prize money follows the final classification (champion/runner-up/etc.), not the plain
+        // table position — a cup run now pays like a top-of-the-league finish. Falls back to the
+        // table order when there are no knockout phases (a plain league).
+        List<UUID> order = finalClassificationOrder(phases, firstPhaseTable, allFixtures);
 
         Map<UUID, Club> clubById = memberClubs.stream().collect(Collectors.toMap(Club::getId, c -> c));
         BigDecimal managedPrize = BigDecimal.ZERO;
         int position = 1;
-        for (StandingRow row : table) {
+        for (UUID clubId : order) {
             BigDecimal prize = financeCalculator.prizeMoney(position, memberClubs.size());
-            Club club = clubById.get(row.clubId());
+            Club club = clubById.get(clubId);
             if (club != null) {
                 club.adjustBalance(prize);
                 clubRepository.save(club);
@@ -285,6 +302,33 @@ public class FinanceService {
             position++;
         }
         return managedPrize;
+    }
+
+    /**
+     * The final classification order for prize distribution: champion, runner-up, each knockout
+     * round's losers, then non-qualifiers. Falls back to the (first-phase, or whole-competition
+     * when phase-less) table order when there are no knockout phases, or — defensively, should
+     * not happen once the season is actually FINISHED — when a knockout phase exists but hasn't
+     * been materialized yet.
+     */
+    private List<UUID> finalClassificationOrder(List<CompetitionPhase> phases,
+                                                 List<StandingRow> firstPhaseTable,
+                                                 List<Fixture> allFixtures) {
+        List<CompetitionPhase> knockoutPhases = phases.stream()
+                .filter(p -> p.getKind() == PhaseKind.KNOCKOUT)
+                .toList();
+        if (knockoutPhases.isEmpty()) {
+            return firstPhaseTable.stream().map(StandingRow::clubId).toList();
+        }
+        Map<UUID, List<Fixture>> fixturesByPhase = allFixtures.stream()
+                .filter(f -> f.getPhaseId() != null)
+                .collect(Collectors.groupingBy(Fixture::getPhaseId));
+        boolean allMaterialized = knockoutPhases.stream()
+                .allMatch(p -> !fixturesByPhase.getOrDefault(p.getId(), List.of()).isEmpty());
+        if (!allMaterialized) {
+            return firstPhaseTable.stream().map(StandingRow::clubId).toList();
+        }
+        return FinalClassification.compute(firstPhaseTable, knockoutPhases, fixturesByPhase);
     }
 
     public FinancesResponse getFinances(UUID saveGameId, UUID clubId, UUID userId) {
