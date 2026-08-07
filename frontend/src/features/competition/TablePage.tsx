@@ -206,11 +206,14 @@ export function TablePage() {
   const hasPhases = phases.length > 0
 
   const [selectedPhaseId, setSelectedPhaseId] = useState('')
-  // Default to the bracket's first phase once phases load, or when the competition changes
-  // and the previously-selected phase id no longer belongs to it.
+  // Open on the phase the competition is actually in: the first one not yet complete. Always
+  // defaulting to phases[0] would show the first-phase table during the final, which is the
+  // least interesting thing on screen at that moment. When every phase is complete the season
+  // is over, so open on the last one — that is where the champion is.
   useEffect(() => {
     if (hasPhases && !phases.some(p => p.id === selectedPhaseId)) {
-      setSelectedPhaseId(phases[0].id)
+      const current = phases.find(p => !p.complete) ?? phases[phases.length - 1]
+      setSelectedPhaseId(current.id)
     }
   }, [hasPhases, phases, selectedPhaseId])
 
