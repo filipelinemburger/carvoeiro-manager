@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link as RouterLink, useSearchParams } from 'react-router-dom'
 import {
@@ -8,10 +8,12 @@ import {
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore'
-import { getStandings, getSaveGame } from '../../api/career'
+import { getStandings, getSaveGame, getPhases, getTies } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
-import type { SaveGameResponse, StandingRow } from '../../api/types'
+import type { SaveGameResponse, StandingRow, Phase } from '../../api/types'
+import { KnockoutBracketList } from './KnockoutBracketList'
+import { PhaseSelector } from './PhaseSelector'
 
 const MANAGED_BG = 'rgba(0, 100, 200, 0.1)'
 
@@ -73,66 +75,22 @@ function StatLegend() {
   )
 }
 
-export function TablePage() {
-  const { token } = useAuth()
-  const [searchParams] = useSearchParams()
-  const isMobile = useIsMobile()
-
-  const saveGameId = searchParams.get('saveGameId') ?? ''
-  const paramCompetitionId = searchParams.get('competitionId') ?? ''
-  const managedClubId = searchParams.get('managedClubId') ?? ''
-
-  // The competition can be switched in the UI; it starts at the one the nav linked to
-  // (the latest-played-or-next competition).
-  const [selectedCompetitionId, setSelectedCompetitionId] = useState(paramCompetitionId)
-  const competitionId = selectedCompetitionId || paramCompetitionId
-
-  const { data: saveGame } = useQuery<SaveGameResponse>({
-    queryKey: ['saveGame', saveGameId],
-    queryFn: () => getSaveGame(saveGameId, token ?? ''),
-    enabled: Boolean(saveGameId && token),
-    staleTime: 30_000,
-  })
-
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['standings', saveGameId, competitionId],
-    queryFn: () => getStandings(saveGameId, competitionId, token ?? ''),
-    enabled: Boolean(saveGameId && competitionId && token),
-    staleTime: Infinity,
-  })
-
-  const competitions = saveGame?.competitions ?? []
-  const rows = data ?? []
-
+/**
+ * The classic league table: loading/error states, then the mobile-collapsible or full desktop
+ * table depending on viewport. Shared between the no-phases competition and a ROUND_ROBIN phase.
+ */
+function StandingsTable({ rows, isLoading, error, isMobile, managedClubId, saveGameId }: {
+  rows: StandingRow[]
+  isLoading: boolean
+  error: unknown
+  isMobile: boolean
+  managedClubId: string
+  saveGameId: string
+}) {
   return (
-    <Box>
-      <Stack
-        direction="row"
-        spacing={2}
-        useFlexGap
-        sx={{ alignItems: 'center', flexWrap: 'wrap' }}
-      >
-        <Typography variant="h5" component="h2" sx={{ fontWeight: 700 }}>
-          Classificação
-        </Typography>
-        {competitions.length > 1 && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-            <Typography component="span" variant="body2">Campeonato:</Typography>
-            <NativeSelect
-              value={competitionId}
-              onChange={e => setSelectedCompetitionId(e.target.value)}
-              inputProps={{ 'aria-label': 'Campeonato' }}
-            >
-              {competitions.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </NativeSelect>
-          </Box>
-        )}
-      </Stack>
-
+    <>
       {isLoading && <Typography sx={{ mt: 2 }}>Carregando classificação…</Typography>}
-      {error && <Typography sx={{ mt: 2 }} color="error">Erro ao carregar classificação.</Typography>}
+      {Boolean(error) && <Typography sx={{ mt: 2 }} color="error">Erro ao carregar classificação.</Typography>}
 
       {!isLoading && !error && (
         <>
@@ -210,6 +168,127 @@ export function TablePage() {
         )}
         {rows.length > 0 && <StatLegend />}
         </>
+      )}
+    </>
+  )
+}
+
+export function TablePage() {
+  const { token } = useAuth()
+  const [searchParams] = useSearchParams()
+  const isMobile = useIsMobile()
+
+  const saveGameId = searchParams.get('saveGameId') ?? ''
+  const paramCompetitionId = searchParams.get('competitionId') ?? ''
+  const managedClubId = searchParams.get('managedClubId') ?? ''
+
+  // The competition can be switched in the UI; it starts at the one the nav linked to
+  // (the latest-played-or-next competition).
+  const [selectedCompetitionId, setSelectedCompetitionId] = useState(paramCompetitionId)
+  const competitionId = selectedCompetitionId || paramCompetitionId
+
+  const { data: saveGame } = useQuery<SaveGameResponse>({
+    queryKey: ['saveGame', saveGameId],
+    queryFn: () => getSaveGame(saveGameId, token ?? ''),
+    enabled: Boolean(saveGameId && token),
+    staleTime: 30_000,
+  })
+
+  // Phases are optional — a competition with none of them (e.g. Série B) keeps behaving exactly
+  // as before: no selector, no phaseId on the standings query.
+  const { data: phasesData } = useQuery<Phase[]>({
+    queryKey: ['phases', saveGameId, competitionId],
+    queryFn: () => getPhases(saveGameId, competitionId, token ?? ''),
+    enabled: Boolean(saveGameId && competitionId && token),
+    staleTime: Infinity,
+  })
+  const phases = [...(phasesData ?? [])].sort((a, b) => a.ordinal - b.ordinal)
+  const hasPhases = phases.length > 0
+
+  const [selectedPhaseId, setSelectedPhaseId] = useState('')
+  // Default to the bracket's first phase once phases load, or when the competition changes
+  // and the previously-selected phase id no longer belongs to it.
+  useEffect(() => {
+    if (hasPhases && !phases.some(p => p.id === selectedPhaseId)) {
+      setSelectedPhaseId(phases[0].id)
+    }
+  }, [hasPhases, phases, selectedPhaseId])
+
+  const selectedPhase = hasPhases ? phases.find(p => p.id === selectedPhaseId) : undefined
+  const isKnockoutPhase = selectedPhase?.kind === 'KNOCKOUT'
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['standings', saveGameId, competitionId, hasPhases ? selectedPhaseId : null],
+    queryFn: () => getStandings(saveGameId, competitionId, token ?? '', hasPhases ? selectedPhaseId : undefined),
+    enabled: Boolean(saveGameId && competitionId && token) && (!hasPhases || !isKnockoutPhase) && (!hasPhases || Boolean(selectedPhaseId)),
+    staleTime: Infinity,
+  })
+
+  const { data: tiesData, isLoading: tiesLoading, error: tiesError } = useQuery({
+    queryKey: ['ties', saveGameId, competitionId, selectedPhaseId],
+    queryFn: () => getTies(saveGameId, competitionId, selectedPhaseId, token ?? ''),
+    enabled: Boolean(saveGameId && competitionId && token && selectedPhaseId) && isKnockoutPhase,
+    staleTime: Infinity,
+  })
+
+  const competitions = saveGame?.competitions ?? []
+  const rows = data ?? []
+  const ties = tiesData ?? []
+
+  return (
+    <Box>
+      <Stack
+        direction="row"
+        spacing={2}
+        useFlexGap
+        sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+      >
+        <Typography variant="h5" component="h2" sx={{ fontWeight: 700 }}>
+          Classificação
+        </Typography>
+        {competitions.length > 1 && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+            <Typography component="span" variant="body2">Campeonato:</Typography>
+            <NativeSelect
+              value={competitionId}
+              onChange={e => setSelectedCompetitionId(e.target.value)}
+              inputProps={{ 'aria-label': 'Campeonato' }}
+            >
+              {competitions.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </NativeSelect>
+          </Box>
+        )}
+      </Stack>
+
+      {hasPhases && (
+        <Box sx={{ mt: 1.5 }}>
+          <PhaseSelector phases={phases} selectedPhaseId={selectedPhaseId} onSelect={setSelectedPhaseId} />
+        </Box>
+      )}
+
+      {isKnockoutPhase ? (
+        <Box sx={{ mt: 2 }}>
+          {tiesLoading && <Typography>Carregando chaveamento…</Typography>}
+          {Boolean(tiesError) && <Typography color="error">Erro ao carregar chaveamento.</Typography>}
+          {!tiesLoading && !tiesError && (
+            <KnockoutBracketList
+              phaseName={selectedPhase?.name ?? ''}
+              ties={ties}
+              managedClubId={managedClubId}
+            />
+          )}
+        </Box>
+      ) : (
+        <StandingsTable
+          rows={rows}
+          isLoading={isLoading}
+          error={error}
+          isMobile={isMobile}
+          managedClubId={managedClubId}
+          saveGameId={saveGameId}
+        />
       )}
     </Box>
   )

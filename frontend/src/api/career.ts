@@ -34,6 +34,8 @@ import type {
   StaffRole,
   StaffRoster,
   StaffCandidate,
+  Phase,
+  KnockoutTie,
 } from './types'
 
 export function createCareer(req: CreateSaveGameRequest, token: string): Promise<SaveGameResponse> {
@@ -106,13 +108,38 @@ export function getAdvancePreview(saveGameId: string, token: string): Promise<Ad
   return apiGet<AdvancePreviewResponse>(`/save-games/${saveGameId}/advance-preview`, token)
 }
 
+// phaseId is optional — omitted, it returns the whole-competition table; the backend ignores
+// it for a competition without phases, which is how a phase-less competition (e.g. Série B)
+// keeps working unchanged.
 export function getStandings(
   saveGameId: string,
   competitionId: string,
   token: string,
+  phaseId?: string,
 ): Promise<StandingRow[]> {
+  const query = phaseId ? `?phaseId=${phaseId}` : ''
   return apiGet<StandingRow[]>(
-    `/save-games/${saveGameId}/competitions/${competitionId}/standings`,
+    `/save-games/${saveGameId}/competitions/${competitionId}/standings${query}`,
+    token,
+  )
+}
+
+// The competition's phases, in bracket order — empty for a competition with no configured
+// format (e.g. Série B), which is the signal the UI uses to skip the phase selector entirely.
+export function getPhases(saveGameId: string, competitionId: string, token: string): Promise<Phase[]> {
+  return apiGet<Phase[]>(`/save-games/${saveGameId}/competitions/${competitionId}/phases`, token)
+}
+
+// One knockout phase's ties, seeded bracket order. A tie not yet fully played comes back with
+// null goal fields and a null winnerClubId rather than an error.
+export function getTies(
+  saveGameId: string,
+  competitionId: string,
+  phaseId: string,
+  token: string,
+): Promise<KnockoutTie[]> {
+  return apiGet<KnockoutTie[]>(
+    `/save-games/${saveGameId}/competitions/${competitionId}/ties?phaseId=${phaseId}`,
     token,
   )
 }

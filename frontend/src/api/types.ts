@@ -299,6 +299,47 @@ export type StandingRow = {
   points: number
 }
 
+/**
+ * The competition-format enum name (not a display label) — mirrors the backend `PhaseKind`
+ * enum exactly. Switch on this, never on `Phase.name` (which is the pt-BR label).
+ */
+export type PhaseKind = 'ROUND_ROBIN' | 'KNOCKOUT'
+
+/** One stage of a competition's format (e.g. league phase, or a knockout round), in bracket order. */
+export type Phase = {
+  id: string
+  ordinal: number
+  /** pt-BR display label (e.g. "Primeira Fase", "Quartas de final") — never switch on this. */
+  name: string
+  /** The enum name — switch on this, not `name`. */
+  kind: PhaseKind
+  legs: number
+  rounds: number
+  qualifiers: number | null
+  complete: boolean
+}
+
+/**
+ * One knockout tie (both legs) in a phase's seeded bracket. All goal/penalty fields and
+ * `winnerClubId` are null until played — a tie can be fetched mid-season with either leg,
+ * or the whole tie, unplayed.
+ */
+export type KnockoutTie = {
+  tieId: string
+  tieOrder: number
+  higherSeedClubId: string
+  higherSeedClubName: string
+  lowerSeedClubId: string
+  lowerSeedClubName: string
+  firstLegHomeGoals: number | null
+  firstLegAwayGoals: number | null
+  secondLegHomeGoals: number | null
+  secondLegAwayGoals: number | null
+  penaltyHome: number | null
+  penaltyAway: number | null
+  winnerClubId: string | null
+}
+
 /** One fixture on the managed club's season calendar; goals are oriented to the managed club
  * (goalsFor/goalsAgainst), and both are null until the fixture is played. */
 export type FixtureEntry = {

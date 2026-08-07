@@ -1,18 +1,24 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { TablePage } from './TablePage'
 import { AuthProvider } from '../../auth/AuthContext'
-import type { StandingRow } from '../../api/types'
+import type { StandingRow, Phase, KnockoutTie } from '../../api/types'
 
 vi.mock('../../api/career', () => ({
   getStandings: vi.fn(),
+  getSaveGame: vi.fn(),
+  getPhases: vi.fn(),
+  getTies: vi.fn(),
 }))
 
-import { getStandings } from '../../api/career'
+import { getStandings, getSaveGame, getPhases, getTies } from '../../api/career'
 
 const mockGetStandings = vi.mocked(getStandings)
+const mockGetSaveGame = vi.mocked(getSaveGame)
+const mockGetPhases = vi.mocked(getPhases)
+const mockGetTies = vi.mocked(getTies)
 
 const MANAGED_CLUB_ID = 'club-cri'
 
@@ -80,6 +86,11 @@ describe('TablePage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetStandings.mockResolvedValue(standings)
+    // No phases by default — this is the compatibility guarantee: a competition with no
+    // configured format (e.g. Série B) must render exactly as it did before phases existed.
+    mockGetSaveGame.mockResolvedValue({ competitions: [] } as never)
+    mockGetPhases.mockResolvedValue([])
+    mockGetTies.mockResolvedValue([])
     localStorage.setItem('carvoeiro_manager_token', 'test-token')
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
   })
@@ -137,5 +148,61 @@ describe('TablePage', () => {
     renderOnce()
     await waitFor(() => expect(screen.getByText('Criciúma')).toBeInTheDocument())
     expect(mockGetStandings).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders with no phase selector and fetches standings without a phaseId when the competition has no phases', async () => {
+    // getPhases resolves to [] via the beforeEach default — this is the compatibility guarantee.
+    renderWithProviders()
+    await waitFor(() => expect(screen.getByText('Criciúma')).toBeInTheDocument())
+
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+    expect(mockGetStandings).toHaveBeenCalledWith('sg-1', 'comp-1', 'test-token', undefined)
+    expect(mockGetTies).not.toHaveBeenCalled()
+  })
+
+  describe('with phases', () => {
+    const phaseRoundRobin: Phase = {
+      id: 'phase-rr', ordinal: 1, name: 'Fase de Grupos', kind: 'ROUND_ROBIN',
+      legs: 1, rounds: 10, qualifiers: 8, complete: false,
+    }
+    const phaseKnockout: Phase = {
+      id: 'phase-ko', ordinal: 2, name: 'Mata-mata', kind: 'KNOCKOUT',
+      legs: 2, rounds: 1, qualifiers: null, complete: false,
+    }
+    const tie: KnockoutTie = {
+      tieId: 'tie-1', tieOrder: 1,
+      higherSeedClubId: 'club-cri', higherSeedClubName: 'Criciúma',
+      lowerSeedClubId: 'club-avi', lowerSeedClubName: 'Avaí',
+      firstLegHomeGoals: 1, firstLegAwayGoals: 1, secondLegHomeGoals: 2, secondLegAwayGoals: 1,
+      penaltyHome: null, penaltyAway: null, winnerClubId: 'club-cri',
+    }
+
+    beforeEach(() => {
+      // Returned out of ordinal order to prove the selector sorts them.
+      mockGetPhases.mockResolvedValue([phaseKnockout, phaseRoundRobin])
+      mockGetTies.mockResolvedValue([tie])
+    })
+
+    it('shows a phase tab per phase, in ordinal order, defaulting to the first one', async () => {
+      renderWithProviders()
+
+      const tabs = await screen.findAllByRole('tab')
+      expect(tabs.map(t => t.textContent)).toEqual(['Fase de Grupos', 'Mata-mata'])
+
+      await waitFor(() => expect(mockGetStandings)
+        .toHaveBeenCalledWith('sg-1', 'comp-1', 'test-token', 'phase-rr'))
+    })
+
+    it('renders the knockout tie list and stops fetching standings when a KNOCKOUT tab is selected', async () => {
+      renderWithProviders()
+      await screen.findAllByRole('tab')
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Mata-mata' }))
+
+      await waitFor(() => expect(mockGetTies)
+        .toHaveBeenCalledWith('sg-1', 'comp-1', 'phase-ko', 'test-token'))
+      expect(await screen.findByText('3 x 2')).toBeInTheDocument()
+      expect(screen.queryByText('POS')).not.toBeInTheDocument()
+    })
   })
 })
