@@ -69,18 +69,26 @@ public class PhaseResolver {
         if (!fixtureRepository.findBySaveGameIdAndPhaseId(save.getId(), next.getId()).isEmpty()) {
             return false; // already materialized — idempotent
         }
-        if (current.getKind() != PhaseKind.ROUND_ROBIN) {
-            return false; // knockout -> knockout is handled by Task 9's tie/extra-time resolver
-        }
 
-        // The current phase is confirmed complete above (every one of its MATCH events is
-        // processed), so every one of its fixtures is already played by this point — an
-        // unbounded table (asOfDate = null) is the correct, complete seeding table. Passing
-        // this round's own date would exclude the very round that just finished it, since
-        // computeStandings' asOfDate bound is strictly-before (see StandingsService).
-        List<UUID> seeds = standingsService
-                .computeStandings(save, current.getCompetitionId(), current.getId(), null)
-                .stream().map(StandingRow::clubId).limit(current.getQualifiers()).toList();
+        List<UUID> seeds;
+        if (current.getKind() == PhaseKind.ROUND_ROBIN) {
+            // The current phase is confirmed complete above (every one of its MATCH events is
+            // processed), so every one of its fixtures is already played by this point — an
+            // unbounded table (asOfDate = null) is the correct, complete seeding table. Passing
+            // this round's own date would exclude the very round that just finished it, since
+            // computeStandings' asOfDate bound is strictly-before (see StandingsService).
+            seeds = standingsService
+                    .computeStandings(save, current.getCompetitionId(), current.getId(), null)
+                    .stream().map(StandingRow::clubId).limit(current.getQualifiers()).toList();
+        } else {
+            // Winners of the phase just finished, in that phase's tie order — which is itself
+            // seeded best-to-worst, so index 0 is the best surviving seed. knockoutPairings then
+            // re-pairs best against worst: with four semifinalists, index 0 plays index 3 and
+            // index 1 plays index 2, exactly as the spec requires.
+            List<Fixture> played =
+                    fixtureRepository.findBySaveGameIdAndPhaseId(save.getId(), current.getId());
+            seeds = TieResolver.tiesOf(played).stream().map(TieResolver::winner).toList();
+        }
 
         materialize(save.getId(), current.getCompetitionId(), next, seeds);
         log.info("Materialized {} for competition {} from {} qualifiers",
@@ -103,6 +111,15 @@ public class PhaseResolver {
         List<SeasonEvent> reserved = seasonEventRepository.findBySaveGameId(saveGameId).stream()
                 .filter(e -> phase.getId().equals(e.getPhaseId()))
                 .sorted(Comparator.comparing(SeasonEvent::getEventDate)).toList();
+
+        // A two-legged knockout round needs exactly two reserved (dated, fixture-less) rounds —
+        // one per leg. Anything else means the calendar generator and this resolver have drifted
+        // out of sync; fail loudly here rather than an unguarded reserved.get(1) throwing a bare
+        // IndexOutOfBoundsException deep inside the loop below.
+        if (reserved.size() != 2) {
+            throw new IllegalStateException("Knockout phase " + phase.getName() + " (" + phase.getId()
+                    + ") has " + reserved.size() + " reserved round(s); a two-legged tie needs exactly 2");
+        }
 
         List<int[]> pairings = fixtureScheduler.knockoutPairings(seeds.size());
         List<Fixture> created = new ArrayList<>();

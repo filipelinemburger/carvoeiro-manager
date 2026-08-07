@@ -20,7 +20,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -54,7 +56,8 @@ class PhaseResolverTest {
 
     /** Everything a test needs about one freshly-built scenario. */
     private record Scenario(SaveGame save, UUID competitionId, UUID firstPhaseId, UUID quarterFinalPhaseId,
-                            SeasonEvent lastFirstPhaseEvent, SeasonEvent midFirstPhaseEvent) {
+                            UUID semiFinalPhaseId, SeasonEvent lastFirstPhaseEvent, SeasonEvent midFirstPhaseEvent,
+                            SeasonEvent firstQuarterFinalEvent, SeasonEvent lastQuarterFinalEvent) {
         UUID saveGameId() { return save.getId(); }
     }
 
@@ -94,6 +97,9 @@ class PhaseResolverTest {
         CompetitionPhase quarterFinalPhase = CompetitionPhase.create(saveGameId, competition.getId(), 1,
                 "Quartas de Final", PhaseKind.KNOCKOUT, 2, 2, null);
         competitionPhaseRepository.save(quarterFinalPhase);
+        CompetitionPhase semiFinalPhase = CompetitionPhase.create(saveGameId, competition.getId(), 2,
+                "Semifinal", PhaseKind.KNOCKOUT, 2, 2, null);
+        competitionPhaseRepository.save(semiFinalPhase);
 
         LocalDate seasonStart = LocalDate.of(2025, 1, 15);
         FixtureScheduler scheduler = new FixtureScheduler();
@@ -135,14 +141,25 @@ class PhaseResolverTest {
 
         // Reserved quarterfinal rounds: dated, phase-stamped, no fixtures — exactly what
         // SeasonCalendarGenerator leaves behind for a KNOCKOUT phase at generation time.
+        List<SeasonEvent> quarterFinalEvents = new ArrayList<>();
         for (int r = 0; r < 2; r++) {
             LocalDate date = seasonStart.plusDays((long) (ROUNDS + r) * 5);
+            SeasonEvent event = SeasonEvent.createPhased(saveGameId, date, competition.getId(),
+                    quarterFinalPhase.getId(), ROUNDS + r, 0);
+            seasonEventRepository.save(event);
+            quarterFinalEvents.add(event);
+        }
+
+        // Reserved semifinal rounds, same idea, dated after the quarterfinal's two rounds.
+        for (int r = 0; r < 2; r++) {
+            LocalDate date = seasonStart.plusDays((long) (ROUNDS + 2 + r) * 5);
             seasonEventRepository.save(SeasonEvent.createPhased(saveGameId, date, competition.getId(),
-                    quarterFinalPhase.getId(), ROUNDS + r, 0));
+                    semiFinalPhase.getId(), ROUNDS + 2 + r, 0));
         }
 
         return new Scenario(save, competition.getId(), firstPhase.getId(), quarterFinalPhase.getId(),
-                lastFirstPhaseEvent, midFirstPhaseEvent);
+                semiFinalPhase.getId(), lastFirstPhaseEvent, midFirstPhaseEvent,
+                quarterFinalEvents.get(0), quarterFinalEvents.get(1));
     }
 
     /** Groups a phase's fixtures into ties (ordered by tieOrder) and renders each as a short
@@ -240,5 +257,78 @@ class PhaseResolverTest {
         List<String> second = pairingSignature(other.saveGameId(), other.quarterFinalPhaseId());
 
         assertThat(second).isEqualTo(first);
+    }
+
+    /**
+     * Covers {@link PhaseResolver}'s knockout -> knockout branch (Task 9): once the quarterfinal
+     * phase itself finishes, its winners — in {@code tie_order}, NOT standings or club-index
+     * order — seed the semifinal, and {@code knockoutPairings} re-pairs best surviving against
+     * worst surviving among just those four.
+     *
+     * <p>Ties 1 and 3 are scripted as upsets (the lower seed advances) precisely so the surviving
+     * seeds are NOT simply "the top 4 of the original table" in index order — if {@code tiesOf}
+     * or this resolver ever quietly sorted by the opaque {@code tie_id} instead of {@code
+     * tie_order}, or dropped tie order when collecting winners, the semifinal pairing below would
+     * scramble while still looking like a plausible bracket.
+     */
+    @Test
+    void semifinalistsArePairedBestAgainstWorstSurvivingSeed() {
+        Scenario s = buildScenario("semis");
+
+        // Given: the quarterfinals are materialized from the first phase's table.
+        boolean qfResolved = phaseResolver.resolveIfPhaseComplete(s.save(), s.lastFirstPhaseEvent());
+        assertThat(qfResolved).isTrue();
+
+        List<StandingRow> table = standingsService.computeStandings(
+                s.save(), s.competitionId(), s.firstPhaseId(), null);
+        List<UUID> seeds = table.stream().map(StandingRow::clubId).toList(); // seeds.get(i) = seed (i+1)
+
+        // Score each quarterfinal tie so ties 0 and 2 go to the higher seed, and ties 1 and 3 are
+        // upsets won by the lower seed — see the pairings knockoutPairings(8) produces:
+        // tie_order 0 = seed0 vs seed7, 1 = seed1 vs seed6, 2 = seed2 vs seed5, 3 = seed3 vs seed4.
+        List<Fixture> qf = fixtureRepository.findBySaveGameIdAndPhaseId(s.saveGameId(), s.quarterFinalPhaseId());
+        Map<Integer, List<Fixture>> byTieOrder = qf.stream()
+                .collect(Collectors.groupingBy(Fixture::getTieOrder));
+        for (Map.Entry<Integer, List<Fixture>> entry : byTieOrder.entrySet()) {
+            List<Fixture> legs = entry.getValue().stream()
+                    .sorted(Comparator.comparing(Fixture::getLeg)).toList();
+            Fixture leg1 = legs.get(0);
+            Fixture leg2 = legs.get(1);
+            boolean higherSeedWins = entry.getKey() == 0 || entry.getKey() == 2;
+            if (higherSeedWins) {
+                leg1.recordResult(0, 1); // leg1: lower(home) 0 - higher(away) 1
+                leg2.recordResult(1, 0); // leg2: higher(home) 1 - lower(away) 0 -> aggregate higher 2-0
+            } else {
+                leg1.recordResult(1, 0); // leg1: lower(home) 1 - higher(away) 0
+                leg2.recordResult(0, 1); // leg2: higher(home) 0 - lower(away) 1 -> aggregate lower 2-0
+            }
+            fixtureRepository.save(leg1);
+            fixtureRepository.save(leg2);
+        }
+
+        // Every quarterfinal round is now played; processing the second reserved QF round
+        // triggers semifinal materialization.
+        s.firstQuarterFinalEvent().markProcessed();
+        seasonEventRepository.save(s.firstQuarterFinalEvent());
+
+        boolean sfResolved = phaseResolver.resolveIfPhaseComplete(s.save(), s.lastQuarterFinalEvent());
+        assertThat(sfResolved).isTrue();
+
+        List<KnockoutTie> semis = TieResolver.tiesOf(
+                fixtureRepository.findBySaveGameIdAndPhaseId(s.saveGameId(), s.semiFinalPhaseId()));
+        assertThat(semis).hasSize(2);
+
+        // Survivors in tie_order sequence: seed0 (tie0, higher won), seed6 (tie1, upset),
+        // seed2 (tie2, higher won), seed4 (tie3, upset) -> seeds indices [0, 1, 2, 3] of the
+        // WINNERS list, re-paired by knockoutPairings(4) as {0,3} and {1,2}.
+        UUID survivor0 = seeds.get(0); // tie0 winner: seed 0 (higher)
+        UUID survivor1 = seeds.get(6); // tie1 winner: seed 6 (lower/upset)
+        UUID survivor2 = seeds.get(2); // tie2 winner: seed 2 (higher)
+        UUID survivor3 = seeds.get(4); // tie3 winner: seed 4 (lower/upset)
+
+        assertThat(semis.get(0).higherSeedClubId()).isEqualTo(survivor0);
+        assertThat(semis.get(0).lowerSeedClubId()).isEqualTo(survivor3);
+        assertThat(semis.get(1).higherSeedClubId()).isEqualTo(survivor1);
+        assertThat(semis.get(1).lowerSeedClubId()).isEqualTo(survivor2);
     }
 }
