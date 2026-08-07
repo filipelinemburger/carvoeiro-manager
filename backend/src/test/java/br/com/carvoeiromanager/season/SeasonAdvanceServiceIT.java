@@ -19,6 +19,7 @@ import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.competition.StandingRow;
+import br.com.carvoeiromanager.competition.TieResolver;
 import br.com.carvoeiromanager.competition.StandingsCalculator;
 import br.com.carvoeiromanager.competition.StandingsService;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
@@ -139,11 +140,11 @@ class SeasonAdvanceServiceIT {
         // Given a fresh career
         Career c = createCareer();
         // Scope to Catarinense: 12 members / 17 match-units (11 round-robin + 6 knockout).
-        // Task 6 only materializes round-robin -> knockout (the quarterfinals); semifinals and
-        // the final stay reserved (fixture-less) until Task 9 supplies tie winners via extra
-        // time and penalties, so this test's assertions are scoped to what Task 6 delivers:
-        // the round-robin phase plus the quarterfinals are actually played, the later two
-        // knockout rounds remain empty, and the season still reaches FINISHED regardless.
+        // This is the slice's end-to-end check: the round-robin phase seeds the quarterfinals,
+        // winners advance through the semifinals to a final, and level ties resolve via extra
+        // time and penalties. The matches-played arithmetic at the bottom ties all of it
+        // together -- if any round materialized wrongly or advanced the wrong club, the
+        // per-club counts stop adding up.
         Competition catarinense = competitionRepository.findBySaveGameId(c.id()).stream()
                 .filter(comp -> comp.getName().contains("Catarinense"))
                 .findFirst().orElseThrow();
@@ -181,21 +182,39 @@ class SeasonAdvanceServiceIT {
         SaveGame saved = saveGameRepository.findById(c.id()).orElseThrow();
         assertThat(saved.getStatus()).isEqualTo(SaveGameStatus.FINISHED);
 
-        // The quarterfinals were materialized (4 ties = 8 fixtures) and fully played...
+        // The whole bracket ran: 4 quarterfinal ties, 2 semifinals, 1 final — two legs each.
         List<Fixture> quarterFinals = fixtureRepository
                 .findBySaveGameIdAndPhaseId(c.id(), quarterFinalPhase.getId());
-        assertThat(quarterFinals).hasSize(8);
-        assertThat(quarterFinals).allMatch(Fixture::isPlayed);
+        List<Fixture> semiFinals = fixtureRepository
+                .findBySaveGameIdAndPhaseId(c.id(), semifinalPhase.getId());
+        List<Fixture> theFinal = fixtureRepository
+                .findBySaveGameIdAndPhaseId(c.id(), finalPhase.getId());
+        assertThat(quarterFinals).hasSize(8).allMatch(Fixture::isPlayed);
+        assertThat(semiFinals).hasSize(4).allMatch(Fixture::isPlayed);
+        assertThat(theFinal).hasSize(2).allMatch(Fixture::isPlayed);
 
-        // ...but the semifinals and final are still reserved with no fixtures — that is Task 9's job.
-        assertThat(fixtureRepository.findBySaveGameIdAndPhaseId(c.id(), semifinalPhase.getId())).isEmpty();
-        assertThat(fixtureRepository.findBySaveGameIdAndPhaseId(c.id(), finalPhase.getId())).isEmpty();
+        // Every tie resolved to a winner — no tie may be level without a shootout on record.
+        List<UUID> quarterFinalWinners = TieResolver.tiesOf(quarterFinals).stream()
+                .map(TieResolver::winner).toList();
+        List<UUID> semiFinalWinners = TieResolver.tiesOf(semiFinals).stream()
+                .map(TieResolver::winner).toList();
+        UUID champion = TieResolver.winner(TieResolver.tiesOf(theFinal).get(0));
+        assertThat(quarterFinalWinners).hasSize(4).doesNotContainNull();
+        assertThat(semiFinalWinners).hasSize(2).doesNotContainNull();
+        assertThat(champion).isNotNull();
 
-        // The 8 clubs that qualified out of the round-robin phase played 11 (round-robin) + 2
-        // (quarterfinal legs) = 13 matches; the 4 that didn't qualify stop at 11.
+        // Winners advance, not arbitrary clubs: each round's field is drawn from the last one's winners.
+        assertThat(semiFinalWinners).allSatisfy(w -> assertThat(quarterFinalWinners).contains(w));
+        assertThat(semiFinalWinners).contains(champion);
+
+        // Matches played stack up by how far a club went: 11 round-robin rounds, plus two legs
+        // for each knockout round survived.
         List<UUID> qualifiers = standingsService
                 .computeStandings(saved, catarinense.getId(), firstPhase.getId(), null)
                 .stream().map(StandingRow::clubId).limit(firstPhase.getQualifiers()).toList();
+        List<UUID> finalists = TieResolver.tiesOf(theFinal).stream()
+                .flatMap(t -> java.util.stream.Stream.of(t.higherSeedClubId(), t.lowerSeedClubId()))
+                .toList();
 
         List<Fixture> all = fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), catarinense.getId());
         Set<UUID> catMemberIds = competitionClubRepository.findByCompetitionId(catarinense.getId()).stream()
@@ -204,10 +223,20 @@ class SeasonAdvanceServiceIT {
                 .filter(cl -> catMemberIds.contains(cl.getId())).toList();
         List<StandingRow> standings = new StandingsCalculator().compute(clubs, all);
         assertThat(standings).hasSize(12); // Catarinense has 12 clubs
-        assertThat(standings.stream().filter(row -> qualifiers.contains(row.clubId())))
-                .allMatch(row -> row.played() == 13);
-        assertThat(standings.stream().filter(row -> !qualifiers.contains(row.clubId())))
-                .allMatch(row -> row.played() == 11);
+        for (StandingRow row : standings) {
+            int expected;
+            if (finalists.contains(row.clubId())) {
+                expected = 17;                                  // 11 + QF + SF + final
+            } else if (semiFinalWinners.contains(row.clubId())
+                    || quarterFinalWinners.contains(row.clubId())) {
+                expected = 15;                                  // 11 + QF + SF, lost the semi
+            } else if (qualifiers.contains(row.clubId())) {
+                expected = 13;                                  // 11 + QF, lost the quarterfinal
+            } else {
+                expected = 11;                                  // never qualified
+            }
+            assertThat(row.played()).as("club %s", row.commonName()).isEqualTo(expected);
+        }
 
         // The whole competition's played fixtures remain zero-sum.
         int totalGF = standings.stream().mapToInt(StandingRow::goalsFor).sum();
