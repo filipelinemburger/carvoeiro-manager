@@ -9,7 +9,11 @@ public enum EventType {
     PENALTY_GOAL, FREE_KICK_GOAL, CORNER_GOAL, PENALTY_MISSED, FOUL,
     // Marks the start of extra time in a knockout tie's match_events; not a goal, never in the
     // live timeline (see LiveMatchService's finalMinute/status handling instead).
-    EXTRA_TIME_START;
+    EXTRA_TIME_START,
+    // Appended after EXTRA_TIME_START (ordinals above still must not shift). A penalty-shootout
+    // kick decides who advances a still-level knockout tie; it is NEVER a goal — see isGoal()
+    // below — so it never inflates the scoreboard, top scorers, or player statistics.
+    PENALTY_SHOOTOUT_SCORED, PENALTY_SHOOTOUT_MISSED;
 
     /**
      * True for every type that counts on the scoreboard. SET_PIECE_GOAL is legacy: no longer

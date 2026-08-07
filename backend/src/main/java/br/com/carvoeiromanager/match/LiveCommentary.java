@@ -111,6 +111,16 @@ public final class LiveCommentary {
             "O comandante rival ajusta as peças no tabuleiro!",
             "O adversário reorganiza a equipe. Postura mais equilibrada agora",
             "Reorganização no adversário, buscando equilíbrio dentro de campo."};
+    private static final String[] SHOOTOUT_SCORED_LINES = {
+            "Bateu, %s... É GOOOOOL! Mais uma na conta da disputa de pênaltis!",
+            "%s foi pra marca da cal e não tremeu: converteu com categoria!",
+            "Frieza total de %s! Bola no fundo da rede na disputa por pênaltis!",
+            "%s engana o goleiro e marca! A cobrança foi impecável!"};
+    private static final String[] SHOOTOUT_MISSED_LINES = {
+            "%s foi pra cobrança e... DESPERDIÇOU! O goleiro leva a melhor na disputa de pênaltis!",
+            "Que pressão... %s bateu e a bola não entrou! Alívio pro goleiro!",
+            "%s cobrou mal e perdeu a chance na disputa por pênaltis!",
+            "Não foi dessa vez! %s desperdiça e a torcida do rival vibra!"};
 
     // Sad PT-BR mirrors of the goal-family pools above, used when the scoring side is the
     // opponent rather than the managed club. Lines take the scorer (%s) and, where the wording
@@ -214,6 +224,8 @@ public final class LiveCommentary {
                     "FOUL is never rendered — LiveMatchService.toState() must filter it before calling of()");
             case EXTRA_TIME_START -> throw new IllegalStateException(
                     "EXTRA_TIME_START is a match_events-only marker, never emitted into the live timeline");
+            case PENALTY_SHOOTOUT_SCORED -> pick(SHOOTOUT_SCORED_LINES, playerName, minute, type);
+            case PENALTY_SHOOTOUT_MISSED -> pick(SHOOTOUT_MISSED_LINES, playerName, minute, type);
         };
         if (!type.isGoal()) {
             return base;

@@ -11,12 +11,14 @@ import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerInstruction;
 import br.com.carvoeiromanager.player.PlayerRepository;
+import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.player.RoleAssignment;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -44,6 +46,9 @@ public class FixtureSimulator {
 
     private static final double ASSIST_CHANCE = 0.65;
     private static final double BASE_FOUL_RATE = 0.13;
+
+    /** Salt keeping the shootout's RNG stream distinct from the match's. */
+    private static final long SHOOTOUT_SEED_SALT = 0x5A17E9C3L;
 
     private final LineupService lineupService;
     private final TacticsService tacticsService;
@@ -262,6 +267,55 @@ public class FixtureSimulator {
         return aggHome == aggAway;
     }
 
+    /**
+     * Runs a penalty shootout and persists it when {@code needsExtraTime} says the tie is STILL
+     * level with the FINAL (post-extra-time) score — a no-op call for every other fixture, since
+     * that same guard returned false before extra time was ever played. Takers are the resolved
+     * XI (no in-match substitutions in this pure/instant engine, unlike {@code LiveMatchEngine}),
+     * best finishers first; the goalkeeper is excluded from the taker pool.
+     *
+     * <p>MUST run after the caller's {@code fixtureRepository.save(fixture)} that first persists
+     * this fixture: {@code match_events.fixture_id} is an FK, and each repository call is its own
+     * committed transaction here, so an earlier {@code matchEventRepository.save} would race a
+     * fixture row that does not exist yet. The penalty score set below is persisted with its own
+     * follow-up save, since the caller's save already ran before these fields were known.
+     */
+    private void resolveShootout(Fixture fixture, List<Player> homeXi, List<Player> awayXi,
+                                 int homeGoals, int awayGoals, UUID homeClubId, UUID awayClubId, long seed) {
+        if (!needsExtraTime(fixture, homeGoals, awayGoals)) {
+            return;
+        }
+        Player homeKeeper = keeperOf(homeXi);
+        Player awayKeeper = keeperOf(awayXi);
+        List<Player> homeTakers = outfieldOf(homeXi, homeKeeper);
+        List<Player> awayTakers = outfieldOf(awayXi, awayKeeper);
+
+        Shootout.Result shootout = Shootout.decide(
+                homeTakers, awayTakers, homeKeeper, awayKeeper, seed ^ SHOOTOUT_SEED_SALT);
+        fixture.setPenaltyHome(shootout.homeScore());
+        fixture.setPenaltyAway(shootout.awayScore());
+        fixtureRepository.save(fixture);
+        for (Shootout.Kick kick : shootout.kicks()) {
+            matchEventRepository.save(MatchEvent.create(fixture.getId(), MatchMath.EXTRA_TIME_END,
+                    (kick.scored() ? EventType.PENALTY_SHOOTOUT_SCORED : EventType.PENALTY_SHOOTOUT_MISSED).name(),
+                    kick.takerId(), kick.home() ? homeClubId : awayClubId));
+        }
+    }
+
+    /** The on-pitch goalkeeper, or (a red-carded keeper with no sub) the best goalkeeping stat. */
+    private static Player keeperOf(List<Player> xi) {
+        return xi.stream().filter(p -> p.getPosition() == Position.GK).findFirst()
+                .orElseGet(() -> xi.stream().max(Comparator.comparingInt(Player::getGoalkeeping))
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Cannot run a shootout with an empty XI")));
+    }
+
+    /** Every outfield player minus the identified keeper; falls back to the full XI if that empties it. */
+    private static List<Player> outfieldOf(List<Player> xi, Player keeper) {
+        List<Player> outfield = xi.stream().filter(p -> !p.getId().equals(keeper.getId())).toList();
+        return outfield.isEmpty() ? xi : outfield;
+    }
+
     private static List<UUID> playerIds(List<Player> players) {
         return players.stream().map(Player::getId).toList();
     }
@@ -361,6 +415,12 @@ public class FixtureSimulator {
                     weather));
         }
         fixtureRepository.save(fixture);
+        // Reuses needsExtraTime with the FINAL (possibly extra-time) score: it returns true only
+        // when the tie is STILL level, which is exactly when a shootout must decide it. Runs
+        // AFTER the save above (and mutates+re-saves the fixture itself) — match_events rows
+        // reference fixture_id via a FK, so the fixture row must exist first.
+        resolveShootout(fixture, homeXi, awayXi, match.homeGoals(), match.awayGoals(),
+                homeClubId, awayClubId, seed);
 
         List<AttributedEvent> attributed = saveEvents(fixture, match, homeXi, awayXi,
                 homeProfile, awayProfile, homeClubId, awayClubId, seed);
@@ -431,7 +491,7 @@ public class FixtureSimulator {
                 case YELLOW_CARD, RED_CARD -> pickByWeight(available,
                         p -> cardWeight(p, profile.instructionFor(p.getId())), rng);
                 case CHANCE, INJURY, SUBSTITUTION, TACTICS_CHANGE, HALF_TIME, PENALTY_MISSED, SET_PIECE_GOAL, FOUL,
-                     EXTRA_TIME_START ->
+                     EXTRA_TIME_START, PENALTY_SHOOTOUT_SCORED, PENALTY_SHOOTOUT_MISSED ->
                         throw new IllegalStateException("Instant simulation does not emit " + event.type());
             };
             matchEventRepository.save(

@@ -25,7 +25,7 @@ public class MatchEvent {
     @Column(name = "minute", nullable = false)
     private int minute;
 
-    @Column(name = "type", nullable = false, length = 20)
+    @Column(name = "type", nullable = false, length = 24)
     private String type;
 
     @Column(name = "player_id", nullable = false)

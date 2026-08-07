@@ -17,6 +17,7 @@ import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
+import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.RoleAssignment;
 import br.com.carvoeiromanager.player.Pressing;
 import br.com.carvoeiromanager.season.AdvanceResponse;
@@ -34,11 +35,13 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -51,6 +54,9 @@ public class LiveMatchService {
 
     static final int MAX_SUBS = 5;
     static final int MINUTES = 90;
+
+    /** Salt keeping the shootout's RNG stream distinct from the match's. */
+    private static final long SHOOTOUT_SEED_SALT = 0x5A17E9C3L;
 
     private final SaveGameService saveGameService;
     private final LineupService lineupService;
@@ -397,6 +403,9 @@ public class LiveMatchService {
         Club awayClub = clubs.get(awayClubId);
 
         fixture.recordResult(timeline.homeGoals(), timeline.awayGoals());
+        // Only ever true when LiveMatchEngine extended into extra time AND the final (post-ET)
+        // score is STILL level on aggregate — same crossover it used to decide the extension.
+        resolveShootout(fixture, cfg, timeline, byId, homeClubId, awayClubId, lm.getSeed());
         // The match just finished, so the forecast is always revealed — weatherFor is used
         // directly rather than routing through the eve-of-match visibleWeather gate.
         Weather weather = homeClub != null ? weatherService.weatherFor(fixture, homeClub) : Weather.neutral();
@@ -995,6 +1004,62 @@ public class LiveMatchService {
             }
         }
         return new OnPitch(onPitch, hobbled, usedIn);
+    }
+
+    /**
+     * Runs and persists a penalty shootout when the tie is STILL level after the engine's own
+     * extra-time extension — a no-op for every other match. Takers are the players ACTUALLY on
+     * the pitch at {@code timeline.finalMinute()} (subs/red cards already applied), best
+     * finishers first; the goalkeeper is excluded from the taker pool. {@code fixture} is
+     * mutated in place — the caller persists it via {@code fixtureRepository.save}.
+     */
+    private void resolveShootout(Fixture fixture, LiveMatchConfig cfg, LiveTimeline timeline,
+                                 Map<UUID, Player> byId, UUID homeClubId, UUID awayClubId, long seed) {
+        if (timeline.finalMinute() != MatchMath.EXTRA_TIME_END || !cfg.knockoutDecider()
+                || cfg.firstLegHomeGoals() == null || cfg.firstLegAwayGoals() == null) {
+            return;
+        }
+        // Crossover: this match's home club was the AWAY club in leg 1 (same as LiveMatchEngine's
+        // minute-90 check), now evaluated against the FINAL (post-extra-time) score.
+        int aggHome = timeline.homeGoals() + cfg.firstLegAwayGoals();
+        int aggAway = timeline.awayGoals() + cfg.firstLegHomeGoals();
+        if (aggHome != aggAway) {
+            return;
+        }
+
+        List<Player> homeOnPitch = onPitchFor(timeline, timeline.finalMinute(), true, cfg.homeXi())
+                .onPitch().stream().map(byId::get).filter(Objects::nonNull).toList();
+        List<Player> awayOnPitch = onPitchFor(timeline, timeline.finalMinute(), false, cfg.awayXi())
+                .onPitch().stream().map(byId::get).filter(Objects::nonNull).toList();
+
+        Player homeKeeper = keeperOf(homeOnPitch);
+        Player awayKeeper = keeperOf(awayOnPitch);
+        List<Player> homeTakers = outfieldOf(homeOnPitch, homeKeeper);
+        List<Player> awayTakers = outfieldOf(awayOnPitch, awayKeeper);
+
+        Shootout.Result shootout = Shootout.decide(
+                homeTakers, awayTakers, homeKeeper, awayKeeper, seed ^ SHOOTOUT_SEED_SALT);
+        fixture.setPenaltyHome(shootout.homeScore());
+        fixture.setPenaltyAway(shootout.awayScore());
+        for (Shootout.Kick kick : shootout.kicks()) {
+            matchEventRepository.save(MatchEvent.create(fixture.getId(), MatchMath.EXTRA_TIME_END,
+                    (kick.scored() ? EventType.PENALTY_SHOOTOUT_SCORED : EventType.PENALTY_SHOOTOUT_MISSED).name(),
+                    kick.takerId(), kick.home() ? homeClubId : awayClubId));
+        }
+    }
+
+    /** The on-pitch goalkeeper, or (a red-carded keeper with no sub available) the best goalkeeping stat. */
+    private static Player keeperOf(List<Player> onPitch) {
+        return onPitch.stream().filter(p -> p.getPosition() == Position.GK).findFirst()
+                .orElseGet(() -> onPitch.stream().max(Comparator.comparingInt(Player::getGoalkeeping))
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Cannot run a shootout with an empty pitch")));
+    }
+
+    /** Every on-pitch player minus the identified keeper; falls back to the full list if that empties it. */
+    private static List<Player> outfieldOf(List<Player> onPitch, Player keeper) {
+        List<Player> outfield = onPitch.stream().filter(p -> !p.getId().equals(keeper.getId())).toList();
+        return outfield.isEmpty() ? onPitch : outfield;
     }
 
     /** Five substitutions in normal time; a sixth becomes available once extra time begins. */
