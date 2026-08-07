@@ -42,7 +42,10 @@ class LiveCommentaryTest {
             Map.entry("OPP_GOAL_ASSISTED", 3),
             Map.entry("OPP_PENALTY_GOAL", 2),
             Map.entry("OPP_FREE_KICK_GOAL", 2),
-            Map.entry("OPP_CORNER_GOAL", 2));
+            Map.entry("OPP_CORNER_GOAL", 2),
+            // Shootout kicks name only the taker.
+            Map.entry("SHOOTOUT_SCORED_LINES", 1),
+            Map.entry("SHOOTOUT_MISSED_LINES", 1));
 
     @Test
     void arityMapCoversExactlyEveryPoolFieldInTheClass() {
