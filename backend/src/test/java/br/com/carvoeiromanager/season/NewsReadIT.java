@@ -68,7 +68,7 @@ class NewsReadIT {
     /** Persists a MATCH item carrying a real (deserializable) AdvanceResponse payload. */
     private UUID persistMatch(UUID saveGameId, int seq, boolean read) {
         AdvanceResponse minimal = new AdvanceResponse("MATCH", null, null, null, List.of(), List.of(),
-                List.of(), List.of(), null, 0, false, null, null, null, null, null, null);
+                List.of(), List.of(), null, 0, false, null, null, null, null, null, null, null);
         String payload;
         try {
             payload = objectMapper.writeValueAsString(minimal);

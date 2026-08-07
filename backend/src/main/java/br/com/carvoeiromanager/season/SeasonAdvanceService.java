@@ -8,9 +8,12 @@ import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.contract.PreContractEventResponse;
 import br.com.carvoeiromanager.contract.PreContractService;
+import br.com.carvoeiromanager.competition.CompetitionPhase;
+import br.com.carvoeiromanager.competition.CompetitionPhaseRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.competition.PhaseKind;
 import br.com.carvoeiromanager.competition.PhaseResolver;
 import br.com.carvoeiromanager.finance.FinanceRoundResponse;
 import br.com.carvoeiromanager.finance.FinanceService;
@@ -87,6 +90,7 @@ public class SeasonAdvanceService {
     private final PreContractService preContractService;
     private final MatchPreviewService matchPreviewService;
     private final PhaseResolver phaseResolver;
+    private final CompetitionPhaseRepository competitionPhaseRepository;
 
     public SeasonAdvanceService(SaveGameService saveGameService,
                                 SaveGameRepository saveGameRepository,
@@ -103,7 +107,8 @@ public class SeasonAdvanceService {
                                 TrainingService trainingService,
                                 PreContractService preContractService,
                                 MatchPreviewService matchPreviewService,
-                                PhaseResolver phaseResolver) {
+                                PhaseResolver phaseResolver,
+                                CompetitionPhaseRepository competitionPhaseRepository) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.seasonEventRepository = seasonEventRepository;
@@ -120,6 +125,7 @@ public class SeasonAdvanceService {
         this.preContractService = preContractService;
         this.matchPreviewService = matchPreviewService;
         this.phaseResolver = phaseResolver;
+        this.competitionPhaseRepository = competitionPhaseRepository;
     }
 
     @Transactional
@@ -141,7 +147,7 @@ public class SeasonAdvanceService {
             saveGameRepository.save(save);
             return new AdvanceResponse("FINISHED", null, null, null,
                     List.of(), List.of(), List.of(), List.of(), null, 0, true, List.of(), List.of(), null,
-                    List.of(), List.of(), null);
+                    List.of(), List.of(), null, null);
         }
 
         LocalDate eventDate = event.getEventDate();
@@ -232,11 +238,37 @@ public class SeasonAdvanceService {
                 matchdayFinance.upkeep(), prize,
                 matchdayFinance.net(), matchdayFinance.balance().add(prize));
 
+        String phaseName = resolvePhaseName(event, fixtures);
+
         return new AdvanceResponse("MATCH", eventDate.toString(), competitionName, round,
                 List.copyOf(outcome.results()), List.copyOf(outcome.bookings()),
                 List.copyOf(outcome.newSuspensions()), List.copyOf(outcome.newInjuries()),
                 finance, 0, seasonFinished, List.copyOf(playerRatings), List.of(), null, List.of(),
-                List.of(), null);
+                List.of(), null, phaseName);
+    }
+
+    /**
+     * Formats the round's phase for display, e.g. {@code "Quartas de final — Volta"} for a
+     * knockout leg or {@code "Primeira Fase"} for a round-robin round — so the UI can show that
+     * instead of a bare "Rodada 12". Null for a plain (unphased) league round.
+     */
+    private String resolvePhaseName(SeasonEvent event, List<Fixture> fixtures) {
+        UUID phaseId = event.getPhaseId();
+        if (phaseId == null) {
+            return null;
+        }
+        CompetitionPhase phase = competitionPhaseRepository.findById(phaseId).orElse(null);
+        if (phase == null) {
+            return null;
+        }
+        if (phase.getKind() != PhaseKind.KNOCKOUT) {
+            return phase.getName();
+        }
+        Integer leg = fixtures.stream().map(Fixture::getLeg).filter(l -> l != null).findFirst().orElse(null);
+        if (leg == null) {
+            return phase.getName();
+        }
+        return phase.getName() + " — " + (leg == 1 ? "Ida" : "Volta");
     }
 
     /**
@@ -310,7 +342,7 @@ public class SeasonAdvanceService {
                 preContractService.processMarketDay(save, event.getEventDate());
         return new AdvanceResponse("TRANSFER", event.getEventDate().toString(), null, null,
                 List.of(), List.of(), List.of(), List.of(), null, bidsReceived, false,
-                List.of(), transfers, null, preContractEvents, List.of(), null);
+                List.of(), transfers, null, preContractEvents, List.of(), null, null);
     }
 
     private int activeIncomingBids(UUID saveGameId) {
@@ -332,7 +364,7 @@ public class SeasonAdvanceService {
                         .toList());
         AdvanceResponse response = new AdvanceResponse("TRAINING_REPORT", eventDate.toString(),
                 null, null, List.of(), List.of(), List.of(), List.of(), null, 0, false,
-                List.of(), List.of(), dto, List.of(), List.of(), null);
+                List.of(), List.of(), dto, List.of(), List.of(), null, null);
         persistNewsItem(saveGameId, eventDate, response);
     }
 

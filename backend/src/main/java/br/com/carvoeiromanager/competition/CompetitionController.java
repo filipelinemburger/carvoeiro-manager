@@ -17,10 +17,40 @@ public class CompetitionController {
 
     private final StandingsService standingsService;
     private final TopScorersService topScorersService;
+    private final CompetitionPhaseService competitionPhaseService;
+    private final KnockoutTieService knockoutTieService;
 
-    public CompetitionController(StandingsService standingsService, TopScorersService topScorersService) {
+    public CompetitionController(StandingsService standingsService, TopScorersService topScorersService,
+                                 CompetitionPhaseService competitionPhaseService,
+                                 KnockoutTieService knockoutTieService) {
         this.standingsService = standingsService;
         this.topScorersService = topScorersService;
+        this.competitionPhaseService = competitionPhaseService;
+        this.knockoutTieService = knockoutTieService;
+    }
+
+    /** The competition's phases, in bracket order. */
+    @GetMapping("/{competitionId}/phases")
+    public ResponseEntity<List<PhaseResponse>> getPhases(
+            @PathVariable UUID saveGameId,
+            @PathVariable UUID competitionId,
+            @CurrentUser UUID userId) {
+        List<PhaseResponse> phases = competitionPhaseService.getPhases(saveGameId, competitionId, userId);
+        return ResponseEntity.ok(phases);
+    }
+
+    /**
+     * One knockout phase's ties, seeded bracket order. A tie not yet fully played returns null
+     * goal fields and a null {@code winnerClubId} rather than a 500.
+     */
+    @GetMapping("/{competitionId}/ties")
+    public ResponseEntity<List<KnockoutTieResponse>> getTies(
+            @PathVariable UUID saveGameId,
+            @PathVariable UUID competitionId,
+            @RequestParam UUID phaseId,
+            @CurrentUser UUID userId) {
+        List<KnockoutTieResponse> ties = knockoutTieService.getTies(saveGameId, competitionId, phaseId, userId);
+        return ResponseEntity.ok(ties);
     }
 
     /**

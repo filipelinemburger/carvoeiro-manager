@@ -45,6 +45,10 @@ import java.util.List;
  * {@code matchPreview} — the Auxiliar Técnico's opponent analysis; only on MATCH_PREVIEW items,
  * null everywhere else and on payloads persisted before the feature existed — callers must
  * null-guard it.
+ * {@code phaseName} — the managed event's competition phase, formatted for display (e.g.
+ * {@code "Quartas de final — Volta"} for a knockout leg, {@code "Primeira Fase"} for a
+ * round-robin round); null for a plain (unphased) league round and for every payload persisted
+ * before the feature existed — callers must null-guard it and fall back to the raw round number.
  * {@code bidsReceived} and {@code seasonFinished} default to {@code 0}/{@code false} (rather
  * than failing deserialization) when absent from a payload, since the standalone WATCHLIST
  * news item (see {@code WatchlistNotifier}) is a sparse {type, date, playerAlerts} map that
@@ -67,5 +71,6 @@ public record AdvanceResponse(
         TrainingReportResponse trainingReport,
         List<PreContractEventResponse> preContractEvents,
         List<PlayerAlertResponse> playerAlerts,
-        MatchPreviewData matchPreview) {
+        MatchPreviewData matchPreview,
+        String phaseName) {
 }

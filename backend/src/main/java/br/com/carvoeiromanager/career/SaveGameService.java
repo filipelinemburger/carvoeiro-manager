@@ -265,7 +265,8 @@ public class SaveGameService {
         // Build response with summary of all competitions
         Competition primaryCompetition = competitions.get(0);
         List<CompetitionSummary> competitionSummaries = competitions.stream()
-                .map(c -> new CompetitionSummary(c.getId(), c.getName(), c.getType(), c.getSeasonYear(), c.getTotalRounds()))
+                .map(c -> new CompetitionSummary(c.getId(), c.getName(), c.getType(), c.getSeasonYear(),
+                        c.getTotalRounds(), hasPhases(c.getId())))
                 .toList();
 
         return new SaveGameResponse(
@@ -303,6 +304,11 @@ public class SaveGameService {
 
     private ApiException saveGameNotFound() {
         return new ApiException(ErrorCode.SAVE_GAME_NOT_FOUND, "Save game not found");
+    }
+
+    /** Whether this competition has any {@link CompetitionPhase} rows — see {@link CompetitionSummary}. */
+    private boolean hasPhases(UUID competitionId) {
+        return !competitionPhaseRepository.findByCompetitionIdOrderByOrdinalAsc(competitionId).isEmpty();
     }
 
     /**
@@ -391,7 +397,8 @@ public class SaveGameService {
         int totalRounds = primaryCompetition != null ? primaryCompetition.getTotalRounds() : 0;
 
         List<CompetitionSummary> competitionSummaries = competitionsForSave.stream()
-                .map(c -> new CompetitionSummary(c.getId(), c.getName(), c.getType(), c.getSeasonYear(), c.getTotalRounds()))
+                .map(c -> new CompetitionSummary(c.getId(), c.getName(), c.getType(), c.getSeasonYear(),
+                        c.getTotalRounds(), hasPhases(c.getId())))
                 .toList();
 
         String currentDate = saveGame.getCurrentDate() != null ? saveGame.getCurrentDate().toString() : null;

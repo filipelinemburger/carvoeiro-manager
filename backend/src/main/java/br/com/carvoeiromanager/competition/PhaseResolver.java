@@ -1,13 +1,20 @@
 package br.com.carvoeiromanager.competition;
 
 import br.com.carvoeiromanager.career.SaveGame;
+import br.com.carvoeiromanager.club.Club;
+import br.com.carvoeiromanager.club.ClubRepository;
+import br.com.carvoeiromanager.season.AdvanceResponse;
+import br.com.carvoeiromanager.season.NewsItem;
+import br.com.carvoeiromanager.season.NewsItemRepository;
 import br.com.carvoeiromanager.season.SeasonEvent;
 import br.com.carvoeiromanager.season.SeasonEventRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -31,16 +38,25 @@ public class PhaseResolver {
     private final FixtureRepository fixtureRepository;
     private final SeasonEventRepository seasonEventRepository;
     private final StandingsService standingsService;
+    private final ClubRepository clubRepository;
+    private final NewsItemRepository newsItemRepository;
+    private final ObjectMapper objectMapper;
     private final FixtureScheduler fixtureScheduler = new FixtureScheduler();
 
     public PhaseResolver(CompetitionPhaseRepository competitionPhaseRepository,
                          FixtureRepository fixtureRepository,
                          SeasonEventRepository seasonEventRepository,
-                         StandingsService standingsService) {
+                         StandingsService standingsService,
+                         ClubRepository clubRepository,
+                         NewsItemRepository newsItemRepository,
+                         ObjectMapper objectMapper) {
         this.competitionPhaseRepository = competitionPhaseRepository;
         this.fixtureRepository = fixtureRepository;
         this.seasonEventRepository = seasonEventRepository;
         this.standingsService = standingsService;
+        this.clubRepository = clubRepository;
+        this.newsItemRepository = newsItemRepository;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -63,6 +79,20 @@ public class PhaseResolver {
         }
         CompetitionPhase next = phases.stream()
                 .filter(p -> p.getOrdinal() == current.getOrdinal() + 1).findFirst().orElse(null);
+
+        // A round-robin phase just ended: tell the managed club whether it goes through to
+        // whatever comes next, or is done for the season. Only meaningful when there IS a next
+        // phase to qualify into — a standalone round-robin competition has no such transition.
+        if (current.getKind() == PhaseKind.ROUND_ROBIN && next != null) {
+            emitQualificationNews(save, current, next);
+        }
+
+        // A knockout phase just ended with nothing after it: that was the final, and its winner
+        // is the champion.
+        if (current.getKind() == PhaseKind.KNOCKOUT && next == null) {
+            emitChampionNews(save, current);
+        }
+
         if (next == null || next.getKind() != PhaseKind.KNOCKOUT) {
             return false;
         }
@@ -91,9 +121,112 @@ public class PhaseResolver {
         }
 
         materialize(save.getId(), current.getCompetitionId(), next, seeds);
+        emitKnockoutDrawNews(save, next);
         log.info("Materialized {} for competition {} from {} qualifiers",
                 next.getName(), current.getCompetitionId(), seeds.size());
         return true;
+    }
+
+    /**
+     * PHASE_QUALIFIED / PHASE_ELIMINATED for the managed club, once its round-robin phase ends.
+     * No-op if the save has no managed club yet, or the managed club is not a member of this
+     * competition at all (neither is a bug — just nothing to announce).
+     */
+    private void emitQualificationNews(SaveGame save, CompetitionPhase current, CompetitionPhase next) {
+        UUID managedClubId = save.getManagedClubId();
+        if (managedClubId == null) {
+            return;
+        }
+        List<StandingRow> table = standingsService
+                .computeStandings(save, current.getCompetitionId(), current.getId(), null);
+        int index = -1;
+        for (int i = 0; i < table.size(); i++) {
+            if (table.get(i).clubId().equals(managedClubId)) {
+                index = i;
+                break;
+            }
+        }
+        if (index < 0) {
+            return; // the managed club is not part of this competition
+        }
+        boolean qualified = current.getQualifiers() != null && index < current.getQualifiers();
+        if (qualified) {
+            persistNews(save.getId(), save.getCurrentDate(), "PHASE_QUALIFIED",
+                    "Classificado para a fase " + next.getName() + "!");
+        } else {
+            persistNews(save.getId(), save.getCurrentDate(), "PHASE_ELIMINATED",
+                    "Eliminado na " + current.getName() + ".");
+        }
+    }
+
+    /**
+     * KNOCKOUT_DRAW naming the managed club's opponent, once a knockout phase's ties have just
+     * been materialized. No-op if the managed club isn't in this phase's bracket at all (a
+     * competition the save doesn't otherwise follow, or a save with no managed club yet).
+     */
+    private void emitKnockoutDrawNews(SaveGame save, CompetitionPhase phase) {
+        UUID managedClubId = save.getManagedClubId();
+        if (managedClubId == null) {
+            return;
+        }
+        List<Fixture> fixtures = fixtureRepository.findBySaveGameIdAndPhaseId(save.getId(), phase.getId());
+        for (KnockoutTie tie : TieResolver.tiesOf(fixtures)) {
+            UUID opponentId;
+            if (managedClubId.equals(tie.higherSeedClubId())) {
+                opponentId = tie.lowerSeedClubId();
+            } else if (managedClubId.equals(tie.lowerSeedClubId())) {
+                opponentId = tie.higherSeedClubId();
+            } else {
+                continue;
+            }
+            String opponentName = clubRepository.findById(opponentId).map(Club::getName).orElse("adversário");
+            persistNews(save.getId(), save.getCurrentDate(), "KNOCKOUT_DRAW",
+                    "Sorteio da " + phase.getName() + ": o adversário será " + opponentName + ".");
+            return;
+        }
+    }
+
+    /**
+     * CHAMPION once the final's winner is known. {@code finalPhase} is confirmed complete by the
+     * caller, so {@link TieResolver#winner} should not throw here — but a defensive catch keeps
+     * this a no-op rather than a 500 if that invariant is ever wrong.
+     */
+    private void emitChampionNews(SaveGame save, CompetitionPhase finalPhase) {
+        List<Fixture> fixtures = fixtureRepository.findBySaveGameIdAndPhaseId(save.getId(), finalPhase.getId());
+        List<KnockoutTie> ties = TieResolver.tiesOf(fixtures);
+        if (ties.isEmpty()) {
+            return;
+        }
+        UUID winnerId;
+        try {
+            winnerId = TieResolver.winner(ties.get(0));
+        } catch (IllegalStateException notYetDecided) {
+            return;
+        }
+        String winnerName = clubRepository.findById(winnerId).map(Club::getName).orElse("Campeão");
+        persistNews(save.getId(), save.getCurrentDate(), "CHAMPION", winnerName + " é o campeão!");
+    }
+
+    /**
+     * Writes a phase-transition news item. {@code news_item.type} is {@code VARCHAR(16)} — every
+     * type passed in here (PHASE_QUALIFIED=15, PHASE_ELIMINATED=16, KNOCKOUT_DRAW=13, CHAMPION=8)
+     * fits. The message lands in {@code competitionName}, the only free-text String field on
+     * {@link AdvanceResponse} — same sparse-payload convention as WatchlistNotifier /
+     * PreContractService: every other field is empty/null and the frontend's existing news card
+     * renders {@code competitionName} regardless of which writer produced the item. Reuses the
+     * same {@code seq = count + 1} pattern every other news writer in this codebase uses.
+     */
+    private void persistNews(UUID saveGameId, LocalDate eventDate, String type, String message) {
+        AdvanceResponse response = new AdvanceResponse(type, null, message, null,
+                List.of(), List.of(), List.of(), List.of(), null, 0, false, List.of(), List.of(),
+                null, List.of(), List.of(), null, null);
+        try {
+            String payload = objectMapper.writeValueAsString(response);
+            int seq = newsItemRepository.countBySaveGameId(saveGameId) + 1;
+            newsItemRepository.save(NewsItem.create(saveGameId, seq, eventDate, type, payload));
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to serialize phase-transition news item", e);
+        }
     }
 
     /** True when every MATCH event of this phase other than the one just handled is processed. */
