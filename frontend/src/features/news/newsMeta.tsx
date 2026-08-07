@@ -26,6 +26,15 @@ export function newsTitle(payload: AdvanceResponse): string {
       return 'Temporada encerrada'
     case 'MATCH_PREVIEW':
       return `Análise do adversário — ${payload.matchPreview?.opponentName ?? ''}`
+    // Phase transitions carry their whole message in competitionName (sparse payload).
+    case 'PHASE_QUALIFIED':
+      return 'Classificado!'
+    case 'PHASE_ELIMINATED':
+      return 'Eliminado'
+    case 'KNOCKOUT_DRAW':
+      return 'Sorteio do mata-mata'
+    case 'CHAMPION':
+      return 'Campeão!'
     default:
       return 'Notícia'
   }
@@ -41,6 +50,10 @@ export function newsIcon(type: AdvanceResponse['type']): ReactNode {
     case 'FINISHED': return <EmojiEventsIcon fontSize="small" />
     case 'PRECONTRACT': return <EditIcon fontSize="small" />
     case 'MATCH_PREVIEW': return <QueryStatsIcon fontSize="small" />
+    case 'PHASE_QUALIFIED': return <EmojiEventsIcon fontSize="small" />
+    case 'PHASE_ELIMINATED': return <ArticleIcon fontSize="small" />
+    case 'KNOCKOUT_DRAW': return <SportsSoccerIcon fontSize="small" />
+    case 'CHAMPION': return <EmojiEventsIcon fontSize="small" />
     default: return <ArticleIcon fontSize="small" />
   }
 }

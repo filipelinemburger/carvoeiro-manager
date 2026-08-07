@@ -199,7 +199,10 @@ export function LiveMatchPage() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (!state) return
-    const openPlay = state.status === 'IN_PROGRESS' && state.minute < 90
+    // Extra time is open play too. The backend flips status to FULL_TIME once the match
+    // reaches its real final minute (90 or 120), so status alone terminates the clock --
+    // the old `minute < 90` bound froze a knockout decider dead at the end of normal time.
+    const openPlay = state.status === 'IN_PROGRESS' || state.status === 'EXTRA_TIME'
     if (playing && openPlay && !advanceMut.isPending && !actionsOpen && !skipping) {
       timer.current = setTimeout(() => advanceMut.mutate(), ADVANCE_MS)
       return () => { if (timer.current) clearTimeout(timer.current) }
@@ -251,6 +254,10 @@ export function LiveMatchPage() {
   const paused = state.status === 'PAUSED_INJURY' || state.status === 'PAUSED_RED'
   const halftime = state.status === 'HALF_TIME'
   const fullTime = state.status === 'FULL_TIME'
+  // A knockout decider level at 90' runs to 120', so the progress bar's denominator is not
+  // always 90. The state carries no finalMinute, so derive it: any minute past 90 (or an
+  // EXTRA_TIME status) means this match is running the full 120.
+  const clockEnd = state.status === 'EXTRA_TIME' || state.minute > 90 ? 120 : 90
   const feed = [...state.events].reverse()
   // Resume from a forced pause / half-time by advancing past it, then let the clock run.
   // Guarded at the source (mirroring skipTo's guard) so EVERY caller — "Continuar assim
@@ -285,7 +292,7 @@ export function LiveMatchPage() {
           </Typography>
         )}
       </Stack>
-      {!fullTime && <LinearProgress variant="determinate" value={(state.minute / 90) * 100} sx={{ my: 1 }} />}
+      {!fullTime && <LinearProgress variant="determinate" value={(state.minute / clockEnd) * 100} sx={{ my: 1 }} />}
 
       {state.status === 'PAUSED_INJURY' && (
         <Alert severity="warning" sx={{ my: 1 }}>Lesão! Faça uma substituição ou continue.</Alert>

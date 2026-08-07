@@ -450,7 +450,13 @@ export type MatchPreviewData = {
 }
 
 export type AdvanceResponse = {
-  type: 'MATCH' | 'TRANSFER' | 'FINISHED' | 'TRAINING_REPORT' | 'PRECONTRACT' | 'WATCHLIST' | 'MATCH_PREVIEW'
+  // The four phase-transition types are written by PhaseResolver. Omitting them here does not
+  // fail the type-check -- newsTitle/newsIcon just fall through to their default branches and
+  // the card renders empty, which is how they shipped invisible.
+  type:
+    | 'MATCH' | 'TRANSFER' | 'FINISHED' | 'TRAINING_REPORT' | 'PRECONTRACT' | 'WATCHLIST'
+    | 'MATCH_PREVIEW'
+    | 'PHASE_QUALIFIED' | 'PHASE_ELIMINATED' | 'KNOCKOUT_DRAW' | 'CHAMPION'
   date: string | null
   competitionName: string | null
   round: number | null
@@ -750,7 +756,16 @@ export type RespondOfferRequest = { action: 'ACCEPT' | 'REJECT' | 'COUNTER'; cou
 
 // Live match
 
-export type LiveMatchStatus = 'IN_PROGRESS' | 'HALF_TIME' | 'PAUSED_INJURY' | 'PAUSED_RED' | 'FULL_TIME'
+// EXTRA_TIME is emitted for every minute past 90 in a knockout decider that was level at
+// full time. Omitting it here does not fail the type-check -- the value simply matches no
+// branch at runtime, which is how the clock silently stopped at 90'.
+export type LiveMatchStatus =
+  | 'IN_PROGRESS'
+  | 'EXTRA_TIME'
+  | 'HALF_TIME'
+  | 'PAUSED_INJURY'
+  | 'PAUSED_RED'
+  | 'FULL_TIME'
 
 export type LiveTactics = {
   mentality: string

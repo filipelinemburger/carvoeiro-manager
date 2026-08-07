@@ -212,12 +212,20 @@ public class PhaseResolver {
      * type passed in here (PHASE_QUALIFIED=15, PHASE_ELIMINATED=16, KNOCKOUT_DRAW=13, CHAMPION=8)
      * fits. The message lands in {@code competitionName}, the only free-text String field on
      * {@link AdvanceResponse} — same sparse-payload convention as WatchlistNotifier /
-     * PreContractService: every other field is empty/null and the frontend's existing news card
-     * renders {@code competitionName} regardless of which writer produced the item. Reuses the
-     * same {@code seq = count + 1} pattern every other news writer in this codebase uses.
+     * PreContractService: every other field is empty/null.
+     *
+     * <p>The frontend does NOT render {@code competitionName} generically — an earlier version of
+     * this comment claimed it did, and it was wrong. AdvanceEventCard reads it only under
+     * {@code type === 'MATCH' && round !== null}, so these four types needed their own branch
+     * there, plus entries in newsTitle/newsIcon and in the AdvanceResponse type union. Without
+     * those the item persisted correctly and rendered as an empty card.
+     *
+     * <p>{@code date} must be populated: NewsPage formats it directly, and a null shows a blank
+     * date. Every other news writer in this codebase passes {@code eventDate.toString()}.
+     * Reuses the same {@code seq = count + 1} pattern the other writers use.
      */
     private void persistNews(UUID saveGameId, LocalDate eventDate, String type, String message) {
-        AdvanceResponse response = new AdvanceResponse(type, null, message, null,
+        AdvanceResponse response = new AdvanceResponse(type, eventDate.toString(), message, null,
                 List.of(), List.of(), List.of(), List.of(), null, 0, false, List.of(), List.of(),
                 null, List.of(), List.of(), null, null);
         try {

@@ -259,6 +259,14 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
               Janela de Transferências
             </Typography>
           )}
+          {/* Phase transitions are sparse payloads: the whole message is in competitionName,
+              and no other field is set. Without this branch the card renders empty. */}
+          {(result.type === 'PHASE_QUALIFIED' || result.type === 'PHASE_ELIMINATED'
+            || result.type === 'KNOCKOUT_DRAW' || result.type === 'CHAMPION') && (
+            <Typography sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
+              {result.competitionName}
+            </Typography>
+          )}
           {result.type === 'PRECONTRACT' && (
             <Typography sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
               Pré-contrato
