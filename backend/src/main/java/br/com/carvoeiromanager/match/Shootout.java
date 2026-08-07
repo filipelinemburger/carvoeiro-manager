@@ -25,6 +25,9 @@ public final class Shootout {
     private static final double MIN_CONVERSION = 0.35;
     private static final double MAX_CONVERSION = 0.95;
 
+    /** Kicks each side takes before sudden death. */
+    private static final int BEST_OF = 5;
+
     /** Guards against a pathological infinite sudden death. */
     private static final int MAX_ROUNDS = 25;
 
@@ -46,7 +49,7 @@ public final class Shootout {
         int awayScore = 0;
 
         for (int round = 1; round <= MAX_ROUNDS; round++) {
-            boolean suddenDeath = round > 5;
+            boolean suddenDeath = round > BEST_OF;
 
             if (!suddenDeath && decided(homeScore, awayScore, round, true)) break;
             Player homeTaker = home.get((round - 1) % home.size());
@@ -60,7 +63,12 @@ public final class Shootout {
             kicks.add(new Kick(false, awayTaker.getId(), round, awayScored));
             if (awayScored) awayScore++;
 
-            if (suddenDeath && homeScore != awayScore) break;
+            // A completed round with a lead ends it. This covers both the end of the best-of-five
+            // (five kicks each, someone ahead) and every sudden-death round. decided() only stops
+            // things EARLY, when the trailing side can no longer catch up — it says nothing about
+            // regulation simply being over, so without this a 4-3 best-of-five would spill into
+            // sudden death and could hand the tie to the side that had already lost it.
+            if (round >= BEST_OF && homeScore != awayScore) break;
         }
 
         // MAX_ROUNDS reached while still level: the better cumulative finisher advances.
@@ -87,12 +95,22 @@ public final class Shootout {
     }
 
     /**
-     * True when the remaining kicks of the best-of-five cannot change the outcome.
-     * {@code beforeHomeKick} distinguishes the two halves of a round.
+     * True when the remaining kicks of the best-of-five cannot change the outcome, i.e. one side
+     * already leads by more than the other can still reach.
+     *
+     * <p>Home kicks first in each round, so at round {@code r} away has always taken {@code r - 1}
+     * kicks, while home has taken {@code r - 1} before its own kick and {@code r} after it.
+     * Getting this backwards ends the shootout a kick early and can hand the lead an outright win
+     * in a position the trailing side could still have levelled.
+     *
+     * <p>Package-private so {@link ShootoutTest} can pin the boundary directly rather than trying
+     * to steer the RNG into it.
      */
-    private static boolean decided(int homeScore, int awayScore, int round, boolean beforeHomeKick) {
-        int homeRemaining = 5 - (round - 1);
-        int awayRemaining = 5 - (round - 1) - (beforeHomeKick ? 0 : 1);
+    static boolean decided(int homeScore, int awayScore, int round, boolean beforeHomeKick) {
+        int homeTaken = beforeHomeKick ? round - 1 : round;
+        int awayTaken = round - 1;
+        int homeRemaining = Math.max(0, BEST_OF - homeTaken);
+        int awayRemaining = Math.max(0, BEST_OF - awayTaken);
         return homeScore > awayScore + awayRemaining || awayScore > homeScore + homeRemaining;
     }
 

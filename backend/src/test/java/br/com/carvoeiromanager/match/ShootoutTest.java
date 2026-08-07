@@ -82,11 +82,22 @@ class ShootoutTest {
     }
 
     @Test
-    void theFirstFiveRoundsEndEarlyWhenTheOutcomeIsSettled() {
-        // A 5-0 lead after three rounds cannot be caught: at most 8 kicks are taken
-        Shootout.Result result = Shootout.decide(eliteTakers, hopelessTakers, avgGk, worldClassGk, 7L);
-
-        assertThat(result.kicks().size()).isLessThanOrEqualTo(10);
+    void aShootoutRunsPastTenKicksOnlyIfTheBestOfFiveWasLevel() {
+        // The real invariant, and one that survives the decided() fix: a shootout only goes
+        // beyond the best-of-five (10 kicks) when the sides were level after five rounds each.
+        // The previous version asserted <= 10 kicks for one seed, which only held because
+        // decided() used to stop a kick early.
+        for (long seed = 0; seed < 100; seed++) {
+            Shootout.Result result = Shootout.decide(eliteTakers, hopelessTakers, avgGk, worldClassGk, seed);
+            if (result.kicks().size() > 10) {
+                int homeAfterFive = (int) result.kicks().stream()
+                        .filter(k -> k.home() && k.round() <= 5 && k.scored()).count();
+                int awayAfterFive = (int) result.kicks().stream()
+                        .filter(k -> !k.home() && k.round() <= 5 && k.scored()).count();
+                assertThat(homeAfterFive).as("seed %d went to sudden death", seed)
+                        .isEqualTo(awayAfterFive);
+            }
+        }
     }
 
     @Test
@@ -95,5 +106,44 @@ class ShootoutTest {
         Shootout.Result result = Shootout.decide(homeTakers, homeTakers, homeGk, homeGk, 99L);
 
         assertThat(result.kicks().size()).isLessThan(60);
+    }
+
+    // --- best-of-five early termination -------------------------------------------------------
+    //
+    // Home kicks first, so at round r away has taken r-1 kicks while home has taken r-1 before
+    // its own kick and r after it. An earlier version had these backwards, which ended a shootout
+    // one kick early and could hand the leader an outright win in a position the trailing side
+    // could still have levelled. These pin the boundary directly rather than steering the RNG.
+
+    @Test
+    void aThreeNilLeadAfterThreeHomeKicksIsNotYetDecided() {
+        // Home 3/3, away 0/2, home has just taken its round-3 kick. Away still has kicks 3, 4
+        // and 5 to come and can reach 3 — the shootout must continue.
+        assertThat(Shootout.decided(3, 0, 3, false)).isFalse();
+    }
+
+    @Test
+    void aLeadIsDecidedOnlyWhenTheTrailerCannotReachIt() {
+        // After home's round-4 kick, away has taken 3 and has 2 left.
+        // home 3, away 1: away can still reach 3 -> not decided.
+        assertThat(Shootout.decided(3, 1, 4, false)).isFalse();
+        // home 4, away 1: away tops out at 3 -> decided.
+        assertThat(Shootout.decided(4, 1, 4, false)).isTrue();
+    }
+
+    @Test
+    void anAwayLeadIsJudgedAgainstHomesRemainingKicks() {
+        // Before home's round-3 kick, home has taken 2 and has 3 left: away 3 is reachable.
+        assertThat(Shootout.decided(0, 3, 3, true)).isFalse();
+        // Before home's round-4 kick, home has only 2 left: away 3 is out of reach.
+        assertThat(Shootout.decided(0, 3, 4, true)).isTrue();
+    }
+
+    @Test
+    void alevelShootoutIsNeverDecidedEarly() {
+        for (int round = 1; round <= 5; round++) {
+            assertThat(Shootout.decided(2, 2, round, true)).as("round %d before home", round).isFalse();
+            assertThat(Shootout.decided(2, 2, round, false)).as("round %d after home", round).isFalse();
+        }
     }
 }
