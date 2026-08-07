@@ -415,10 +415,13 @@ public class SeasonRolloverService {
 
     /**
      * The Brazilian classificação final for archiving: champion, runner-up, then each knockout
-     * round's losers, then non-qualifiers. Falls back to the plain table order when the
-     * competition has no knockout phases (a plain league), or — defensively, this should never
-     * happen once {@code SaveGameStatus.FINISHED} — when a knockout phase exists but hasn't
-     * actually been materialized yet.
+     * round's losers, then non-qualifiers. A competition with no knockout phases returns its
+     * plain table order.
+     *
+     * <p>A declared knockout phase with no materialized fixtures is a bug, not a state to paper
+     * over: this record is persisted history, so archiving the table order instead would record
+     * a plausible-looking champion that never won anything, with nothing surfacing the fault.
+     * Fail loudly instead.
      */
     private List<UUID> finalClassificationOrder(UUID saveGameId, UUID competitionId,
                                                  List<CompetitionPhase> phases,
@@ -433,11 +436,12 @@ public class SeasonRolloverService {
         Map<UUID, List<Fixture>> fixturesByPhase = allFixtures.stream()
                 .filter(f -> f.getPhaseId() != null)
                 .collect(Collectors.groupingBy(Fixture::getPhaseId));
-        boolean allMaterialized = knockoutPhases.stream()
-                .allMatch(p -> !fixturesByPhase.getOrDefault(p.getId(), List.of()).isEmpty());
-        if (!allMaterialized) {
-            return firstPhaseTable.stream().map(StandingRow::clubId).toList();
-        }
+        knockoutPhases.stream()
+                .filter(p -> fixturesByPhase.getOrDefault(p.getId(), List.of()).isEmpty())
+                .findFirst()
+                .ifPresent(p -> { throw new IllegalStateException(
+                        "Knockout phase " + p.getName() + " (" + p.getId() + ") has no fixtures; "
+                        + "cannot archive a final classification for competition " + competitionId); });
         return FinalClassification.compute(firstPhaseTable, knockoutPhases, fixturesByPhase);
     }
 }

@@ -184,10 +184,14 @@ class FinanceServiceIT {
 
     @Test
     void processSeasonEndAwardsPrizeMoney() {
-        // Given a fresh career (prize money is awarded by final standing position in Catarinense)
+        // Given a fresh career. This test is about the money-transfer wiring -- balance moves,
+        // a PRIZE row is written, the date is stamped -- not about knockout classification, so
+        // it uses Serie B: a phase-less league whose final order is just its table. Pointing it
+        // at the Catarinense would ask processSeasonEnd to classify a bracket that this
+        // never-advanced career has not materialized, which now (correctly) throws.
         Career c = createCareer();
         Competition competition = competitionRepository.findBySaveGameId(c.id()).stream()
-                .filter(comp -> comp.getName().contains("Catarinense"))
+                .filter(comp -> comp.getName().contains("Série B"))
                 .findFirst().orElseThrow();
         BigDecimal managedBalanceBefore = clubRepository.findById(c.clubId()).orElseThrow().getBalance();
 

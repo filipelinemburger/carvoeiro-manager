@@ -306,10 +306,13 @@ public class FinanceService {
 
     /**
      * The final classification order for prize distribution: champion, runner-up, each knockout
-     * round's losers, then non-qualifiers. Falls back to the (first-phase, or whole-competition
-     * when phase-less) table order when there are no knockout phases, or — defensively, should
-     * not happen once the season is actually FINISHED — when a knockout phase exists but hasn't
-     * been materialized yet.
+     * round's losers, then non-qualifiers. A competition with no knockout phases returns its
+     * plain table order.
+     *
+     * <p>A declared knockout phase with no materialized fixtures is a bug, not a state to paper
+     * over: prize money is a real balance change, so paying out the table order instead would
+     * move money on a plausible-looking but wrong classification with nothing surfacing the
+     * fault. Fail loudly instead.
      */
     private List<UUID> finalClassificationOrder(List<CompetitionPhase> phases,
                                                  List<StandingRow> firstPhaseTable,
@@ -323,11 +326,12 @@ public class FinanceService {
         Map<UUID, List<Fixture>> fixturesByPhase = allFixtures.stream()
                 .filter(f -> f.getPhaseId() != null)
                 .collect(Collectors.groupingBy(Fixture::getPhaseId));
-        boolean allMaterialized = knockoutPhases.stream()
-                .allMatch(p -> !fixturesByPhase.getOrDefault(p.getId(), List.of()).isEmpty());
-        if (!allMaterialized) {
-            return firstPhaseTable.stream().map(StandingRow::clubId).toList();
-        }
+        knockoutPhases.stream()
+                .filter(p -> fixturesByPhase.getOrDefault(p.getId(), List.of()).isEmpty())
+                .findFirst()
+                .ifPresent(p -> { throw new IllegalStateException(
+                        "Knockout phase " + p.getName() + " (" + p.getId() + ") has no fixtures; "
+                        + "cannot compute a final classification for prize money"); });
         return FinalClassification.compute(firstPhaseTable, knockoutPhases, fixturesByPhase);
     }
 
