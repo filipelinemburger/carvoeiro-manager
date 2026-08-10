@@ -2,12 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Box, Stack, Typography, Button, Chip, Alert, LinearProgress, Tabs, Tab,
+  Box, Stack, Typography, Button, Alert, Tabs, Tab,
   Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
 } from '@mui/material'
 import { useAuth } from '../../auth/AuthContext'
-import { formatDatePtBR } from '../../utils/date'
-import { formatThousandsBR } from '../../lib/money'
 import {
   getLiveMatch, advanceLiveMatch, advanceToLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics,
 } from '../../api/liveMatch'
@@ -17,10 +15,11 @@ import { MatchActionsDialog } from './MatchActionsDialog'
 import type { SubPair } from './MatchActionsDialog'
 import { PlayerRatingsList } from './PlayerRatingsList'
 import { PreMatchLineups } from './PreMatchLineups'
+import { MatchScoreboard } from './MatchScoreboard'
+import { MatchInfoLine } from './MatchInfoLine'
 import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { WatchStar } from '../players/WatchStar'
-import { WeatherChip, type WeatherCondition } from '../../components/WeatherChip'
 
 /** Builds one side's pitch view-model from its live on-pitch roster. Module-scope (no
  * component state) so it's freely reusable for either side without a closure. */
@@ -254,10 +253,6 @@ export function LiveMatchPage() {
   const paused = state.status === 'PAUSED_INJURY' || state.status === 'PAUSED_RED'
   const halftime = state.status === 'HALF_TIME'
   const fullTime = state.status === 'FULL_TIME'
-  // A knockout decider level at 90' runs to 120', so the progress bar's denominator is not
-  // always 90. The state carries no finalMinute, so derive it: any minute past 90 (or an
-  // EXTRA_TIME status) means this match is running the full 120.
-  const clockEnd = state.status === 'EXTRA_TIME' || state.minute > 90 ? 120 : 90
   const feed = [...state.events].reverse()
   // Resume from a forced pause / half-time by advancing past it, then let the clock run.
   // Guarded at the source (mirroring skipTo's guard) so EVERY caller — "Continuar assim
@@ -271,28 +266,13 @@ export function LiveMatchPage() {
 
   return (
     <Box>
-      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 1 }}>
-        <Chip color="error" label="AO VIVO" size="small" />
-        <Typography sx={{ fontWeight: 700 }}>{state.minute}'</Typography>
-        <Typography sx={{ flex: 1, textAlign: 'center', fontFamily: 'monospace', fontSize: '1.1rem' }}>
-          {state.homeClubShortName} <strong>{state.homeGoals}</strong> — <strong>{state.awayGoals}</strong> {state.awayClubShortName}
-        </Typography>
-      </Stack>
-      <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          {state.competitionName}{state.round !== null ? ` · Rodada ${state.round + 1}` : ''}
-          {state.matchDate
-            ? ` · ${state.stadiumName ? `${state.stadiumName} · ` : ''}${formatDatePtBR(state.matchDate)}`
-            : ''}
-        </Typography>
-        <WeatherChip condition={state.weather as WeatherCondition | null} temperatureC={state.temperatureC} />
-        {state.attendance !== null && (
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            Público: {formatThousandsBR(state.attendance)}
-          </Typography>
-        )}
-      </Stack>
-      {!fullTime && <LinearProgress variant="determinate" value={(state.minute / clockEnd) * 100} sx={{ my: 1 }} />}
+      <MatchScoreboard
+        state={state}
+        onOwnClick={() => { setActionsTab(0); setActionsOpen(true) }}
+        // Task 11 wires the opponent scouting panel here; no-op for now.
+        onOpponentClick={() => {}}
+      />
+      <MatchInfoLine state={state} />
 
       {state.status === 'PAUSED_INJURY' && (
         <Alert severity="warning" sx={{ my: 1 }}>Lesão! Faça uma substituição ou continue.</Alert>
