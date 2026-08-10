@@ -392,10 +392,46 @@ a candidate with `currentClubName` renders the club chip, one without renders "L
 Filled in during implementation, one row per club, so the gaps left by §3.2 are auditable rather
 than invisible:
 
+✓ = confirmed with a source (recorded in §13); — = not confirmed, left open.
+
 | Clube | TECNICO | ASSISTENTE | PREP. FÍSICO | OLHEIRO | FISIOTERAPEUTA |
 |---|---|---|---|---|---|
-| Criciúma (CRI) | — (jogador) | Julio Cesar Schiavon | Juvenilson Souza | Davi Almeida | _(não confirmado)_ |
-| Demais 30 clubes | _(Task 3)_ | | | | |
+| Criciúma (CRI) | — (jogador) | ✓ | ✓ | ✓ | — |
+| América-MG (AME) | ✓ | — | — | — | — |
+| Atlético-GO (ATG) | ✓ | ✓ | — | — | ✓ |
+| Athletic (ATH) | ✓ | — | — | — | — |
+| Avaí (AVA) | ✓ | ✓ | ✓ | — | — |
+| Barra (BAR) | ✓ | — | ✓ | — | — |
+| Botafogo-SP (BOT) | ✓ | — | ✓ | ✓ | ✓ |
+| Brusque (BRU) | ✓ | — | — | — | — |
+| Camboriú (CAM) | — | — | — | — | — |
+| Carlos Renaux (CAR) | ✓ | — | ✓ | — | ✓ |
+| Ceará (CEA) | ✓ | ✓ | ✓ | ✓ | — |
+| Chapecoense (CHA) | ✓ | ✓ | ✓ | ✓ | — |
+| Concórdia (CON) | — | — | — | — | — |
+| CRB (CRB) | ✓ | ✓ | ✓ | — | — |
+| Cuiabá (CUI) | ✓ | ✓ | ✓ | — | — |
+| Figueirense (FIG) | ✓ | ✓ | ✓ | — | ✓ |
+| Fortaleza (FOR) | ✓ | ✓ | ✓ | — | — |
+| Goiás (GOI) | ✓ | ✓ | ✓ | ✓ | — |
+| Hercílio Luz (HER) | ✓ | ✓ | — | — | — |
+| Joinville (JOI) | ✓ | ✓ | — | — | — |
+| Juventude (JUV) | ✓ | — | ✓ | — | — |
+| Londrina (LON) | ✓ | ✓ | ✓ | — | — |
+| Marcílio Dias (MAR) | ✓ | ✓ | ✓ | — | — |
+| Náutico (NAU) | ✓ | ✓ | ✓ | — | — |
+| Novorizontino (NOV) | ✓ | ✓ | ✓ | ✓ | — |
+| Operário (OPE) | ✓ | ✓ | ✓ | — | — |
+| Ponte Preta (PPT) | ✓ | ✓ | — | — | — |
+| São Bernardo (SBE) | ✓ | — | — | — | — |
+| Santa Catarina (SCA) | ✓ | — | ✓ | — | — |
+| Sport (SPT) | ✓ | ✓ | ✓ | ✓ | — |
+| Vila Nova (VIL) | ✓ | ✓ | ✓ | ✓ | — |
+| **Total** | 28/31 | 20/31 | 21/31 | 8/31 | 4/31 |
+
+CON and Camboriú confirmed nothing citable for any role; both are entirely absent from
+`club-staff.json` (§4.1 — an absent club means every role is an open slot, so an empty array would
+be redundant).
 
 ## 12. Risks
 
@@ -448,3 +484,165 @@ Recorded per name during implementation, alongside the coverage table in §11.
   which the research rules (§4.2) forbid, so the role is left open for Criciúma.
 - **TECNICO — out of scope for CRI.** Eduardo Baptista is Criciúma's real head coach, but §5.2
   reserves the managed club's TECNICO slot for the player; no row is seeded.
+
+### América-MG (AME)
+
+- **Umberto Louzer — TECNICO.** [itatiaia.com.br](https://www.itatiaia.com.br/esportes/futebol/futebol-nacional/futebol-mineiro/america/america-apresenta-umberto-louzer-como-novo-tecnico-olhar-daqui-para-frente/)
+
+### Atlético-GO (ATG)
+
+- **Roger Silva — TECNICO.** [futebolinterior.com.br](https://www.futebolinterior.com.br/serie-b-atletico-go-fecha-com-roger-silva-como-novo-treinador/)
+- **Renan Brito — ASSISTENTE.** [futebolinterior.com.br](https://www.futebolinterior.com.br/serie-b-atletico-go-fecha-com-roger-silva-como-novo-treinador/)
+- **Gustavo Ignácio — FISIOTERAPEUTA.** [atleticogoianiense.com.br](https://www.atleticogoianiense.com.br/futebol/profissional.html)
+
+### Athletic (ATH)
+
+- **Alex de Souza — TECNICO.** [ge.globo.com](https://ge.globo.com/mg/zona-da-mata-centro-oeste/futebol/noticia/2026/02/21/athletic-anuncia-alex-como-novo-tecnico.ghtml)
+
+### Avaí (AVA)
+
+- **Allan Aal — TECNICO.** [avai.com.br](https://avai.com.br/allan-aal-e-o-novo-tecnico-do-avai/)
+- **Anderson Valiñas — ASSISTENTE.** [avai.com.br](https://avai.com.br/allan-aal-e-o-novo-tecnico-do-avai/)
+- **Leo Almeida — PREPARADOR_FISICO.** [ogol.com.br](https://www.ogol.com.br/treinador/leo-almeida/40386)
+
+### Barra (BAR)
+
+- **Evaristo Piza — TECNICO.** [barrafc.com.br](https://www.barrafc.com.br/post/evaristo-piza-é-o-novo-treinador-do-barra-fc)
+- **Anderson de Lazari — PREPARADOR_FISICO.** [ge.globo.com](https://ge.globo.com/sc/futebol/times/barra-sc/noticia/2026/06/30/barra-anuncia-retorno-de-preparador-fisico-da-campanha-do-titulo-da-serie-d.ghtml)
+
+### Botafogo-SP (BOT)
+
+- **Cláudio Tencati — TECNICO.** [botafogofutebolsa.com.br](https://botafogofutebolsa.com.br/futebolprofissional/)
+- **Jackson Schwengber — PREPARADOR_FISICO.** [rastro101.com.br](https://www.rastro101.com.br/noticia/59782/botafogo-sp-muda-comissao-tecnica-e-cria-departamentos-para-2026)
+- **Tiago Rocha — FISIOTERAPEUTA.** [rastro101.com.br](https://www.rastro101.com.br/noticia/59782/botafogo-sp-muda-comissao-tecnica-e-cria-departamentos-para-2026)
+- **Caio Felipe — OLHEIRO.** [botafogofutebolsa.com.br](https://botafogofutebolsa.com.br/futebolprofissional/)
+
+### Brusque (BRU)
+
+- **Higo Magalhães — TECNICO.** [esportesc.com.br](https://www.esportesc.com.br/brusque-recebe-o-figueirense-no-augusto-bauer-nesta-segunda-6-pela-serie-c-veja-as-informacoes-da-partida/)
+
+### Carlos Renaux (CAR)
+
+- **André Horta — TECNICO.** [omunicipio.com.br](https://omunicipio.com.br/futebol/jovem-tecnico-segue-trabalhando-no-carlos-renaux-apesar-de-sondagem-de-time-da-serie-c/)
+- **Oclébio Antônio da Silva Filho — PREPARADOR_FISICO.** [instagram.com](https://www.instagram.com/p/DUQHcTLDVor/)
+- **Otávio Mansur — FISIOTERAPEUTA.** [instagram.com](https://www.instagram.com/p/DR5NNPnkqGE/)
+
+### Ceará (CEA)
+
+- **Daniel Paulista — TECNICO.** [ne45.com.br](https://ne45.com.br/2026/08/08/daniel-reconhece-dificuldades-ceara/)
+- **Daniel Cerqueira — ASSISTENTE.** [ne45.com.br](https://ne45.com.br/2026/06/25/ceara-oficializa-daniel-paulista/)
+- **Rodolfo Mancha — PREPARADOR_FISICO.** [ne45.com.br](https://ne45.com.br/2026/06/25/ceara-oficializa-daniel-paulista/)
+- **Rennato Bennata — OLHEIRO.** [diariodonordeste.verdesmares.com.br](https://diariodonordeste.verdesmares.com.br/jogada/analista-da-cbf-academy-rennato-bennata-assume-coordenacao-de-desempenho-e-mercado-do-ceara-1.3758206)
+
+### Chapecoense (CHA)
+
+- **Rafael Lacerda — TECNICO.** [chapecoense.com](https://chapecoense.com/2026/05/30/fechado-com-a-chape-rafael-lacerda-e-o-novo-tecnico-da-chapecoense/)
+- **Rodrigo Vicenzi Casarin — ASSISTENTE.** [chapecoense.com](https://chapecoense.com/2026/06/24/chapecoense-contrata-rodrigo-casarin-e-mateus-dariva-para-integrar-a-comissao-tecnica-do-clube/)
+- **Glydiston Ananias — PREPARADOR_FISICO.** [chapecoense.com](https://chapecoense.com/2026/06/01/chapecoense-contrata-o-preparador-fisico-glydiston-ananias/)
+- **Enory Martins — OLHEIRO.** [chapecoense.com](https://chapecoense.com/2025/12/11/enory-martins-e-o-novo-analista-de-mercado-da-chapecoense/)
+
+### CRB (CRB)
+
+- **Fábio Matias — TECNICO.** [alagoas24horas.com.br](https://www.alagoas24horas.com.br/1748790/fabio-matias-comanda-primeiro-treinamento-no-ct-ninho-do-galo/)
+- **Lucas Batista — ASSISTENTE.** [tribunahoje.com](https://tribunahoje.com/noticias/esportes/2026/07/23/189694-crb-confirma-saida-de-felipe-lucena-da-comissao-tecnica)
+- **Felippe Capella — PREPARADOR_FISICO.** [alagoas24horas.com.br](https://www.alagoas24horas.com.br/1748790/fabio-matias-comanda-primeiro-treinamento-no-ct-ninho-do-galo/)
+
+### Cuiabá (CUI)
+
+- **Eduardo Barros — TECNICO.** [folhamax.com](https://folhamax.com/esporte/cuiaba-renova-contrato-com-tecnico/524553)
+- **Nei Silva — ASSISTENTE.** [esportemt.com.br](https://esportemt.com.br/noticia/cuiaba-acerta-retorno-de-ex-lateral-com-passagem-por-vasco-e-internacional-como-auxiliar-09-04-2026)
+- **Jean Carlo Freitas — PREPARADOR_FISICO.** [cuiabaesporteclube.com.br](https://www.cuiabaesporteclube.com.br/futebol/5/time-profissional/)
+
+### Figueirense (FIG)
+
+- **Raul Cabral — TECNICO.** [nsctotal.com.br](https://www.nsctotal.com.br/noticias/figueirense-oficializa-contratacao-do-tecnico-raul-cabral)
+- **André Walter — ASSISTENTE.** [instagram.com](https://www.instagram.com/p/DXMj3frDnxH/)
+- **George Castilhos — PREPARADOR_FISICO.** [polidorojunior.com.br](https://polidorojunior.com.br/de-malas-prontas-preparador-fisico-multicampeao-no-brusque-esta-acertado-com-o-figueirense/)
+- **Rodrigo Reis Rodrigues — FISIOTERAPEUTA.** [figueirense.com.br](https://figueirense.com.br/futebol/comissao-tecnica-elenco-profissional/)
+
+### Fortaleza (FOR)
+
+- **Paulo Autuori — TECNICO.** [fortaleza1918.com.br](https://fortaleza1918.com.br/paulo-autuori-e-o-novo-tecnico-do-fortaleza/)
+- **Bernardo Franco — ASSISTENTE.** [fortaleza1918.com.br](https://fortaleza1918.com.br/paulo-autuori-e-o-novo-tecnico-do-fortaleza/)
+- **Fábio Eiras — PREPARADOR_FISICO.** [fortaleza1918.com.br](https://fortaleza1918.com.br/paulo-autuori-e-o-novo-tecnico-do-fortaleza/)
+
+### Goiás (GOI)
+
+- **Mozart Santos — TECNICO.** [goiasec.com.br](https://www.goiasec.com.br/noticias/mozart-e-o-novo-treinador-do-goias-esporte-clube)
+- **Denis Iwamura — ASSISTENTE.** [goiasec.com.br](https://www.goiasec.com.br/noticias/mozart-e-o-novo-treinador-do-goias-esporte-clube)
+- **Edu Brasil — PREPARADOR_FISICO.** [goiasec.com.br](https://www.goiasec.com.br/noticias/mozart-e-o-novo-treinador-do-goias-esporte-clube)
+- **Mariel Mees — OLHEIRO.** [goiasec.com.br](https://www.goiasec.com.br/perfil/comissao-tecnica)
+
+### Hercílio Luz (HER)
+
+- **Rogério Corrêa — TECNICO.** [sulagora.com.br](https://sulagora.com.br/esportes/hercilio-luz-renova-com-tecnico-e-diretor-executivo-apos-titulo-da-serie-b-25216)
+- **Vinícius do Valle — ASSISTENTE.** [sctd.com.br](https://sctd.com.br/blogs/caio-maximiano/hercilio-luz-acerta-com-auxiliar-tecnico-e-preparador-de-goleiros-para-a-serie-b/)
+
+### Joinville (JOI)
+
+- **Diego Souza — TECNICO.** [jec.com.br](https://jec.com.br/diego-souza-inicia-trabalho-no-jec/)
+- **Raphael Bahia — ASSISTENTE.** [jec.com.br](https://jec.com.br/jec-report-22a-edicao-31-de-julho-a-06-de-agosto-de-2026/)
+
+### Juventude (JUV)
+
+- **Maurício Barbieri — TECNICO.** [juventude.com.br](https://www.juventude.com.br/blog/mauricio-barbieri-e-do-verdao-juventude-confirma-contratacao-do-treinador-para-temporada-2026)
+- **Gustavo Araújo — PREPARADOR_FISICO.** [juventude.com.br](https://www.juventude.com.br/plantel/profissional)
+
+### Londrina (LON)
+
+- **Rogério Micale — TECNICO.** [folhadelondrina.com.br](https://www.folhadelondrina.com.br/esporte/londrina-esporte-clube/micale-ajusta-modelo-do-londrina-para-buscar-reacao-na-serie-b-3316589e.html)
+- **Daniel Azambuja — ASSISTENTE.** [londrinasaf.com.br](https://www.londrinasaf.com.br/futebol/principal/equipe)
+- **Guilherme Strass Miatto — PREPARADOR_FISICO.** [londrinasaf.com.br](https://www.londrinasaf.com.br/futebol/principal/equipe)
+
+### Marcílio Dias (MAR)
+
+- **Lúcio Flávio — TECNICO.** [marciliodias.com.br](https://marciliodias.com.br/elenco.php)
+- **Chiquinho Lima — ASSISTENTE.** [marciliodias.com.br](https://marciliodias.com.br/elenco.php)
+- **Agenor Junqueira — PREPARADOR_FISICO.** [marciliodias.com.br](https://marciliodias.com.br/elenco.php)
+
+### Náutico (NAU)
+
+- **Hélio dos Anjos — TECNICO.** [pt.wikipedia.org](https://pt.wikipedia.org/wiki/H%C3%A9lio_dos_Anjos)
+- **Robinho — ASSISTENTE.** [ne45.com.br](https://ne45.com.br/2025/12/22/com-robinho-ex-cruzeiro-nautico-anuncia-reforcos-para-sua-comissao-tecnica/)
+- **Thomaz Lucena — PREPARADOR_FISICO.** [diariodepernambuco.com.br](https://www.diariodepernambuco.com.br/esportes-dp/nautico/2025/12/11703788-preparador-fisico-do-nautico-avalia-elenco-durante-a-pre-temporada-para-2026.html)
+
+### Novorizontino (NOV)
+
+- **Enderson Moreira — TECNICO.** [gremionovorizontino.com.br](https://www.gremionovorizontino.com.br/2025/08/27/novorizontino-apresenta-tecnico-enderson-moreira-em-busca-do-acesso-ao-brasileirao/)
+- **Luís Fernando Flores — ASSISTENTE.** [gremionovorizontino.com.br](https://www.gremionovorizontino.com.br/2025/08/27/novorizontino-apresenta-tecnico-enderson-moreira-em-busca-do-acesso-ao-brasileirao/)
+- **Gerson Rocha — PREPARADOR_FISICO.** [gremionovorizontino.com.br](https://www.gremionovorizontino.com.br/2025/08/27/novorizontino-apresenta-tecnico-enderson-moreira-em-busca-do-acesso-ao-brasileirao/)
+- **Ricardo Leite — OLHEIRO.** [gremionovorizontino.com.br](https://www.gremionovorizontino.com.br/comissao-tecnica/)
+
+### Operário (OPE)
+
+- **Luizinho Lopes — TECNICO.** [arede.info](https://arede.info/jornaldamanha/esporte/663964/operario-ferroviario-mantem-foco-e-sonha-com-acesso-a-serie-a)
+- **Róbson Agondi — ASSISTENTE.** [ogol.com.br](https://www.ogol.com.br/treinador/robson-agondi/44869)
+- **Hugo Paulista — PREPARADOR_FISICO.** [blogdodoc.com](https://blogdodoc.com/2026/07/13/hugo-paulista-e-o-novo-preparador-fisico-da-equipe-profissional-do-fantasma)
+
+### Ponte Preta (PPT)
+
+- **Márcio Zanardi — TECNICO.** [ge.globo.com](https://ge.globo.com/sp/campinas-e-regiao/futebol/times/ponte-preta/noticia/2026/06/12/da-crise-financeira-a-luta-contra-a-degola-zanardi-trata-a-ponte-como-grande-desafio.ghtml)
+- **Caco Espinosa — ASSISTENTE.** [ge.globo.com](https://ge.globo.com/sp/campinas-e-regiao/futebol/times/ponte-preta/noticia/2026/06/12/da-crise-financeira-a-luta-contra-a-degola-zanardi-trata-a-ponte-como-grande-desafio.ghtml)
+
+### São Bernardo (SBE)
+
+- **Vinícius Bergantin — TECNICO.** [abcreporter.com.br](https://abcreporter.com.br/2026/08/04/sao-bernardo-fc-anuncia-vinicius-bergantin-como-novo-treinador/)
+
+### Santa Catarina (SCA)
+
+- **Jordã Rodrigues — TECNICO.** [gcd.com.br](https://www.gcd.com.br/esporte/santa-catarina-clube-confirma-comissao-tecnica-para-a-copa-santa-catarina/)
+- **Sérgio Scur — PREPARADOR_FISICO.** [gcd.com.br](https://www.gcd.com.br/esporte/santa-catarina-clube-confirma-comissao-tecnica-para-a-copa-santa-catarina/)
+
+### Sport (SPT)
+
+- **Gilmar Dal Pozzo — TECNICO.** [sportrecife.com.br](https://sportrecife.com.br/futebol/gilmar-dal-pozzo-e-o-novo-tecnico-do-sport/)
+- **Emerson Nunes — ASSISTENTE.** [sportrecife.com.br](https://sportrecife.com.br/futebol/dal-pozzo-desembarca-no-recife-para-comandar-o-sport-sensacao-de-felicidade/)
+- **Leandro Duda — PREPARADOR_FISICO.** [sportrecife.com.br](https://sportrecife.com.br/staff/leandro-duda/)
+- **Arthur Alecrim — OLHEIRO.** [sportrecife.com.br](https://sportrecife.com.br/staff/arthur-alecrim/)
+
+### Vila Nova (VIL)
+
+- **Guto Ferreira — TECNICO.** [vilanovafc.com.br](https://www.vilanovafc.com.br/comissao-tecnica)
+- **Juca Antonello — ASSISTENTE.** [esportegoiano.com.br](https://esportegoiano.com.br/auxiliar-guto-ferreira-destaca-entrega-vila-serie-b-elenco-tem-garra/)
+- **Jorge Soter — PREPARADOR_FISICO.** [ohoje.com](https://ohoje.com/2026/03/22/vila-nova-anuncia-guto-ferreira-para-tecnico/)
+- **Iury Aguiar — OLHEIRO.** [vilanovafc.com.br](https://www.vilanovafc.com.br/comissao-tecnica)

@@ -6,5 +6,223 @@
       { "name": "Juvenilson Souza", "role": "PREPARADOR_FISICO", "primaryAttribute": 17, "secondaryAttribute": 16 },
       { "name": "Davi Almeida", "role": "OLHEIRO", "primaryAttribute": 14, "secondaryAttribute": 13 }
     ]
+  },
+  {
+    "clubShortName": "AME",
+    "staff": [
+      { "name": "Umberto Louzer", "role": "TECNICO", "primaryAttribute": 15, "secondaryAttribute": 14 }
+    ]
+  },
+  {
+    "clubShortName": "ATG",
+    "staff": [
+      { "name": "Roger Silva", "role": "TECNICO", "primaryAttribute": 12, "secondaryAttribute": 11 },
+      { "name": "Renan Brito", "role": "ASSISTENTE", "primaryAttribute": 14, "secondaryAttribute": 13 },
+      { "name": "Gustavo Ignácio", "role": "FISIOTERAPEUTA", "primaryAttribute": 13, "secondaryAttribute": 12 }
+    ]
+  },
+  {
+    "clubShortName": "ATH",
+    "staff": [
+      { "name": "Alex de Souza", "role": "TECNICO", "primaryAttribute": 13, "secondaryAttribute": 12 }
+    ]
+  },
+  {
+    "clubShortName": "AVA",
+    "staff": [
+      { "name": "Allan Aal", "role": "TECNICO", "primaryAttribute": 15, "secondaryAttribute": 14 },
+      { "name": "Anderson Valiñas", "role": "ASSISTENTE", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Leo Almeida", "role": "PREPARADOR_FISICO", "primaryAttribute": 15, "secondaryAttribute": 14 }
+    ]
+  },
+  {
+    "clubShortName": "BAR",
+    "staff": [
+      { "name": "Evaristo Piza", "role": "TECNICO", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Anderson de Lazari", "role": "PREPARADOR_FISICO", "primaryAttribute": 12, "secondaryAttribute": 11 }
+    ]
+  },
+  {
+    "clubShortName": "BOT",
+    "staff": [
+      { "name": "Cláudio Tencati", "role": "TECNICO", "primaryAttribute": 16, "secondaryAttribute": 15 },
+      { "name": "Jackson Schwengber", "role": "PREPARADOR_FISICO", "primaryAttribute": 14, "secondaryAttribute": 13 },
+      { "name": "Tiago Rocha", "role": "FISIOTERAPEUTA", "primaryAttribute": 14, "secondaryAttribute": 13 },
+      { "name": "Caio Felipe", "role": "OLHEIRO", "primaryAttribute": 13, "secondaryAttribute": 12 }
+    ]
+  },
+  {
+    "clubShortName": "BRU",
+    "staff": [
+      { "name": "Higo Magalhães", "role": "TECNICO", "primaryAttribute": 13, "secondaryAttribute": 12 }
+    ]
+  },
+  {
+    "clubShortName": "CAR",
+    "staff": [
+      { "name": "André Horta", "role": "TECNICO", "primaryAttribute": 10, "secondaryAttribute": 9 },
+      { "name": "Oclébio Antônio da Silva Filho", "role": "PREPARADOR_FISICO", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Otávio Mansur", "role": "FISIOTERAPEUTA", "primaryAttribute": 11, "secondaryAttribute": 10 }
+    ]
+  },
+  {
+    "clubShortName": "CEA",
+    "staff": [
+      { "name": "Daniel Paulista", "role": "TECNICO", "primaryAttribute": 14, "secondaryAttribute": 13 },
+      { "name": "Daniel Cerqueira", "role": "ASSISTENTE", "primaryAttribute": 15, "secondaryAttribute": 14 },
+      { "name": "Rodolfo Mancha", "role": "PREPARADOR_FISICO", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Rennato Bennata", "role": "OLHEIRO", "primaryAttribute": 14, "secondaryAttribute": 13 }
+    ]
+  },
+  {
+    "clubShortName": "CHA",
+    "staff": [
+      { "name": "Rafael Lacerda", "role": "TECNICO", "primaryAttribute": 14, "secondaryAttribute": 13 },
+      { "name": "Rodrigo Vicenzi Casarin", "role": "ASSISTENTE", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Glydiston Ananias", "role": "PREPARADOR_FISICO", "primaryAttribute": 14, "secondaryAttribute": 13 },
+      { "name": "Enory Martins", "role": "OLHEIRO", "primaryAttribute": 13, "secondaryAttribute": 12 }
+    ]
+  },
+  {
+    "clubShortName": "CRB",
+    "staff": [
+      { "name": "Fábio Matias", "role": "TECNICO", "primaryAttribute": 15, "secondaryAttribute": 14 },
+      { "name": "Lucas Batista", "role": "ASSISTENTE", "primaryAttribute": 14, "secondaryAttribute": 13 },
+      { "name": "Felippe Capella", "role": "PREPARADOR_FISICO", "primaryAttribute": 15, "secondaryAttribute": 14 }
+    ]
+  },
+  {
+    "clubShortName": "CUI",
+    "staff": [
+      { "name": "Eduardo Barros", "role": "TECNICO", "primaryAttribute": 12, "secondaryAttribute": 11 },
+      { "name": "Nei Silva", "role": "ASSISTENTE", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Jean Carlo Freitas", "role": "PREPARADOR_FISICO", "primaryAttribute": 13, "secondaryAttribute": 12 }
+    ]
+  },
+  {
+    "clubShortName": "FIG",
+    "staff": [
+      { "name": "Raul Cabral", "role": "TECNICO", "primaryAttribute": 12, "secondaryAttribute": 11 },
+      { "name": "André Walter", "role": "ASSISTENTE", "primaryAttribute": 11, "secondaryAttribute": 10 },
+      { "name": "George Castilhos", "role": "PREPARADOR_FISICO", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Rodrigo Reis Rodrigues", "role": "FISIOTERAPEUTA", "primaryAttribute": 14, "secondaryAttribute": 13 }
+    ]
+  },
+  {
+    "clubShortName": "FOR",
+    "staff": [
+      { "name": "Paulo Autuori", "role": "TECNICO", "primaryAttribute": 16, "secondaryAttribute": 15 },
+      { "name": "Bernardo Franco", "role": "ASSISTENTE", "primaryAttribute": 14, "secondaryAttribute": 13 },
+      { "name": "Fábio Eiras", "role": "PREPARADOR_FISICO", "primaryAttribute": 13, "secondaryAttribute": 12 }
+    ]
+  },
+  {
+    "clubShortName": "GOI",
+    "staff": [
+      { "name": "Mozart Santos", "role": "TECNICO", "primaryAttribute": 15, "secondaryAttribute": 14 },
+      { "name": "Denis Iwamura", "role": "ASSISTENTE", "primaryAttribute": 14, "secondaryAttribute": 13 },
+      { "name": "Edu Brasil", "role": "PREPARADOR_FISICO", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Mariel Mees", "role": "OLHEIRO", "primaryAttribute": 13, "secondaryAttribute": 12 }
+    ]
+  },
+  {
+    "clubShortName": "HER",
+    "staff": [
+      { "name": "Rogério Corrêa", "role": "TECNICO", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Vinícius do Valle", "role": "ASSISTENTE", "primaryAttribute": 11, "secondaryAttribute": 10 }
+    ]
+  },
+  {
+    "clubShortName": "JOI",
+    "staff": [
+      { "name": "Diego Souza", "role": "TECNICO", "primaryAttribute": 10, "secondaryAttribute": 9 },
+      { "name": "Raphael Bahia", "role": "ASSISTENTE", "primaryAttribute": 11, "secondaryAttribute": 10 }
+    ]
+  },
+  {
+    "clubShortName": "JUV",
+    "staff": [
+      { "name": "Maurício Barbieri", "role": "TECNICO", "primaryAttribute": 15, "secondaryAttribute": 14 },
+      { "name": "Gustavo Araújo", "role": "PREPARADOR_FISICO", "primaryAttribute": 13, "secondaryAttribute": 13 }
+    ]
+  },
+  {
+    "clubShortName": "LON",
+    "staff": [
+      { "name": "Rogério Micale", "role": "TECNICO", "primaryAttribute": 16, "secondaryAttribute": 15 },
+      { "name": "Daniel Azambuja", "role": "ASSISTENTE", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Guilherme Strass Miatto", "role": "PREPARADOR_FISICO", "primaryAttribute": 13, "secondaryAttribute": 12 }
+    ]
+  },
+  {
+    "clubShortName": "MAR",
+    "staff": [
+      { "name": "Lúcio Flávio", "role": "TECNICO", "primaryAttribute": 12, "secondaryAttribute": 11 },
+      { "name": "Chiquinho Lima", "role": "ASSISTENTE", "primaryAttribute": 11, "secondaryAttribute": 10 },
+      { "name": "Agenor Junqueira", "role": "PREPARADOR_FISICO", "primaryAttribute": 11, "secondaryAttribute": 10 }
+    ]
+  },
+  {
+    "clubShortName": "NAU",
+    "staff": [
+      { "name": "Hélio dos Anjos", "role": "TECNICO", "primaryAttribute": 16, "secondaryAttribute": 15 },
+      { "name": "Robinho", "role": "ASSISTENTE", "primaryAttribute": 12, "secondaryAttribute": 11 },
+      { "name": "Thomaz Lucena", "role": "PREPARADOR_FISICO", "primaryAttribute": 13, "secondaryAttribute": 12 }
+    ]
+  },
+  {
+    "clubShortName": "NOV",
+    "staff": [
+      { "name": "Enderson Moreira", "role": "TECNICO", "primaryAttribute": 16, "secondaryAttribute": 15 },
+      { "name": "Luís Fernando Flores", "role": "ASSISTENTE", "primaryAttribute": 15, "secondaryAttribute": 14 },
+      { "name": "Gerson Rocha", "role": "PREPARADOR_FISICO", "primaryAttribute": 14, "secondaryAttribute": 13 },
+      { "name": "Ricardo Leite", "role": "OLHEIRO", "primaryAttribute": 13, "secondaryAttribute": 12 }
+    ]
+  },
+  {
+    "clubShortName": "OPE",
+    "staff": [
+      { "name": "Luizinho Lopes", "role": "TECNICO", "primaryAttribute": 14, "secondaryAttribute": 13 },
+      { "name": "Róbson Agondi", "role": "ASSISTENTE", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Hugo Paulista", "role": "PREPARADOR_FISICO", "primaryAttribute": 15, "secondaryAttribute": 14 }
+    ]
+  },
+  {
+    "clubShortName": "PPT",
+    "staff": [
+      { "name": "Márcio Zanardi", "role": "TECNICO", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Caco Espinosa", "role": "ASSISTENTE", "primaryAttribute": 13, "secondaryAttribute": 12 }
+    ]
+  },
+  {
+    "clubShortName": "SBE",
+    "staff": [
+      { "name": "Vinícius Bergantin", "role": "TECNICO", "primaryAttribute": 14, "secondaryAttribute": 13 }
+    ]
+  },
+  {
+    "clubShortName": "SCA",
+    "staff": [
+      { "name": "Jordã Rodrigues", "role": "TECNICO", "primaryAttribute": 11, "secondaryAttribute": 11 },
+      { "name": "Sérgio Scur", "role": "PREPARADOR_FISICO", "primaryAttribute": 11, "secondaryAttribute": 11 }
+    ]
+  },
+  {
+    "clubShortName": "SPT",
+    "staff": [
+      { "name": "Gilmar Dal Pozzo", "role": "TECNICO", "primaryAttribute": 15, "secondaryAttribute": 14 },
+      { "name": "Emerson Nunes", "role": "ASSISTENTE", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Leandro Duda", "role": "PREPARADOR_FISICO", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Arthur Alecrim", "role": "OLHEIRO", "primaryAttribute": 13, "secondaryAttribute": 12 }
+    ]
+  },
+  {
+    "clubShortName": "VIL",
+    "staff": [
+      { "name": "Guto Ferreira", "role": "TECNICO", "primaryAttribute": 16, "secondaryAttribute": 15 },
+      { "name": "Juca Antonello", "role": "ASSISTENTE", "primaryAttribute": 13, "secondaryAttribute": 12 },
+      { "name": "Jorge Soter", "role": "PREPARADOR_FISICO", "primaryAttribute": 15, "secondaryAttribute": 14 },
+      { "name": "Iury Aguiar", "role": "OLHEIRO", "primaryAttribute": 13, "secondaryAttribute": 12 }
+    ]
   }
 ]
