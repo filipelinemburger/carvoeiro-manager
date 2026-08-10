@@ -845,6 +845,25 @@ export type ParallelScore = {
   awayGoals: number
 }
 
+export type TeamStats = {
+  possession: number
+  shots: number
+  shotsOnTarget: number
+  saves: number
+  corners: number
+  offsides: number
+  fouls: number
+  yellowCards: number
+  redCards: number
+}
+
+/**
+ * Mirrors the backend `MatchStats` record exactly: **home/away oriented, not
+ * managed/opponent** — like `homeGoals`/`awayGoals` and `homeClubColors`/`awayClubColors`.
+ * Nothing flips it based on `managedIsHome`.
+ */
+export type MatchStats = { home: TeamStats; away: TeamStats }
+
 export type LiveMatchState = {
   fixtureId: string
   competitionName: string | null
@@ -877,6 +896,7 @@ export type LiveMatchState = {
   weather: string | null
   temperatureC: number | null
   attendance: number | null
+  stats: MatchStats
 }
 
 export type SubstituteRequest = { outPlayerId: string; inPlayerId: string }
