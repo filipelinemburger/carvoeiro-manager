@@ -221,6 +221,55 @@ class LiveMatchEngineTest {
     }
 
     @Test
+    void eventsAreByteIdenticalAfterTheStatsStreamWasAdded() {
+        // Full-event-list byte-identity golden — unlike allMistoGoalAttributionMatchesTheGoldenBaseline
+        // (goals only), this one covers every event type a new RNG stream could leak into: cards,
+        // substitutions, fouls, tactics changes and chances, in addition to goals. Per Task 2 brief
+        // step 6a, this was pinned on the engine BEFORE the statsRng stream existed, then re-confirmed
+        // unchanged immediately after wiring it in. If this ever needs its golden value edited, that
+        // means the stats stream is drawing from an existing RNG stream — find the leak, don't touch
+        // the golden.
+        List<LiveSub> subs = List.of(new LiveSub(60, true, homeXi.get(5).getId(), homeBench.get(0).getId()));
+        List<TimedTactics> tactics = List.of(
+                new TimedTactics(30, true, Mentality.ATTACKING, null, null, Pressing.HIGH, Marking.ZONAL, "4-3-3"));
+        LiveMatchConfig cfg = config(555L, subs, tactics);
+        LiveTimeline t = engine.simulate(cfg);
+
+        List<Player> homePool = new ArrayList<>(homeXi);
+        homePool.addAll(homeBench);
+
+        assertThat(fullEventSignature(t, homePool, awayXi)).isEqualTo(
+                "1:H:FOUL:7|1:A:CHANCE:5|4:H:YELLOW_CARD:9|4:H:CHANCE:1|5:H:FOUL:3|5:A:FOUL:10|6:H:FOUL:3"
+                        + "|9:A:INJURY:0|10:A:YELLOW_CARD:10|11:H:FOUL:4|11:A:CHANCE:9|12:H:FOUL:7|12:H:CHANCE:7"
+                        + "|13:A:FOUL:3|13:H:CHANCE:7|19:H:CHANCE:9|25:H:RED_CARD:8|25:A:CHANCE:10"
+                        + "|30:H:TACTICS_CHANGE:0|30:A:FOUL:10|30:H:CHANCE:9|32:H:FOUL:0|33:A:FOUL:0"
+                        + "|33:H:CHANCE:10|34:H:GOAL:10|34:A:FOUL:1|37:H:YELLOW_CARD:3|38:H:CHANCE:9|39:H:GOAL:10"
+                        + "|41:H:FOUL:3|41:A:FOUL:7|43:A:YELLOW_CARD:5|43:H:FOUL:3|43:A:CHANCE:9|44:H:FOUL:2"
+                        + "|45:A:GOAL:8|45:H:FOUL:7|45:H:HALF_TIME:0|46:A:FOUL:6|47:H:FOUL:0|47:A:FOUL:0"
+                        + "|50:H:FOUL:2|54:A:FOUL:9|57:H:FOUL:9|58:A:CHANCE:8|60:H:SUBSTITUTION:5|62:H:FOUL:3"
+                        + "|62:A:FOUL:6|63:A:CHANCE:5|64:H:FOUL:6|66:A:CHANCE:10|66:H:INJURY:2|68:H:FOUL:11"
+                        + "|69:A:CHANCE:7|72:A:CHANCE:10|73:H:FOUL:1|78:H:FOUL:3|78:H:CHANCE:9|79:A:FOUL:3"
+                        + "|86:A:FOUL:8|86:A:CHANCE:8|90:H:FOUL:10");
+    }
+
+    /**
+     * A compact, UUID-independent signature of the FULL event list (every type, not just goals):
+     * {@code minute:side:type:playerIdx} joined by {@code |}, where {@code playerIdx} is the
+     * event's {@code playerId}'s position within its side's XI+bench pool (stable for a fixed seed
+     * regardless of the random UUIDs). {@code -} means a null playerId, {@code ?} means not found
+     * in the pool.
+     */
+    private String fullEventSignature(LiveTimeline t, List<Player> homePool, List<Player> awayPool) {
+        return t.events().stream()
+                .map(e -> {
+                    List<Player> pool = e.home() ? homePool : awayPool;
+                    return e.minute() + ":" + (e.home() ? "H" : "A") + ":" + e.type().name()
+                            + ":" + indexOf(pool, e.playerId());
+                })
+                .collect(java.util.stream.Collectors.joining("|"));
+    }
+
+    @Test
     void foulsOccurAtARealisticPerTeamRateAndAreNeverAttributedToAnEmptyPitch() {
         // ~10-13 fouls per team per match; sample many seeds and check the per-seed average
         // lands in a broad realistic band (loose bounds — this is a calibration sanity check,
@@ -925,5 +974,173 @@ class LiveMatchEngineTest {
             assertThat(t.finalMinute()).as("seed %d", seed).isEqualTo(90);
             assertThat(t.events()).noneMatch(e -> e.type() == EventType.EXTRA_TIME_START);
         }
+    }
+
+    // --- Match statistics (statsRng) ----------------------------------------------------------
+
+    @Test
+    void statsAreDeterministicForAFixedSeed() {
+        LiveMatchConfig cfg = config(1234L, List.of());
+        LiveTimeline a = engine.simulate(cfg);
+        LiveTimeline b = engine.simulate(cfg);
+        assertThat(a.minuteStats()).isEqualTo(b.minuteStats());
+    }
+
+    @Test
+    void statsInvariantsHoldAtEveryRevealedMinute() {
+        // Over many seeds and every revealed minute, statsThrough's structural invariants must
+        // hold and every counter (other than possession, which is an average, not a running total)
+        // must be monotonically non-decreasing as more of the match is revealed.
+        for (long seed = 0; seed < 100; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            TeamStats prevHome = t.statsThrough(0).home();
+            TeamStats prevAway = t.statsThrough(0).away();
+            for (int minute = 0; minute <= t.finalMinute(); minute++) {
+                MatchStats stats = t.statsThrough(minute);
+                TeamStats homeStats = stats.home();
+                TeamStats awayStats = stats.away();
+                String ctx = "seed " + seed + " minute " + minute;
+
+                assertThat(homeStats.shots()).as(ctx + ": home shots >= shotsOnTarget")
+                        .isGreaterThanOrEqualTo(homeStats.shotsOnTarget());
+                assertThat(awayStats.shots()).as(ctx + ": away shots >= shotsOnTarget")
+                        .isGreaterThanOrEqualTo(awayStats.shotsOnTarget());
+                assertThat(homeStats.shotsOnTarget()).as(ctx + ": home shotsOnTarget >= goals")
+                        .isGreaterThanOrEqualTo(t.homeGoalsAt(minute));
+                assertThat(awayStats.shotsOnTarget()).as(ctx + ": away shotsOnTarget >= goals")
+                        .isGreaterThanOrEqualTo(t.awayGoalsAt(minute));
+                assertThat(homeStats.corners()).as(ctx + ": home corners >= cornerGoals")
+                        .isGreaterThanOrEqualTo(countEvents(t, minute, EventType.CORNER_GOAL, true));
+                assertThat(awayStats.corners()).as(ctx + ": away corners >= cornerGoals")
+                        .isGreaterThanOrEqualTo(countEvents(t, minute, EventType.CORNER_GOAL, false));
+                assertThat(homeStats.saves()).as(ctx + ": home saves >= 0").isGreaterThanOrEqualTo(0);
+                assertThat(awayStats.saves()).as(ctx + ": away saves >= 0").isGreaterThanOrEqualTo(0);
+                assertThat(homeStats.possession() + awayStats.possession())
+                        .as(ctx + ": possession sums to 100").isEqualTo(100);
+
+                assertMonotonicallyNonDecreasing(prevHome, homeStats, ctx + " home");
+                assertMonotonicallyNonDecreasing(prevAway, awayStats, ctx + " away");
+                prevHome = homeStats;
+                prevAway = awayStats;
+            }
+        }
+    }
+
+    private void assertMonotonicallyNonDecreasing(TeamStats prev, TeamStats current, String ctx) {
+        assertThat(current.shots()).as(ctx + ": shots monotonic").isGreaterThanOrEqualTo(prev.shots());
+        assertThat(current.shotsOnTarget()).as(ctx + ": shotsOnTarget monotonic")
+                .isGreaterThanOrEqualTo(prev.shotsOnTarget());
+        assertThat(current.saves()).as(ctx + ": saves monotonic").isGreaterThanOrEqualTo(prev.saves());
+        assertThat(current.corners()).as(ctx + ": corners monotonic").isGreaterThanOrEqualTo(prev.corners());
+        assertThat(current.offsides()).as(ctx + ": offsides monotonic").isGreaterThanOrEqualTo(prev.offsides());
+        assertThat(current.fouls()).as(ctx + ": fouls monotonic").isGreaterThanOrEqualTo(prev.fouls());
+        assertThat(current.yellowCards()).as(ctx + ": yellowCards monotonic")
+                .isGreaterThanOrEqualTo(prev.yellowCards());
+        assertThat(current.redCards()).as(ctx + ": redCards monotonic").isGreaterThanOrEqualTo(prev.redCards());
+    }
+
+    private static int countEvents(LiveTimeline t, int throughMinute, EventType type, boolean home) {
+        return (int) t.eventsThrough(throughMinute).stream()
+                .filter(e -> e.home() == home && e.type() == type).count();
+    }
+
+    @Test
+    void everyChanceAndMissedPenaltyIsCountedAsAShot() {
+        // Product requirement, as an executable assertion: a user who watched 9 near-miss lances
+        // must never see "Finalizacoes: 3" -- every narrated CHANCE and every missed penalty must
+        // count toward the final shot tally (statsThrough sums extraShots on top of these, so the
+        // inequality rather than an equality is the correct check).
+        for (long seed = 0; seed < 200; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            MatchStats stats = t.statsThrough(t.finalMinute());
+
+            int homeChances = countEvents(t, t.finalMinute(), EventType.CHANCE, true);
+            int awayChances = countEvents(t, t.finalMinute(), EventType.CHANCE, false);
+            int homePenaltyMissed = countEvents(t, t.finalMinute(), EventType.PENALTY_MISSED, true);
+            int awayPenaltyMissed = countEvents(t, t.finalMinute(), EventType.PENALTY_MISSED, false);
+
+            assertThat(stats.home().shots()).as("seed %d home", seed)
+                    .isGreaterThanOrEqualTo(homeChances + t.homeGoals() + homePenaltyMissed);
+            assertThat(stats.away().shots()).as("seed %d away", seed)
+                    .isGreaterThanOrEqualTo(awayChances + t.awayGoals() + awayPenaltyMissed);
+        }
+    }
+
+    @Test
+    void statsLandInRealisticPerNinetyBands() {
+        // Loose calibration sanity check, mirroring the deliberately loose style of
+        // foulsOccurAtARealisticPerTeamRateAndAreNeverAttributedToAnEmptyPitch: not exact-value
+        // assertions, just a broad realistic band per 90 minutes.
+        int seeds = 150;
+        long totalShots = 0;
+        long totalOnTarget = 0;
+        long totalCorners = 0;
+        long totalOffsides = 0;
+        for (long seed = 0; seed < seeds; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            TeamStats home = t.statsThrough(t.finalMinute()).home();
+            totalShots += home.shots();
+            totalOnTarget += home.shotsOnTarget();
+            totalCorners += home.corners();
+            totalOffsides += home.offsides();
+        }
+        assertThat((double) totalShots / seeds).isBetween(8.0, 18.0);
+        assertThat((double) totalOnTarget / seeds).isBetween(2.5, 7.0);
+        assertThat((double) totalCorners / seeds).isBetween(3.0, 8.0);
+        assertThat((double) totalOffsides / seeds).isBetween(1.0, 5.0);
+    }
+
+    @Test
+    void possessionAveragesNearFiftyForIdenticalSquads() {
+        // buildXi() fields identically-rated squads on both sides, so mean home possession over
+        // many seeds must land close to 50 -- pins that rollPossession carries no home-advantage term.
+        int seeds = 150;
+        double totalHomePossession = 0;
+        for (long seed = 0; seed < seeds; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            totalHomePossession += t.statsThrough(t.finalMinute()).home().possession();
+        }
+        assertThat(totalHomePossession / seeds).isBetween(45.0, 55.0);
+    }
+
+    @Test
+    void aStrongerSideHoldsMorePossession() {
+        List<Player> strongHomeXi = buildXiRated(90);
+        List<Player> weakAwayXi = buildXiRated(40);
+        TacticalProfile strongProfile = defaultProfile(strongHomeXi);
+        TacticalProfile weakProfile = defaultProfile(weakAwayXi);
+        Map<UUID, Integer> fitness = fullFitness(strongHomeXi, weakAwayXi);
+
+        int seeds = 150;
+        double totalHomePossession = 0;
+        for (long seed = 0; seed < seeds; seed++) {
+            LiveMatchConfig cfg = new LiveMatchConfig(seed, strongHomeXi, weakAwayXi, List.of(), List.of(),
+                    strongProfile, weakProfile, fitness, List.of(), List.of(), null, Weather.neutral(),
+                    false, null, null);
+            LiveTimeline t = engine.simulate(cfg);
+            totalHomePossession += t.statsThrough(t.finalMinute()).home().possession();
+        }
+        assertThat(totalHomePossession / seeds).isGreaterThan(55.0);
+    }
+
+    /** 1 GK + 4 DEF + 4 MID + 2 ATT, all rated {@code rating} -- for building a strong/weak XI. */
+    private static List<Player> buildXiRated(int rating) {
+        return new ArrayList<>(List.of(
+                p(Position.GK, rating),
+                p(Position.DEF, rating), p(Position.DEF, rating), p(Position.DEF, rating), p(Position.DEF, rating),
+                p(Position.MID, rating), p(Position.MID, rating), p(Position.MID, rating), p(Position.MID, rating),
+                p(Position.ATT, rating), p(Position.ATT, rating)));
+    }
+
+    @Test
+    void minuteStatsHasOneEntryPerSimulatedMinute() {
+        LiveTimeline normal = engine.simulate(config(7L, List.of()));
+        assertThat(normal.minuteStats()).hasSize(normal.finalMinute());
+
+        long seed = 4242L;
+        LiveTimeline ninety = engine.simulate(config(seed, List.of()));
+        LiveTimeline extended = engine.simulate(deciderConfig(seed, ninety.homeGoals(), ninety.awayGoals()));
+        assertThat(extended.finalMinute()).isEqualTo(120);
+        assertThat(extended.minuteStats()).hasSize(120);
     }
 }

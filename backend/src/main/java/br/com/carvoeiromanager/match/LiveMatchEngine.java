@@ -48,6 +48,24 @@ public class LiveMatchEngine {
     private static final double ASSIST_CHANCE = 0.65;
     private static final double BASE_FOUL_RATE = 0.13;   // ~11-12 fouls/team/90min at aggression 1.0
 
+    // ---- display-only statistics (statsRng) — see the stats block in simulate() for the fixed
+    // draw order these constants feed, and its Javadoc for the one accepted determinism risk.
+    private static final double EXTRA_SHOT_GAIN = 0.50;    // CHANCE_RATE 0.12x90=10.8 shots/side already
+                                                             // arrive free as CHANCE events; small
+                                                             // dominance-scaled term (~0.8/90) so a
+                                                             // stronger side visibly out-shoots a weaker one
+    private static final double EXTRA_SHOT_CAP = 0.25;     // clamps an extreme mismatch from producing
+                                                             // absurd shot counts
+    private static final double ON_TARGET_SHARE = 0.25;    // targets 4-5 on target per 90; corroborated by
+                                                             // LiveCommentary's CHANCE pool (1 of 5 lines is
+                                                             // a keeper save)
+    private static final double CORNER_BASE_RATE = 0.035;  // floor, so a pinned-back side still wins corners
+    private static final double CORNER_GAIN = 1.00;        // with the floor, => ~4.5-4.9 corners per 90
+    private static final double OFFSIDE_RATE = 0.028;      // flat => ~2.5 per 90; not dominance-scaled, the
+                                                             // realism gain doesn't justify another tunable
+    private static final double POSSESSION_SPREAD = 1.5;   // see rollPossession's Javadoc
+    private static final double POSSESSION_JITTER = 0.12;  // see rollPossession's Javadoc
+
     private final TeamStrengthCalculator teamStrengthCalculator;
     private final FitnessCalculator fitnessCalculator;
     private final StaffEffectsService staffEffectsService;
@@ -85,6 +103,7 @@ public class LiveMatchEngine {
         Random injuryRng = new Random(cfg.seed() ^ 0x1A70F1E5L);
         Random assistRng = new Random(cfg.seed() ^ 0x5A551571L);
         Random foulRng = new Random(cfg.seed() ^ 0xF0011E5L);
+        Random statsRng = new Random(cfg.seed() ^ 0x57A75L);   // "STATS"
 
         Side home = buildSide(true, cfg.homeXi(), cfg.homeBench());
         Side away = buildSide(false, cfg.awayXi(), cfg.awayBench());
@@ -106,6 +125,7 @@ public class LiveMatchEngine {
 
         List<LiveTimelineEvent> events = new ArrayList<>();
         List<TimedInjury> injuries = new ArrayList<>();
+        List<MinuteStats> minuteStats = new ArrayList<>();
 
         TeamMatchInput homeInput = strength(home, home.currentProfile, cfg);
         home.dirty = false;
@@ -128,6 +148,11 @@ public class LiveMatchEngine {
         // cfg.knockoutDecider().
         int finalMinute = MatchMath.MINUTES;
         for (int minute = 1; minute <= finalMinute; minute++) {
+            // Captured before any of this minute's events are appended, so the tail slice of
+            // `events` from this index (events is in insertion order during the loop — the final
+            // sort-by-minute runs only after the loop) is exactly this minute's events. Feeds the
+            // display-only statistics block below (see countThisMinute).
+            int eventsAtMinuteStart = events.size();
             applyTacticChanges(cfg, minute, home, events);
             applyTacticChanges(cfg, minute, away, events);
             applySubs(cfg, minute, home, events);
@@ -187,6 +212,30 @@ public class LiveMatchEngine {
             maybeInjury(minute, home, cfg, homeInjuryRisk, injuryRng, events, injuries);
             maybeInjury(minute, away, cfg, awayInjuryRisk, injuryRng, events, injuries);
 
+            // --- display-only statistics (statsRng only; never feeds back into play) -----------
+            // Fixed draw order, which this stream's determinism depends on:
+            //   home: extraShots -> onTarget x (chances + extraShots) -> corners -> offsides
+            //   away: the same four
+            //   possession jitter (one draw)
+            // homeChance/awayChance here are this minute's final, post-modifier, post-weather score
+            // chances (already computed above); homeChances/awayChances are this minute's already-
+            // appended CHANCE event counts, read back out of `events` via countThisMinute rather than
+            // tracked separately, so the stats block can never disagree with the event stream it
+            // describes.
+            //
+            // Accepted risk: inserting a future stat into the middle of this draw order would shift
+            // every subsequent statsRng draw, so an in-flight save's displayed statistics could change
+            // on its next request. That is acceptable and materially different from this engine's
+            // event-stream determinism contract, because statsRng never feeds back into events,
+            // scoring, ratings, or anything persisted — only this minute's MinuteStats entry.
+            int homeChances = countThisMinute(events, eventsAtMinuteStart, EventType.CHANCE, true);
+            int awayChances = countThisMinute(events, eventsAtMinuteStart, EventType.CHANCE, false);
+            MinuteTeamStats homeMs = rollMinuteStats(homeChance, homeChances, statsRng);
+            MinuteTeamStats awayMs = rollMinuteStats(awayChance, awayChances, statsRng);
+            minuteStats.add(new MinuteStats(
+                    rollPossession(homeInput, awayInput, homeFf, awayFf, weatherImpact, statsRng),
+                    homeMs, awayMs));
+
             // Emit a half-time marker at the END of minute 45 (after all RNG draws for this minute).
             // Consumes zero RNG — the marker sorts last among minute-45 events when the list is
             // stable-sorted by minute, ensuring determinism is byte-identical to before.
@@ -221,9 +270,8 @@ public class LiveMatchEngine {
         Map<UUID, Integer> minutes = new LinkedHashMap<>();
         putMinutes(home, minutes);
         putMinutes(away, minutes);
-        // minuteStats is List.of() for now — a later task adds the RNG stream that fills it.
         return new LiveTimeline(hg, ag, List.copyOf(events), Map.copyOf(minutes), List.copyOf(injuries), finalMinute,
-                List.of());
+                List.copyOf(minuteStats));
     }
 
     // ---- side setup & minutes ----
@@ -423,6 +471,72 @@ public class LiveMatchEngine {
                     p -> foulWeight(p, side.currentProfile.instructionFor(p.getId())), foulRng);
             events.add(new LiveTimelineEvent(minute, EventType.FOUL, side.home, fouler, null, null, null));
         }
+    }
+
+    // ---- display-only statistics (statsRng) ----
+
+    /**
+     * Counts this minute's {@code type} events for {@code home}, by scanning only the tail of
+     * {@code events} from {@code fromIndex} onward — the size of {@code events} captured at the top
+     * of this minute's loop iteration, before any of this minute's events were appended. Safe
+     * because {@code events} stays in insertion order for the whole minute loop; the
+     * sort-by-minute in {@link #simulate} runs only after the loop completes.
+     */
+    private static int countThisMinute(List<LiveTimelineEvent> events, int fromIndex, EventType type,
+                                       boolean home) {
+        int count = 0;
+        for (int i = fromIndex; i < events.size(); i++) {
+            LiveTimelineEvent e = events.get(i);
+            if (e.type() == type && e.home() == home) count++;
+        }
+        return count;
+    }
+
+    /**
+     * Rolls one side's per-minute shot/set-piece stats from {@code statsRng}, using only values
+     * this minute has already computed: {@code perMinuteChance} (that side's final, post-modifier,
+     * post-weather score chance for the minute) and {@code narratedShots} (this minute's already-
+     * appended {@code CHANCE} event count for that side, via {@link #countThisMinute}). Draw order:
+     * extra-shot roll, then one on-target Bernoulli per shot (narrated + extra), then corner, then
+     * offside — see the call site in {@link #simulate} for why this order is fixed.
+     *
+     * <p>The one-Bernoulli-per-shot loop (rather than a single scaled draw) is what makes
+     * {@code shotsOnTarget <= shots} hold by construction, not by assertion — every on-target roll
+     * is tied to an actual shot that was either narrated as a CHANCE or rolled as an extra one.
+     */
+    private MinuteTeamStats rollMinuteStats(double perMinuteChance, int narratedShots, Random statsRng) {
+        int extra = statsRng.nextDouble() < Math.min(EXTRA_SHOT_CAP, EXTRA_SHOT_GAIN * perMinuteChance) ? 1 : 0;
+        int onTarget = 0;
+        for (int i = 0; i < narratedShots + extra; i++) {
+            if (statsRng.nextDouble() < ON_TARGET_SHARE) onTarget++;   // <= narratedShots + extra
+        }
+        int corners = statsRng.nextDouble() < CORNER_BASE_RATE + CORNER_GAIN * perMinuteChance ? 1 : 0;
+        int offsides = statsRng.nextDouble() < OFFSIDE_RATE ? 1 : 0;
+        return new MinuteTeamStats(extra, onTarget, corners, offsides);
+    }
+
+    /**
+     * Rolls this minute's home ball-possession share (whole percent; away is {@code 100 -} this).
+     * "Control" reuses the same attack/defense strengths the scoring roll uses, so possession can
+     * never contradict territorial dominance; it is scaled by each side's live fitness
+     * ({@code homeFf}/{@code awayFf}, which already fold in weather's decay multiplier), by tempo
+     * (pressing high wins the ball back higher up the pitch), and by weather's own chance
+     * multiplier (so rain punishing a passing side costs it the ball as well as the goal).
+     * Identical squads give {@code raw = 0.5} => exactly 50 — deliberately no home-advantage term.
+     * {@code POSSESSION_SPREAD = 1.5} lifts a strong-vs-weak matchup's {@code raw ~ 0.575} to a
+     * realistic ~61%. The {@code [0.25, 0.75]} clamp guarantees the away share also lands in range.
+     * {@code total <= 0} is defensive and unreachable in practice (every fielded side has positive
+     * attack + defense).
+     */
+    private int rollPossession(TeamMatchInput home, TeamMatchInput away, double homeFf, double awayFf,
+                               WeatherEffects.Impact weather, Random statsRng) {
+        double homeControl = (home.attack() + home.defense()) * homeFf * home.tempo() * weather.homeChanceMult();
+        double awayControl = (away.attack() + away.defense()) * awayFf * away.tempo() * weather.awayChanceMult();
+        double total = homeControl + awayControl;
+        double raw = total <= 0 ? 0.5 : homeControl / total;
+        double share = 0.5 + POSSESSION_SPREAD * (raw - 0.5);
+        double jitter = (statsRng.nextDouble() - 0.5) * 2 * POSSESSION_JITTER;
+        return (int) Math.round(Math.max(0.25, Math.min(0.75, share + jitter)) * 100);
     }
 
     /**

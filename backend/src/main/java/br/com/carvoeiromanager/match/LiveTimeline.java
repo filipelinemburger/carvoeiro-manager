@@ -11,8 +11,9 @@ import java.util.UUID;
  *
  * @param minuteStats one entry per simulated minute of shot/possession activity not already
  *                    derivable from {@code events} (see {@link MinuteStats}); index {@code i}
- *                    corresponds to minute {@code i + 1}. Currently always {@code List.of()} —
- *                    the engine does not yet roll per-minute stats (a later task fills it in).
+ *                    corresponds to minute {@code i + 1}. Rolled by {@link LiveMatchEngine}'s
+ *                    dedicated {@code statsRng} stream, so size is always exactly
+ *                    {@link #finalMinute}.
  */
 public record LiveTimeline(
         int homeGoals,
