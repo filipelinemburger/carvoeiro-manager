@@ -173,7 +173,7 @@ describe('LiveMatchPage', () => {
     expect(within(opponentColumn).queryByText(STATE.awayClubShortName)).not.toBeInTheDocument()
   })
 
-  it('shows the score and the commentary feed', async () => {
+  it('shows the score and the latest narration', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
     renderPage()
     expect(await screen.findByText(/GOL! Camisa 9/)).toBeInTheDocument()
@@ -443,12 +443,11 @@ describe('LiveMatchPage', () => {
       await Promise.resolve()
     })
 
-    // The existing half-time flow takes over: banner + auto-opened tactics dialog (same
-    // assertions as the pre-existing "at half-time" test — the dialog covers the background
-    // "Iniciar 2º tempo" button, so it isn't independently queryable here).
+    // The existing half-time flow takes over: banner + the "Iniciar 2º tempo" button on the
+    // match card (same assertions as the pre-existing "at half-time" test — no dialog
+    // auto-opens anymore, so the button is directly queryable here).
     expect(await screen.findByText(/intervalo/i)).toBeInTheDocument()
-    expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    expect(await screen.findByRole('combobox', { name: /mentalidade/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /iniciar 2º tempo/i })).toBeInTheDocument()
     expect(advanceLiveMatch).not.toHaveBeenCalled()
   }, 10_000)
 
@@ -483,13 +482,9 @@ describe('LiveMatchPage', () => {
     vi.mocked(advanceToLiveMatch).mockImplementation(() => new Promise(() => {}))
     renderPage()
 
-    // The tactics dialog auto-opens at half-time, covering the background buttons. Dismiss it via
-    // its own "Cancelar" button (same as a manager closing it before starting the 2nd half) so
-    // "Iniciar 2º tempo" and "Avançar até o fim" become reachable — a real, non-fiddly path to the
-    // exact scenario described in the bug: both buttons exposed at HALF_TIME with the dialog closed.
-    const dialog = await screen.findByRole('dialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: /cancelar/i }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    // No dialog auto-opens at half-time anymore, so "Iniciar 2º tempo" and "Avançar até o fim"
+    // are both directly reachable — the exact scenario described in the bug: both buttons
+    // exposed at HALF_TIME.
 
     // Start a skip while at half-time — advanceToMut is now in flight.
     fireEvent.click(await screen.findByRole('button', { name: /avançar até o fim/i }))
@@ -717,13 +712,21 @@ describe('LiveMatchPage', () => {
     await waitFor(() => expect(advanceLiveMatch).toHaveBeenCalledWith('sg-1', 'test-token'))
   })
 
-  it('at half-time, shows the Intervalo banner and auto-opens the tactics dialog', async () => {
+  it('at half-time, shows the Intervalo banner and the Iniciar 2º tempo button on the match card', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, minute: 45, status: 'HALF_TIME' } as never)
     renderPage()
     expect(await screen.findByText(/intervalo/i)).toBeInTheDocument()
-    // The actions dialog auto-opens on the tactics tab so the manager can adjust before the 2nd half.
-    expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    expect(await screen.findByRole('combobox', { name: /mentalidade/i })).toBeInTheDocument()
+    // No dialog auto-opens anymore — "Iniciar 2º tempo" on the match card is the entry point
+    // into the 2nd half instead.
+    expect(await screen.findByRole('button', { name: /iniciar 2º tempo/i })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('at HALF_TIME no dialog is auto-opened', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, minute: 45, status: 'HALF_TIME' } as never)
+    renderPage()
+    await screen.findByRole('button', { name: /iniciar 2º tempo/i })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('queues a sub AND changes mentality, clicks Continuar, calls both substituteLiveMatch and changeTactics', async () => {
@@ -935,5 +938,53 @@ describe('LiveMatchPage', () => {
 
     const shotsValues = within(screen.getByTestId('stat-shots')).getAllByText(/^(7|2)$/)
     expect(shotsValues.map(el => el.textContent)).toEqual(['7', '2'])
+  })
+
+  it('the key-events block groups two goals by the same scorer into one line with both minutes', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE,
+      status: 'IN_PROGRESS',
+      events: [
+        {
+          minute: 21, type: 'GOAL', home: true, playerId: 'p1', playerName: 'Samba',
+          playerInId: null, playerInName: null, severity: null, text: 'GOL! Samba abre o placar!',
+        },
+        {
+          minute: 42, type: 'GOAL', home: true, playerId: 'p1', playerName: 'Samba',
+          playerInId: null, playerInName: null, severity: null, text: 'GOL! Samba de novo!',
+        },
+      ],
+    } as never)
+    renderPage()
+
+    // Exercises the real path (LiveMatchPage -> MatchNarrationCard -> KeyEventsSummary ->
+    // summarizeKeyEvents), not the grouping algorithm itself (matchKeyEvents.test.ts already
+    // covers that) — proves the rendering keeps name and minutes together in one line.
+    expect(await screen.findByText(/Samba 21', 42'/)).toBeInTheDocument()
+  })
+
+  it.each<[string, Partial<typeof STATE>]>([
+    ['minute 0', { minute: 0, status: 'IN_PROGRESS' }],
+    ['half-time', { minute: 45, status: 'HALF_TIME' }],
+    ['a forced injury pause', { minute: 30, status: 'PAUSED_INJURY' }],
+    ['a forced red-card pause', { minute: 55, status: 'PAUSED_RED' }],
+    ['full time', { minute: 90, status: 'FULL_TIME' }],
+  ])('hides the pause/play button at %s, since the action slot already shows a button there', async (_label, override) => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, ...override } as never)
+    renderPage()
+    // Wait for the page to settle on some recognisable content before asserting absence, so a
+    // false negative can't come from asserting before the query resolves.
+    await screen.findByRole('tab', { name: /partida/i })
+    // `playing` defaults to true and nothing in this render toggles it, so the pause/play
+    // button — if it were rendered — would read "Pausar", never "Continuar"; that keeps this
+    // query unambiguous even at full time, where a *different* "Continuar" button (the finish
+    // CTA) legitimately exists.
+    expect(screen.queryByRole('button', { name: /^pausar$/i })).not.toBeInTheDocument()
+  })
+
+  it('shows the pause/play button during open play', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', minute: 12 } as never)
+    renderPage()
+    expect(await screen.findByRole('button', { name: /^pausar$/i })).toBeInTheDocument()
   })
 })

@@ -7,7 +7,7 @@ import {
   getLiveMatch, advanceLiveMatch, advanceToLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics,
 } from '../../api/liveMatch'
 import { getPlayer, getStandings, getSaveGame } from '../../api/career'
-import type { LiveEvent, LiveMatchState, LiveTacticsRequest } from '../../api/types'
+import type { LiveMatchState, LiveTacticsRequest } from '../../api/types'
 import { MatchActionsDialog } from './MatchActionsDialog'
 import type { SubPair } from './MatchActionsDialog'
 import { PlayerRatingsList } from './PlayerRatingsList'
@@ -16,14 +16,9 @@ import { MatchStatsTab } from './MatchStatsTab'
 import { RoundTab } from './RoundTab'
 import { MatchScoreboard } from './MatchScoreboard'
 import { MatchInfoLine } from './MatchInfoLine'
+import { MatchNarrationCard } from './MatchNarrationCard'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { WatchStar } from '../players/WatchStar'
-
-const EVENT_ICON: Record<LiveEvent['type'], string> = {
-  GOAL: '⚽', SET_PIECE_GOAL: '⚽', YELLOW_CARD: '🟨', RED_CARD: '🟥',
-  CHANCE: '🎯', INJURY: '🚑', SUBSTITUTION: '🔁', TACTICS_CHANGE: '📋', HALF_TIME: '⏸️',
-  PENALTY_GOAL: '⚽', FREE_KICK_GOAL: '⚽', CORNER_GOAL: '⚽', PENALTY_MISSED: '🧤',
-}
 
 const ADVANCE_MS = 1500   // event-to-event pacing (client-owned clock)
 
@@ -208,18 +203,6 @@ export function LiveMatchPage() {
     }
   }
 
-  // At half-time, auto-open the tactics tab once so the manager can adjust before the 2nd half.
-  const halftimeOpenedRef = useRef(false)
-  useEffect(() => {
-    if (state?.status === 'HALF_TIME' && !halftimeOpenedRef.current) {
-      halftimeOpenedRef.current = true
-      setActionsTab(1)
-      setActionsOpen(true)
-    } else if (state?.status !== 'HALF_TIME') {
-      halftimeOpenedRef.current = false
-    }
-  }, [state?.status])
-
   // At full time, surface the final grades by switching to the Atuações tab once.
   const fullTimeTabRef = useRef(false)
   useEffect(() => {
@@ -235,7 +218,13 @@ export function LiveMatchPage() {
   const paused = state.status === 'PAUSED_INJURY' || state.status === 'PAUSED_RED'
   const halftime = state.status === 'HALF_TIME'
   const fullTime = state.status === 'FULL_TIME'
-  const feed = [...state.events].reverse()
+  // Mirrors MatchNarrationCard's ActionSlot: true whenever the card shows a button rather than
+  // the live narration line. Drives the pause/play toggle's visibility below — it is hidden
+  // (not disabled) whenever the card already shows a button, both because pausing is meaningless
+  // in every one of those states and because the full-time card button and the pause toggle can
+  // share the label "Continuar", which would make `getByRole('button', { name: /continuar/i })`
+  // ambiguous if both were mounted at once.
+  const actionSlotShowsButton = state.minute === 0 || halftime || paused || fullTime
   // Resume from a forced pause / half-time by advancing past it, then let the clock run.
   // Guarded at the source (mirroring skipTo's guard) so EVERY caller — "Continuar assim
   // mesmo", "Iniciar 2º tempo", and the auto-resume in handleApply — is protected against
@@ -255,12 +244,6 @@ export function LiveMatchPage() {
         onOpponentClick={() => {}}
       />
 
-      {state.status === 'PAUSED_INJURY' && (
-        <Alert severity="warning" sx={{ my: 1 }}>Lesão! Faça uma substituição ou continue.</Alert>
-      )}
-      {state.status === 'PAUSED_RED' && (
-        <Alert severity="error" sx={{ my: 1 }}>Cartão vermelho! Seu time está com um a menos.</Alert>
-      )}
       {halftime && (
         <Alert severity="info" sx={{ my: 1 }}>Intervalo — ajuste as táticas e comece o segundo tempo.</Alert>
       )}
@@ -268,30 +251,11 @@ export function LiveMatchPage() {
         <Alert severity="error" sx={{ my: 1 }} onClose={() => setSubError(null)}>{subError}</Alert>
       )}
 
+      {/* Pausar/Continuar, Continuar assim mesmo, Iniciar 2º tempo and the full-time Continuar
+          now live on MatchNarrationCard (Partida tab) — see the action-slot table there. Skip
+          buttons stay here for now (Task 9 moves them into the options menu); Substituir/Tática
+          stay here permanently, they're still test entry points. */}
       <Stack direction="row" spacing={1} sx={{ my: 1 }}>
-        {!fullTime && !halftime && (
-          <Button variant="outlined" onClick={() => setPlaying(p => !p)}>
-            {playing ? 'Pausar' : 'Continuar'}
-          </Button>
-        )}
-        {!fullTime && paused && (
-          <Button
-            variant="outlined"
-            disabled={skipping || advanceToMut.isPending || advanceMut.isPending}
-            onClick={resume}
-          >
-            Continuar assim mesmo
-          </Button>
-        )}
-        {!fullTime && halftime && (
-          <Button
-            variant="contained"
-            disabled={skipping || advanceToMut.isPending || advanceMut.isPending}
-            onClick={resume}
-          >
-            Iniciar 2º tempo
-          </Button>
-        )}
         {!fullTime && !halftime && state.minute < 45 && (
           <Button
             variant="outlined"
@@ -321,11 +285,6 @@ export function LiveMatchPage() {
             Tática
           </Button>
         )}
-        {fullTime && (
-          <Button variant="contained" disabled={finishMut.isPending} onClick={() => finishMut.mutate()}>
-            {finishMut.isPending ? 'Continuando…' : 'Continuar'}
-          </Button>
-        )}
       </Stack>
 
       <Tabs value={feedTab} onChange={(_, v) => setFeedTab(v as 0 | 1 | 2 | 3 | 4)} sx={{ mt: 2, minHeight: 40 }}>
@@ -337,15 +296,31 @@ export function LiveMatchPage() {
       </Tabs>
       <MatchInfoLine state={state} />
 
-      {feedTab === 0 && (
-        <Stack spacing={0.5} sx={{ mt: 1 }}>
-          {feed.map((e, i) => (
-            <Stack key={`${e.minute}-${i}`} direction="row" spacing={1}>
-              <Typography sx={{ minWidth: 32, color: 'text.secondary' }}>{e.minute}'</Typography>
-              <Typography component="span">{EVENT_ICON[e.type]} {e.text}</Typography>
+      {/* Also rendered outside Partida (feedTab 0) once the match reaches FULL_TIME: the
+          fullTimeTabRef effect above auto-switches to Atuações at full time (kept exactly as
+          it was, per the task brief), which would otherwise strand the finish "Continuar"
+          button — now living on this card — on a tab nobody is looking at. Mirrors the old
+          always-visible (non-tab-gated) button row's guarantee that the finish action stays
+          reachable regardless of which tab the manager is on. */}
+      {(feedTab === 0 || fullTime) && (
+        <Box sx={{ mt: 1 }}>
+          <MatchNarrationCard
+            minute={state.minute}
+            status={state.status}
+            events={state.events}
+            onResume={resume}
+            onFinish={() => finishMut.mutate()}
+            actionPending={skipping || advanceToMut.isPending || advanceMut.isPending}
+            finishPending={finishMut.isPending}
+          />
+          {!actionSlotShowsButton && (
+            <Stack direction="row" sx={{ justifyContent: 'center', mt: 1 }}>
+              <Button size="small" variant="outlined" onClick={() => setPlaying(p => !p)}>
+                {playing ? 'Pausar' : 'Continuar'}
+              </Button>
             </Stack>
-          ))}
-        </Stack>
+          )}
+        </Box>
       )}
 
       {feedTab === 1 && (
