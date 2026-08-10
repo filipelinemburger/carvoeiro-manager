@@ -122,7 +122,8 @@ class LiveMatchControllerIT {
         // GET → 200 (session exists)
         mockMvc.perform(get("/api/v1/save-games/{s}/live-match", saveGameId)
                         .header("Authorization", bearer))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stats.home.possession").exists());
 
         // advance until FULL_TIME (bounded at 200 iterations)
         String status = "IN_PROGRESS";

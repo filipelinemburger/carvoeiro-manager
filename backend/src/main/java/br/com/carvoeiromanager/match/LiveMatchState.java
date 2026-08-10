@@ -32,5 +32,6 @@ public record LiveMatchState(
         List<ParallelScore> parallelScores,
         String weather,
         Integer temperatureC,
-        Integer attendance) {
+        Integer attendance,
+        MatchStats stats) {
 }

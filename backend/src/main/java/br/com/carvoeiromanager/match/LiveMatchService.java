@@ -694,6 +694,11 @@ public class LiveMatchService {
         // rather than routing through the eve-of-match visibleWeather gate.
         Weather weather = weatherService.weatherFor(fixture, homeClub);
 
+        // Statistics are display-only and never persisted: finish() deletes the live_match row,
+        // and the timeline is always recomputed from the seed. No migration, and the post-match
+        // news card does not show statistics.
+        MatchStats stats = timeline.statsThrough(minute);
+
         return new LiveMatchState(
                 lm.getFixtureId().toString(), competitionName, lm.getRound(), lm.getMatchDate().toString(),
                 homeClub.resolvedStadiumName(),
@@ -703,7 +708,7 @@ public class LiveMatchService {
                 status, events, onPitch, bench, maxSubsAt(minute) - subsUsed, currentTactics, playerRatings,
                 opponentOnPitch, opponentTactics, opponentPlayerRatings, homeClubColors, awayClubColors,
                 lm.getCompetitionId().toString(), parallelScoresAsOf(lm, minute),
-                weather.condition().name(), weather.temperatureC(), fixture.getAttendance());
+                weather.condition().name(), weather.temperatureC(), fixture.getAttendance(), stats);
     }
 
     /**
