@@ -979,18 +979,31 @@ describe('LiveMatchPage', () => {
     ['half-time', { minute: 45, status: 'HALF_TIME' }],
     ['a forced injury pause', { minute: 30, status: 'PAUSED_INJURY' }],
     ['a forced red-card pause', { minute: 55, status: 'PAUSED_RED' }],
-    ['full time', { minute: 90, status: 'FULL_TIME' }],
   ])('hides the pause/play button at %s, since the action slot already shows a button there', async (_label, override) => {
     vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, ...override } as never)
     renderPage()
     // Wait for the page to settle on some recognisable content before asserting absence, so a
     // false negative can't come from asserting before the query resolves.
     await screen.findByRole('tab', { name: /partida/i })
-    // `playing` defaults to true and nothing in this render toggles it, so the pause/play
-    // button — if it were rendered — would read "Pausar", never "Continuar"; that keeps this
-    // query unambiguous even at full time, where a *different* "Continuar" button (the finish
-    // CTA) legitimately exists.
-    expect(screen.queryByRole('button', { name: /^pausar$/i })).not.toBeInTheDocument()
+    // `playing` now starts false and none of these states' autoResumedRef condition is met
+    // (minute 0, or a status other than IN_PROGRESS/EXTRA_TIME), so the toggle — if it leaked
+    // past the `!actionSlotShowsButton` gate — would read "Continuar", not "Pausar". Match the
+    // toggle's exact accessible name either way ("Pausar" or "Continuar"): none of these states'
+    // own action-slot buttons collide with an EXACT match on either word ("Iniciar partida",
+    // "Iniciar 2º tempo" and "Continuar assim mesmo" all fail ^...$), so this single query still
+    // catches the toggle rendering regardless of `playing`'s value.
+    expect(screen.queryByRole('button', { name: /^(pausar|continuar)$/i })).not.toBeInTheDocument()
+  })
+
+  it('hides the pause/play button at full time, since the action slot already shows a button there', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, minute: 90, status: 'FULL_TIME' } as never)
+    renderPage()
+    // At full time the finish CTA legitimately reads exactly "Continuar" too, and `playing` is
+    // false here (autoResumedRef's status check excludes FULL_TIME), so a toggle that leaked
+    // past the gate would ALSO read "Continuar" — indistinguishable from the finish CTA by text
+    // alone. Assert there is exactly one such button, not two, so a regression that renders both
+    // is still caught.
+    expect(await screen.findAllByRole('button', { name: /^continuar$/i })).toHaveLength(1)
   })
 
   it('shows the pause/play button during open play', async () => {
@@ -998,6 +1011,40 @@ describe('LiveMatchPage', () => {
     renderPage()
     expect(await screen.findByRole('button', { name: /^pausar$/i })).toBeInTheDocument()
   })
+
+  it('at minute 0, shows "Iniciar partida" and clicking it calls advanceLiveMatch once', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, minute: 0, status: 'IN_PROGRESS' } as never)
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar partida/i }))
+    await waitFor(() => expect(advanceLiveMatch).toHaveBeenCalledTimes(1))
+  })
+
+  it('at minute 0, does NOT auto-advance before "Iniciar partida" is pressed (regression: playing must default to false)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, minute: 0, status: 'IN_PROGRESS' } as never)
+    renderPage()
+    await screen.findByRole('button', { name: /iniciar partida/i })
+    // The client-owned clock ticks every ADVANCE_MS (1.5s) — wait past that to prove kickoff
+    // stays frozen with no button press. This is the test that actually pins the behaviour
+    // change: without it, a future revert to `useState(true)` would pass every other test here
+    // silently.
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    expect(advanceLiveMatch).not.toHaveBeenCalled()
+  }, 10_000)
+
+  it('auto-resumes play for a match reloaded past minute 0, with no "Iniciar partida" button and no click needed (the reload case)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, minute: 12, status: 'IN_PROGRESS' } as never)
+    renderPage()
+    expect(screen.queryByRole('button', { name: /iniciar partida/i })).not.toBeInTheDocument()
+    await waitFor(() => expect(advanceLiveMatch).toHaveBeenCalledTimes(1), { timeout: 3000 })
+  }, 10_000)
+
+  it('does NOT auto-advance a match reloaded at half-time', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, minute: 45, status: 'HALF_TIME' } as never)
+    renderPage()
+    await screen.findByRole('button', { name: /iniciar 2º tempo/i })
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    expect(advanceLiveMatch).not.toHaveBeenCalled()
+  }, 10_000)
 
   it('clicking the opponent card opens a scouting panel with the opponent formation as plain text, no mentality combobox, and no Continuar button (read-only)', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({

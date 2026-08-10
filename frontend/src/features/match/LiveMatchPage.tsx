@@ -32,7 +32,7 @@ export function LiveMatchPage() {
   const queryClient = useQueryClient()
   const saveGameId = searchParams.get('saveGameId') ?? ''
 
-  const [playing, setPlaying] = useState(true)
+  const [playing, setPlaying] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [actionsTab, setActionsTab] = useState<0 | 1>(0)
   // Opens the read-only opponent scouting panel from the opponent's club card.
@@ -216,6 +216,16 @@ export function LiveMatchPage() {
       setFeedTab(2)
     }
   }, [state?.status])
+
+  // `playing` starts false so minute 0 waits for "Iniciar partida". A RESUMED match (reload,
+  // or the top bar's "Retomar partida") has no such button, so restore the previous auto-play
+  // behaviour exactly once, the first time a live state with a started match is observed.
+  const autoResumedRef = useRef(false)
+  useEffect(() => {
+    if (!state || autoResumedRef.current) return
+    autoResumedRef.current = true
+    if (state.minute > 0 && (state.status === 'IN_PROGRESS' || state.status === 'EXTRA_TIME')) setPlaying(true)
+  }, [state])
 
   if (!saveGameId) return <Typography>Partida inválida.</Typography>
   if (!state) return <Typography>Nenhuma partida em andamento.</Typography>
