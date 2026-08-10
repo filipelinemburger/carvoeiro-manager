@@ -18,6 +18,8 @@ import { MatchScoreboard } from './MatchScoreboard'
 import { MatchInfoLine } from './MatchInfoLine'
 import { MatchNarrationCard } from './MatchNarrationCard'
 import { GameOptionsMenu } from './GameOptionsMenu'
+import { OpponentScoutingPanel } from './OpponentScoutingPanel'
+import { sidesOf } from './matchSides'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { WatchStar } from '../players/WatchStar'
 
@@ -33,6 +35,8 @@ export function LiveMatchPage() {
   const [playing, setPlaying] = useState(true)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [actionsTab, setActionsTab] = useState<0 | 1>(0)
+  // Opens the read-only opponent scouting panel from the opponent's club card.
+  const [scoutingOpen, setScoutingOpen] = useState(false)
   // 0 = Partida, 1 = Escalações, 2 = Atuações, 3 = Estatísticas do jogo, 4 = Rodada
   const [feedTab, setFeedTab] = useState<0 | 1 | 2 | 3 | 4>(0)
   const [applyPending, setApplyPending] = useState(false)
@@ -180,11 +184,11 @@ export function LiveMatchPage() {
     // reaches its real final minute (90 or 120), so status alone terminates the clock --
     // the old `minute < 90` bound froze a knockout decider dead at the end of normal time.
     const openPlay = state.status === 'IN_PROGRESS' || state.status === 'EXTRA_TIME'
-    if (playing && openPlay && !advanceMut.isPending && !actionsOpen && !skipping) {
+    if (playing && openPlay && !advanceMut.isPending && !actionsOpen && !skipping && !scoutingOpen) {
       timer.current = setTimeout(() => advanceMut.mutate(), ADVANCE_MS)
       return () => { if (timer.current) clearTimeout(timer.current) }
     }
-  }, [state, playing, advanceMut.isPending, actionsOpen, skipping])
+  }, [state, playing, advanceMut.isPending, actionsOpen, skipping, scoutingOpen])
 
   // "Avançar até o intervalo/fim" — skip ahead server-side to the given target. Stops the
   // pending per-minute tick immediately (both the queued setTimeout and, via `skipping`, any
@@ -216,6 +220,10 @@ export function LiveMatchPage() {
   if (!saveGameId) return <Typography>Partida inválida.</Typography>
   if (!state) return <Typography>Nenhuma partida em andamento.</Typography>
 
+  // The opponent scouting panel's SideView, resolved through sidesOf (matchSides.ts) — never a
+  // hand-rolled home/away mapping — so it can't accidentally show the managed club's own side.
+  const opponentSide = state.managedIsHome ? sidesOf(state).away : sidesOf(state).home
+
   const paused = state.status === 'PAUSED_INJURY' || state.status === 'PAUSED_RED'
   const halftime = state.status === 'HALF_TIME'
   const fullTime = state.status === 'FULL_TIME'
@@ -241,8 +249,7 @@ export function LiveMatchPage() {
       <MatchScoreboard
         state={state}
         onOwnClick={() => { setActionsTab(0); setActionsOpen(true) }}
-        // Task 11 wires the opponent scouting panel here; no-op for now.
-        onOpponentClick={() => {}}
+        onOpponentClick={() => setScoutingOpen(true)}
       />
 
       {halftime && (
@@ -254,21 +261,8 @@ export function LiveMatchPage() {
 
       {/* Pausar/Continuar, Continuar assim mesmo, Iniciar 2º tempo and the full-time Continuar
           now live on MatchNarrationCard (Partida tab) — see the action-slot table there. The two
-          "Avançar" skip actions now live in GameOptionsMenu (bottom of the page); Substituir/
-          Tática stay here permanently, they're still test entry points. */}
-      <Stack direction="row" spacing={1} sx={{ my: 1 }}>
-        {!fullTime && (
-          <Button variant="outlined" color="secondary" disabled={state.subsRemaining <= 0}
-            onClick={() => { setActionsTab(0); setActionsOpen(true) }}>
-            Substituir ({state.subsRemaining})
-          </Button>
-        )}
-        {!fullTime && (
-          <Button variant="outlined" color="secondary" onClick={() => { setActionsTab(1); setActionsOpen(true) }}>
-            Tática
-          </Button>
-        )}
-      </Stack>
+          "Avançar" skip actions live in GameOptionsMenu (bottom of the page). Substituir/Tática
+          no longer have their own buttons — the own club card (above) is their entry point. */}
 
       <Tabs value={feedTab} onChange={(_, v) => setFeedTab(v as 0 | 1 | 2 | 3 | 4)} sx={{ mt: 2, minHeight: 40 }}>
         <Tab label="Partida" sx={{ minHeight: 40 }} />
@@ -387,6 +381,14 @@ export function LiveMatchPage() {
         pending={applyPending}
         onApply={handleApply}
         currentTactics={state.currentTactics}
+      />
+
+      <OpponentScoutingPanel
+        open={scoutingOpen}
+        onClose={() => setScoutingOpen(false)}
+        side={opponentSide}
+        tactics={state.opponentTactics}
+        onPlayerClick={openPlayerDetails}
       />
 
       {/* Read-only player details, opened from a lineup or ratings-row name. No

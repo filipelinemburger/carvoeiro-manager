@@ -537,7 +537,7 @@ describe('LiveMatchPage', () => {
     // real-world path that reaches handleApply's programmatic (non-button) resume() call, e.g.
     // the manager kicks off "Avançar até o fim" then reopens the dialog to make a sub before it
     // resolves.
-    fireEvent.click(await screen.findByRole('button', { name: /substituir/i }))
+    fireEvent.click(await screen.findByTestId('club-card-own'))
     const outSection = (await screen.findByText(/selecionar quem sai do campo/i)).closest('div') as HTMLElement
     fireEvent.click(within(outSection).getByText(/Titular/))
     await screen.findByText(/Substituições Pendentes/i)
@@ -582,12 +582,13 @@ describe('LiveMatchPage', () => {
 
     renderPage()
 
-    // Open the tactics dialog
-    fireEvent.click(await screen.findByRole('button', { name: /tática/i }))
+    // The own club card opens the dialog on the substitutions tab — switch to Instruções táticas.
+    fireEvent.click(await screen.findByTestId('club-card-own'))
 
     // The dialog should be open
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('tab', { name: /instruções táticas/i }))
 
     // Change the mentality select to ATTACKING
     const mentalidadeSelect = screen.getByRole('combobox', { name: /mentalidade/i })
@@ -616,8 +617,8 @@ describe('LiveMatchPage', () => {
 
     renderPage()
 
-    // Open the substitution dialog
-    fireEvent.click(await screen.findByRole('button', { name: /substituir/i }))
+    // Open the substitution dialog (the own club card's default entry point)
+    fireEvent.click(await screen.findByTestId('club-card-own'))
 
     // Pick the OUT player from the left column (multiple elements may contain 'Titular')
     // Click the card in the left column picker section
@@ -668,7 +669,7 @@ describe('LiveMatchPage', () => {
 
     renderPage()
 
-    fireEvent.click(await screen.findByRole('button', { name: /substituir/i }))
+    fireEvent.click(await screen.findByTestId('club-card-own'))
     const dialog = await screen.findByRole('dialog')
 
     // Queue the first pair
@@ -707,7 +708,7 @@ describe('LiveMatchPage', () => {
     vi.mocked(substituteLiveMatch).mockResolvedValue({ ...paused, subsRemaining: 4 } as never)
 
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /substituir/i }))
+    fireEvent.click(await screen.findByTestId('club-card-own'))
     const outSection = (await screen.findByText(/selecionar quem sai do campo/i)).closest('div') as HTMLElement
     fireEvent.click(within(outSection).getByText(/Titular/))
     await screen.findByText(/Substituições Pendentes/i)
@@ -753,8 +754,8 @@ describe('LiveMatchPage', () => {
 
     renderPage()
 
-    // Open the substitution dialog on tab 0
-    fireEvent.click(await screen.findByRole('button', { name: /substituir/i }))
+    // Open the substitution dialog on tab 0 (the own club card's default)
+    fireEvent.click(await screen.findByTestId('club-card-own'))
     const dialog = await screen.findByRole('dialog')
 
     // Queue a substitution
@@ -997,4 +998,75 @@ describe('LiveMatchPage', () => {
     renderPage()
     expect(await screen.findByRole('button', { name: /^pausar$/i })).toBeInTheDocument()
   })
+
+  it('clicking the opponent card opens a scouting panel with the opponent formation as plain text, no mentality combobox, and no Continuar button (read-only)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE,
+      opponentOnPitch: [
+        { playerId: 'o1', name: 'Zagueiro Rival', position: 'DEF', overall: 65, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'STOPPER' },
+      ],
+      opponentTactics: { mentality: 'ATTACKING', gameStyle: 'PRESSAO_ALTA', attackZone: 'CENTRO', pressing: 'HIGH', marking: 'MAN_TIGHT', formation: '3-5-2' },
+    } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByTestId('club-card-opponent'))
+
+    const dialog = await screen.findByRole('dialog')
+    // Scoped to the tactics rows block (not the whole dialog): LineupColumn also renders the
+    // formation as a caption, so an unscoped query would hit two elements.
+    const tacticsBlock = within(dialog).getByTestId('opponent-tactics')
+    expect(within(tacticsBlock).getByText('3-5-2')).toBeInTheDocument()
+    // 'Ofensiva' is MENTALITY_LABEL.ATTACKING, not the raw 'ATTACKING' enum value — proves the
+    // panel labels tactics through the shared map, same as the user's own tactics dialog.
+    expect(within(tacticsBlock).getByText('Ofensiva')).toBeInTheDocument()
+
+    // Genuinely read-only: the own tactics dialog renders a `combobox` for mentality; if this
+    // panel regressed to reuse a (disabled) Select instead of plain text, it would still expose
+    // that combobox role, since `disabled` doesn't remove an element's role. No apply action
+    // either — only "Fechar".
+    expect(within(dialog).queryByRole('combobox')).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: /continuar/i })).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: /fechar/i })).toBeInTheDocument()
+  })
+
+  it('shows the opponent\'s players in the scouting panel, not the managed club\'s, and does not invert when managedIsHome is false', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE,
+      managedIsHome: false,
+      onPitch: [
+        { playerId: 'p1', name: 'Managed Titular', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'BOX_TO_BOX' },
+      ],
+      opponentOnPitch: [
+        { playerId: 'o1', name: 'Home Rival Titular', position: 'MID', overall: 65, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'BOX_TO_BOX' },
+      ],
+    } as never)
+    renderPage()
+
+    // Managed club plays away, so its own club card carries the away short name — the opponent
+    // card (this panel's entry point) is therefore the home one.
+    expect(await screen.findByTestId('club-card-own')).toHaveTextContent(STATE.awayClubShortName)
+    fireEvent.click(screen.getByTestId('club-card-opponent'))
+
+    const dialog = await screen.findByRole('dialog')
+    // The opponent, playing at home in this fixture, is the AI-controlled club — the panel must
+    // show ITS roster (opponentOnPitch), never the managed club's (onPitch), even though the
+    // managed club is the one playing away. Each name can render twice inside the dialog (list
+    // + pitch token), so assert presence/absence rather than a single-match getByText.
+    expect(within(dialog).getAllByText('Home Rival Titular').length).toBeGreaterThan(0)
+    expect(within(dialog).queryAllByText('Managed Titular')).toHaveLength(0)
+  })
+
+  it('blocks the per-minute clock while the scouting panel is open', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', minute: 12 } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByTestId('club-card-opponent'))
+    await screen.findByRole('dialog')
+
+    // The client-owned clock ticks every ADVANCE_MS (1.5s) — wait past that to prove the
+    // scouting panel's open state suppresses the tick, mirroring the shape of the "blocks the
+    // per-minute clock" assertions on the skip-ahead tests above.
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    expect(advanceLiveMatch).not.toHaveBeenCalled()
+  }, 10_000)
 })

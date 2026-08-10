@@ -5,8 +5,9 @@ import { sidesOf } from './matchSides'
 import type { LiveKitColors, LiveMatchState, LivePlayer } from '../../api/types'
 
 /** Builds one side's pitch view-model from its live on-pitch roster. Module-scope (no
- * component state) so it's freely reusable for either side without a closure. */
-function buildTeam(players: LivePlayer[], formation: string, colors: LiveKitColors): TeamOnPitch {
+ * component state) so it's freely reusable for either side without a closure. Exported for
+ * `OpponentScoutingPanel`, which renders a single-team pitch for the opponent's XI. */
+export function buildTeam(players: LivePlayer[], formation: string, colors: LiveKitColors): TeamOnPitch {
   return {
     formation,
     kit: colors,
