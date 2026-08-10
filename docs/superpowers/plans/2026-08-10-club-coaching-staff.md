@@ -1335,6 +1335,36 @@ In `StaffService.java`, add a `requireHirable` guard and change both callers of 
     }
 ```
 
+**Also close a pre-existing authorization gap, found by Task 5's review.** `requireClubInSave`
+(`StaffService.java:105-111`) only checks that `clubId` belongs to the caller's *save game* — not
+that it is the caller's *managed club*. `clubId` is a free path variable on
+`StaffController.hire`, so today a crafted `PUT .../clubs/{rivalClubId}/staff/OLHEIRO` hires staff
+onto a rival, putting the wage bill and the benefit on that rival. It predates this whole slice,
+but Task 5 made the consequence visible: `hire` passes `managedClub = true` unconditionally
+(`StaffService.java:96`), so the response would show the player's own manager name inside a rival's
+roster.
+
+Add alongside `requireHirable`:
+
+```java
+    /**
+     * Browsing and hiring only ever apply to your own club. {@code requireClubInSave} alone is not
+     * enough — it permits any club in the caller's save, which would let a crafted request staff a
+     * rival at that rival's expense.
+     */
+    private void requireManagedClub(SaveGame save, UUID clubId) {
+        if (!clubId.equals(save.getManagedClubId())) {
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, "Staff can only be managed for your own club");
+        }
+    }
+```
+
+Call it in both `getCandidates` and `hire`, right after `requireClubInSave`. Both methods already
+hold the `SaveGame` from `requireOwned`. With this guard in place, `hire`'s hardcoded
+`toRosterResponse(byRole, true, ...)` becomes genuinely true rather than assumed.
+
+Cover it with a test: hiring against a rival club's id, inside your own save, must be rejected.
+
 Replace the `hiredNames` resolution in both `getCandidates` and `hire` with a shared helper. The
 exclusion narrows from save-wide to this club only — otherwise every rival's staff is filtered out
 and poaching can never happen:
