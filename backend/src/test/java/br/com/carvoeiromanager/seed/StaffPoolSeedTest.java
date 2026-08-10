@@ -15,9 +15,14 @@ class StaffPoolSeedTest {
     private final List<SeedStaff> pool = new SeedLoader().loadStaffPool();
 
     @Test
-    void everyRoleIsCovered() {
+    void everyHirableRoleIsCovered() {
         Set<StaffRole> covered = pool.stream().map(SeedStaff::role).collect(Collectors.toSet());
-        assertThat(covered).containsExactlyInAnyOrder(StaffRole.values());
+        assertThat(covered).containsExactlyInAnyOrderElementsOf(StaffRole.HIRABLE);
+    }
+
+    @Test
+    void theUnemployedPoolNeverOffersAHeadCoach() {
+        assertThat(pool).noneMatch(s -> s.role() == StaffRole.TECNICO);
     }
 
     @Test
