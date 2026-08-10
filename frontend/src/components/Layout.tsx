@@ -102,6 +102,11 @@ export function Layout({ children }: LayoutProps) {
       void queryClient.invalidateQueries({ queryKey: ['news', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['newsUnreadCount', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['standings'] })
+      // An advance can play a knockout leg or materialize a whole round, so the bracket and
+      // the phases' `complete` flags both go stale. Both are cached with staleTime: Infinity,
+      // so nothing else will ever refetch them.
+      void queryClient.invalidateQueries({ queryKey: ['phases'] })
+      void queryClient.invalidateQueries({ queryKey: ['ties'] })
       void queryClient.invalidateQueries({ queryKey: ['finances'] })
       void queryClient.invalidateQueries({ queryKey: ['offers'] })
       void queryClient.invalidateQueries({ queryKey: ['squad'] })

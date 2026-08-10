@@ -196,7 +196,7 @@ export function TablePage() {
 
   // Phases are optional — a competition with none of them (e.g. Série B) keeps behaving exactly
   // as before: no selector, no phaseId on the standings query.
-  const { data: phasesData } = useQuery<Phase[]>({
+  const { data: phasesData, error: phasesError } = useQuery<Phase[]>({
     queryKey: ['phases', saveGameId, competitionId],
     queryFn: () => getPhases(saveGameId, competitionId, token ?? ''),
     enabled: Boolean(saveGameId && competitionId && token),
@@ -223,7 +223,12 @@ export function TablePage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['standings', saveGameId, competitionId, hasPhases ? selectedPhaseId : null],
     queryFn: () => getStandings(saveGameId, competitionId, token ?? '', hasPhases ? selectedPhaseId : undefined),
-    enabled: Boolean(saveGameId && competitionId && token) && (!hasPhases || !isKnockoutPhase) && (!hasPhases || Boolean(selectedPhaseId)),
+    // Never fetch while the phases call is failing. Falling back to a phase-less request is not
+    // merely degraded: with no phaseId the backend counts EVERY fixture in the competition, so a
+    // semifinalist would show played = 15 in an 11-round league, mixing two-legged cup ties into
+    // league points. Show the error instead.
+    enabled: Boolean(saveGameId && competitionId && token) && !phasesError
+      && (!hasPhases || !isKnockoutPhase) && (!hasPhases || Boolean(selectedPhaseId)),
     staleTime: Infinity,
   })
 
@@ -287,7 +292,8 @@ export function TablePage() {
         <StandingsTable
           rows={rows}
           isLoading={isLoading}
-          error={error}
+          // A failed /phases call must surface, not silently degrade into a phase-less table.
+          error={error ?? phasesError}
           isMobile={isMobile}
           managedClubId={managedClubId}
           saveGameId={saveGameId}

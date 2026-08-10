@@ -25,6 +25,7 @@ import br.com.carvoeiromanager.seed.SeedClub;
 import br.com.carvoeiromanager.seed.SeedCompetition;
 import br.com.carvoeiromanager.seed.SeedLoader;
 import br.com.carvoeiromanager.seed.SeedPhase;
+import br.com.carvoeiromanager.seed.SeedPhaseValidator;
 import br.com.carvoeiromanager.seed.SeedPlayer;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -220,6 +221,12 @@ public class SaveGameService {
         //    (the generator reads memberships via competitionClubRepository to build the fixture schedule).
         List<Competition> competitions = new ArrayList<>();
         for (SeedCompetition seedComp : seed.competitions()) {
+            // Fail here, before any row is written, rather than mid-season: a bad phase config
+            // otherwise surfaces as an IndexOutOfBounds during career creation, an exception
+            // inside an advance() that rolls back and permanently blocks the round, or a career
+            // that cannot roll over at all. See SeedPhaseValidator for each rule's failure mode.
+            SeedPhaseValidator.validate(seedComp);
+
             // A phased competition's length is the sum of its phases' match-units; an unphased
             // one keeps the legacy double-round-robin count.
             int totalRounds = (seedComp.phases() == null || seedComp.phases().isEmpty())

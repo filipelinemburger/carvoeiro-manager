@@ -63,6 +63,12 @@ export function SeasonSummaryPage() {
       void queryClient.invalidateQueries({ queryKey: ['preContractAgreements', saveGameId] })
       // Rollover can also sell/list/free watched players during the off-season.
       void queryClient.invalidateQueries({ queryKey: ['watchlist', saveGameId] })
+      // Rollover reuses the same Competition row (id preserved) and deliberately keeps its
+      // phase rows, so ['phases', saveGameId, competitionId] is byte-identical across
+      // seasons. Without this the new season opens on a cache where every phase is
+      // complete -- landing the user on the Final tab showing last season's ties.
+      void queryClient.invalidateQueries({ queryKey: ['phases'] })
+      void queryClient.invalidateQueries({ queryKey: ['ties'] })
     },
   })
 
