@@ -24,5 +24,12 @@ public record FixtureEntryResponse(
         Integer goalsAgainst,
         Integer attendance,
         String weather,
-        Integer temperatureC
+        Integer temperatureC,
+        /**
+         * Shootout score in the same for/against orientation as {@code goalsFor}/{@code goalsAgainst},
+         * or null when the match was not decided on penalties. goalsFor/goalsAgainst stay the
+         * 120-minute score, so without these a knockout tie won on penalties shows as a plain draw.
+         */
+        Integer penaltiesFor,
+        Integer penaltiesAgainst
 ) {}

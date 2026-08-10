@@ -92,6 +92,19 @@ function ScoreCell({ fixture }: { fixture: FixtureEntry }) {
       >
         {homeGoals}x{awayGoals}
       </Typography>
+      {/* A tie decided on penalties still ended level, so the result colour stays a draw --
+          but the shootout is what actually settled it, so show it. */}
+      {fixture.penaltiesFor != null && fixture.penaltiesAgainst != null && (
+        <Typography
+          component="div"
+          variant="caption"
+          sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}
+        >
+          {fixture.home
+            ? `(${fixture.penaltiesFor}x${fixture.penaltiesAgainst} pên.)`
+            : `(${fixture.penaltiesAgainst}x${fixture.penaltiesFor} pên.)`}
+        </Typography>
+      )}
     </TableCell>
   )
 }

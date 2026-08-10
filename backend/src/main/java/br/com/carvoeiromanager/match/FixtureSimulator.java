@@ -433,7 +433,9 @@ public class FixtureSimulator {
                 awayClubId, awayClub != null ? awayClub.getName() : "", shortName(awayClub),
                 match.awayGoals(),
                 homeClub != null ? homeClub.resolvedStadiumName() : null,
-                fixture.getAttendance(), weather.condition().name(), weather.temperatureC());
+                fixture.getAttendance(), weather.condition().name(), weather.temperatureC(),
+                // resolveShootout ran above, so these are already set when the tie went to penalties.
+                fixture.getPenaltyHome(), fixture.getPenaltyAway());
         return new FixtureSim(response, homeXi, awayXi, match.homeGoals(), match.awayGoals(), attributed,
                 homeFitness, awayFitness);
     }

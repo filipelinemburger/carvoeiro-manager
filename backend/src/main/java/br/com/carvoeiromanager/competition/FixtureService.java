@@ -106,6 +106,9 @@ public class FixtureService {
                 goalsAgainst,
                 fixture.getAttendance(),
                 weatherLabel,
-                temperatureC);
+                temperatureC,
+                // Penalties follow the same for/against flip as the goals above.
+                home ? fixture.getPenaltyHome() : fixture.getPenaltyAway(),
+                home ? fixture.getPenaltyAway() : fixture.getPenaltyHome());
     }
 }

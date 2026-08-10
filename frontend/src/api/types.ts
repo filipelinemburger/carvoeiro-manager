@@ -359,6 +359,13 @@ export type FixtureEntry = {
   temperatureC?: number | null
   /** Null until the fixture has been played. */
   attendance?: number | null
+  /**
+   * Shootout score in the same for/against orientation as goalsFor/goalsAgainst, present only
+   * when a knockout tie went to penalties. The goals stay the 120-minute score, so without
+   * these a tie won on penalties shows as a plain draw in the calendar.
+   */
+  penaltiesFor?: number | null
+  penaltiesAgainst?: number | null
 }
 
 export type FixtureResultResponse = {
@@ -376,6 +383,13 @@ export type FixtureResultResponse = {
   attendance?: number | null
   weather?: string | null
   temperatureC?: number | null
+  /**
+   * Shootout score, present only when a knockout tie was decided on penalties. homeGoals/awayGoals
+   * remain the 120-minute score, so without rendering these a final won on penalties reads as a
+   * draw. Optional: absent on payloads persisted before the field existed.
+   */
+  penaltyHome?: number | null
+  penaltyAway?: number | null
 }
 
 export type FinanceRoundResponse = {

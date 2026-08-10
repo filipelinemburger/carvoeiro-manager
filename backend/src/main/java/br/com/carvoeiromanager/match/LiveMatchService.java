@@ -474,7 +474,9 @@ public class LiveMatchService {
                 homeClubId, homeClub.getName(), shortName(homeClub), timeline.homeGoals(),
                 awayClubId, awayClub.getName(), shortName(awayClub), timeline.awayGoals(),
                 homeClub.resolvedStadiumName(),
-                fixture.getAttendance(), weather.condition().name(), weather.temperatureC());
+                fixture.getAttendance(), weather.condition().name(), weather.temperatureC(),
+                // resolveShootout ran earlier in finish(), so these are set for a tie on penalties.
+                fixture.getPenaltyHome(), fixture.getPenaltyAway());
         Set<UUID> userPlayedIds = allPlayed.stream().map(Player::getId).collect(Collectors.toSet());
 
         List<PlayerRating> playerRatings = managedRatings(lm, cfg, timeline, MINUTES);

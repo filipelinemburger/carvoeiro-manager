@@ -96,6 +96,17 @@ function MatchTimeline({ result, saveGameId, competitionId, managedClubId }: {
                 {' — '}
                 <strong>{r.awayGoals}</strong> {r.awayClubShortName ?? r.awayClubName}
               </Typography>
+              {/* homeGoals/awayGoals are the 120-minute score, so a tie won on penalties would
+                  otherwise read as a draw here. Absent on older payloads and on every league match. */}
+              {r.penaltyHome != null && r.penaltyAway != null && (
+                <Typography
+                  variant="caption"
+                  component="div"
+                  sx={{ color: 'text.secondary', mt: '2px' }}
+                >
+                  {`${r.penaltyHome} — ${r.penaltyAway} nos pênaltis`}
+                </Typography>
+              )}
               {/* Old news payloads persisted before this field existed have no stadium — omit the line. */}
               {r.stadium && (
                 <Typography
