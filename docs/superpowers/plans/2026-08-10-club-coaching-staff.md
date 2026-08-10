@@ -757,49 +757,73 @@ git commit -m "feat: expose the head-coach slot on the staff roster"
 
 ### Task 6: Real staff attributes drive every club's effects
 
-Deletes the 14.0 AI baseline. Gated on Task 3's coverage report.
+**REVISED after Task 3's coverage gate fired.** The original version of this task deleted the 14.0
+AI baseline entirely. Measured coverage (`FISIOTERAPEUTA` 4/31, `OLHEIRO` 8/31) showed that would
+raise injuries ~20% for 27 of 31 clubs — a league-wide nerf, not differentiation — because an empty
+slot records what the internet publishes, not what the club employs. Per design §3.2a the baseline
+now survives as a **floor for AI clubs only**.
+
+Consequence: **the four public signatures do not change**, so six of the seven call sites need no
+edit at all. Only the fallback inside `averageFor` and `TrainingService`'s single global AI bonus
+move.
 
 **Files:**
-- Modify: `backend/src/main/java/br/com/carvoeiromanager/staff/StaffEffectsService.java`
+- Modify: `backend/src/main/java/br/com/carvoeiromanager/staff/StaffEffectsService.java:49-60`
 - Modify: `backend/src/main/java/br/com/carvoeiromanager/player/TrainingService.java:87-88,113`
-- Modify: `backend/src/main/java/br/com/carvoeiromanager/contract/ContractService.java:63,111`
-- Modify: `backend/src/main/java/br/com/carvoeiromanager/match/MatchOutcomeApplier.java:173`
-- Modify: `backend/src/main/java/br/com/carvoeiromanager/match/LiveMatchEngine.java:596-600`
-- Modify: `backend/src/main/java/br/com/carvoeiromanager/finance/FinanceService.java:226`
 - Modify: `backend/src/test/java/br/com/carvoeiromanager/staff/StaffEffectsServiceTest.java`
+
+`ContractService`, `MatchOutcomeApplier`, `LiveMatchEngine` and `FinanceService` are **untouched**
+by this task.
 
 **Interfaces:**
 - Consumes: seeded rows for every club (Task 4).
-- Produces: `StaffEffectsService.trainingBonusFor(UUID clubId)`, `injuryRiskMultiplierFor(UUID clubId)`, `wageDemandMultiplierFor(UUID clubId)`, `sponsorshipMultiplierFor(UUID clubId)` — the `boolean managed` parameter is gone from all four.
+- Produces: unchanged public API — `trainingBonusFor(UUID clubId, boolean managed)`, `injuryRiskMultiplierFor(UUID clubId, boolean managed)`, `wageDemandMultiplierFor(UUID clubId, boolean managed)`, `sponsorshipMultiplierFor(UUID clubId, boolean managed)`. Behaviour changes, not shape.
 
 - [ ] **Step 1: Write the failing test**
 
-Replace the `managed`-flag assertions in `StaffEffectsServiceTest` (every call currently passes
-`CLUB_ID, true` or `CLUB_ID, false`) with the single-argument form, and add:
+`StaffEffectsServiceTest` currently has a test asserting the old contract — that a non-managed club
+returns the baseline **without touching the repository** (it uses `verifyNoInteractions`). That
+contract is exactly what changes: an AI club is now read first, and only falls back to the baseline
+when its slot is empty. Update that test to reflect the new behaviour rather than deleting it.
+
+Keep every existing call's two-argument form; the signatures do not change. Add:
 
 ```java
     @Test
-    void aClubWithRealStaffUsesThoseAttributesRatherThanAnyBaseline() {
+    void anAiClubWithRealStaffUsesThoseAttributesInsteadOfTheBaseline() {
         when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.FISIOTERAPEUTA))
                 .thenReturn(Optional.of(staffWith(StaffRole.FISIOTERAPEUTA, 18, 18)));
 
-        // An excellent physio must beat the old flat 14.0 baseline (which produced ~0.886).
-        assertThat(service.injuryRiskMultiplierFor(CLUB_ID)).isLessThan(0.80);
+        // The whole point of the slice: a researched physio beats the flat 14.0 baseline (~0.886).
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, false)).isLessThan(0.80);
     }
 
     @Test
-    void anUnfilledSlotIsNeutralForEveryClub() {
+    void anAiClubWithAnEmptySlotFallsBackToTheBaseline() {
         when(staffRepository.findByClubIdAndRole(any(), any())).thenReturn(Optional.empty());
 
-        assertThat(service.injuryRiskMultiplierFor(CLUB_ID)).isEqualTo(1.0);
-        assertThat(service.trainingBonusFor(CLUB_ID)).isZero();
-        assertThat(service.wageDemandMultiplierFor(CLUB_ID)).isEqualTo(1.0);
-        assertThat(service.sponsorshipMultiplierFor(CLUB_ID)).isEqualTo(1.0);
+        // An empty slot on an AI club records a research gap, not a club without a physio —
+        // so it must behave exactly as it did before this slice (design §3.2a).
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, false)).isEqualTo(0.8285714285714286);
+        assertThat(service.trainingBonusFor(CLUB_ID, false)).isEqualTo(1);
+    }
+
+    @Test
+    void theManagedClubWithAnEmptySlotStaysNeutral() {
+        when(staffRepository.findByClubIdAndRole(any(), any())).thenReturn(Optional.empty());
+
+        // At your own club an empty slot IS a fact — you have not hired anyone — and hiring is
+        // the mechanic that fixes it. No floor here.
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
+        assertThat(service.trainingBonusFor(CLUB_ID, true)).isZero();
+        assertThat(service.wageDemandMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
+        assertThat(service.sponsorshipMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
     }
 ```
 
-Delete any existing test asserting the AI baseline (it will reference `verifyNoInteractions` on the
-repository for a non-managed club — that contract is exactly what this task removes).
+The literal `0.8285714285714286` is `lerp(14.0, 1.0, 0.70)` = `1.0 - 0.3 * (4.0/7.0)`. Pin the exact
+value rather than a range: it is the number an in-progress career is already running on, and this
+task's promise is that it does not move.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -807,115 +831,82 @@ repository for a non-managed club — that contract is exactly what this task re
 cd backend && ./gradlew test --tests "br.com.carvoeiromanager.staff.StaffEffectsServiceTest"
 ```
 
-Expected: FAIL — compilation error, the single-argument overloads do not exist.
+Expected: FAIL — `anAiClubWithRealStaffUsesThoseAttributesInsteadOfTheBaseline` fails because
+today's `averageFor` short-circuits to 14.0 for `managed == false` and never reads the row, so the
+result is 0.8285…, not below 0.80.
 
-- [ ] **Step 3: Drop the baseline**
+- [ ] **Step 3: Turn the baseline into a floor**
 
-Replace `StaffEffectsService.java` body — delete `AI_BASELINE_AVERAGE` and the `managed` parameter:
+In `StaffEffectsService.java`, the four public methods and the constructor are unchanged. Replace
+only the class javadoc, the `AI_BASELINE_AVERAGE` javadoc, and `averageFor`:
 
 ```java
 /**
  * The single place that turns a hired {@link Staff} row into a numeric effect. Every consumer
  * (training, injury risk, wage-demand discounts, sponsorship, match strength) calls through here
- * instead of touching {@link StaffRepository} directly. Every club — managed or AI — is read from
- * its real rows; an unfilled role yields the effect's identity value.
+ * instead of touching {@link StaffRepository} directly.
+ *
+ * <p>Every club is read from its real rows. What differs is the fallback when a role is unfilled:
+ * the managed club gets a neutral effect, because there an empty slot is a fact the player can act
+ * on by hiring; an AI club gets {@link #AI_BASELINE_AVERAGE}, because there an empty slot only
+ * means the seed research found nobody — not that the club employs nobody (design §3.2a).
  */
-@Service
-public class StaffEffectsService {
-
-    private final StaffRepository staffRepository;
-
-    public StaffEffectsService(StaffRepository staffRepository) {
-        this.staffRepository = staffRepository;
-    }
-
-    public int trainingBonusFor(UUID clubId) {
-        Double a = averageFor(clubId, StaffRole.PREPARADOR_FISICO);
-        if (a == null) {
-            return 0;
-        }
-        return (int) Math.max(0, Math.min(2, Math.round(lerp(a, 0.0, 2.0))));
-    }
-
-    public double injuryRiskMultiplierFor(UUID clubId) {
-        Double a = averageFor(clubId, StaffRole.FISIOTERAPEUTA);
-        return a == null ? 1.0 : clamp(lerp(a, 1.0, 0.70), 0.65, 1.0);
-    }
-
-    public double wageDemandMultiplierFor(UUID clubId) {
-        Double a = averageFor(clubId, StaffRole.OLHEIRO);
-        return a == null ? 1.0 : clamp(lerp(a, 1.0, 0.90), 0.88, 1.0);
-    }
-
-    public double sponsorshipMultiplierFor(UUID clubId) {
-        Double a = averageFor(clubId, StaffRole.ASSISTENTE);
-        return a == null ? 1.0 : clamp(lerp(a, 1.0, 1.10), 1.0, 1.12);
-    }
-
-    /** The effective attribute average for a role, or {@code null} when the slot is unfilled. */
-    private Double averageFor(UUID clubId, StaffRole role) {
-        return staffRepository.findByClubIdAndRole(clubId, role)
-                .map(Staff::attributeAverage)
-                .orElse(null);
-    }
-
-    /** Linear map anchored at (10, atRegular) and (17, atExcelente) — today's tier endpoints. */
-    private static double lerp(double average, double atRegular, double atExcelente) {
-        return atRegular + (atExcelente - atRegular) * (average - 10.0) / 7.0;
-    }
-
-    private static double clamp(double value, double lo, double hi) {
-        return Math.max(lo, Math.min(hi, value));
-    }
-}
 ```
-
-- [ ] **Step 4: Update the five simple call sites**
-
-Drop the second argument at each:
-
-- `ContractService.java:63` → `staffEffectsService.wageDemandMultiplierFor(save.getManagedClubId())`
-- `ContractService.java:111` → `staffEffectsService.wageDemandMultiplierFor(managedClubId)`
-- `MatchOutcomeApplier.java:173` → `staffEffectsService.injuryRiskMultiplierFor(p.getClubId())`
-- `FinanceService.java:226` → `staffEffectsService.sponsorshipMultiplierFor(club.getId())`
-- `LiveMatchEngine.java:596-600` → `resolveInjuryRiskMultiplier` no longer needs `cfg`:
 
 ```java
     /**
-     * Resolves this side's injury-risk multiplier once, up front, instead of once per player per
-     * minute. The multiplier depends only on the side's club, which cannot change during a match.
+     * Floor for an AI club whose role the research could not fill. Equivalent to the old flat
+     * {@link StaffQuality#BOM}, so an unresearched AI club behaves exactly as it did before club
+     * staff existed. Never applied to the managed club.
      */
-    private double resolveInjuryRiskMultiplier(Side side) {
-        UUID clubId = side.all.values().iterator().next().getClubId();
-        return staffEffectsService.injuryRiskMultiplierFor(clubId);
+    private static final double AI_BASELINE_AVERAGE = 14.0;
+```
+
+```java
+    /**
+     * The effective attribute average for a role: the club's real hired staff, or — when the slot
+     * is empty — {@code null} for the managed club (neutral effect) and the baseline for an AI one.
+     */
+    private Double averageFor(UUID clubId, boolean managed, StaffRole role) {
+        return staffRepository.findByClubIdAndRole(clubId, role)
+                .map(Staff::attributeAverage)
+                .orElseGet(() -> managed ? null : AI_BASELINE_AVERAGE);
     }
 ```
 
-and its two callers at lines 95-96 become `resolveInjuryRiskMultiplier(home)` /
-`resolveInjuryRiskMultiplier(away)`. If `cfg` is now unused in that region, leave the surrounding
-code untouched — it is used extensively elsewhere.
+Note the deliberate shape: the old version returned early for `!managed` and never queried. Now the
+query always runs and `orElseGet` decides the fallback.
 
-- [ ] **Step 5: Make training per-club**
+- [ ] **Step 4: Make the training bonus per club**
 
-In `TrainingService.java`, delete lines 87-88 (`managedBonus` / `aiBonus`). The `players` list is
-resolved further down; immediately after it, add:
+`TrainingService.java:87-88` resolves two constants for the whole week — one for the managed club
+and one "AI bonus" standing in for all 30 other clubs. That second constant stops describing the
+league the moment AI clubs differ from each other, which is what Task 4 just made true.
+
+Delete both lines. The `players` list is resolved further down; immediately after it, add:
 
 ```java
-        // One lookup per club per week, not per player: every club now has real staff, so the
-        // old single "AI bonus" constant no longer describes the league.
+        // One lookup per club per week, not one per player. A single league-wide "AI bonus" no
+        // longer describes anything now that each club has its own preparador físico.
         Map<UUID, Integer> trainingBonusByClub = players.stream()
                 .map(Player::getClubId)
                 .distinct()
-                .collect(Collectors.toMap(id -> id, staffEffectsService::trainingBonusFor));
+                .collect(Collectors.toMap(
+                        clubId -> clubId,
+                        clubId -> staffEffectsService.trainingBonusFor(clubId, clubId.equals(managedClubId))));
 ```
 
-Replace line 113:
+Replace line 113 — the `managed` local is already in scope there but the map keys off the club, so
+the ternary goes away entirely:
 
 ```java
             int bonus = intensityBonus(intensity) + trainingBonusByClub.getOrDefault(p.getClubId(), 0);
 ```
 
 Add the imports `java.util.Map` and `java.util.stream.Collectors` if absent.
+
+**Do not touch** `ContractService`, `MatchOutcomeApplier`, `LiveMatchEngine` or `FinanceService` —
+they already pass the correct `managed` flag and their behaviour is unchanged by this task.
 
 - [ ] **Step 6: Run the full backend suite**
 
@@ -947,6 +938,15 @@ git commit -m "feat: drive every club's staff effects from its real roster"
 **Interfaces:**
 - Consumes: `StaffRole.TECNICO` (Task 1); the single-argument effects API (Task 6).
 - Produces: `StaffEffectsService.coachStrengthMultiplierFor(UUID clubId)` returning `double` in `[0.96, 1.04]`; `TeamMatchInput.withCoachMultiplier(double)` returning `TeamMatchInput`.
+
+**Why this one method takes no `managed` flag**, unlike the four beside it: Task 6 gives an AI club
+with an empty slot the 14.0 baseline so a research gap never becomes a penalty. For a multiplier
+centred on 1.0, the non-penalising value already *is* 1.0 — an unresearched club fields a
+league-average coach. Routing it through the baseline would instead produce 1.0057, the same thing
+plus a rounding artefact that would perturb existing seeded-simulation results for no gain. Only
+CAM and CON reach this branch (`TECNICO` coverage is 28/31, and CRI has no row by design). Put that
+reasoning in the method's javadoc — the asymmetry with its four neighbours will otherwise read as
+an oversight.
 
 - [ ] **Step 1: Write the failing tests**
 

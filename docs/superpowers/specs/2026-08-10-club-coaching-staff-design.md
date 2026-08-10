@@ -46,12 +46,31 @@ career creation, and makes those attributes actually drive the AI clubs' effects
 
 These four were settled during brainstorming and drive everything below.
 
-**3.1 — AI staff counts in gameplay.** The seeded attributes feed `StaffEffectsService` for real;
-the 14.0 baseline is deleted. A club with a strong physio genuinely gets fewer injuries.
+**3.1 — AI staff counts in gameplay.** The seeded attributes feed `StaffEffectsService` for real.
+A club with a strong physio genuinely gets fewer injuries.
 
-**3.2 — Unresearched roles stay empty.** Only people confirmed by a source are seeded. A club with
-no findable olheiro starts with that slot open and therefore a neutral effect in it — which reads
-as a coherent penalty for a small club rather than as missing data.
+**3.2 — Unresearched roles stay empty in the data.** Only people confirmed by a source are seeded.
+A club with no findable olheiro simply has no row for it.
+
+**3.2a — AMENDED after the research landed (see §11).** As first written, §3.1 deleted the 14.0
+baseline outright and §3.2 read an empty slot as "a coherent penalty for a small club". The
+measured coverage refutes the premise: `FISIOTERAPEUTA` came in at 4/31 and `OLHEIRO` at 8/31,
+and the gaps are not concentrated in small clubs — Fortaleza, Ceará and Sport have no identifiable
+first-team physio either. **An empty slot on an AI club is a fact about what the internet
+publishes, not a fact about the club.** Deleting the baseline would therefore have raised the
+injury multiplier from 0.829 to 1.0 for 27 of 31 clubs — a league-wide nerf wearing the costume of
+differentiation.
+
+So the baseline survives as a **floor for AI clubs only**:
+
+- **AI club, role filled** → its real researched attributes. This is the differentiation §3.1 wanted,
+  and it lands wherever the research succeeded.
+- **AI club, role empty** → the 14.0 baseline, exactly as today. No regression, no invented name.
+- **Managed club, role empty** → neutral, unchanged. There the empty slot *is* a fact: the manager
+  genuinely has not hired anyone, and hiring is the mechanic that fixes it.
+
+This keeps the "omit rather than invent" rule (§3.2) completely intact — no fabricated staff exist
+anywhere — while confining the gameplay consequence of a research gap to nothing at all.
 
 **3.3 — Hiring becomes poaching.** Because §3.2 leaves real professionals employed and
 `StaffService` excludes every hired name save-wide, the candidate list would otherwise collapse to
@@ -186,15 +205,26 @@ comissão técnica.
 
 ## 7. Effects
 
-### 7.1 `StaffEffectsService` reads real rows for every club
+### 7.1 `StaffEffectsService` reads real rows, with the baseline as an AI floor
 
-`AI_BASELINE_AVERAGE` is deleted and the `boolean managed` parameter is removed from all four
-public methods. `averageFor(clubId, role)` becomes a plain repository lookup returning `null` for
-an unfilled slot, which every effect method already handles as its identity value.
+Under §3.2a the service still needs to know whether it is looking at the managed club, so the
+`boolean managed` parameter **stays** on all four public methods — no signature change, and
+therefore no call-site churn. Only the fallback moves:
 
-Call sites updated (mechanical, 7 of them): `ContractService.java:63,111`,
-`MatchOutcomeApplier.java:173`, `LiveMatchEngine.java:599`, `FinanceService.java:226`,
-`TrainingService.java:87-88`.
+```java
+private Double averageFor(UUID clubId, boolean managed, StaffRole role) {
+    return staffRepository.findByClubIdAndRole(clubId, role)
+            .map(Staff::attributeAverage)
+            .orElseGet(() -> managed ? null : AI_BASELINE_AVERAGE);
+}
+```
+
+Today the `!managed` branch returns the baseline *without reading the database at all*. Now every
+club is read first, and the baseline applies only when an AI club's slot is genuinely empty.
+
+Six of the seven call sites need no edit. The exception is `TrainingService.java:87-88`, which
+resolves one bonus for the managed club and one "AI bonus" for the entire rest of the league — a
+single constant that stops describing the league the moment AI clubs differ from each other.
 
 ### 7.2 `TrainingService` resolves per club
 
@@ -205,10 +235,10 @@ and reads from it inside the loop. One query per club per week, not one per play
 
 ### 7.3 Injury, wage-demand and sponsorship
 
-No structural change. `LiveMatchEngine.resolveInjuryRiskMultiplier` already resolves once per side
-per match (`LiveMatchEngine.java:588-600`), so removing the constant-return fast path costs two
-queries per match, not one per minute. `ContractService` and `FinanceService` already call per
-club.
+No change at all to these call sites. `LiveMatchEngine.resolveInjuryRiskMultiplier` already
+resolves once per side per match (`LiveMatchEngine.java:588-600`), so removing the constant-return
+fast path costs two queries per match, not one per minute. `ContractService` and `FinanceService`
+already call per club and already pass the correct `managed` flag.
 
 ### 7.4 The coach effect
 
@@ -222,6 +252,13 @@ public double coachStrengthMultiplierFor(UUID clubId)
 It maps the `TECNICO` attribute average through the existing `lerp` anchored at (10, 0.96) and
 (17, 1.04), clamped to that range. The managed club has no `TECNICO` row (§5.2), so it always
 receives exactly 1.0 — your own decisions are already the input the engine reads.
+
+**This one method does not take the §3.2a baseline floor**, and needs no `managed` flag. The floor
+exists to stop a research gap from becoming a penalty, and for a multiplier centred on 1.0 the
+non-penalising value simply *is* 1.0 — an unresearched club fields a league-average coach. Routing
+it through the 14.0 baseline would instead yield 1.0057, which is the same thing plus a rounding
+artefact that would perturb existing seeded-simulation results for no gain. Only two clubs (CAM,
+CON) reach this branch.
 
 `TeamMatchInput` gains:
 
@@ -337,8 +374,15 @@ physio from the pool keeps that person, while a fresh career gets the researched
 prefers the user's choice. Existing saves are therefore not byte-identical to new ones, the same
 trade V43 already accepted (`V43__research_backfill.sql` header).
 
-Skipping the migration entirely is **not** an option: §7.1 deletes the 14.0 baseline, so an
-un-backfilled save would silently drop every AI club to neutral effects mid-career.
+**Amended by §3.2a:** the original justification for this migration was that §7.1 deleted the
+baseline, so skipping it would silently drop every AI club in an in-progress save to neutral
+effects. That is no longer true — under the floor rule an un-backfilled save behaves exactly as it
+does today. The migration is therefore no longer a *correctness* requirement, and a save that
+never receives it degrades gracefully rather than breaking.
+
+It stays in scope anyway, for the reason the slice exists: without it, an in-progress career never
+sees a single real comissão técnica, and the rival club pages stay empty forever. The guards above
+are what make applying it to a live save safe.
 
 ## 10. Testing
 
@@ -435,10 +479,16 @@ be redundant).
 
 ## 12. Risks
 
-- **Research coverage is the real deliverable and it is uneven.** The smaller Catarinense clubs may
-  end up with only a head coach. §3.2 makes that a deliberate outcome, but if coverage turns out
-  worse than expected across the board, the balance conclusion in §7.1 (AI asymmetry) is weaker
-  than intended and should be revisited before the effect change ships.
+- ~~**Research coverage is the real deliverable and it is uneven.**~~ **This risk materialised and
+  has been resolved.** Coverage came in at `FISIOTERAPEUTA` 4/31 and `OLHEIRO` 8/31 (§11), far
+  below what §3.1's asymmetry argument assumed, and the gaps tracked press-office habits rather
+  than club size. §3.2a is the resolution: the baseline survives as an AI floor, so the research
+  differentiates where it succeeded and costs nothing where it did not. Residual consequence: the
+  asymmetry this slice delivers is real but narrower than first designed — it is carried mostly by
+  `TECNICO` (28/31), `PREPARADOR_FISICO` (21/31) and `ASSISTENTE` (20/31).
+- **`FISIOTERAPEUTA` and `OLHEIRO` are effectively cosmetic for AI clubs.** With 4 and 8 clubs
+  covered, almost every AI club sits on the baseline in those roles. If a later slice wants injury
+  prevention to differentiate the league, it needs a better data source — not more code.
 - **Staff data goes stale fast.** Coaching staff turn over constantly in Brazilian football; this
   seed is a 2026 snapshot and will drift. Sources are recorded so a refresh pass is mechanical.
 - **The `StaffRole` ordinal shift** (§5.1) changes candidate lists for existing saves. Harmless —
