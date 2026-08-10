@@ -55,6 +55,12 @@ class ContractServiceStaffIT {
         Career c = createCareer();
         Player target = freeAgent(c.id());
         playerRepository.save(target);
+        // The managed club now starts with a researched OLHEIRO seeded at career creation
+        // (Task 4), so replace rather than blindly insert — otherwise this collides with the
+        // staff_club_id_role_key unique constraint. (Base CrudRepository#delete auto-wraps in
+        // its own transaction outside a @Transactional test; the derived deleteByClubIdAndRole
+        // does not, so it can't be used bare here.)
+        staffRepository.findByClubIdAndRole(c.clubId(), StaffRole.OLHEIRO).ifPresent(staffRepository::delete);
         staffRepository.save(Staff.create(c.id(), c.clubId(), StaffRole.OLHEIRO,
                 StaffQuality.EXCELENTE, "Marcos Vieira", new BigDecimal("80000.00"), 17, 17));
 

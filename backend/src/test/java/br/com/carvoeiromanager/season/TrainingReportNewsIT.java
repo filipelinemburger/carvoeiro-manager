@@ -58,6 +58,12 @@ class TrainingReportNewsIT {
         // Given a hired EXCELENTE physio (also grants coach bonus +2) and a managed player one
         // unit from evolving: LEVE(+1) + coach(+2) pushes 39 → 42, guaranteeing an evolution.
         Career c = createCareer();
+        // The managed club now starts with a researched PREPARADOR_FISICO seeded at career
+        // creation (Task 4), so replace rather than blindly insert — otherwise this collides
+        // with the staff_club_id_role_key unique constraint. (Base CrudRepository#delete
+        // auto-wraps in its own transaction outside a @Transactional test; the derived
+        // deleteByClubIdAndRole does not, so it can't be used bare here.)
+        staffRepository.findByClubIdAndRole(c.clubId(), StaffRole.PREPARADOR_FISICO).ifPresent(staffRepository::delete);
         staffRepository.save(Staff.create(c.id(), c.clubId(), StaffRole.PREPARADOR_FISICO,
                 StaffQuality.EXCELENTE, "Preparador Teste", new BigDecimal("80000"), 17, 17));
         Player trainee = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).get(0);
@@ -86,8 +92,11 @@ class TrainingReportNewsIT {
 
     @Test
     void noPhysioMeansNoTrainingReportItem() {
-        // Given the same evolving player but no staff hired at all
+        // Given the same evolving player, but explicitly with no PREPARADOR_FISICO — career
+        // creation seeds one for the managed club by default, so it must be removed here to
+        // still exercise the true no-physio case.
         Career c = createCareer();
+        staffRepository.findByClubIdAndRole(c.clubId(), StaffRole.PREPARADOR_FISICO).ifPresent(staffRepository::delete);
         Player trainee = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).get(0);
         trainee.setTrainingAssignment(Attribute.PASSE, TrainingIntensity.LEVE);
         trainee.setTrainingProgress(39);

@@ -50,6 +50,11 @@ class FinanceServiceStaffIT {
     void aHiredAssistantBoostsMonthlySponsorshipAndTheirWageIsDeducted() {
         Career c = createCareer();
         Club club = clubRepository.findById(c.clubId()).orElseThrow();
+        // The managed club now starts with a researched commission seeded at career creation
+        // (Task 4). Clear it and hire only the one ASSISTENTE under test: the STAFF_WAGES
+        // assertion below sums every staff wage at the club, so any other seeded role left in
+        // place would break the isolation the test relies on (see the comment further down).
+        staffRepository.deleteAll(staffRepository.findByClubId(c.clubId()));
         staffRepository.save(Staff.create(c.id(), c.clubId(), StaffRole.ASSISTENTE,
                 StaffQuality.EXCELENTE, "Roberto Lima", new BigDecimal("80000.00"), 17, 17));
 

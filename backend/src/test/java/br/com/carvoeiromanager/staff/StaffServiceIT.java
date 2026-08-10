@@ -41,15 +41,15 @@ class StaffServiceIT {
     }
 
     @Test
-    void freshCareerHasAnEmptyRoster() {
+    void freshCareerStartsWithTheResearchedCommission() {
         Career c = createCareer();
 
         StaffRosterResponse roster = staffService.getRoster(c.id(), c.clubId(), c.userId());
 
-        assertThat(roster.assistente()).isNull();
-        assertThat(roster.preparadorFisico()).isNull();
-        assertThat(roster.olheiro()).isNull();
-        assertThat(roster.fisioterapeuta()).isNull();
+        // Coverage is researched, so exactly which slots are filled is data, not contract —
+        // what matters is that the manager no longer inherits an empty building.
+        assertThat(staffRepository.findByClubId(c.clubId())).isNotEmpty();
+        assertThat(roster).isNotNull();
     }
 
     @Test
@@ -87,7 +87,12 @@ class StaffServiceIT {
 
         StaffRosterResponse roster = staffService.hire(c.id(), c.clubId(), StaffRole.ASSISTENTE, 2, c.userId());
 
-        assertThat(staffRepository.findByClubId(c.clubId())).hasSize(1);
+        // The managed club now starts with a researched commission of its own (career creation
+        // seeds it), so asserting a total roster size of one no longer holds — assert instead
+        // that the ASSISTENTE role specifically was replaced, not duplicated.
+        assertThat(staffRepository.findByClubId(c.clubId()).stream()
+                .filter(s -> s.getRole() == StaffRole.ASSISTENTE)
+                .toList()).hasSize(1);
         assertThat(roster.assistente()).isNotNull();
     }
 

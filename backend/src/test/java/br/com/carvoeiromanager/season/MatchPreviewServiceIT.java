@@ -55,6 +55,12 @@ class MatchPreviewServiceIT {
     }
 
     private void hireAssistant(Career c, int primaryAttribute, int secondaryAttribute) {
+        // The managed club now starts with a researched ASSISTENTE seeded at career creation
+        // (Task 4), so replace rather than blindly insert — otherwise this collides with the
+        // staff_club_id_role_key unique constraint. (Base CrudRepository#delete auto-wraps in
+        // its own transaction outside a @Transactional test; the derived deleteByClubIdAndRole
+        // does not, so it can't be used bare here.)
+        staffRepository.findByClubIdAndRole(c.clubId(), StaffRole.ASSISTENTE).ifPresent(staffRepository::delete);
         staffRepository.save(Staff.create(c.id(), c.clubId(), StaffRole.ASSISTENTE, StaffQuality.EXCELENTE,
                 "Auxiliar Teste", new BigDecimal("80000.00"), primaryAttribute, secondaryAttribute));
     }
@@ -76,8 +82,10 @@ class MatchPreviewServiceIT {
 
     @Test
     void noAssistantMeansNoPreview() {
-        // Fresh career, no staff hired at all.
+        // Fresh career; explicitly remove the researched ASSISTENTE career creation now seeds
+        // for the managed club so this test still exercises the true no-assistant case.
         Career c = createCareer();
+        staffRepository.findByClubIdAndRole(c.clubId(), StaffRole.ASSISTENTE).ifPresent(staffRepository::delete);
 
         matchPreviewService.maybePersistPreview(c.id());
 
