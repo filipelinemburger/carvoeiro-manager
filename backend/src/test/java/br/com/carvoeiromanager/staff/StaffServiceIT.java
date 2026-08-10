@@ -111,6 +111,35 @@ class StaffServiceIT {
     }
 
     @Test
+    void theManagedClubsHeadCoachSlotIsTheManagerThemselves() {
+        Career c = createCareer();
+
+        StaffRosterResponse roster = staffService.getRoster(c.id(), c.clubId(), c.userId());
+
+        assertThat(roster.tecnico()).isNotNull();
+        assertThat(roster.tecnico().name()).isEqualTo("Técnico");   // createCareer's default manager name
+        // Null quality/wage is how the frontend recognises "this is you, not a hire".
+        assertThat(roster.tecnico().quality()).isNull();
+        assertThat(roster.tecnico().wage()).isNull();
+    }
+
+    @Test
+    void aRivalClubsHeadCoachSlotIsTheirRealCoach() {
+        Career c = createCareer();
+        UUID rivalClubId = staffRepository.findBySaveGameId(c.id()).stream()
+                .filter(s -> s.getRole() == StaffRole.TECNICO)
+                .map(Staff::getClubId)
+                .findFirst()
+                .orElseThrow();
+
+        StaffRosterResponse roster = staffService.getRoster(c.id(), rivalClubId, c.userId());
+
+        assertThat(roster.tecnico()).isNotNull();
+        assertThat(roster.tecnico().quality()).isNotNull();
+        assertThat(roster.tecnico().wage()).isNotNull();
+    }
+
+    @Test
     void aClubFromADifferentSaveGameIsRejected() {
         // Two independent save games, each with its own user (createCareer mints a fresh User every
         // call) — c2's club must not be reachable through c1's save-game id, proving the

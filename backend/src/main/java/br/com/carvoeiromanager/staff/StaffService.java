@@ -38,11 +38,11 @@ public class StaffService {
     }
 
     public StaffRosterResponse getRoster(UUID saveGameId, UUID clubId, UUID userId) {
-        saveGameService.requireOwned(saveGameId, userId);
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         requireClubInSave(saveGameId, clubId);
         Map<StaffRole, Staff> byRole = staffRepository.findByClubId(clubId).stream()
                 .collect(Collectors.toMap(Staff::getRole, s -> s));
-        return toRosterResponse(byRole);
+        return toRosterResponse(byRole, clubId.equals(save.getManagedClubId()), save.getManagerName());
     }
 
     public List<StaffCandidateResponse> getCandidates(UUID saveGameId, UUID clubId, StaffRole role,
@@ -93,7 +93,7 @@ public class StaffService {
             matchPreviewService.maybePersistPreview(saveGameId);
         }
 
-        return toRosterResponse(byRole);
+        return toRosterResponse(byRole, true, save.getManagerName());
     }
 
     /**
@@ -110,8 +110,15 @@ public class StaffService {
         }
     }
 
-    private StaffRosterResponse toRosterResponse(Map<StaffRole, Staff> byRole) {
+    private StaffRosterResponse toRosterResponse(Map<StaffRole, Staff> byRole, boolean managedClub,
+                                                 String managerName) {
+        // At the managed club the head coach is the player, so no row exists (see
+        // SaveGameService.seedClubStaff) and the slot is filled from the manager persona instead.
+        StaffResponse tecnico = managedClub
+                ? new StaffResponse(managerName, null, null, 0, 0)
+                : toStaffResponse(byRole.get(StaffRole.TECNICO));
         return new StaffRosterResponse(
+                tecnico,
                 toStaffResponse(byRole.get(StaffRole.ASSISTENTE)),
                 toStaffResponse(byRole.get(StaffRole.PREPARADOR_FISICO)),
                 toStaffResponse(byRole.get(StaffRole.OLHEIRO)),
