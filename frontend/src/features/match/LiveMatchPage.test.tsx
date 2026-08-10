@@ -114,8 +114,8 @@ describe('LiveMatchPage', () => {
     fireEvent.click(await screen.findByRole('tab', { name: /escalações/i }))
 
     // Each name renders twice — once in the list, once as a PlayerToken on the pitch.
-    expect((await screen.findAllByText('Goleiro Casa')).length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Goleiro Fora').length).toBeGreaterThan(0)
+    expect(await screen.findAllByText('Goleiro Casa')).toHaveLength(2)
+    expect(screen.getAllByText('Goleiro Fora')).toHaveLength(2)
     expect(screen.getAllByText(STATE.homeClubShortName).length).toBeGreaterThan(0)
     expect(screen.getAllByText(STATE.awayClubShortName).length).toBeGreaterThan(0)
   })
@@ -149,7 +149,7 @@ describe('LiveMatchPage', () => {
     // short names), producing a false match.
     const columnFor = async (playerName: string) => {
       const matches = await screen.findAllByText(playerName)
-      let el: HTMLElement | null = matches.find(m => m.closest('button')) ?? matches[0]
+      let el: HTMLElement | null = listOccurrence(matches)
       for (
         let i = 0;
         i < 10 && el && !el.textContent?.includes(STATE.homeClubShortName) && !el.textContent?.includes(STATE.awayClubShortName);
@@ -337,8 +337,8 @@ describe('LiveMatchPage', () => {
 
     fireEvent.click(await screen.findByRole('tab', { name: /escalações/i }))
     expect(await screen.findByTestId('pitch')).toBeInTheDocument()
-    expect((await screen.findAllByText('Goleiro Titular')).length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Zagueiro Rival').length).toBeGreaterThan(0)
+    expect(await screen.findAllByText('Goleiro Titular')).toHaveLength(2)
+    expect(screen.getAllByText('Zagueiro Rival')).toHaveLength(2)
     expect(screen.getByLabelText('Lesionado')).toBeInTheDocument()
   })
 
@@ -915,13 +915,25 @@ describe('LiveMatchPage', () => {
   })
 
   it('shows the match stats in the Estatísticas do jogo tab', async () => {
-    vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE,
+      stats: {
+        home: { ...STATE.stats.home, possession: 62, shots: 7 },
+        away: { ...STATE.stats.away, possession: 38, shots: 2 },
+      },
+    } as never)
     renderPage()
 
     fireEvent.click(await screen.findByRole('tab', { name: /estatísticas do jogo/i }))
-    // STATE.stats is zero-filled/50-50, so every counter row and the possession row (with its
-    // % suffix) must render from the real fixture, not MatchStatsTab's own null fallback.
-    expect(await screen.findByText('Finalizações')).toBeInTheDocument()
-    expect(within(screen.getByTestId('stat-possession')).getAllByText('50%')).toHaveLength(2)
+    // STATE.stats (50/50 possession, every counter 0) is byte-identical to MatchStatsTab's own
+    // EMPTY_STATS fallback (MatchStatsTab.tsx:20-36), so a test built on the shared fixture
+    // can't tell `stats={state.stats}` apart from `stats={undefined}`. Override with asymmetric
+    // values the fallback could never produce, and check each pair in DOM order (home value
+    // first, away value second) so a home/away swap regression is also caught.
+    const possessionValues = within(await screen.findByTestId('stat-possession')).getAllByText(/^(62%|38%)$/)
+    expect(possessionValues.map(el => el.textContent)).toEqual(['62%', '38%'])
+
+    const shotsValues = within(screen.getByTestId('stat-shots')).getAllByText(/^(7|2)$/)
+    expect(shotsValues.map(el => el.textContent)).toEqual(['7', '2'])
   })
 })
