@@ -257,7 +257,7 @@ public class SaveGameService {
 
         // 4. Route fixture and season_event creation through SeasonCalendarGenerator.
         //    Memberships are persisted above so the generator will find them.
-        seasonCalendarGenerator.generate(saveGame.getId(), seasonYear, competitions);
+        seasonCalendarGenerator.generate(saveGame.getId(), seasonYear, competitions, managedClubId);
 
         // 5. Set managed club, current date to season start, and save the SaveGame.
         LocalDate seasonStart = LocalDate.of(seasonYear, 1, 15);

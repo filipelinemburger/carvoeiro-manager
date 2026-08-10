@@ -56,17 +56,35 @@ public class SeasonCalendarGenerator {
 
     // Persists via the EntityManager, so it needs an active transaction. In production it joins
     // createCareer()/rollover's existing transaction (REQUIRED); called standalone it opens its own.
+    /**
+     * @param managedClubId the club the player manages. Competitions it belongs to are interleaved
+     *                      onto one shared 5-day cadence (their matches must not collide); every
+     *                      other competition is dated independently across the same window, so
+     *                      adding a division the player does not play in never lengthens their
+     *                      season. Passed in rather than read from the save because
+     *                      SaveGameService generates the calendar BEFORE it sets the managed club.
+     */
     @Transactional
-    public void generate(UUID saveGameId, int seasonYear, List<Competition> competitions) {
+    public void generate(UUID saveGameId, int seasonYear, List<Competition> competitions,
+                         UUID managedClubId) {
         final LocalDate seasonStart = LocalDate.of(seasonYear, 1, 15);
 
         List<Competition> comps = competitions.stream()
                 .sorted(Comparator.comparing(Competition::getId)).toList();
 
-        // 1. Build each competition's rounds (fixtures not yet dated/persisted), grouped by round.
+        List<Competition> managed = new ArrayList<>();
+        List<Competition> background = new ArrayList<>();
+        for (Competition comp : comps) {
+            boolean playsHere = competitionClubRepository.findByCompetitionId(comp.getId()).stream()
+                    .anyMatch(cc -> cc.getClubId().equals(managedClubId));
+            (playsHere ? managed : background).add(comp);
+        }
+
+        // 1. Build each managed competition's rounds (fixtures not yet dated/persisted), grouped
+        //    by round. Background competitions are dated independently below (step 4).
         List<List<MatchUnit>> roundsByComp = new ArrayList<>();
         int maxRounds = 0;
-        for (Competition comp : comps) {
+        for (Competition comp : managed) {
             List<UUID> memberIds = competitionClubRepository.findByCompetitionId(comp.getId()).stream()
                     .map(cc -> cc.getClubId()).sorted().toList();
             List<CompetitionPhase> phases =
@@ -102,6 +120,14 @@ public class SeasonCalendarGenerator {
                     ? SeasonEvent.createMatch(saveGameId, date, unit.competitionId(), unit.round(), 0)
                     : SeasonEvent.createPhased(saveGameId, date, unit.competitionId(),
                             unit.phaseId(), unit.round(), 0));
+        }
+
+        // Background competitions run in parallel across the same window the managed season
+        // occupies, so their tables advance at a believable pace without consuming any of the
+        // player's match slots.
+        int managedSeasonDays = Math.max(1, (ordered.size() - 1) * MATCH_INTERVAL_DAYS);
+        for (Competition comp : background) {
+            generateBackground(saveGameId, seasonStart, comp, managedSeasonDays);
         }
 
         // 4. TRANSFER events inside each window range (sequence 1), plus pre-contract
@@ -173,6 +199,40 @@ public class SeasonCalendarGenerator {
             roundOffset += phase.getRounds();
         }
         return units;
+    }
+
+    /**
+     * Dates one background competition's rounds evenly across the managed season's window and
+     * persists its fixtures and MATCH events. The events exist so BackgroundCompetitionService
+     * can tell what is due; they are distinguished from managed ones by their competition's
+     * membership, never by a column.
+     */
+    private void generateBackground(UUID saveGameId, LocalDate seasonStart, Competition comp,
+                                    int managedSeasonDays) {
+        List<UUID> memberIds = competitionClubRepository.findByCompetitionId(comp.getId()).stream()
+                .map(cc -> cc.getClubId()).sorted().toList();
+        int rounds = comp.getTotalRounds();
+        int interval = Math.max(1, managedSeasonDays / Math.max(1, rounds));
+
+        List<List<Fixture>> byRound = new ArrayList<>();
+        for (int r = 0; r < rounds; r++) {
+            byRound.add(new ArrayList<>());
+        }
+        fixtureScheduler.doubleRoundRobin(memberIds.size()).forEach(scheduled -> {
+            UUID home = memberIds.get(scheduled.homeIndex());
+            UUID away = memberIds.get(scheduled.awayIndex());
+            byRound.get(scheduled.round()).add(
+                    Fixture.create(saveGameId, comp.getId(), scheduled.round(), home, away, null));
+        });
+
+        for (int r = 0; r < rounds; r++) {
+            LocalDate date = seasonStart.plusDays((long) r * interval);
+            for (Fixture fx : byRound.get(r)) {
+                fx.setMatchDate(date);
+                entityManager.persist(fx);
+            }
+            entityManager.persist(SeasonEvent.createMatch(saveGameId, date, comp.getId(), r, 0));
+        }
     }
 
     private void addTransferEvents(UUID saveGameId, LocalDate seasonStart, int startOffset, int endOffset) {

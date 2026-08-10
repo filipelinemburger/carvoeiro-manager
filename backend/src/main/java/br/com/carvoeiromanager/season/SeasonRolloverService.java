@@ -341,7 +341,7 @@ public class SeasonRolloverService {
             competition.setSeasonYear(finishingYear + 1);
             competitionRepository.save(competition);
         }
-        seasonCalendarGenerator.generate(saveGameId, finishingYear + 1, competitions);
+        seasonCalendarGenerator.generate(saveGameId, finishingYear + 1, competitions, managedClubId);
 
         // 5. Advance the save into the new season.
         saveGame.advanceToNextSeason();
