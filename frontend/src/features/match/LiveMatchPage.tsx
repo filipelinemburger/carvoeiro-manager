@@ -17,6 +17,7 @@ import { RoundTab } from './RoundTab'
 import { MatchScoreboard } from './MatchScoreboard'
 import { MatchInfoLine } from './MatchInfoLine'
 import { MatchNarrationCard } from './MatchNarrationCard'
+import { GameOptionsMenu } from './GameOptionsMenu'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { WatchStar } from '../players/WatchStar'
 
@@ -252,28 +253,10 @@ export function LiveMatchPage() {
       )}
 
       {/* Pausar/Continuar, Continuar assim mesmo, Iniciar 2º tempo and the full-time Continuar
-          now live on MatchNarrationCard (Partida tab) — see the action-slot table there. Skip
-          buttons stay here for now (Task 9 moves them into the options menu); Substituir/Tática
-          stay here permanently, they're still test entry points. */}
+          now live on MatchNarrationCard (Partida tab) — see the action-slot table there. The two
+          "Avançar" skip actions now live in GameOptionsMenu (bottom of the page); Substituir/
+          Tática stay here permanently, they're still test entry points. */}
       <Stack direction="row" spacing={1} sx={{ my: 1 }}>
-        {!fullTime && !halftime && state.minute < 45 && (
-          <Button
-            variant="outlined"
-            disabled={skipping || advanceToMut.isPending || advanceMut.isPending}
-            onClick={() => skipTo('HALF_TIME')}
-          >
-            Avançar até o intervalo
-          </Button>
-        )}
-        {!fullTime && (
-          <Button
-            variant="outlined"
-            disabled={skipping || advanceToMut.isPending || advanceMut.isPending}
-            onClick={() => skipTo('FULL_TIME')}
-          >
-            Avançar até o fim
-          </Button>
-        )}
         {!fullTime && (
           <Button variant="outlined" color="secondary" disabled={state.subsRemaining <= 0}
             onClick={() => { setActionsTab(0); setActionsOpen(true) }}>
@@ -385,6 +368,13 @@ export function LiveMatchPage() {
           managedClubId={managedClubId}
         />
       )}
+
+      <GameOptionsMenu
+        minute={state.minute}
+        status={state.status}
+        actionPending={skipping || advanceToMut.isPending || advanceMut.isPending}
+        onSkip={skipTo}
+      />
 
       <MatchActionsDialog
         key={String(actionsOpen)}

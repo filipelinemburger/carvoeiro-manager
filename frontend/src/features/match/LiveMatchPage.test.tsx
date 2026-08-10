@@ -398,12 +398,13 @@ describe('LiveMatchPage', () => {
     )
     renderPage()
 
-    const button = await screen.findByRole('button', { name: /avançar até o fim/i })
-    fireEvent.click(button)
+    fireEvent.click(await screen.findByRole('button', { name: /opções do jogo/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /avançar até o fim/i }))
 
     await waitFor(() => expect(advanceToLiveMatch).toHaveBeenCalledWith('sg-1', 'FULL_TIME', 'test-token'))
     // A second click while the skip is in flight must not double-fire the request.
-    fireEvent.click(button)
+    fireEvent.click(await screen.findByRole('button', { name: /opções do jogo/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /avançar até o fim/i }))
 
     // The skip is still pending (mock promise unresolved). The client-owned clock ticks every
     // 1.5s — wait past that to prove it does NOT sneak in a per-minute advance meanwhile.
@@ -430,7 +431,8 @@ describe('LiveMatchPage', () => {
     )
     renderPage()
 
-    fireEvent.click(await screen.findByRole('button', { name: /avançar até o intervalo/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /opções do jogo/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /avançar até o intervalo/i }))
 
     await waitFor(() => expect(advanceToLiveMatch).toHaveBeenCalledWith('sg-1', 'HALF_TIME', 'test-token'))
 
@@ -462,16 +464,20 @@ describe('LiveMatchPage', () => {
     await waitFor(() => expect(advanceLiveMatch).toHaveBeenCalledTimes(1))
 
     // While the per-minute advance is in flight, both the "Continuar assim mesmo" button
-    // (which would fire another advanceLiveMatch) and the skip button (which would fire
+    // (which would fire another advanceLiveMatch) and the skip item (which would fire
     // advanceToLiveMatch against the same ['liveMatch', saveGameId] cache key) must be disabled.
-    const skipButton = await screen.findByRole('button', { name: /avançar até o fim/i })
-    await waitFor(() => expect(skipButton).toBeDisabled())
+    fireEvent.click(await screen.findByRole('button', { name: /opções do jogo/i }))
+    const skipItem = await screen.findByRole('menuitem', { name: /avançar até o fim/i })
+    // MenuItem renders as an <li>, not a native <button> — jest-dom's toBeDisabled() only
+    // recognises form-control tags, so the MUI-applied aria-disabled attribute is the correct
+    // signal here (same guard state the old toBeDisabled() check on the <button> asserted).
+    await waitFor(() => expect(skipItem).toHaveAttribute('aria-disabled', 'true'))
     expect(resumeButton).toBeDisabled()
 
-    // Attempting to click the (disabled) skip button must not sneak an advanceToLiveMatch call
+    // Attempting to click the (disabled) skip item must not sneak an advanceToLiveMatch call
     // through while advanceMut is still pending — skipTo's own guard also checks
     // advanceMut.isPending, so this holds even if the disabled attribute were ever dropped.
-    fireEvent.click(skipButton)
+    fireEvent.click(skipItem)
     expect(advanceToLiveMatch).not.toHaveBeenCalled()
     expect(advanceLiveMatch).toHaveBeenCalledTimes(1)
   })
@@ -482,12 +488,13 @@ describe('LiveMatchPage', () => {
     vi.mocked(advanceToLiveMatch).mockImplementation(() => new Promise(() => {}))
     renderPage()
 
-    // No dialog auto-opens at half-time anymore, so "Iniciar 2º tempo" and "Avançar até o fim"
-    // are both directly reachable — the exact scenario described in the bug: both buttons
+    // No dialog auto-opens at half-time anymore, so "Iniciar 2º tempo" and the "Avançar até o
+    // fim" menu item are both directly reachable — the exact scenario described in the bug: both
     // exposed at HALF_TIME.
 
-    // Start a skip while at half-time — advanceToMut is now in flight.
-    fireEvent.click(await screen.findByRole('button', { name: /avançar até o fim/i }))
+    // Start a skip via the options menu while at half-time — advanceToMut is now in flight.
+    fireEvent.click(await screen.findByRole('button', { name: /opções do jogo/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /avançar até o fim/i }))
     await waitFor(() => expect(advanceToLiveMatch).toHaveBeenCalledWith('sg-1', 'FULL_TIME', 'test-token'))
 
     // "Iniciar 2º tempo" (onClick={resume}) must now be disabled...
@@ -519,8 +526,10 @@ describe('LiveMatchPage', () => {
 
     renderPage()
 
-    // Start a skip — advanceToMut is now in flight (and stays that way: the mock never resolves).
-    fireEvent.click(await screen.findByRole('button', { name: /avançar até o fim/i }))
+    // Start a skip via the options menu — advanceToMut is now in flight (and stays that way: the
+    // mock never resolves).
+    fireEvent.click(await screen.findByRole('button', { name: /opções do jogo/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /avançar até o fim/i }))
     await waitFor(() => expect(advanceToLiveMatch).toHaveBeenCalledWith('sg-1', 'FULL_TIME', 'test-token'))
 
     // The substitution controls aren't gated on the skip's in-flight state, so the actions
@@ -553,8 +562,9 @@ describe('LiveMatchPage', () => {
     vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', minute: 46 } as never)
     renderPage()
 
-    expect(await screen.findByRole('button', { name: /avançar até o fim/i })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /avançar até o intervalo/i })).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: /opções do jogo/i }))
+    expect(screen.getByRole('menuitem', { name: /avançar até o fim/i })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /avançar até o intervalo/i })).not.toBeInTheDocument()
   })
 
   it('hides both skip buttons at full time', async () => {
@@ -562,8 +572,8 @@ describe('LiveMatchPage', () => {
     renderPage()
 
     await screen.findByRole('button', { name: /^continuar$/i })
-    expect(screen.queryByRole('button', { name: /avançar até o fim/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /avançar até o intervalo/i })).not.toBeInTheDocument()
+    // The whole options-menu trigger is hidden at full time — there is nothing left to skip to.
+    expect(screen.queryByRole('button', { name: /opções do jogo/i })).not.toBeInTheDocument()
   })
 
   it('opens the Tática dialog, changes mentality, clicks Continuar, and calls changeTactics', async () => {
