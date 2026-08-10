@@ -1,42 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  Box, Stack, Typography, Button, Alert, Tabs, Tab,
-  Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-} from '@mui/material'
+import { Box, Stack, Typography, Button, Alert, Tabs, Tab } from '@mui/material'
 import { useAuth } from '../../auth/AuthContext'
 import {
   getLiveMatch, advanceLiveMatch, advanceToLiveMatch, finishLiveMatch, substituteLiveMatch, changeTactics,
 } from '../../api/liveMatch'
 import { getPlayer, getStandings, getSaveGame } from '../../api/career'
-import type { LiveEvent, LiveMatchState, LiveTacticsRequest, LivePlayer, LiveKitColors } from '../../api/types'
+import type { LiveEvent, LiveMatchState, LiveTacticsRequest } from '../../api/types'
 import { MatchActionsDialog } from './MatchActionsDialog'
 import type { SubPair } from './MatchActionsDialog'
 import { PlayerRatingsList } from './PlayerRatingsList'
-import { PreMatchLineups } from './PreMatchLineups'
+import { LineupsTab } from './LineupsTab'
+import { MatchStatsTab } from './MatchStatsTab'
+import { RoundTab } from './RoundTab'
 import { MatchScoreboard } from './MatchScoreboard'
 import { MatchInfoLine } from './MatchInfoLine'
-import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { WatchStar } from '../players/WatchStar'
-
-/** Builds one side's pitch view-model from its live on-pitch roster. Module-scope (no
- * component state) so it's freely reusable for either side without a closure. */
-function buildTeam(players: LivePlayer[], formation: string, colors: LiveKitColors): TeamOnPitch {
-  return {
-    formation,
-    kit: colors,
-    showNames: true,
-    players: players.map((p): PlacedPlayer => ({
-      id: p.playerId,
-      surname: p.name,
-      position: p.position as PlacedPlayer['position'],
-      fitness: p.fitness,
-      badges: p.hobbled ? { injured: true } : undefined,
-    })),
-  }
-}
 
 const EVENT_ICON: Record<LiveEvent['type'], string> = {
   GOAL: '⚽', SET_PIECE_GOAL: '⚽', YELLOW_CARD: '🟨', RED_CARD: '🟥',
@@ -45,9 +26,6 @@ const EVENT_ICON: Record<LiveEvent['type'], string> = {
 }
 
 const ADVANCE_MS = 1500   // event-to-event pacing (client-owned clock)
-
-// Background tint for the managed club's standings row (matches TablePage's highlight).
-const MANAGED_BG = 'rgba(0, 100, 200, 0.1)'
 
 export function LiveMatchPage() {
   const { token } = useAuth()
@@ -59,7 +37,7 @@ export function LiveMatchPage() {
   const [playing, setPlaying] = useState(true)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [actionsTab, setActionsTab] = useState<0 | 1>(0)
-  // 0 = Lances, 1 = Atuações, 2 = Campo, 3 = Paralelas, 4 = Classificação
+  // 0 = Partida, 1 = Escalações, 2 = Atuações, 3 = Estatísticas do jogo, 4 = Rodada
   const [feedTab, setFeedTab] = useState<0 | 1 | 2 | 3 | 4>(0)
   const [applyPending, setApplyPending] = useState(false)
   const [subError, setSubError] = useState<string | null>(null)
@@ -90,8 +68,10 @@ export function LiveMatchPage() {
     enabled: Boolean(saveGameId && token && selectedPlayerId),
   })
 
-  // Pre-round standings snapshot for the Classificação tab. staleTime Infinity so the live
-  // clock (which replaces `state` every minute) never triggers a mid-match refetch.
+  // Pre-round standings snapshot for the Rodada tab's Classificação sub-tab. staleTime Infinity
+  // so the live clock (which replaces `state` every minute) never triggers a mid-match refetch.
+  // Enabled on mount regardless of the active tab — deliberately NOT owned by RoundTab, see the
+  // comment on that component for why.
   const standingsQuery = useQuery({
     queryKey: ['standings', saveGameId, state?.competitionId],
     queryFn: () => getStandings(saveGameId, state!.competitionId, token ?? ''),
@@ -111,6 +91,8 @@ export function LiveMatchPage() {
 
   // Previous parallel scores keyed by fixtureId, used to flash a row when its score changes.
   // Updated after every committed render, so during render it still holds the prior snapshot.
+  // Deliberately kept in the container (not moved into RoundTab): a ref owned by the tab itself
+  // would reset every time the user leaves and returns to the Rodada tab, re-flashing every row.
   const prevScoresRef = useRef<Record<string, string>>({})
   useEffect(() => {
     if (!state) return
@@ -243,7 +225,7 @@ export function LiveMatchPage() {
   useEffect(() => {
     if (state?.status === 'FULL_TIME' && !fullTimeTabRef.current) {
       fullTimeTabRef.current = true
-      setFeedTab(1)
+      setFeedTab(2)
     }
   }, [state?.status])
 
@@ -272,7 +254,6 @@ export function LiveMatchPage() {
         // Task 11 wires the opponent scouting panel here; no-op for now.
         onOpponentClick={() => {}}
       />
-      <MatchInfoLine state={state} />
 
       {state.status === 'PAUSED_INJURY' && (
         <Alert severity="warning" sx={{ my: 1 }}>Lesão! Faça uma substituição ou continue.</Alert>
@@ -348,43 +329,32 @@ export function LiveMatchPage() {
       </Stack>
 
       <Tabs value={feedTab} onChange={(_, v) => setFeedTab(v as 0 | 1 | 2 | 3 | 4)} sx={{ mt: 2, minHeight: 40 }}>
-        <Tab label="Lances" sx={{ minHeight: 40 }} />
+        <Tab label="Partida" sx={{ minHeight: 40 }} />
+        <Tab label="Escalações" sx={{ minHeight: 40 }} />
         <Tab label="Atuações" sx={{ minHeight: 40 }} />
-        <Tab label="Campo" sx={{ minHeight: 40 }} />
-        <Tab label="Paralelas" sx={{ minHeight: 40 }} />
-        <Tab label="Classificação" sx={{ minHeight: 40 }} />
+        <Tab label="Estatísticas do jogo" sx={{ minHeight: 40 }} />
+        <Tab label="Rodada" sx={{ minHeight: 40 }} />
       </Tabs>
+      <MatchInfoLine state={state} />
 
       {feedTab === 0 && (
-        state.minute === 0 ? (
-          <PreMatchLineups
-            home={{
-              clubName: state.homeClubShortName,
-              formation: state.managedIsHome ? state.currentTactics.formation : state.opponentTactics.formation,
-              players: state.managedIsHome ? state.onPitch : state.opponentOnPitch,
-              isOwnSide: state.managedIsHome,
-            }}
-            away={{
-              clubName: state.awayClubShortName,
-              formation: state.managedIsHome ? state.opponentTactics.formation : state.currentTactics.formation,
-              players: state.managedIsHome ? state.opponentOnPitch : state.onPitch,
-              isOwnSide: !state.managedIsHome,
-            }}
-            onPlayerClick={openPlayerDetails}
-          />
-        ) : (
-          <Stack spacing={0.5} sx={{ mt: 1 }}>
-            {feed.map((e, i) => (
-              <Stack key={`${e.minute}-${i}`} direction="row" spacing={1}>
-                <Typography sx={{ minWidth: 32, color: 'text.secondary' }}>{e.minute}'</Typography>
-                <Typography component="span">{EVENT_ICON[e.type]} {e.text}</Typography>
-              </Stack>
-            ))}
-          </Stack>
-        )
+        <Stack spacing={0.5} sx={{ mt: 1 }}>
+          {feed.map((e, i) => (
+            <Stack key={`${e.minute}-${i}`} direction="row" spacing={1}>
+              <Typography sx={{ minWidth: 32, color: 'text.secondary' }}>{e.minute}'</Typography>
+              <Typography component="span">{EVENT_ICON[e.type]} {e.text}</Typography>
+            </Stack>
+          ))}
+        </Stack>
       )}
 
       {feedTab === 1 && (
+        <Box sx={{ mt: 1 }}>
+          <LineupsTab state={state} onPlayerClick={openPlayerDetails} />
+        </Box>
+      )}
+
+      {feedTab === 2 && (
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography sx={{ fontWeight: 700, mb: 0.5 }}>Meu Time</Typography>
@@ -419,123 +389,26 @@ export function LiveMatchPage() {
         </Stack>
       )}
 
-      {feedTab === 2 && (
+      {feedTab === 3 && (
         <Box sx={{ mt: 1 }}>
-          <Pitch
-            home={buildTeam(
-              state.managedIsHome ? state.onPitch : state.opponentOnPitch,
-              state.managedIsHome ? state.currentTactics.formation : state.opponentTactics.formation,
-              state.homeClubColors,
-            )}
-            away={buildTeam(
-              state.managedIsHome ? state.opponentOnPitch : state.onPitch,
-              state.managedIsHome ? state.opponentTactics.formation : state.currentTactics.formation,
-              state.awayClubColors,
-            )}
+          <MatchStatsTab
+            stats={state.stats}
+            homeShort={state.homeClubShortName}
+            awayShort={state.awayClubShortName}
+            homeKit={state.homeClubColors}
+            awayKit={state.awayClubColors}
           />
         </Box>
       )}
 
-      {feedTab === 3 && (
-        <Box sx={{ mt: 1 }}>
-          {state.parallelScores.length === 0 ? (
-            <Typography sx={{ color: 'text.secondary', mt: 1 }}>Sem outros jogos nesta rodada</Typography>
-          ) : (
-            <Stack spacing={0.5}>
-              {state.parallelScores.map(ps => {
-                const scoreKey = `${ps.homeGoals}-${ps.awayGoals}`
-                const prev = prevScoresRef.current[ps.fixtureId]
-                const changed = prev !== undefined && prev !== scoreKey
-                return (
-                  <Box
-                    key={ps.fixtureId}
-                    data-testid={`parallel-${ps.fixtureId}`}
-                    sx={{ display: 'flex', justifyContent: 'center' }}
-                  >
-                    {/* Remounting on scoreKey change restarts the flash animation each time the
-                        score moves (even on consecutive advances). Gated by `changed` so it never
-                        fires on first mount or when switching to this tab. */}
-                    <Typography
-                      key={scoreKey}
-                      sx={{
-                        fontFamily: 'monospace',
-                        fontSize: '0.95rem',
-                        px: 1.5,
-                        py: 0.5,
-                        borderRadius: 1,
-                        ...(changed && {
-                          '@keyframes parallelScoreFlash': {
-                            from: { backgroundColor: 'rgba(255, 193, 7, 0.6)' },
-                            to: { backgroundColor: 'transparent' },
-                          },
-                          animation: 'parallelScoreFlash 1s ease-out',
-                        }),
-                      }}
-                    >
-                      {`${ps.homeShort} ${ps.homeGoals} x ${ps.awayGoals} ${ps.awayShort}`}
-                    </Typography>
-                  </Box>
-                )
-              })}
-            </Stack>
-          )}
-        </Box>
-      )}
-
       {feedTab === 4 && (
-        <Box sx={{ mt: 1 }}>
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>Classificação antes da rodada</Typography>
-          {standingsQuery.isLoading ? (
-            <Typography sx={{ mt: 1, color: 'text.secondary' }}>Carregando classificação…</Typography>
-          ) : (standingsQuery.data ?? []).length === 0 ? (
-            <Typography sx={{ mt: 1, color: 'text.secondary' }}>Classificação indisponível.</Typography>
-          ) : (
-            <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell align="center">POS</TableCell>
-                    <TableCell>CLUBE</TableCell>
-                    <TableCell align="center">P</TableCell>
-                    <TableCell align="center">V</TableCell>
-                    <TableCell align="center">E</TableCell>
-                    <TableCell align="center">D</TableCell>
-                    <TableCell align="center">GP</TableCell>
-                    <TableCell align="center">GC</TableCell>
-                    <TableCell align="center">SG</TableCell>
-                    <TableCell align="center">PTS</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(standingsQuery.data ?? []).map((row, index) => {
-                    const isManaged = row.clubId === managedClubId
-                    return (
-                      <TableRow
-                        key={row.clubId}
-                        data-managed={isManaged ? 'true' : undefined}
-                        sx={{
-                          backgroundColor: isManaged ? MANAGED_BG : undefined,
-                          '& td': { fontWeight: isManaged ? 700 : undefined },
-                        }}
-                      >
-                        <TableCell align="center">{index + 1}</TableCell>
-                        <TableCell>{row.commonName ?? row.clubName}</TableCell>
-                        <TableCell align="center">{row.played}</TableCell>
-                        <TableCell align="center">{row.won}</TableCell>
-                        <TableCell align="center">{row.drawn}</TableCell>
-                        <TableCell align="center">{row.lost}</TableCell>
-                        <TableCell align="center">{row.goalsFor}</TableCell>
-                        <TableCell align="center">{row.goalsAgainst}</TableCell>
-                        <TableCell align="center">{row.goalDifference}</TableCell>
-                        <TableCell align="center">{row.points}</TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </Box>
+        <RoundTab
+          parallelScores={state.parallelScores}
+          previousScores={prevScoresRef.current}
+          standingsLoading={standingsQuery.isLoading}
+          standings={standingsQuery.data}
+          managedClubId={managedClubId}
+        />
       )}
 
       <MatchActionsDialog

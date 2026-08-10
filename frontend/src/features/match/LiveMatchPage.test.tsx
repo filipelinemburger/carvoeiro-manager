@@ -53,6 +53,22 @@ const STATE = {
   homeClubColors: { primary: '#f7d417', secondary: '#111111' },
   awayClubColors: { primary: '#003399', secondary: '#ffffff' },
   competitionId: 'comp-1', parallelScores: [],
+  // Every counter 0, possession 50/50 — exactly what minute 0 looks like. A real, type-checked
+  // fixture here (not a fallback the component conjures on `stats == null`) is what actually
+  // exercises MatchStatsTab's real data path once it's mounted in this page.
+  stats: {
+    home: { possession: 50, shots: 0, shotsOnTarget: 0, saves: 0, corners: 0, offsides: 0, fouls: 0, yellowCards: 0, redCards: 0 },
+    away: { possession: 50, shots: 0, shotsOnTarget: 0, saves: 0, corners: 0, offsides: 0, fouls: 0, yellowCards: 0, redCards: 0 },
+  },
+}
+
+// The Escalações tab renders each player name twice — once as a clickable list Link (rendered
+// as an MUI `<button>`), once as a plain, non-interactive PlayerToken label on the pitch. Picks
+// the clickable one out of a `getAllByText`/`findAllByText` match set.
+function listOccurrence(matches: HTMLElement[]): HTMLElement {
+  const el = matches.find(m => m.closest('button'))
+  if (!el) throw new Error('No clickable list occurrence found among the matches')
+  return el
 }
 
 function renderPage() {
@@ -82,7 +98,7 @@ describe('LiveMatchPage', () => {
     vi.mocked(getSaveGame).mockResolvedValue({ managedClubId: 'club-x' } as never)
   })
 
-  it('shows both starting lineups at kickoff (minute 0) instead of the empty feed', async () => {
+  it('shows both starting lineups in the Escalações tab at kickoff (minute 0)', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({
       ...STATE,
       minute: 0,
@@ -95,8 +111,11 @@ describe('LiveMatchPage', () => {
     } as never)
     renderPage()
 
-    expect(await screen.findByText('Goleiro Casa')).toBeInTheDocument()
-    expect(screen.getByText('Goleiro Fora')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('tab', { name: /escalações/i }))
+
+    // Each name renders twice — once in the list, once as a PlayerToken on the pitch.
+    expect((await screen.findAllByText('Goleiro Casa')).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Goleiro Fora').length).toBeGreaterThan(0)
     expect(screen.getAllByText(STATE.homeClubShortName).length).toBeGreaterThan(0)
     expect(screen.getAllByText(STATE.awayClubShortName).length).toBeGreaterThan(0)
   })
@@ -115,6 +134,8 @@ describe('LiveMatchPage', () => {
     } as never)
     renderPage()
 
+    fireEvent.click(await screen.findByRole('tab', { name: /escalações/i }))
+
     // The scoreboard's "own" card must follow managedIsHome too, not assume home — proves
     // MatchScoreboard routes own/opponent correctly when the managed club plays away.
     expect(await screen.findByTestId('club-card-own')).toHaveTextContent(STATE.awayClubShortName)
@@ -122,9 +143,13 @@ describe('LiveMatchPage', () => {
     // Walks up from a player's name to the nearest ancestor whose text includes one of the
     // club short names — that ancestor is the LineupColumn for that player. The score-bar
     // header (which also renders both short names) sits outside this subtree, so it can't
-    // create a false match.
+    // create a false match. Each name renders twice (list + pitch token); start from the
+    // clickable list occurrence (an MUI Link rendered as a <button>) — the token has no such
+    // ancestor and its own walk-up would land on the shared grid wrapper (both columns'
+    // short names), producing a false match.
     const columnFor = async (playerName: string) => {
-      let el: HTMLElement | null = await screen.findByText(playerName)
+      const matches = await screen.findAllByText(playerName)
+      let el: HTMLElement | null = matches.find(m => m.closest('button')) ?? matches[0]
       for (
         let i = 0;
         i < 10 && el && !el.textContent?.includes(STATE.homeClubShortName) && !el.textContent?.includes(STATE.awayClubShortName);
@@ -296,7 +321,7 @@ describe('LiveMatchPage', () => {
     expect(subbedOffRow?.style.opacity).toBe('0.5')
   })
 
-  it('shows both teams on the Campo tab with their names and an injury badge', async () => {
+  it('shows both teams on the Escalações tab with their names and an injury badge', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({
       ...STATE,
       onPitch: [
@@ -310,14 +335,14 @@ describe('LiveMatchPage', () => {
     } as never)
     renderPage()
 
-    fireEvent.click(await screen.findByRole('tab', { name: /campo/i }))
+    fireEvent.click(await screen.findByRole('tab', { name: /escalações/i }))
     expect(await screen.findByTestId('pitch')).toBeInTheDocument()
-    expect(await screen.findByText('Goleiro Titular')).toBeInTheDocument()
-    expect(screen.getByText('Zagueiro Rival')).toBeInTheDocument()
+    expect((await screen.findAllByText('Goleiro Titular')).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Zagueiro Rival').length).toBeGreaterThan(0)
     expect(screen.getByLabelText('Lesionado')).toBeInTheDocument()
   })
 
-  it('does not invert the Campo mapping when the managed club plays away', async () => {
+  it('does not invert the Escalações mapping when the managed club plays away', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({
       ...STATE,
       managedIsHome: false,
@@ -332,15 +357,25 @@ describe('LiveMatchPage', () => {
     } as never)
     renderPage()
 
-    fireEvent.click(await screen.findByRole('tab', { name: /campo/i }))
+    fireEvent.click(await screen.findByRole('tab', { name: /escalações/i }))
+    await screen.findByTestId('pitch')
+
+    // The player's name renders twice (list + pitch token); select the token specifically —
+    // the list copy has no `player-token` ancestor, so it can't create a false match.
+    const tokenFor = (playerName: string): HTMLElement => {
+      const token = Array.from(document.querySelectorAll('[data-testid="player-token"]'))
+        .find(el => el.textContent?.includes(playerName))
+      if (!token) throw new Error(`Could not locate the player token for "${playerName}"`)
+      return token as HTMLElement
+    }
 
     // Managed club plays away, so the managed player must render with awayClubColors
     // (#003399 -> rgb(0, 51, 153)), not homeClubColors — proves the mapping is not inverted.
-    const managedToken = (await screen.findByText('Managed Titular')).closest('[data-testid="player-token"]') as HTMLElement
+    const managedToken = tokenFor('Managed Titular')
     expect(managedToken.querySelector('[data-role="disc"]')).toHaveStyle({ backgroundColor: 'rgb(0, 51, 153)' })
 
     // The opponent, playing at home, must render with homeClubColors (#f7d417 -> rgb(247, 212, 23)).
-    const opponentToken = (await screen.findByText('Home Rival Titular')).closest('[data-testid="player-token"]') as HTMLElement
+    const opponentToken = tokenFor('Home Rival Titular')
     expect(opponentToken.querySelector('[data-role="disc"]')).toHaveStyle({ backgroundColor: 'rgb(247, 212, 23)' })
   })
 
@@ -799,7 +834,8 @@ describe('LiveMatchPage', () => {
     vi.mocked(getPlayer).mockResolvedValue({ ...MOCK_PLAYER, id: 'a1', name: 'Goleiro Fora', position: 'GK' } as never)
 
     renderPage()
-    fireEvent.click(await screen.findByText('Goleiro Fora'))
+    fireEvent.click(await screen.findByRole('tab', { name: /escalações/i }))
+    fireEvent.click(listOccurrence(await screen.findAllByText('Goleiro Fora')))
 
     const dialog = await screen.findByRole('dialog')
     await waitFor(() => expect(getPlayer).toHaveBeenCalledWith('sg-1', 'a1', 'test-token'))
@@ -820,14 +856,15 @@ describe('LiveMatchPage', () => {
     vi.mocked(getPlayer).mockResolvedValue({ ...MOCK_PLAYER, id: 'h1', name: 'Goleiro Casa', position: 'GK' } as never)
 
     renderPage()
-    fireEvent.click(await screen.findByText('Goleiro Casa'))
+    fireEvent.click(await screen.findByRole('tab', { name: /escalações/i }))
+    fireEvent.click(listOccurrence(await screen.findAllByText('Goleiro Casa')))
 
     const dialog = await screen.findByRole('dialog')
     await waitFor(() => expect(getPlayer).toHaveBeenCalledWith('sg-1', 'h1', 'test-token'))
     expect(within(dialog).queryByRole('button', { name: 'Observar jogador' })).not.toBeInTheDocument()
   })
 
-  it('Paralelas tab renders one formatted row per parallel fixture from state', async () => {
+  it('Rodada tab (Resultados sub-tab) renders one formatted row per parallel fixture from state', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({
       ...STATE, status: 'IN_PROGRESS',
       parallelScores: [
@@ -837,22 +874,23 @@ describe('LiveMatchPage', () => {
     } as never)
     renderPage()
 
-    fireEvent.click(await screen.findByRole('tab', { name: /paralelas/i }))
+    // Resultados is the default sub-tab, so no extra click is needed once on Rodada.
+    fireEvent.click(await screen.findByRole('tab', { name: /rodada/i }))
     expect(await screen.findByText('AVA 2 x 1 FIG')).toBeInTheDocument()
     expect(screen.getByText('JEC 0 x 0 CHA')).toBeInTheDocument()
     expect(screen.getByTestId('parallel-px1')).toBeInTheDocument()
     expect(screen.getByTestId('parallel-px2')).toBeInTheDocument()
   })
 
-  it('Paralelas tab shows an empty state when there are no other games this round', async () => {
+  it('Rodada tab (Resultados sub-tab) shows an empty state when there are no other games this round', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', parallelScores: [] } as never)
     renderPage()
 
-    fireEvent.click(await screen.findByRole('tab', { name: /paralelas/i }))
+    fireEvent.click(await screen.findByRole('tab', { name: /rodada/i }))
     expect(await screen.findByText('Sem outros jogos nesta rodada')).toBeInTheDocument()
   })
 
-  it('Classificação tab fetches standings for the live competitionId and marks the managed club row', async () => {
+  it('Rodada tab (Classificação sub-tab) fetches standings for the live competitionId and marks the managed club row', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', competitionId: 'comp-9' } as never)
     vi.mocked(getSaveGame).mockResolvedValue({ managedClubId: 'club-1' } as never)
     vi.mocked(getStandings).mockResolvedValue([
@@ -865,6 +903,7 @@ describe('LiveMatchPage', () => {
     // the live state's competitionId regardless of the active tab.
     await waitFor(() => expect(getStandings).toHaveBeenCalledWith('sg-1', 'comp-9', 'test-token'))
 
+    fireEvent.click(await screen.findByRole('tab', { name: /rodada/i }))
     fireEvent.click(await screen.findByRole('tab', { name: /classificação/i }))
     expect(await screen.findByText('Tigrão')).toBeInTheDocument()
     expect(screen.getByText('Leão')).toBeInTheDocument()
@@ -873,5 +912,16 @@ describe('LiveMatchPage', () => {
     const managedRows = document.querySelectorAll('[data-managed="true"]')
     expect(managedRows).toHaveLength(1)
     expect(within(managedRows[0] as HTMLElement).getByText('Tigrão')).toBeInTheDocument()
+  })
+
+  it('shows the match stats in the Estatísticas do jogo tab', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('tab', { name: /estatísticas do jogo/i }))
+    // STATE.stats is zero-filled/50-50, so every counter row and the possession row (with its
+    // % suffix) must render from the real fixture, not MatchStatsTab's own null fallback.
+    expect(await screen.findByText('Finalizações')).toBeInTheDocument()
+    expect(within(screen.getByTestId('stat-possession')).getAllByText('50%')).toHaveLength(2)
   })
 })
