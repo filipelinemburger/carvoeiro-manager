@@ -221,7 +221,9 @@ public class LiveMatchEngine {
         Map<UUID, Integer> minutes = new LinkedHashMap<>();
         putMinutes(home, minutes);
         putMinutes(away, minutes);
-        return new LiveTimeline(hg, ag, List.copyOf(events), Map.copyOf(minutes), List.copyOf(injuries), finalMinute);
+        // minuteStats is List.of() for now — a later task adds the RNG stream that fills it.
+        return new LiveTimeline(hg, ag, List.copyOf(events), Map.copyOf(minutes), List.copyOf(injuries), finalMinute,
+                List.of());
     }
 
     // ---- side setup & minutes ----
