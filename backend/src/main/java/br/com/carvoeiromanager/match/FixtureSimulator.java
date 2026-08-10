@@ -422,9 +422,17 @@ public class FixtureSimulator {
         resolveShootout(fixture, homeXi, awayXi, match.homeGoals(), match.awayGoals(),
                 homeClubId, awayClubId, seed);
 
+        // How long this match actually ran. Derived from the match rather than a local, because
+        // `match` arrives here from three different paths (replayed XI, legacy precompute, fresh
+        // simulation) and only the engine knows whether extra time was played. EXTRA_TIME_START is
+        // emitted exactly once, and only when the loop was extended to 120.
+        int finalMinute = match.events().stream()
+                .anyMatch(e -> e.type() == EventType.EXTRA_TIME_START)
+                ? MatchMath.EXTRA_TIME_END : MatchMath.MINUTES;
+
         List<AttributedEvent> attributed = saveEvents(fixture, match, homeXi, awayXi,
                 homeProfile, awayProfile, homeClubId, awayClubId, seed);
-        persistAppearances(fixture, homeXi, awayXi, homeProfile, awayProfile, homeClubId, awayClubId, seed);
+        persistAppearances(fixture, homeXi, awayXi, homeProfile, awayProfile, homeClubId, awayClubId, seed, finalMinute);
 
         FixtureResultResponse response = new FixtureResultResponse(
                 fixture.getId(),
@@ -521,18 +529,24 @@ public class FixtureSimulator {
         return attributed;
     }
 
-    /** Every starter plays all 90 minutes — the instant path has no substitutions. */
+    /**
+     * Every starter plays the whole match — the instant path has no substitutions. {@code
+     * finalMinute} is 90 normally and 120 when the tie went to extra time; hard-coding 90 would
+     * make an AI club's players accrue less fatigue than the managed club's after the same
+     * 120-minute cup tie, because the live path records the true figure from
+     * {@code timeline.minutesPlayed()}.
+     */
     private void persistAppearances(Fixture fixture, List<Player> homeXi, List<Player> awayXi,
                                     TacticalProfile homeProfile, TacticalProfile awayProfile,
-                                    UUID homeClubId, UUID awayClubId, long seed) {
+                                    UUID homeClubId, UUID awayClubId, long seed, int finalMinute) {
         Map<UUID, Integer> fouls = foulCounts(homeXi, awayXi, homeProfile, awayProfile, seed);
         for (Player p : homeXi) {
             fixtureAppearanceRepository.save(FixtureAppearance.create(
-                    fixture.getId(), p.getId(), homeClubId, 90, fouls.getOrDefault(p.getId(), 0)));
+                    fixture.getId(), p.getId(), homeClubId, finalMinute, fouls.getOrDefault(p.getId(), 0)));
         }
         for (Player p : awayXi) {
             fixtureAppearanceRepository.save(FixtureAppearance.create(
-                    fixture.getId(), p.getId(), awayClubId, 90, fouls.getOrDefault(p.getId(), 0)));
+                    fixture.getId(), p.getId(), awayClubId, finalMinute, fouls.getOrDefault(p.getId(), 0)));
         }
     }
 

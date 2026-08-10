@@ -328,9 +328,10 @@ export type KnockoutTie = {
   tieId: string
   tieOrder: number
   higherSeedClubId: string
-  higherSeedClubName: string
+  /** Null when the club row could not be resolved — KnockoutTieService sends null, not "". */
+  higherSeedClubName: string | null
   lowerSeedClubId: string
-  lowerSeedClubName: string
+  lowerSeedClubName: string | null
   firstLegHomeGoals: number | null
   firstLegAwayGoals: number | null
   secondLegHomeGoals: number | null
