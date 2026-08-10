@@ -4,6 +4,8 @@ import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.club.Club;
+import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
@@ -14,7 +16,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,6 +32,7 @@ class StaffServiceIT {
     @Autowired StaffRepository staffRepository;
     @Autowired SaveGameService saveGameService;
     @Autowired UserRepository userRepository;
+    @Autowired ClubRepository clubRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -137,6 +142,31 @@ class StaffServiceIT {
         assertThat(roster.tecnico()).isNotNull();
         assertThat(roster.tecnico().quality()).isNotNull();
         assertThat(roster.tecnico().wage()).isNotNull();
+    }
+
+    @Test
+    void aRivalClubWithNoResearchedCoachLeavesTheSlotNull() {
+        Career c = createCareer();
+        // Not every rival club's research turned up a named head coach (two currently don't).
+        // Pick one dynamically rather than hardcoding a short name: the seed research may be
+        // refreshed later, and a club pinned by name today could gain a coach tomorrow, which
+        // would fail this test for the wrong reason.
+        Set<UUID> clubsWithTecnico = staffRepository.findBySaveGameId(c.id()).stream()
+                .filter(s -> s.getRole() == StaffRole.TECNICO)
+                .map(Staff::getClubId)
+                .collect(Collectors.toSet());
+        UUID rivalClubWithoutCoach = clubRepository.findBySaveGameId(c.id()).stream()
+                .map(Club::getId)
+                .filter(id -> !id.equals(c.clubId()))
+                .filter(id -> !clubsWithTecnico.contains(id))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "Expected at least one rival club with no seeded TECNICO — none found. "
+                                + "The seed research may have changed since this test was written."));
+
+        StaffRosterResponse roster = staffService.getRoster(c.id(), rivalClubWithoutCoach, c.userId());
+
+        assertThat(roster.tecnico()).isNull();
     }
 
     @Test
