@@ -46,10 +46,15 @@ class StaffServiceIT {
 
         StaffRosterResponse roster = staffService.getRoster(c.id(), c.clubId(), c.userId());
 
-        // Coverage is researched, so exactly which slots are filled is data, not contract —
-        // what matters is that the manager no longer inherits an empty building.
-        assertThat(staffRepository.findByClubId(c.clubId())).isNotEmpty();
-        assertThat(roster).isNotNull();
+        // A fresh career no longer hands the manager an empty building: Criciúma's research
+        // found a named ASSISTENTE, PREPARADOR_FISICO and OLHEIRO, so getRoster's DTO mapping
+        // must surface all three. The FISIOTERAPEUTA slot stays null on purpose — the research
+        // found five physios at the club with no identifiable first-team lead, so an empty slot
+        // here is real data, not a gap in the seeding or the mapping code.
+        assertThat(roster.assistente()).isNotNull();
+        assertThat(roster.preparadorFisico()).isNotNull();
+        assertThat(roster.olheiro()).isNotNull();
+        assertThat(roster.fisioterapeuta()).isNull();
     }
 
     @Test

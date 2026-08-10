@@ -8,6 +8,8 @@ import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
+import br.com.carvoeiromanager.staff.StaffRepository;
+import br.com.carvoeiromanager.staff.StaffRole;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +33,7 @@ class ContractServiceRenewIT {
     @Autowired PlayerRepository playerRepository;
     @Autowired ContractService contractService;
     @Autowired ContractValuation contractValuation;
+    @Autowired StaffRepository staffRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -68,6 +71,12 @@ class ContractServiceRenewIT {
         Player p = aManagedPlayer(c);
         int originalContractYears = p.getContractYears();
         BigDecimal originalWage = p.getWage();
+        // The managed club now starts with a researched OLHEIRO seeded at career creation
+        // (Task 4), whose scout discount shaves the acceptance threshold below the raw
+        // wageDemand used here. Remove it so this test keeps exercising the plain
+        // undiscounted-threshold rejection path rather than the discount interaction
+        // (that interaction is covered separately, e.g. ContractServiceStaffIT).
+        staffRepository.findByClubIdAndRole(c.clubId(), StaffRole.OLHEIRO).ifPresent(staffRepository::delete);
         BigDecimal demand = contractValuation.wageDemand(p.getOverall(), p.getAge());
         BigDecimal lowball = demand.subtract(new BigDecimal("1"));
 

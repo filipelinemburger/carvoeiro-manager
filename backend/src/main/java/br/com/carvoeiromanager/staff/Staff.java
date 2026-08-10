@@ -11,10 +11,10 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
- * A technical-staff member: either the managed club's hired commission, or a rival club's
- * researched staff seeded at career creation. {@code StaffEffectsService} still evaluates every
- * AI club against a fixed baseline rather than these rows — wiring AI effects to the seeded data
- * is a later change.
+ * A technical-staff member: the managed club's commission (researched staff seeded at career
+ * creation, until the player hires over a role) or a rival club's researched staff, also seeded
+ * at career creation. {@code StaffEffectsService} still evaluates every AI club against a fixed
+ * baseline rather than these rows — wiring AI effects to the seeded data is a later change.
  */
 @Entity
 @Table(name = "staff")
