@@ -993,6 +993,11 @@ class LiveMatchEngineTest {
         // must be monotonically non-decreasing as more of the match is revealed.
         for (long seed = 0; seed < 100; seed++) {
             LiveTimeline t = engine.simulate(config(seed, List.of()));
+            // statsThrough clamps rather than throws when asked for a minute beyond minuteStats'
+            // size, so a dropped entry would silently under-report instead of failing loudly — pin
+            // the one-entry-per-minute invariant across this same 100-seed spread, not just the two
+            // seeds in minuteStatsHasOneEntryPerSimulatedMinute.
+            assertThat(t.minuteStats()).as("seed %d minuteStats size", seed).hasSize(t.finalMinute());
             TeamStats prevHome = t.statsThrough(0).home();
             TeamStats prevAway = t.statsThrough(0).away();
             for (int minute = 0; minute <= t.finalMinute(); minute++) {

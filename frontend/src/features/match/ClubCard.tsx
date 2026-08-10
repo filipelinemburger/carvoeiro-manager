@@ -9,14 +9,19 @@ import type { LiveKitColors } from '../../api/types'
  *
  * `clash` is a plain boolean handed down by `MatchScoreboard`: this component never compares
  * itself against the other club's kit, it just draws an outline when told to.
+ *
+ * `disabled`, when true, makes the whole card non-interactive (no click, no keyboard activation)
+ * — `MatchScoreboard` sets it on the own-club card at full time, since neither of its entry
+ * points (Substituir/Tática) is meaningful once the match is over.
  */
-export function ClubCard({ shortName, colors, caption, isOwn, onClick, clash = false }: {
+export function ClubCard({ shortName, colors, caption, isOwn, onClick, clash = false, disabled = false }: {
   shortName: string
   colors: LiveKitColors | null
   caption?: string
   isOwn: boolean
   onClick: () => void
   clash?: boolean
+  disabled?: boolean
 }) {
   const { bg, fg } = cardColors(colors)
 
@@ -25,6 +30,7 @@ export function ClubCard({ shortName, colors, caption, isOwn, onClick, clash = f
       data-testid={isOwn ? 'club-card-own' : 'club-card-opponent'}
       aria-label={isOwn ? `Ações do meu time — ${shortName}` : `Escalação do adversário — ${shortName}`}
       onClick={onClick}
+      disabled={disabled}
       sx={{
         display: 'flex',
         flexDirection: 'column',

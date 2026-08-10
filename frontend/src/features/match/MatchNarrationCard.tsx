@@ -2,18 +2,35 @@ import { Alert, Button, Paper, Stack, Typography } from '@mui/material'
 import { KeyEventsSummary } from './KeyEventsSummary'
 import type { LiveEvent, LiveMatchStatus } from '../../api/types'
 
-/** Moved from `LiveMatchPage.tsx` — the feed list was its only other consumer; the live
- * narration line (below) is now the sole consumer. */
-export const EVENT_ICON: Record<LiveEvent['type'], string> = {
+/** Icons for the live narration line. No consumer outside this file — kept module-private. */
+const EVENT_ICON: Record<LiveEvent['type'], string> = {
   GOAL: '⚽', SET_PIECE_GOAL: '⚽', YELLOW_CARD: '🟨', RED_CARD: '🟥',
   CHANCE: '🎯', INJURY: '🚑', SUBSTITUTION: '🔁', TACTICS_CHANGE: '📋', HALF_TIME: '⏸️',
   PENALTY_GOAL: '⚽', FREE_KICK_GOAL: '⚽', CORNER_GOAL: '⚽', PENALTY_MISSED: '🧤',
 }
 
 /**
+ * True whenever the action slot renders a button instead of the live narration line — the single
+ * source of truth for both `ActionSlot`'s own branch selection below and `LiveMatchPage`'s gating
+ * of the pause/play toggle and the Partida card's visibility on the other tabs. Exported (rather
+ * than hand-mirrored at the call site) so the two can never drift: a status added here that shows
+ * a button is automatically picked up by every caller, instead of relying on a comment to keep a
+ * second, independently-written copy of this condition in sync.
+ */
+export function actionSlotShowsButton(minute: number, status: LiveMatchStatus): boolean {
+  return (
+    minute === 0
+    || status === 'HALF_TIME'
+    || status === 'PAUSED_INJURY'
+    || status === 'PAUSED_RED'
+    || status === 'FULL_TIME'
+  )
+}
+
+/**
  * The action slot: exactly one of these renders at a time, in this priority order. `minute === 0`
  * is checked first because it implies `IN_PROGRESS` (the backend's `statusAt` returns a single
- * status), so it would otherwise fall into the "otherwise" branch alongside real in-progress play.
+ * status), so it would otherwise be indistinguishable from real in-progress play.
  */
 function ActionSlot({ minute, status, events, onResume, onFinish, actionPending, finishPending }: {
   minute: number
@@ -24,55 +41,57 @@ function ActionSlot({ minute, status, events, onResume, onFinish, actionPending,
   actionPending: boolean
   finishPending: boolean
 }) {
-  if (minute === 0) {
-    return (
-      <Button variant="contained" disabled={actionPending} onClick={onResume}>
-        Iniciar partida
-      </Button>
-    )
-  }
-
-  if (status === 'HALF_TIME') {
-    return (
-      <Stack spacing={1} sx={{ alignItems: 'center' }}>
+  if (actionSlotShowsButton(minute, status)) {
+    if (minute === 0) {
+      return (
         <Button variant="contained" disabled={actionPending} onClick={onResume}>
-          Iniciar 2º tempo
+          Iniciar partida
         </Button>
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          Ajuste substituições e táticas no card do seu time antes de começar.
-        </Typography>
-      </Stack>
-    )
-  }
+      )
+    }
 
-  if (status === 'PAUSED_INJURY') {
-    return (
-      <Stack spacing={1} sx={{ alignItems: 'center', width: '100%' }}>
-        <Alert severity="warning" sx={{ width: '100%' }}>Lesão! Faça uma substituição ou continue.</Alert>
-        <Button variant="outlined" disabled={actionPending} onClick={onResume}>
-          Continuar assim mesmo
+    if (status === 'HALF_TIME') {
+      return (
+        <Stack spacing={1} sx={{ alignItems: 'center' }}>
+          <Button variant="contained" disabled={actionPending} onClick={onResume}>
+            Iniciar 2º tempo
+          </Button>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            Ajuste substituições e táticas no card do seu time antes de começar.
+          </Typography>
+        </Stack>
+      )
+    }
+
+    if (status === 'PAUSED_INJURY') {
+      return (
+        <Stack spacing={1} sx={{ alignItems: 'center', width: '100%' }}>
+          <Alert severity="warning" sx={{ width: '100%' }}>Lesão! Faça uma substituição ou continue.</Alert>
+          <Button variant="outlined" disabled={actionPending} onClick={onResume}>
+            Continuar assim mesmo
+          </Button>
+        </Stack>
+      )
+    }
+
+    if (status === 'PAUSED_RED') {
+      return (
+        <Stack spacing={1} sx={{ alignItems: 'center', width: '100%' }}>
+          <Alert severity="error" sx={{ width: '100%' }}>Cartão vermelho! Seu time está com um a menos.</Alert>
+          <Button variant="outlined" disabled={actionPending} onClick={onResume}>
+            Continuar assim mesmo
+          </Button>
+        </Stack>
+      )
+    }
+
+    if (status === 'FULL_TIME') {
+      return (
+        <Button variant="contained" disabled={finishPending} onClick={onFinish}>
+          {finishPending ? 'Continuando…' : 'Continuar'}
         </Button>
-      </Stack>
-    )
-  }
-
-  if (status === 'PAUSED_RED') {
-    return (
-      <Stack spacing={1} sx={{ alignItems: 'center', width: '100%' }}>
-        <Alert severity="error" sx={{ width: '100%' }}>Cartão vermelho! Seu time está com um a menos.</Alert>
-        <Button variant="outlined" disabled={actionPending} onClick={onResume}>
-          Continuar assim mesmo
-        </Button>
-      </Stack>
-    )
-  }
-
-  if (status === 'FULL_TIME') {
-    return (
-      <Button variant="contained" disabled={finishPending} onClick={onFinish}>
-        {finishPending ? 'Continuando…' : 'Continuar'}
-      </Button>
-    )
+      )
+    }
   }
 
   // Open play with no action pending: show the live narration line instead of a button.

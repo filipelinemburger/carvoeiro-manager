@@ -9,12 +9,18 @@ import type { LiveMatchStatus } from '../../api/types'
  * never reimplements that guard, `actionPending` only drives the items' `disabled` prop.
  *
  * The trigger button itself is hidden entirely at full time — there is nothing left to skip to.
+ *
+ * `onOpenChange`, when provided, fires whenever the menu opens or closes. `LiveMatchPage` uses it
+ * to gate its per-minute clock: the menu is a backdrop-covering surface just like the actions
+ * dialog and the scouting panel, and `actionPending` flips these items enabled/disabled every
+ * tick, so the clock must not keep ticking behind it while it is open.
  */
-export function GameOptionsMenu({ minute, status, actionPending, onSkip }: {
+export function GameOptionsMenu({ minute, status, actionPending, onSkip, onOpenChange }: {
   minute: number
   status: LiveMatchStatus
   actionPending: boolean
   onSkip: (target: 'HALF_TIME' | 'FULL_TIME') => void
+  onOpenChange?: (open: boolean) => void
 }) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const open = Boolean(anchorEl)
@@ -24,9 +30,14 @@ export function GameOptionsMenu({ minute, status, actionPending, onSkip }: {
 
   if (fullTime) return null
 
+  const closeMenu = () => {
+    setAnchorEl(null)
+    onOpenChange?.(false)
+  }
+
   const handleSkip = (target: 'HALF_TIME' | 'FULL_TIME') => {
     onSkip(target)
-    setAnchorEl(null)
+    closeMenu()
   }
 
   return (
@@ -35,11 +46,11 @@ export function GameOptionsMenu({ minute, status, actionPending, onSkip }: {
         variant="outlined"
         endIcon={<MoreVertIcon />}
         aria-expanded={open}
-        onClick={(e) => setAnchorEl(e.currentTarget)}
+        onClick={(e) => { setAnchorEl(e.currentTarget); onOpenChange?.(true) }}
       >
         Opções do jogo
       </Button>
-      <Menu anchorEl={anchorEl} open={open} onClose={() => setAnchorEl(null)}>
+      <Menu anchorEl={anchorEl} open={open} onClose={closeMenu}>
         {!halftime && minute < 45 && (
           <MenuItem disabled={actionPending} onClick={() => handleSkip('HALF_TIME')}>
             Avançar até o intervalo

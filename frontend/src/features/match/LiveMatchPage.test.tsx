@@ -180,6 +180,27 @@ describe('LiveMatchPage', () => {
     expect(screen.getByText(/Criciúma/)).toBeInTheDocument()
   })
 
+  it('prefixes the narration line with the event\'s own minute, not the current clock minute', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE,
+      // The clock can sit past the last event's minute after an "advance-to" skip (e.g. last
+      // event 87', clock 90') — the earlier /GOL! Camisa 9/ match above passes whether or not the
+      // minute prefix exists at all, or even if it were swapped for the clock minute (12 === 12 in
+      // STATE), so it can't catch a regression on its own. Use a fixture where the two differ.
+      minute: 90,
+      events: [{ ...STATE.events[0], minute: 87 }],
+    } as never)
+    renderPage()
+    expect(await screen.findByText(/^87' ⚽ GOL! Camisa 9/)).toBeInTheDocument()
+    expect(screen.queryByText(/^90' /)).not.toBeInTheDocument()
+  })
+
+  it('shows the "Bola rolando." fallback when open play has no events yet', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, minute: 3, events: [] } as never)
+    renderPage()
+    expect(await screen.findByText('Bola rolando.')).toBeInTheDocument()
+  })
+
   it('renders the short club name, not the full legal name, in the header', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
     renderPage()
@@ -268,7 +289,7 @@ describe('LiveMatchPage', () => {
       ],
     } as never)
     renderPage()
-    // Default tab is Lances (the feed); the grades only show after switching to Atuações.
+    // Default tab is Partida (no feed on it); the grades only show after switching to Atuações.
     fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
     expect(await screen.findByText('Meia Vivo')).toBeInTheDocument()
     expect(screen.getByText('6.7')).toBeInTheDocument()
@@ -475,8 +496,14 @@ describe('LiveMatchPage', () => {
     expect(resumeButton).toBeDisabled()
 
     // Attempting to click the (disabled) skip item must not sneak an advanceToLiveMatch call
-    // through while advanceMut is still pending — skipTo's own guard also checks
-    // advanceMut.isPending, so this holds even if the disabled attribute were ever dropped.
+    // through while advanceMut is still pending. This only proves the MenuItem's disabled wiring
+    // is correct, not that skipTo's own guard fires: MUI's ButtonBase short-circuits handleClick
+    // before the onClick prop is ever invoked when disabled (useButtonBase.js:121-130), so skipTo
+    // is never entered here. The source-level guard — skipTo/resume() checking isPending
+    // themselves, independent of any disabled prop — is instead covered by the two race tests
+    // that click a plain <Button> rather than an MUI MenuItem: "guards 'Iniciar 2º tempo' against
+    // an in-flight skip" below, and "does not race the per-minute advance when handleApply
+    // auto-resumes while a skip is in flight".
     fireEvent.click(skipItem)
     expect(advanceToLiveMatch).not.toHaveBeenCalled()
     expect(advanceLiveMatch).toHaveBeenCalledTimes(1)
@@ -604,6 +631,15 @@ describe('LiveMatchPage', () => {
         'test-token',
       )
     )
+  })
+
+  it('does not open the actions dialog when the own club card is clicked at full time (regression: Substituir/Tática used to still be reachable post-match, and a queued sub then failed server-side)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'FULL_TIME', minute: 90 } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByTestId('club-card-own'))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('opens the sub dialog, queues a pair, confirms, and calls substituteLiveMatch', async () => {
@@ -738,6 +774,16 @@ describe('LiveMatchPage', () => {
     renderPage()
     await screen.findByRole('button', { name: /iniciar 2º tempo/i })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('shows the injury pause Alert and "Continuar assim mesmo" on the Escalações tab too (regression: the narration card used to be gated to the Partida tab only, stranding every pause/resume control off it)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'PAUSED_INJURY', minute: 30 } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('tab', { name: /escalações/i }))
+
+    expect(await screen.findByText(/Lesão! Faça uma substituição ou continue\./i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /continuar assim mesmo/i })).toBeInTheDocument()
   })
 
   it('queues a sub AND changes mentality, clicks Continuar, calls both substituteLiveMatch and changeTactics', async () => {
@@ -1113,6 +1159,35 @@ describe('LiveMatchPage', () => {
     // The client-owned clock ticks every ADVANCE_MS (1.5s) — wait past that to prove the
     // scouting panel's open state suppresses the tick, mirroring the shape of the "blocks the
     // per-minute clock" assertions on the skip-ahead tests above.
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    expect(advanceLiveMatch).not.toHaveBeenCalled()
+  }, 10_000)
+
+  it('blocks the per-minute clock while the read-only player details modal is open (regression: clicking a name is now a first-class interaction on the Escalações/Atuações tabs)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS', minute: 12,
+      playerRatings: [
+        { playerId: 'p1', name: 'Camisa 9', position: 'ATT', minutesPlayed: 12, goals: 1, rating: 7.0 },
+      ],
+    } as never)
+    vi.mocked(getPlayer).mockResolvedValue(MOCK_PLAYER as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
+    fireEvent.click(await screen.findByText('Camisa 9'))
+    await screen.findByRole('dialog')
+
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    expect(advanceLiveMatch).not.toHaveBeenCalled()
+  }, 10_000)
+
+  it('blocks the per-minute clock while the "Opções do jogo" menu is open (regression: the clock used to keep ticking behind the menu backdrop while actionPending flips its items every tick)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, status: 'IN_PROGRESS', minute: 12 } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: /opções do jogo/i }))
+    await screen.findByRole('menuitem', { name: /avançar até o fim/i })
+
     await new Promise(resolve => setTimeout(resolve, 2000))
     expect(advanceLiveMatch).not.toHaveBeenCalled()
   }, 10_000)

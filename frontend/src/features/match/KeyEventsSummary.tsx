@@ -38,17 +38,21 @@ function SideColumn({ side }: { side: SideKeyEvents }) {
 
 /**
  * The permanent key-events block under the narration/action slot: two columns (home left, away
- * right) separated by a thin divider, each grouped by `summarizeKeyEvents` (`matchKeyEvents.ts`,
- * Task 4) — this component only renders that grouping, it never re-derives it.
+ * right) separated by a thin divider, each grouped by `summarizeKeyEvents` (`matchKeyEvents.ts`)
+ * — this component only renders that grouping, it never re-derives it.
  */
 export function KeyEventsSummary({ events }: { events: LiveEvent[] }) {
   const keyEvents = summarizeKeyEvents(events)
+  // Nothing to separate at minute 0 (both columns empty) — omit the divider rather than leave
+  // dead space on the first thing a user sees.
+  const hasContent = keyEvents.home.scorers.length > 0 || keyEvents.home.discipline.length > 0
+    || keyEvents.away.scorers.length > 0 || keyEvents.away.discipline.length > 0
 
   return (
     <Stack
       direction="row"
       spacing={2}
-      divider={<Divider orientation="vertical" flexItem />}
+      divider={hasContent ? <Divider orientation="vertical" flexItem /> : undefined}
       sx={{ mt: 1.5 }}
     >
       <SideColumn side={keyEvents.home} />

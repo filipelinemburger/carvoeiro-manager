@@ -87,8 +87,7 @@ function StatRow({ testId, label, homeValue, awayValue, suffix, homeColor, awayC
  * underneath. `stats` is home/away oriented, not managed/opponent — like `MatchStats` itself
  * (api/types.ts) — so home is always the left column; this component never reorients it.
  *
- * Self-contained and deliberately not mounted anywhere yet; the nav-bar restructure task wires
- * it into `LiveMatchPage`.
+ * Self-contained: mounted in `LiveMatchPage` under the "Estatísticas do jogo" tab (feedTab === 3).
  *
  * Bar colours reuse `tokenColors`/`safeKit`, the same pipeline `ClubCard` and `MatchScoreboard`
  * already use, so this panel reads as part of the same system rather than a bolt-on.

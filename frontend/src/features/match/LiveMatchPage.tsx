@@ -16,7 +16,7 @@ import { MatchStatsTab } from './MatchStatsTab'
 import { RoundTab } from './RoundTab'
 import { MatchScoreboard } from './MatchScoreboard'
 import { MatchInfoLine } from './MatchInfoLine'
-import { MatchNarrationCard } from './MatchNarrationCard'
+import { MatchNarrationCard, actionSlotShowsButton } from './MatchNarrationCard'
 import { GameOptionsMenu } from './GameOptionsMenu'
 import { OpponentScoutingPanel } from './OpponentScoutingPanel'
 import { sidesOf } from './matchSides'
@@ -37,6 +37,11 @@ export function LiveMatchPage() {
   const [actionsTab, setActionsTab] = useState<0 | 1>(0)
   // Opens the read-only opponent scouting panel from the opponent's club card.
   const [scoutingOpen, setScoutingOpen] = useState(false)
+  // Mirrors GameOptionsMenu's own MUI Menu open state, via its onOpenChange callback — gates the
+  // per-minute clock below, same reasoning as actionsOpen/scoutingOpen: a backdrop-covering
+  // surface whose items' disabled state (actionPending) flips every tick must not have the clock
+  // ticking behind it while it's open.
+  const [gameOptionsMenuOpen, setGameOptionsMenuOpen] = useState(false)
   // 0 = Partida, 1 = Escalações, 2 = Atuações, 3 = Estatísticas do jogo, 4 = Rodada
   const [feedTab, setFeedTab] = useState<0 | 1 | 2 | 3 | 4>(0)
   const [applyPending, setApplyPending] = useState(false)
@@ -184,11 +189,21 @@ export function LiveMatchPage() {
     // reaches its real final minute (90 or 120), so status alone terminates the clock --
     // the old `minute < 90` bound froze a knockout decider dead at the end of normal time.
     const openPlay = state.status === 'IN_PROGRESS' || state.status === 'EXTRA_TIME'
-    if (playing && openPlay && !advanceMut.isPending && !actionsOpen && !skipping && !scoutingOpen) {
+    // Every backdrop-covering surface gates the clock: the actions dialog, an in-flight skip, the
+    // scouting panel, the read-only player details modal (selectedPlayerId !== null — opened from
+    // a lineup or ratings-row name, a first-class interaction now that Escalações is its own tab)
+    // and the game-options menu (its items' disabled state flips every tick behind the backdrop).
+    if (
+      playing && openPlay && !advanceMut.isPending && !actionsOpen && !skipping && !scoutingOpen
+      && selectedPlayerId === null && !gameOptionsMenuOpen
+    ) {
       timer.current = setTimeout(() => advanceMut.mutate(), ADVANCE_MS)
       return () => { if (timer.current) clearTimeout(timer.current) }
     }
-  }, [state, playing, advanceMut.isPending, actionsOpen, skipping, scoutingOpen])
+  }, [
+    state, playing, advanceMut.isPending, actionsOpen, skipping, scoutingOpen, selectedPlayerId,
+    gameOptionsMenuOpen,
+  ])
 
   // "Avançar até o intervalo/fim" — skip ahead server-side to the given target. Stops the
   // pending per-minute tick immediately (both the queued setTimeout and, via `skipping`, any
@@ -234,16 +249,16 @@ export function LiveMatchPage() {
   // hand-rolled home/away mapping — so it can't accidentally show the managed club's own side.
   const opponentSide = state.managedIsHome ? sidesOf(state).away : sidesOf(state).home
 
-  const paused = state.status === 'PAUSED_INJURY' || state.status === 'PAUSED_RED'
   const halftime = state.status === 'HALF_TIME'
-  const fullTime = state.status === 'FULL_TIME'
-  // Mirrors MatchNarrationCard's ActionSlot: true whenever the card shows a button rather than
-  // the live narration line. Drives the pause/play toggle's visibility below — it is hidden
-  // (not disabled) whenever the card already shows a button, both because pausing is meaningless
-  // in every one of those states and because the full-time card button and the pause toggle can
-  // share the label "Continuar", which would make `getByRole('button', { name: /continuar/i })`
-  // ambiguous if both were mounted at once.
-  const actionSlotShowsButton = state.minute === 0 || halftime || paused || fullTime
+  // Single source of truth for "does the Partida card show a button right now" — imported from
+  // MatchNarrationCard, where ActionSlot calls the very same function, so the two can never drift
+  // (see the doc comment on actionSlotShowsButton). Drives (a) the pause/play toggle's visibility
+  // below — hidden, not disabled, both because pausing is meaningless in every one of those
+  // states and because the full-time card button and the pause toggle can share the label
+  // "Continuar", which would make `getByRole('button', { name: /continuar/i })` ambiguous if both
+  // were mounted at once — and (b) the Partida card's visibility on the other four tabs, so
+  // kickoff/half-time/both forced pauses stay reachable no matter which tab the manager is on.
+  const showsActionButton = actionSlotShowsButton(state.minute, state.status)
   // Resume from a forced pause / half-time by advancing past it, then let the clock run.
   // Guarded at the source (mirroring skipTo's guard) so EVERY caller — "Continuar assim
   // mesmo", "Iniciar 2º tempo", and the auto-resume in handleApply — is protected against
@@ -283,13 +298,17 @@ export function LiveMatchPage() {
       </Tabs>
       <MatchInfoLine state={state} />
 
-      {/* Also rendered outside Partida (feedTab 0) once the match reaches FULL_TIME: the
-          fullTimeTabRef effect above auto-switches to Atuações at full time (kept exactly as
-          it was, per the task brief), which would otherwise strand the finish "Continuar"
-          button — now living on this card — on a tab nobody is looking at. Mirrors the old
-          always-visible (non-tab-gated) button row's guarantee that the finish action stays
-          reachable regardless of which tab the manager is on. */}
-      {(feedTab === 0 || fullTime) && (
+      {/* Also rendered outside Partida (feedTab 0) whenever the action slot shows a button
+          (showsActionButton — kickoff, half-time, both forced pauses, and full time): every
+          kickoff/resume/pause control and both pause Alerts live only on this card, and browsing
+          the other tabs is normal mid-match activity now (the clock deliberately keeps running
+          there), so the card the match is waiting on must stay reachable no matter which tab the
+          manager is on. This subsumes the old fullTime-only special case — the fullTimeTabRef
+          effect above auto-switches to Atuações at full time, which would otherwise strand the
+          finish "Continuar" button (now living on this card) on a tab nobody is looking at, same
+          as it subsumes minute 0 (Escalações has no other kickoff affordance) and both pauses
+          (before this branch, both Alerts rendered unconditionally at page level). */}
+      {(feedTab === 0 || showsActionButton) && (
         <Box sx={{ mt: 1 }}>
           <MatchNarrationCard
             minute={state.minute}
@@ -300,7 +319,7 @@ export function LiveMatchPage() {
             actionPending={skipping || advanceToMut.isPending || advanceMut.isPending}
             finishPending={finishMut.isPending}
           />
-          {!actionSlotShowsButton && (
+          {!showsActionButton && (
             <Stack direction="row" sx={{ justifyContent: 'center', mt: 1 }}>
               <Button size="small" variant="outlined" onClick={() => setPlaying(p => !p)}>
                 {playing ? 'Pausar' : 'Continuar'}
@@ -378,6 +397,7 @@ export function LiveMatchPage() {
         status={state.status}
         actionPending={skipping || advanceToMut.isPending || advanceMut.isPending}
         onSkip={skipTo}
+        onOpenChange={setGameOptionsMenuOpen}
       />
 
       <MatchActionsDialog

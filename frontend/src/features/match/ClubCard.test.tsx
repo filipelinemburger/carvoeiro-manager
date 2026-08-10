@@ -108,6 +108,23 @@ describe('ClubCard', () => {
     expect(card).toHaveStyle({ border: '1px solid rgb(255, 255, 255)' })
   })
 
+  it('does not fire onClick when disabled', () => {
+    const onClick = vi.fn()
+    render(
+      <ClubCard
+        shortName="Criciúma"
+        colors={{ primary: '#f7d417', secondary: '#111111' }}
+        isOwn
+        onClick={onClick}
+        disabled
+      />,
+    )
+    const button = screen.getByTestId('club-card-own')
+    expect(button).toBeDisabled()
+    fireEvent.click(button)
+    expect(onClick).not.toHaveBeenCalled()
+  })
+
   it('renders no outline when clash is false or omitted', () => {
     render(
       <ClubCard

@@ -12,9 +12,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Pure unit-level coverage for {@link LiveTimeline#statsThrough(int)} — a pure function of a
  * hand-built {@link LiveTimeline}, so timelines are built directly here rather than through
- * {@link LiveMatchEngine}. The engine itself always passes an empty {@code minuteStats} for now
- * (Task 2 fills it); several cases here exercise a hand-built non-empty {@code minuteStats} to
- * cover the fold in isolation.
+ * {@link LiveMatchEngine}. The engine itself fills {@code minuteStats} with one entry per
+ * simulated minute (see {@code LiveMatchEngine.simulate}, which rolls a {@link MinuteStats} entry
+ * every minute); several cases here exercise a hand-built non-empty {@code minuteStats} to cover
+ * the fold in isolation.
  */
 class LiveTimelineStatsThroughTest {
 

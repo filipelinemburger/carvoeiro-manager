@@ -26,7 +26,10 @@ export function MatchScoreboard({ state, onOwnClick, onOpponentClick }: {
 
   const homeIsOwn = state.managedIsHome
   // No subs remain meaningful once the match is over — hide the caption rather than show a
-  // stale count.
+  // stale count. The own card is also made non-interactive below (disabled prop) — before this
+  // branch both entry points (Substituir/Tática) were gated on !fullTime; a still-clickable own
+  // card at full time let a manager queue a substitution that then failed server-side. The
+  // opponent card stays clickable post-match — its scouting panel is read-only and still useful.
   const ownCaption = fullTime ? undefined : `Substituições (${state.subsRemaining})`
 
   // Guarded through safeKit before the RGB-distance check, same guard cardColors applies
@@ -42,6 +45,7 @@ export function MatchScoreboard({ state, onOwnClick, onOpponentClick }: {
           caption={homeIsOwn ? ownCaption : 'Adversário'}
           isOwn={homeIsOwn}
           onClick={homeIsOwn ? onOwnClick : onOpponentClick}
+          disabled={homeIsOwn && fullTime}
         />
         <Stack spacing={0.5} sx={{ flex: 1, alignItems: 'center' }}>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -59,6 +63,7 @@ export function MatchScoreboard({ state, onOwnClick, onOpponentClick }: {
           isOwn={!homeIsOwn}
           onClick={homeIsOwn ? onOpponentClick : onOwnClick}
           clash={clash}
+          disabled={!homeIsOwn && fullTime}
         />
       </Stack>
       {!fullTime && (
