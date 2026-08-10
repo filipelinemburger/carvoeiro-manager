@@ -49,4 +49,14 @@ public class SeedLoader {
             throw new IllegalStateException("Failed to load staff pool seed", e);
         }
     }
+
+    /** The researched coaching staff each club already employs when a career begins. Coverage is
+     *  deliberately partial — an absent role means an open slot, not missing data. */
+    public List<SeedClubStaff> loadClubStaff() {
+        try (InputStream in = new ClassPathResource("seed/club-staff.json").getInputStream()) {
+            return mapper.readValue(in, new TypeReference<List<SeedClubStaff>>() {});
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to load club staff seed", e);
+        }
+    }
 }

@@ -1,0 +1,10 @@
+[
+  {
+    "clubShortName": "CRI",
+    "staff": [
+      { "name": "Julio Cesar Schiavon", "role": "ASSISTENTE", "primaryAttribute": 14, "secondaryAttribute": 13 },
+      { "name": "Juvenilson Souza", "role": "PREPARADOR_FISICO", "primaryAttribute": 17, "secondaryAttribute": 16 },
+      { "name": "Davi Almeida", "role": "OLHEIRO", "primaryAttribute": 14, "secondaryAttribute": 13 }
+    ]
+  }
+]

@@ -394,7 +394,8 @@ than invisible:
 
 | Clube | TECNICO | ASSISTENTE | PREP. FÍSICO | OLHEIRO | FISIOTERAPEUTA |
 |---|---|---|---|---|---|
-| _(a preencher)_ | | | | | |
+| Criciúma (CRI) | — (jogador) | Julio Cesar Schiavon | Juvenilson Souza | Davi Almeida | _(não confirmado)_ |
+| Demais 30 clubes | _(Task 3)_ | | | | |
 
 ## 12. Risks
 
@@ -413,3 +414,37 @@ than invisible:
 ## 13. Sources
 
 Recorded per name during implementation, alongside the coverage table in §11.
+
+### Criciúma (CRI)
+
+- **Julio Cesar Schiavon — ASSISTENTE.** Arrived with head coach Eduardo Baptista in May 2025:
+  ["Eduardo Baptista é o novo técnico do Tigre"](https://www.criciuma.com.br/noticias/o-clube/eduardo-baptista-e-o-novo-tecnico-do-tigre)
+  (criciuma.com.br, 2025-05-07) — "chegam seu auxiliar Julio Cesar Schiavon". Retained on the
+  2027 contract renewal announced 2025-11-25
+  ([sctd.com.br](https://sctd.com.br/esporte/criciuma-anuncia-renovacao-com-tecnico-e-dois-jogadores-para-2026/)).
+  Confirmed current on the club's official staff page
+  ([criciuma.com.br/m/comissao-tecnica](https://www.criciuma.com.br/m/comissao-tecnica)), listed
+  as "auxiliar técnico".
+- **Juvenilson Souza — PREPARADOR_FISICO.** Confirmed current on the club's official staff page
+  ([criciuma.com.br/m/comissao-tecnica](https://www.criciuma.com.br/m/comissao-tecnica)), listed
+  as "Preparador Físico". Explicitly retained across the Zé Ricardo → Eduardo Baptista coaching
+  change: ["Preparador físico permanece no Criciúma"](https://www.4oito.com.br/blog/enio-biz/post/preparador-fisico-permanece-no-criciuma-14834)
+  (4oito.com.br, 2025-05-06) — "a direção do clube optou pela continuidade do trabalho de
+  Juvenilson." Track record (two-time Brazilian champion with Cruzeiro 2013–2014, Copa do Brasil
+  champion with Palmeiras 2015, prior work at Atlético-PR, Coritiba, Atlético-MG, Ponte Preta) drove
+  attributes to the top of the reputation band. **Reconciliation:** this name was previously in
+  `staff-pool.json` as an unemployed PREPARADOR_FISICO (13/12) — removed from that file in this
+  commit and moved here, per §4.4.
+- **Davi Almeida — OLHEIRO.** Club's official staff page
+  ([criciuma.com.br/m/comissao-tecnica](https://www.criciuma.com.br/m/comissao-tecnica)) lists him
+  as "Analista de mercado/ Scout" — the only market analyst on that page carrying the added scout
+  designation (two colleagues, Silvestre Freitas and Carlos Miguel, are listed as plain "Analista
+  de Mercado" with no scouting tag). No independent track record found, so attributes sit at the
+  bottom of the reputation band.
+- **FISIOTERAPEUTA — left open.** The club's official staff page lists five physiotherapists
+  (Fabrício Gonçalves, Allan Martins de Souza, Bruno Conti, Luiz Gustavo Graci, João Victor
+  Januario) with no distinguishing "chefe"/"coordenador" title or other signal identifying a lead
+  for the professional squad. Picking one over the other four would be an unsupported inference,
+  which the research rules (§4.2) forbid, so the role is left open for Criciúma.
+- **TECNICO — out of scope for CRI.** Eduardo Baptista is Criciúma's real head coach, but §5.2
+  reserves the managed club's TECNICO slot for the player; no row is seeded.
