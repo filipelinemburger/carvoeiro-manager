@@ -32,9 +32,10 @@ describe('ClubCard', () => {
   it('falls back with no NaN anywhere in the rendered style when colors is null', () => {
     render(<ClubCard shortName="Criciúma" colors={null} isOwn onClick={() => {}} />)
     const card = screen.getByTestId('club-card-own')
-    expect(card.getAttribute('style') ?? '').not.toContain('NaN')
-    expect(card.style.backgroundColor).not.toContain('NaN')
-    expect(card.style.color).not.toContain('NaN')
+    // sx compiles bgcolor/color into an emotion-generated class, never an inline style attribute,
+    // so this must resolve the computed/class-based style (toHaveStyle) rather than read
+    // card.style.* — the fallback kit resolves to a fixed, known bg/fg pair, not just "no NaN".
+    expect(card).toHaveStyle({ backgroundColor: 'rgb(91, 102, 112)', color: 'rgb(255, 255, 255)' })
   })
 
   it('falls back when the primary colour is a non-hex CSS keyword', () => {
@@ -42,7 +43,9 @@ describe('ClubCard', () => {
       <ClubCard shortName="Criciúma" colors={{ primary: 'red', secondary: '#12' }} isOwn onClick={() => {}} />,
     )
     const card = screen.getByTestId('club-card-own')
-    expect(card.getAttribute('style') ?? '').not.toContain('NaN')
+    // Both primary ('red') and secondary ('#12') are non-hex, so both fall back to the default
+    // kit — same resolved colours as the null-colors case above.
+    expect(card).toHaveStyle({ backgroundColor: 'rgb(91, 102, 112)', color: 'rgb(255, 255, 255)' })
   })
 
   it('renders the short name and the caption', () => {
@@ -115,6 +118,9 @@ describe('ClubCard', () => {
       />,
     )
     const card = screen.getByTestId('club-card-opponent')
-    expect(card.style.border).toBe('')
+    // Same reasoning as above: card.style.border reads the inline style attribute, which sx
+    // never populates, so it would read '' even if a border were always rendered. Assert the
+    // computed border instead.
+    expect(card).toHaveStyle({ borderStyle: 'none' })
   })
 })

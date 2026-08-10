@@ -115,6 +115,10 @@ describe('LiveMatchPage', () => {
     } as never)
     renderPage()
 
+    // The scoreboard's "own" card must follow managedIsHome too, not assume home — proves
+    // MatchScoreboard routes own/opponent correctly when the managed club plays away.
+    expect(await screen.findByTestId('club-card-own')).toHaveTextContent(STATE.awayClubShortName)
+
     // Walks up from a player's name to the nearest ancestor whose text includes one of the
     // club short names — that ancestor is the LineupColumn for that player. The score-bar
     // header (which also renders both short names) sits outside this subtree, so it can't
