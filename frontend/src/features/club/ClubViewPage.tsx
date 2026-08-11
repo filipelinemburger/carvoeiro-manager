@@ -5,7 +5,7 @@ import {
   Alert, Box, Button, Card, CardContent, Chip, Link, Paper, Stack, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Typography,
 } from '@mui/material'
-import { getClubs, getSaveGame, getSquad, makeOffer } from '../../api/career'
+import { getClubs, getSaveGame, getSquad, getStaffRoster, makeOffer } from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
@@ -13,7 +13,9 @@ import { formatBRL, formatThousandsBR } from '../../lib/money'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { WatchStar } from '../players/WatchStar'
 import { MakeOfferDialog, type OfferTarget } from '../transfer/MakeOfferDialog'
-import type { ClubSummary, PlayerResponse, TransferOffer } from '../../api/types'
+import type {
+  ClubSummary, PlayerResponse, StaffMember, StaffQuality, StaffRole, StaffRoster, TransferOffer,
+} from '../../api/types'
 import { positionShort } from '../players/positionLabels'
 
 // Display order for the roster: goalkeepers, then defenders, midfielders, attackers.
@@ -37,6 +39,91 @@ function clubLocationLine(club: ClubSummary): string | null {
   if (place) segments.push(place)
   if (club.stadiumCapacity != null) segments.push(`${formatThousandsBR(club.stadiumCapacity)} lugares`)
   return segments.length > 0 ? segments.join(' · ') : null
+}
+
+const COMMISSION_LABEL: Record<StaffRole, string> = {
+  TECNICO: 'Técnico',
+  ASSISTENTE: 'Auxiliar Técnico',
+  PREPARADOR_FISICO: 'Preparador Físico',
+  OLHEIRO: 'Olheiro',
+  FISIOTERAPEUTA: 'Fisioterapeuta',
+}
+
+const COMMISSION_QUALITY_LABEL: Record<StaffQuality, string> = {
+  REGULAR: 'Regular',
+  BOM: 'Bom',
+  EXCELENTE: 'Excelente',
+}
+
+const COMMISSION_ATTRIBUTE_LABELS: Record<StaffRole, [string, string]> = {
+  TECNICO: ['Trabalho Tático', 'Motivação'],
+  ASSISTENTE: ['Conhecimento Tático', 'Avaliação de Jogadores'],
+  PREPARADOR_FISICO: ['Preparação Física', 'Ciência Esportiva'],
+  OLHEIRO: ['Conhecimento do Mercado', 'Negociação'],
+  FISIOTERAPEUTA: ['Prevenção de Lesões', 'Reabilitação'],
+}
+
+const COMMISSION_ORDER: StaffRole[] = [
+  'TECNICO', 'ASSISTENTE', 'PREPARADOR_FISICO', 'OLHEIRO', 'FISIOTERAPEUTA',
+]
+
+/**
+ * A club's coaching staff, as seen from its profile page. Roles with no holder are skipped —
+ * an empty slot is real information about a small club, but a list of five "—" rows is noise.
+ *
+ * The head-coach slot is asymmetric: on a rival club it is a normal employee with a quality,
+ * a wage and real attributes, but on the managed club it stands for the player, who is not a
+ * hire — that entry arrives with a null quality/wage and placeholder attributes, so it renders
+ * as a bare name. The guard is on the null fields, never on which club is being viewed.
+ */
+function Commission({ roster }: { roster: StaffRoster | undefined }) {
+  if (!roster) return null
+  const holderFor = (role: StaffRole): StaffMember | null => ({
+    TECNICO: roster.tecnico,
+    ASSISTENTE: roster.assistente,
+    PREPARADOR_FISICO: roster.preparadorFisico,
+    OLHEIRO: roster.olheiro,
+    FISIOTERAPEUTA: roster.fisioterapeuta,
+  })[role]
+  const filled = COMMISSION_ORDER.filter(role => holderFor(role) !== null)
+  if (filled.length === 0) return null
+
+  return (
+    <Box sx={{ mt: 3 }}>
+      <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>Comissão Técnica</Typography>
+      <Stack spacing={0.5}>
+        {filled.map(role => {
+          const holder = holderFor(role)!
+          const [primaryLabel, secondaryLabel] = COMMISSION_ATTRIBUTE_LABELS[role]
+          return (
+            <Stack
+              key={role}
+              direction="row"
+              spacing={1}
+              sx={{ alignItems: 'baseline', flexWrap: 'wrap', rowGap: 0.5 }}
+            >
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 150 }}>
+                {COMMISSION_LABEL[role]}
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>{holder.name}</Typography>
+              {holder.quality && (
+                <Chip size="small" label={COMMISSION_QUALITY_LABEL[holder.quality]} />
+              )}
+              {holder.wage !== null && (
+                <Typography variant="body2" color="text.secondary">{formatBRL(holder.wage)}/mês</Typography>
+              )}
+              {holder.quality && (
+                <>
+                  <Chip size="small" label={`${primaryLabel}: ${holder.primaryAttribute}`} />
+                  <Chip size="small" label={`${secondaryLabel}: ${holder.secondaryAttribute}`} />
+                </>
+              )}
+            </Stack>
+          )
+        })}
+      </Stack>
+    </Box>
+  )
 }
 
 /**
@@ -74,6 +161,14 @@ export function ClubViewPage() {
     queryKey: ['squad', saveGameId, clubId],
     queryFn: () => getSquad(saveGameId, clubId, token ?? ''),
     enabled: Boolean(saveGameId && clubId && token),
+  })
+
+  // Same queryKey shape as StaffPage so both share one cache entry.
+  const staffRoster = useQuery({
+    queryKey: ['staffRoster', saveGameId, clubId],
+    queryFn: () => getStaffRoster(saveGameId, clubId, token ?? ''),
+    enabled: Boolean(saveGameId && clubId && token),
+    staleTime: Infinity,
   })
 
   const club = (clubsQuery.data ?? []).find(c => c.id === clubId)
@@ -226,6 +321,8 @@ export function ClubViewPage() {
           </TableContainer>
         )
       )}
+
+      <Commission roster={staffRoster.data} />
 
       <PlayerDetails
         player={detailsPlayer}
