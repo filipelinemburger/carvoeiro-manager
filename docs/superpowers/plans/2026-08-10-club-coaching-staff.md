@@ -1975,8 +1975,22 @@ In `ClubViewPage.tsx`, add the query alongside the existing ones:
 
 Reuse the same `queryKey` shape `StaffPage` uses so both share one cache entry.
 
-Add a small presentational block after the squad table. Roles with no holder are skipped — an empty
-slot is real information about a small club, but a list of five "—" rows is noise:
+Add a small presentational block after the squad table. Roles with no holder are skipped.
+
+> **CORRECTED after implementation.** This step originally justified the skip with "an empty slot
+> is real information about a small club" — the exact premise §3.2a of the spec refutes. An
+> unfilled slot on an AI club records what the research could find, not what the club employs, so
+> rendering "Vaga em aberto" on a rival's profile would assert something false. The behaviour
+> below (skip) is right; only that reason was wrong, and it was removed from the shipped code
+> comment in commit `924b6c3`.
+>
+> Two further deviations shipped deliberately. **(a)** The block below renders only the role label
+> and the name; the shipped `Commission` also renders the quality chip, the wage and two attribute
+> chips, guarded on the null fields so the managed club's head-coach slot stays a bare name — with
+> tests for both. **(b)** The label maps below live in the components here, but shipped in
+> `frontend/src/features/staff/staffLabels.ts`, shared by this screen and `StaffPage`; two copies
+> that must agree is a divergence no test would catch, since each screen asserts against its own.
+> The same applies to Task 10's copy of these maps.
 
 ```tsx
 const COMMISSION_LABEL: Record<StaffRole, string> = {

@@ -204,7 +204,14 @@ constraint.
 
 No `staff` row is ever written for the managed club's `TECNICO`. `StaffService.getRoster` fills the
 slot from `SaveGame.getManagerName()`, and `StaffRosterResponse` gains a `tecnico` field carrying a
-`StaffResponse` with the manager's name, no wage, and no attributes.
+`StaffResponse` with the manager's name, a null quality and a null wage.
+
+**The attribute placeholder.** "No attributes" is not representable — `primaryAttribute` and
+`secondaryAttribute` are primitive `int`. That slot therefore reports **`0` for both**, a
+"not applicable" placeholder rather than a rating: real staff attributes always land in an 8–19
+band, so 0 is unambiguous. Both screens key their rendering off the null `quality`/`wage`, never
+off the zeros — displaying a 0 as if it were a rating is the regression to guard against, and
+each screen has a test pinning it.
 
 This keeps the special case in one method instead of spreading a "is this row really the player"
 check through hiring, wages, poaching and effects.
@@ -291,7 +298,9 @@ non-penalising value simply *is* 1.0 — an unresearched club fields a league-av
 it through the 14.0 baseline would instead yield 1.0057 — **not** a rounding artefact, as an
 earlier draft of this section claimed, but a systematic +0.57% strength bonus handed to every
 unresearched AI club, which no research supports and which would perturb existing
-seeded-simulation results for no gain. Only two clubs (CAM, CON) reach this branch.
+seeded-simulation results for no gain. Only two *AI* clubs (CAM, CON) reach this branch — three
+clubs lack a TECNICO row in total, but the third is the managed club, whose row is withheld by
+design and which is already covered by the paragraph above.
 
 `TeamMatchInput` gains:
 
