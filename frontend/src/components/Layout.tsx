@@ -4,11 +4,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AppBar, Toolbar, Box, Button, IconButton, Typography, Menu, MenuItem,
   Drawer, List, ListItemButton, ListItemText, Alert, Snackbar, Container, Paper, Divider, Badge,
+  CircularProgress,
 } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
 import SettingsIcon from '@mui/icons-material/Settings'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import SportsSoccerIcon from '@mui/icons-material/SportsSoccer'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
+import FastForwardIcon from '@mui/icons-material/FastForward'
+import { useIsMobile } from '../lib/useIsMobile'
 import { useAuth } from '../auth/AuthContext'
 import { advanceRound, getAdvancePreview, getLineup, getSaveGame } from '../api/career'
 import { deleteAccount } from '../api/account'
@@ -84,6 +89,8 @@ export function Layout({ children }: LayoutProps) {
     retry: false,
     staleTime: 10_000,
   })
+
+  const isMobile = useIsMobile()
 
   const [gearAnchor, setGearAnchor] = useState<null | HTMLElement>(null)
   const gearOpen = Boolean(gearAnchor)
@@ -217,6 +224,18 @@ export function Layout({ children }: LayoutProps) {
   const advanceDisabled =
     advanceMutation.isPending || seasonFinished || !sgId || advanceBlockReason !== null
 
+  // The advance control's four states. On compact viewports the label is rendered as an icon
+  // (see below), so each state also names the icon that stands in for its words.
+  const advancePending = advanceMutation.isPending || kickoffMutation.isPending
+  const advanceLabel = liveMatch ? 'Retomar partida'
+    : advancePending ? 'Avançando…'
+      : preview?.managedClubPlaysNext ? 'Ir para o jogo'
+        : 'Avançar'
+  const advanceIcon = advancePending ? <CircularProgress size={20} color="inherit" />
+    : liveMatch ? <PlayArrowIcon />
+      : preview?.managedClubPlaysNext ? <SportsSoccerIcon />
+        : <FastForwardIcon />
+
   // Section links shown once a save game exists — reused by the desktop bar and the
   // mobile Drawer so the two never drift.
   const saveLinks = hasSaveGame
@@ -267,7 +286,7 @@ export function Layout({ children }: LayoutProps) {
   return (
     <>
       <AppBar position="sticky" elevation={0} sx={{ bgcolor: BAR_BG, color: BAR_FG }}>
-        <Toolbar variant="dense" sx={{ gap: 1 }}>
+        <Toolbar variant="dense" sx={{ gap: { xs: 0.5, md: 1 } }}>
           {/* Left: back arrow (hidden on the dashboard) */}
           {!isDashboard && (
             <IconButton
@@ -281,12 +300,27 @@ export function Layout({ children }: LayoutProps) {
             </IconButton>
           )}
 
-          <Typography component="span" sx={{ fontWeight: 700, mr: 1, whiteSpace: 'nowrap' }}>
-            Carvoeiro Manager
+          {/* Shortened on phones: the full name plus the date and three icon buttons overflow a
+              375px bar, which is what pushed the menu and gear off screen. */}
+          <Typography component="span" sx={{ fontWeight: 700, mr: { md: 1 }, whiteSpace: 'nowrap' }}>
+            {isMobile ? 'Carvoeiro' : 'Carvoeiro Manager'}
           </Typography>
 
-          {/* Desktop: inline nav links */}
-          <Box component="nav" sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 0.25 }}>
+          {/* Desktop: inline nav links. The full set is wider than a 1280px laptop once the
+              brand, date and advance button are accounted for, so the strip scrolls (without a
+              visible scrollbar) rather than squeezing its neighbours. */}
+          <Box
+            component="nav"
+            sx={{
+              display: { xs: 'none', md: 'flex' },
+              alignItems: 'center',
+              gap: 0.25,
+              minWidth: 0,
+              overflowX: 'auto',
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': { display: 'none' },
+            }}
+          >
             {navLinks.map(link => (
               <Box key={link.to} component={NavLink} to={link.to} sx={barLinkSx}>
                 {renderNavLabel(link)}
@@ -308,18 +342,36 @@ export function Layout({ children }: LayoutProps) {
             </Typography>
           )}
 
+          {/* The label is long enough ("Ir para o jogo") to wrap onto four lines on a phone,
+              inflating the bar and pushing the menu/gear icons off screen — so on compact
+              viewports the same action becomes a gold icon button, named for screen readers. */}
           {hasSaveGame && !isMatchScreen && (
-            <Button
-              color="primary"
-              disabled={advanceDisabled || kickoffMutation.isPending}
-              title={advanceBlockReason ?? undefined}
-              onClick={handleAdvance}
-            >
-              {liveMatch ? 'Retomar partida'
-                : advanceMutation.isPending || kickoffMutation.isPending ? 'Avançando…'
-                  : preview?.managedClubPlaysNext ? 'Ir para o jogo'
-                    : 'Avançar'}
-            </Button>
+            isMobile ? (
+              <IconButton
+                disabled={advanceDisabled || kickoffMutation.isPending}
+                aria-label={advanceLabel}
+                title={advanceBlockReason ?? advanceLabel}
+                onClick={handleAdvance}
+                sx={{
+                  bgcolor: 'primary.main',
+                  color: 'primary.contrastText',
+                  '&:hover': { bgcolor: 'primary.dark' },
+                  '&.Mui-disabled': { bgcolor: 'action.disabledBackground', color: 'action.disabled' },
+                }}
+              >
+                {advanceIcon}
+              </IconButton>
+            ) : (
+              <Button
+                color="primary"
+                disabled={advanceDisabled || kickoffMutation.isPending}
+                title={advanceBlockReason ?? undefined}
+                onClick={handleAdvance}
+                sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+              >
+                {advanceLabel}
+              </Button>
+            )
           )}
 
           {hasSaveGame && !isMatchScreen && (

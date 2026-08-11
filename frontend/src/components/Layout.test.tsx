@@ -9,6 +9,7 @@ import { getSaveGame, advanceRound, getAdvancePreview, getLineup } from '../api/
 import { deleteAccount } from '../api/account'
 import { getLiveMatch } from '../api/liveMatch'
 import { getNewsUnreadCount } from '../api/news'
+import { useIsMobile } from '../lib/useIsMobile'
 import type { Mock } from 'vitest'
 import type { AdvancePreviewResponse, AdvanceResponse, SaveGameResponse } from '../api/types'
 
@@ -33,6 +34,10 @@ vi.mock('../api/liveMatch', () => ({
 }))
 
 vi.mock('../api/news', () => ({ getNewsUnreadCount: vi.fn() }))
+
+// jsdom has no matchMedia, so the real hook always reports desktop; mocking it lets the
+// compact-viewport rendering (icon-only advance button) be tested too.
+vi.mock('../lib/useIsMobile', () => ({ useIsMobile: vi.fn(() => false) }))
 
 const PREVIEW_OK: AdvancePreviewResponse = {
   nextEventType: 'MATCH',
@@ -122,6 +127,7 @@ describe('Layout shell', () => {
     ;(deleteAccount as Mock).mockResolvedValue(undefined)
     ;(getLiveMatch as Mock).mockResolvedValue(null)
     vi.mocked(getNewsUnreadCount).mockResolvedValue(3)
+    vi.mocked(useIsMobile).mockReturnValue(false)
   })
 
   it('renders children inside a content panel', () => {
@@ -357,5 +363,57 @@ describe('Layout shell', () => {
     await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['market'] }))
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['clubs'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['staffCandidates'] })
+  })
+
+  // On a phone the wordy labels ("Ir para o jogo") wrapped onto four lines, which inflated the
+  // app bar and pushed the menu and gear buttons off screen. The action becomes an icon there.
+  describe('on a compact viewport', () => {
+    beforeEach(() => {
+      vi.mocked(useIsMobile).mockReturnValue(true)
+    })
+
+    it('renders the advance action as an icon that keeps its name for screen readers', async () => {
+      seedAuth('U1', 'sg-1')
+      renderLayout('/dashboard')
+
+      const advanceBtn = await screen.findByRole('button', { name: 'Ir para o jogo' })
+      // No text node: the label lives in aria-label, so nothing can wrap the bar onto two rows.
+      expect(advanceBtn).toHaveTextContent('')
+      expect(advanceBtn.querySelector('svg')).toBeInTheDocument()
+    })
+
+    it('still opens the kickoff confirmation when the icon is tapped', async () => {
+      seedAuth('U1', 'sg-1')
+      renderLayout('/dashboard')
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Ir para o jogo' }))
+
+      expect(screen.getByRole('heading', { name: 'Ir para o jogo' })).toBeInTheDocument()
+    })
+
+    it('advances directly from the icon when the managed club is not next up', async () => {
+      ;(getAdvancePreview as Mock).mockResolvedValue({
+        ...PREVIEW_OK,
+        managedClubPlaysNext: false,
+      } satisfies AdvancePreviewResponse)
+      seedAuth('U1', 'sg-1')
+      renderLayout('/dashboard')
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Avançar' }))
+
+      await waitFor(() => expect(advanceRound).toHaveBeenCalledWith('sg-1', 'test-token'))
+    })
+
+    it('keeps the menu and gear buttons reachable next to the advance icon', async () => {
+      seedAuth('U1', 'sg-1')
+      renderLayout('/dashboard')
+
+      expect(await screen.findByRole('button', { name: 'Ir para o jogo' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Abrir menu' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Configurações' })).toBeInTheDocument()
+      // The brand is shortened so the whole row fits a 375px bar.
+      expect(screen.getByText('Carvoeiro')).toBeInTheDocument()
+      expect(screen.queryByText('Carvoeiro Manager')).not.toBeInTheDocument()
+    })
   })
 })
