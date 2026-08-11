@@ -705,8 +705,8 @@ public class LiveMatchService {
         return new LiveMatchState(
                 lm.getFixtureId().toString(), competitionName, lm.getRound(), lm.getMatchDate().toString(),
                 homeClub.resolvedStadiumName(),
-                homeClub.getName(), shortName(homeClub),
-                awayClub.getName(), shortName(awayClub),
+                fixture.getHomeClubId().toString(), homeClub.getName(), shortName(homeClub),
+                fixture.getAwayClubId().toString(), awayClub.getName(), shortName(awayClub),
                 managedIsHome, minute, timeline.homeGoalsAt(minute), timeline.awayGoalsAt(minute),
                 status, events, onPitch, bench, maxSubsAt(minute) - subsUsed, currentTactics, playerRatings,
                 opponentOnPitch, opponentTactics, opponentPlayerRatings, homeClubColors, awayClubColors,
@@ -722,6 +722,14 @@ public class LiveMatchService {
      * Null/blank (in-flight matches created before {@code parallel_scores} existed) yields an empty
      * list. A parse failure also yields an empty list: this is a display-only projection and must
      * never break {@code getLive}; genuine JSON corruption still surfaces loudly at {@code finish}.
+     * <p>
+     * The two club ids are resolved from the FIXTURE ROWS rather than read off the snapshot, which
+     * has never carried them — adding them there would leave every already-in-flight match showing
+     * nulls. All fixtures are fetched in ONE {@code findAllById}, because this runs on every
+     * {@code getLive} (once per minute tick). A fixture id that no longer resolves degrades to null
+     * ids on that entry alone: the score itself still displays (losing a visible result over a
+     * cosmetic lookup would be the worse failure) and a null id joins no standings row, so the live
+     * table simply omits that fixture instead of mis-attributing it.
      */
     private List<ParallelScore> parallelScoresAsOf(LiveMatch lm, int minute) {
         String json = lm.getParallelScores();
@@ -731,9 +739,16 @@ public class LiveMatchService {
         try {
             List<ParallelFixtureScore> scores =
                     objectMapper.readValue(json, new TypeReference<List<ParallelFixtureScore>>() { });
+            Map<UUID, Fixture> fixtures = fixturesById(scores);
             return scores.stream()
-                    .map(pfs -> new ParallelScore(pfs.fixtureId(), pfs.homeShort(), pfs.awayShort(),
-                            goalsAsOf(pfs, minute, true), goalsAsOf(pfs, minute, false)))
+                    .map(pfs -> {
+                        Fixture f = pfs.fixtureId() == null ? null : fixtures.get(pfs.fixtureId());
+                        return new ParallelScore(pfs.fixtureId(),
+                                f == null ? null : f.getHomeClubId(),
+                                f == null ? null : f.getAwayClubId(),
+                                pfs.homeShort(), pfs.awayShort(),
+                                goalsAsOf(pfs, minute, true), goalsAsOf(pfs, minute, false));
+                    })
                     .toList();
         } catch (Exception e) {
             // Display-only projection: a corrupt snapshot must never break getLive. Log so the
@@ -742,6 +757,24 @@ public class LiveMatchService {
                     lm.getFixtureId(), e);
             return List.of();
         }
+    }
+
+    /**
+     * The fixture rows behind a parallel-scores snapshot, keyed by id — one batched query for the
+     * whole list. Ids with no surviving row are simply absent from the map; callers degrade on a
+     * miss rather than throwing.
+     */
+    private Map<UUID, Fixture> fixturesById(List<ParallelFixtureScore> scores) {
+        List<UUID> ids = scores.stream()
+                .map(ParallelFixtureScore::fixtureId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return fixtureRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Fixture::getId, f -> f));
     }
 
     private int goalsAsOf(ParallelFixtureScore pfs, int minute, boolean home) {

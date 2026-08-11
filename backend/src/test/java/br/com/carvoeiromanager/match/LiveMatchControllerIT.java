@@ -15,6 +15,9 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -35,6 +38,7 @@ class LiveMatchControllerIT {
 
     private String bearer;
     private String saveGameId;
+    private String managedClubId;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -57,7 +61,7 @@ class LiveMatchControllerIT {
                 .andReturn().getResponse().getContentAsString();
         JsonNode career = objectMapper.readTree(careerResponse);
         saveGameId = career.get("id").asString();
-        String managedClubId = career.get("managedClubId").asString();
+        managedClubId = career.get("managedClubId").asString();
 
         // Set lineup via HTTP so the save game is playable (best XI via the lineup service)
         // We need to seed a valid lineup — hit the squad endpoint to get player ids and then set the lineup
@@ -120,10 +124,25 @@ class LiveMatchControllerIT {
                 .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
 
         // GET → 200 (session exists)
-        mockMvc.perform(get("/api/v1/save-games/{s}/live-match", saveGameId)
+        String liveBody = mockMvc.perform(get("/api/v1/save-games/{s}/live-match", saveGameId)
                         .header("Authorization", bearer))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.stats.home.possession").exists());
+                .andExpect(jsonPath("$.stats.home.possession").exists())
+                // Club ids reach the payload: the live table joins the round's results onto the
+                // pre-round standings by club id, so nulls here would silently show a wrong table.
+                .andExpect(jsonPath("$.homeClubId").isNotEmpty())
+                .andExpect(jsonPath("$.awayClubId").isNotEmpty())
+                .andExpect(jsonPath("$.parallelScores").isNotEmpty())
+                // Every other fixture of the round is a live row, so none degrades to null ids.
+                .andExpect(jsonPath("$.parallelScores[*].homeClubId", everyItem(notNullValue())))
+                .andExpect(jsonPath("$.parallelScores[*].awayClubId", everyItem(notNullValue())))
+                .andReturn().getResponse().getContentAsString();
+
+        // The managed club sits on exactly the side managedIsHome claims — proves the two ids are
+        // the fixture's real clubs and are not swapped.
+        JsonNode live = objectMapper.readTree(liveBody);
+        String managedSide = live.get("managedIsHome").asBoolean() ? "homeClubId" : "awayClubId";
+        assertThat(live.get(managedSide).asString()).isEqualTo(managedClubId);
 
         // advance until FULL_TIME (bounded at 200 iterations)
         String status = "IN_PROGRESS";

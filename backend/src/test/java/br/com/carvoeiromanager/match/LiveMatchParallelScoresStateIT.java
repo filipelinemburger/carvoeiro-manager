@@ -4,6 +4,8 @@ import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.competition.Fixture;
+import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.RoleArchetype;
@@ -40,6 +42,7 @@ class LiveMatchParallelScoresStateIT {
     @Autowired LineupService lineupService;
     @Autowired LiveMatchRepository liveMatchRepository;
     @Autowired PlayerRepository playerRepository;
+    @Autowired FixtureRepository fixtureRepository;
     @Autowired ObjectMapper objectMapper;
 
     private UUID saveGameId;
@@ -177,5 +180,89 @@ class LiveMatchParallelScoresStateIT {
 
         assertThat(state.parallelScores()).isEmpty();
         assertThat(state.competitionId()).isEqualTo(competitionId.toString());
+    }
+
+    /** The round's fixtures other than the one the manager is playing, in fixture-row order. */
+    private List<Fixture> otherFixturesOfTheRound() {
+        LiveMatch lm = liveMatchService.requireLive(saveGameId);
+        return fixtureRepository
+                .findBySaveGameIdAndCompetitionIdAndRound(saveGameId, lm.getCompetitionId(), lm.getRound())
+                .stream()
+                .filter(f -> !f.getId().equals(lm.getFixtureId()))
+                .toList();
+    }
+
+    private ParallelFixtureScore crafted(UUID fixtureId, String homeShort, String awayShort) {
+        return new ParallelFixtureScore(fixtureId, homeShort, awayShort, 1, 0,
+                List.of(new SimulatedEvent(10, EventType.GOAL, true)), null, null);
+    }
+
+    @Test
+    void eachParallelScoreCarriesTheClubIdsOfItsOwnFixtureRow() {
+        liveMatchService.kickoff(saveGameId, userId);
+
+        List<Fixture> others = otherFixturesOfTheRound();
+        assertThat(others).hasSizeGreaterThanOrEqualTo(2);
+
+        // Stored in REVERSE fixture-row order, with shorts that deliberately do NOT name the real
+        // clubs: a positional join, or one that leans on the snapshot's strings, cannot pass.
+        List<ParallelFixtureScore> stored = new java.util.ArrayList<>(others.stream()
+                .map(f -> crafted(f.getId(), "ZZZ", "YYY"))
+                .toList());
+        java.util.Collections.reverse(stored);
+
+        LiveMatchState state = stateWith(json(stored), 30);
+
+        for (Fixture fixture : others) {
+            ParallelScore projected = scoreOf(state, fixture.getId());
+            assertThat(projected.homeClubId())
+                    .as("home club of fixture %s", fixture.getId())
+                    .isEqualTo(fixture.getHomeClubId());
+            assertThat(projected.awayClubId())
+                    .as("away club of fixture %s", fixture.getId())
+                    .isEqualTo(fixture.getAwayClubId());
+        }
+    }
+
+    @Test
+    void aParallelFixtureIdThatNoLongerResolvesKeepsItsScoreWithNullClubIds() {
+        liveMatchService.kickoff(saveGameId, userId);
+
+        Fixture real = otherFixturesOfTheRound().getFirst();
+        UUID ghost = UUID.randomUUID();   // no fixture row will ever match this
+        String stored = json(List.of(crafted(ghost, "ABC", "XYZ"), crafted(real.getId(), "DEF", "UVW")));
+
+        LiveMatchState state = stateWith(stored, 30);
+
+        // Degradation is per-entry: the unresolvable fixture keeps its score (the display must not
+        // silently lose a result) but carries null ids, so no standings join can mis-attribute it.
+        ParallelScore missing = scoreOf(state, ghost);
+        assertThat(missing.homeClubId()).isNull();
+        assertThat(missing.awayClubId()).isNull();
+        assertThat(missing.homeShort()).isEqualTo("ABC");
+        assertThat(missing.awayShort()).isEqualTo("XYZ");
+        assertThat(missing.homeGoals()).isEqualTo(1);
+        assertThat(missing.awayGoals()).isZero();
+
+        // ...and it does not poison the entries that DO resolve.
+        ParallelScore resolved = scoreOf(state, real.getId());
+        assertThat(resolved.homeClubId()).isEqualTo(real.getHomeClubId());
+        assertThat(resolved.awayClubId()).isEqualTo(real.getAwayClubId());
+    }
+
+    @Test
+    void liveStateCarriesTheClubIdsOfTheFixtureBeingPlayed() {
+        LiveMatchState state = liveMatchService.kickoff(saveGameId, userId);
+
+        Fixture fixture = fixtureRepository.findById(UUID.fromString(state.fixtureId())).orElseThrow();
+        assertThat(state.homeClubId()).isEqualTo(fixture.getHomeClubId().toString());
+        assertThat(state.awayClubId()).isEqualTo(fixture.getAwayClubId().toString());
+
+        // The managed club must land on exactly the side managedIsHome claims — an independent
+        // check that the two ids are not swapped.
+        assertThat(state.managedIsHome() ? state.homeClubId() : state.awayClubId())
+                .isEqualTo(managedClubId.toString());
+        assertThat(state.managedIsHome() ? state.awayClubId() : state.homeClubId())
+                .isNotEqualTo(managedClubId.toString());
     }
 }
