@@ -125,6 +125,23 @@ describe('ClubCard', () => {
     expect(onClick).not.toHaveBeenCalled()
   })
 
+  it('fills its share of the scoreboard row instead of hugging its label', () => {
+    render(
+      <ClubCard
+        shortName="Criciúma"
+        colors={{ primary: '#f7d417', secondary: '#111111' }}
+        isOwn
+        onClick={() => {}}
+      />,
+    )
+    const card = screen.getByTestId('club-card-own')
+    // Same sx-vs-inline-style caveat as the colour assertions above: this must go through the
+    // computed style. `flex: 1` resolves to grow 1 / basis 0%, and the old `minWidth: 100` (which
+    // made the card hug its label and sit as a pill at the row's edge) must be gone — a card that
+    // grows but keeps a 100px floor still can't shrink below it on a narrow screen.
+    expect(card).toHaveStyle({ flexGrow: '1', flexBasis: '0%', minWidth: '0px' })
+  })
+
   it('renders no outline when clash is false or omitted', () => {
     render(
       <ClubCard

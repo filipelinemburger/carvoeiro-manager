@@ -5,8 +5,8 @@ import { ClubCard } from './ClubCard'
 import type { LiveMatchState } from '../../api/types'
 
 /**
- * Scoreboard: home club card — score block — away club card, cards at the outer edges and the
- * score centred between them, with the clock progress bar underneath.
+ * Scoreboard: home club card — score block — away club card as three equal columns (each `flex: 1`),
+ * with the clock progress bar underneath.
  *
  * "Own" (the managed club) is decided from `state.managedIsHome`, never assumed to be home —
  * `onOwnClick`/`onOpponentClick` are wired to whichever side (home or away) that turns out to be.
@@ -30,6 +30,9 @@ export function MatchScoreboard({ state, onOwnClick, onOpponentClick }: {
   // branch both entry points (Substituir/Tática) were gated on !fullTime; a still-clickable own
   // card at full time let a manager queue a substitution that then failed server-side. The
   // opponent card stays clickable post-match — its scouting panel is read-only and still useful.
+  // Only the own card is captioned — the opponent card carries no 'Adversário' label any more,
+  // so during play `Substituições (N)` is what tells the two apart (plus the kit colours and the
+  // score). At full time the caption is dropped and both cards render bare.
   const ownCaption = fullTime ? undefined : `Substituições (${state.subsRemaining})`
 
   // Guarded through safeKit before the RGB-distance check, same guard cardColors applies
@@ -42,7 +45,7 @@ export function MatchScoreboard({ state, onOwnClick, onOpponentClick }: {
         <ClubCard
           shortName={state.homeClubShortName}
           colors={state.homeClubColors}
-          caption={homeIsOwn ? ownCaption : 'Adversário'}
+          caption={homeIsOwn ? ownCaption : undefined}
           isOwn={homeIsOwn}
           onClick={homeIsOwn ? onOwnClick : onOpponentClick}
           disabled={homeIsOwn && fullTime}
@@ -59,7 +62,7 @@ export function MatchScoreboard({ state, onOwnClick, onOpponentClick }: {
         <ClubCard
           shortName={state.awayClubShortName}
           colors={state.awayClubColors}
-          caption={homeIsOwn ? 'Adversário' : ownCaption}
+          caption={homeIsOwn ? undefined : ownCaption}
           isOwn={!homeIsOwn}
           onClick={homeIsOwn ? onOpponentClick : onOwnClick}
           clash={clash}

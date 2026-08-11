@@ -840,6 +840,13 @@ export type LiveKitColors = { primary: string; secondary: string }
 /** One other fixture's score in the same round, as it stands at the live match's committed minute. */
 export type ParallelScore = {
   fixtureId: string
+  /**
+   * Null when the backend could not resolve the fixture row behind this snapshot entry (the score
+   * is still shown; only the standings join is lost). The two ids are always null together — they
+   * come from one `Fixture` or from nothing — so narrowing one narrows the pair in practice.
+   */
+  homeClubId: string | null
+  awayClubId: string | null
   homeShort: string
   awayShort: string
   homeGoals: number
@@ -871,8 +878,10 @@ export type LiveMatchState = {
   round: number | null
   matchDate: string | null
   stadiumName: string
+  homeClubId: string
   homeClubName: string
   homeClubShortName: string
+  awayClubId: string
   awayClubName: string
   awayClubShortName: string
   managedIsHome: boolean

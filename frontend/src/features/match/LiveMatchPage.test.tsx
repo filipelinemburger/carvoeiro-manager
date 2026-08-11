@@ -39,8 +39,9 @@ const MOCK_PLAYER = {
 const STATE = {
   fixtureId: 'f1', competitionName: 'Catarinense', round: 0, matchDate: '2026-03-01',
   stadiumName: 'Estádio Heriberto Hülse',
-  homeClubName: 'Criciúma Esporte Clube', homeClubShortName: 'Criciúma',
-  awayClubName: 'Rival Futebol Clube', awayClubShortName: 'Rival', managedIsHome: true,
+  homeClubId: 'club-home', homeClubName: 'Criciúma Esporte Clube', homeClubShortName: 'Criciúma',
+  awayClubId: 'club-away', awayClubName: 'Rival Futebol Clube', awayClubShortName: 'Rival',
+  managedIsHome: true,
   minute: 12, homeGoals: 1, awayGoals: 0, status: 'IN_PROGRESS',
   events: [{ minute: 12, type: 'GOAL', home: true, playerId: 'p1', playerName: 'Camisa 9',
     playerInId: null, playerInName: null, severity: null, text: 'GOL! Camisa 9 balança as redes!' }],
@@ -256,6 +257,33 @@ describe('LiveMatchPage', () => {
     expect(screen.queryByText(/Público:/)).not.toBeInTheDocument()
   })
 
+  it('renders the game-info line in the header, ABOVE the tab bar, not above each tab\'s content', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
+    renderPage()
+    // The info line used to render below <Tabs>, which put it on top of every tab panel and
+    // repeated the Partida details on the other four tabs. Its DOM position relative to the
+    // tablist is the whole point of the move, so pin it — a future refactor that drops it back
+    // below the tabs must fail here.
+    const info = await screen.findByText(/Estádio Heriberto Hülse · 01\/03\/2026/)
+    const tablist = screen.getByRole('tablist')
+    expect(info.compareDocumentPosition(tablist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('leaves the opponent card uncaptioned, keeping "Substituições" on the own card as the distinguishing mark', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
+    renderPage()
+    // Scoped to the two cards on purpose: this test is about the scoreboard caption only, so it
+    // must not be satisfied — or broken — by the word appearing anywhere else on the page.
+    // (It used to head an Atuações column; those headings are the clubs' short names now.)
+    const opponent = await screen.findByTestId('club-card-opponent')
+    expect(within(opponent).queryByText(/advers/i)).not.toBeInTheDocument()
+    // The card is still identified as the opponent's — by its testid and its accessible name.
+    expect(opponent).toHaveAccessibleName('Escalação do adversário — Rival')
+    expect(within(opponent).getByText('Rival')).toBeInTheDocument()
+    // …and the own card keeps the caption that now tells the two apart during play.
+    expect(within(screen.getByTestId('club-card-own')).getByText('Substituições (5)')).toBeInTheDocument()
+  })
+
   it('at full time, Ver resumo finishes and navigates to the news', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({ ...STATE, minute: 90, status: 'FULL_TIME' } as never)
     vi.mocked(finishLiveMatch).mockResolvedValue({ type: 'MATCH' } as never)
@@ -317,8 +345,128 @@ describe('LiveMatchPage', () => {
     fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
     expect(await screen.findByText('Camisa 9')).toBeInTheDocument()
     expect(screen.getByText('Rival Camisa 10')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /^meu time$/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /^adversário$/i })).not.toBeInTheDocument()
+    // The subject is "no toggle": both sides are on screen at once, so neither column heading may
+    // be a control that swaps the other one out. The headings used to read "Meu Time"/"Adversário"
+    // and now read the two clubs' short names, so a surviving toggle would carry THOSE names —
+    // same claim, retargeted at the text that expresses it today. (The scoreboard's club cards are
+    // buttons too, but their accessible names are "Ações do meu time — Criciúma" / "Escalação do
+    // adversário — Rival", which the anchored patterns below deliberately do not match.)
+    expect(screen.queryByRole('button', { name: /^criciúma$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^rival$/i })).not.toBeInTheDocument()
+  })
+
+  // --- Atuações: left column = home club, right = away club, ALWAYS ---
+
+  // Named after the SIDE they play on, not after who manages them: every test below varies
+  // `managedIsHome` while keeping the same two rated players, so a column that followed the
+  // managed/opponent axis would place "Mandante Camisa 9" on the right in one of them.
+  const RATED_HOME = { playerId: 'h9', name: 'Mandante Camisa 9', position: 'ATT', minutesPlayed: 12, goals: 1, rating: 7.4 }
+  const RATED_AWAY = { playerId: 'a10', name: 'Visitante Camisa 10', position: 'MID', minutesPlayed: 12, goals: 0, rating: 6.3 }
+
+  // The Atuações tab renders one column per side — [heading, PlayerRatingsList] — inside a single
+  // two-column Stack. Walks up from a rated player's name (an MUI Link rendered as a <button>)
+  // through the row Stack and the list Stack to that player's column, then returns the Stack's
+  // children in DOM order: [left, right]. Structural on purpose rather than testid-based — the
+  // structure is identical before and after this change, so an inverted render fails on the
+  // column CONTENT assertions below (the real subject) instead of on a missing test hook.
+  const atuacoesColumns = async (ratedPlayerName: string): Promise<HTMLElement[]> => {
+    const name = await screen.findByText(ratedPlayerName)
+    const column = name.closest('div')?.parentElement?.parentElement
+    const columns = Array.from(column?.parentElement?.children ?? []) as HTMLElement[]
+    if (columns.length !== 2) throw new Error(`Expected 2 Atuações columns, found ${columns.length}`)
+    return columns
+  }
+
+  it('puts the home club\'s players in the left Atuações column and the away club\'s in the right', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS', managedIsHome: true,
+      playerRatings: [RATED_HOME], opponentRatings: [RATED_AWAY],
+    } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
+    const [left, right] = await atuacoesColumns(RATED_HOME.name)
+
+    expect(within(left).getByText(RATED_HOME.name)).toBeInTheDocument()
+    expect(within(left).queryByText(RATED_AWAY.name)).not.toBeInTheDocument()
+    expect(within(right).getByText(RATED_AWAY.name)).toBeInTheDocument()
+    expect(within(right).queryByText(RATED_HOME.name)).not.toBeInTheDocument()
+  })
+
+  it('keeps the Atuações columns home-left/away-right when the managed club plays AWAY (regression: they used to follow managed/opponent, contradicting the scoreboard)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS', managedIsHome: false,
+      // Managed club plays away, so ITS grades are the away ones and the AI rival's are the home
+      // ones — the exact fixture in which a managed-oriented layout puts the manager on the left.
+      playerRatings: [RATED_AWAY], opponentRatings: [RATED_HOME],
+    } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
+    const [left, right] = await atuacoesColumns(RATED_HOME.name)
+
+    expect(within(left).getByText(RATED_HOME.name)).toBeInTheDocument()
+    expect(within(left).queryByText(RATED_AWAY.name)).not.toBeInTheDocument()
+    expect(within(right).getByText(RATED_AWAY.name)).toBeInTheDocument()
+    expect(within(right).queryByText(RATED_HOME.name)).not.toBeInTheDocument()
+  })
+
+  it('heads the two Atuações columns with the home and away short names, not "Meu Time"/"Adversário"', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS', managedIsHome: false,
+      playerRatings: [RATED_AWAY], opponentRatings: [RATED_HOME],
+    } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
+    const [left, right] = await atuacoesColumns(RATED_HOME.name)
+
+    expect(within(left).getByText(STATE.homeClubShortName)).toBeInTheDocument()
+    expect(within(right).getByText(STATE.awayClubShortName)).toBeInTheDocument()
+    // The old headings named the managed/opponent axis — the very one being replaced — so they
+    // cannot survive anywhere on the screen. ("Escalação do adversário — Rival" is the opponent
+    // card's aria-label, not text, so it can't satisfy the second query.)
+    expect(screen.queryByText('Meu Time')).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Adversário$/)).not.toBeInTheDocument()
+  })
+
+  it('shows the watch star for a rival player clicked in the LEFT Atuações column when the managed club plays away (isOwnPlayer follows the side, never the column)', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS', managedIsHome: false,
+      playerRatings: [RATED_AWAY], opponentRatings: [RATED_HOME],
+    } as never)
+    vi.mocked(getPlayer).mockResolvedValue({ ...MOCK_PLAYER, id: RATED_HOME.playerId, name: RATED_HOME.name } as never)
+
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
+    // The rival plays at home here, so its rows sit in the LEFT column — the position that used
+    // to be reserved for the manager's own team. Deriving isOwnPlayer from the column would put
+    // the star on the wrong side of the screen.
+    fireEvent.click(await screen.findByText(RATED_HOME.name))
+
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(getPlayer).toHaveBeenCalledWith('sg-1', RATED_HOME.playerId, 'test-token'))
+    expect(await within(dialog).findByRole('button', { name: 'Observar jogador' })).toBeInTheDocument()
+  })
+
+  it('shows no watch star for a managed-club player clicked in the RIGHT Atuações column when the managed club plays away', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS', managedIsHome: false,
+      playerRatings: [RATED_AWAY], opponentRatings: [RATED_HOME],
+    } as never)
+    vi.mocked(getPlayer).mockResolvedValue({ ...MOCK_PLAYER, id: RATED_AWAY.playerId, name: RATED_AWAY.name } as never)
+
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: /atuações/i }))
+    fireEvent.click(await screen.findByText(RATED_AWAY.name))
+
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(getPlayer).toHaveBeenCalledWith('sg-1', RATED_AWAY.playerId, 'test-token'))
+    // Non-vacuity: the details really did render, so the two absent-star queries below are
+    // capable of failing.
+    expect(within(dialog).getByText('Pos')).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Observar jogador' })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Remover da observação' })).not.toBeInTheDocument()
   })
 
   it('dims a player who has been substituted off in the ratings list', async () => {
@@ -928,8 +1076,8 @@ describe('LiveMatchPage', () => {
     vi.mocked(getLiveMatch).mockResolvedValue({
       ...STATE, status: 'IN_PROGRESS',
       parallelScores: [
-        { fixtureId: 'px1', homeShort: 'AVA', awayShort: 'FIG', homeGoals: 2, awayGoals: 1 },
-        { fixtureId: 'px2', homeShort: 'JEC', awayShort: 'CHA', homeGoals: 0, awayGoals: 0 },
+        { fixtureId: 'px1', homeClubId: 'club-ava', awayClubId: 'club-fig', homeShort: 'AVA', awayShort: 'FIG', homeGoals: 2, awayGoals: 1 },
+        { fixtureId: 'px2', homeClubId: 'club-jec', awayClubId: 'club-cha', homeShort: 'JEC', awayShort: 'CHA', homeGoals: 0, awayGoals: 0 },
       ],
     } as never)
     renderPage()
@@ -972,6 +1120,53 @@ describe('LiveMatchPage', () => {
     const managedRows = document.querySelectorAll('[data-managed="true"]')
     expect(managedRows).toHaveLength(1)
     expect(within(managedRows[0] as HTMLElement).getByText('Tigrão')).toBeInTheDocument()
+  })
+
+  it('Rodada tab (Classificação sub-tab) folds the in-progress match AND the parallel fixtures into the table', async () => {
+    // Pre-round table, in the order the server returns it. None of this round is in it — the
+    // round's fixtures are only persisted at finish(), so nothing below is double-counted.
+    vi.mocked(getStandings).mockResolvedValue([
+      { clubId: 'club-a', clubName: 'Alfa', played: 3, won: 2, drawn: 0, lost: 1, goalsFor: 6, goalsAgainst: 3, goalDifference: 3, points: 6 },
+      { clubId: 'club-b', clubName: 'Beta', played: 3, won: 1, drawn: 1, lost: 1, goalsFor: 4, goalsAgainst: 4, goalDifference: 0, points: 4 },
+      { clubId: 'club-c', clubName: 'Gama', played: 3, won: 1, drawn: 0, lost: 2, goalsFor: 3, goalsAgainst: 5, goalDifference: -2, points: 3 },
+      { clubId: 'club-d', clubName: 'Delta', played: 3, won: 0, drawn: 2, lost: 1, goalsFor: 2, goalsAgainst: 3, goalDifference: -1, points: 2 },
+    ] as never)
+    vi.mocked(getSaveGame).mockResolvedValue({ managedClubId: 'club-b' } as never)
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS',
+      // The managed club (Beta) is winning 2-0 at home: 4 + 3 = 7 points, above Alfa's 6.
+      homeClubId: 'club-b', awayClubId: 'club-a', homeGoals: 2, awayGoals: 0,
+      // ...and in parallel Delta is thumping Gama 3-0: 2 + 3 = 5 points, above Gama's 3.
+      parallelScores: [
+        { fixtureId: 'px1', homeClubId: 'club-d', awayClubId: 'club-c', homeShort: 'DEL', awayShort: 'GAM', homeGoals: 3, awayGoals: 0 },
+        // A fixture the backend could not resolve to club ids: its score still shows in
+        // Resultados, but it must contribute nothing here rather than corrupt a row.
+        { fixtureId: 'px2', homeClubId: null, awayClubId: null, homeShort: 'ZZZ', awayShort: 'YYY', homeGoals: 4, awayGoals: 4 },
+      ],
+    } as never)
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('tab', { name: /rodada/i }))
+    fireEvent.click(await screen.findByRole('tab', { name: /classificação/i }))
+    await screen.findByText('Beta')
+
+    const cellsOf = (tr: Element) => Array.from(tr.querySelectorAll('td')).map(td => td.textContent)
+    const bodyRows = Array.from(document.querySelectorAll('tbody tr'))
+
+    // Base order was Alfa, Beta, Gama, Delta. Both live results move a club, so an
+    // untouched base table cannot produce this ordering.
+    expect(bodyRows.map(tr => cellsOf(tr)[1])).toEqual(['Beta', 'Alfa', 'Delta', 'Gama'])
+
+    // POS, CLUBE, P, V, E, D, GP, GC, SG, PTS — the current match applied to both its clubs.
+    expect(cellsOf(bodyRows[0])).toEqual(['1', 'Beta', '4', '2', '1', '1', '6', '4', '2', '7'])
+    expect(cellsOf(bodyRows[1])).toEqual(['2', 'Alfa', '4', '2', '0', '2', '6', '5', '1', '6'])
+    // ...and the parallel fixture applied to its two clubs, the 4-4 null-id one to neither.
+    expect(cellsOf(bodyRows[2])).toEqual(['3', 'Delta', '4', '1', '2', '1', '5', '3', '2', '5'])
+    expect(cellsOf(bodyRows[3])).toEqual(['4', 'Gama', '4', '1', '0', '3', '3', '8', '-5', '3'])
+
+    // The caption no longer claims the table predates the round.
+    expect(screen.queryByText('Classificação antes da rodada')).not.toBeInTheDocument()
+    expect(screen.getByText(/Classificação ao vivo/i)).toBeInTheDocument()
   })
 
   it('shows the match stats in the Estatísticas do jogo tab', async () => {
@@ -1018,6 +1213,135 @@ describe('LiveMatchPage', () => {
     // summarizeKeyEvents), not the grouping algorithm itself (matchKeyEvents.test.ts already
     // covers that) — proves the rendering keeps name and minutes together in one line.
     expect(await screen.findByText(/Samba 21', 42'/)).toBeInTheDocument()
+  })
+
+  // --- Narration card: key events above it, acting team's colours on it ---
+
+  // Two goals on OPPOSITE sides. Every colour test below feeds both and only varies which one is
+  // LAST, so a card that tinted by "any home event" or by the managed club would pass one case
+  // and fail the other.
+  const HOME_GOAL = {
+    minute: 21, type: 'GOAL', home: true, playerId: 'p1', playerName: 'Samba',
+    playerInId: null, playerInName: null, severity: null, text: 'GOL! Samba abre o placar!',
+  }
+  const AWAY_GOAL = {
+    minute: 34, type: 'GOAL', home: false, playerId: 'p9', playerName: 'Nogueira',
+    playerInId: null, playerInName: null, severity: null, text: 'GOL! Nogueira empata!',
+  }
+  // What `cardColors` (clubKit.ts) yields for the fixture's kits. The two backgrounds are
+  // DIFFERENT on purpose — with one shared colour neither tint test could fail.
+  const HOME_BG = 'rgb(247, 212, 23)'   // homeClubColors.primary   #f7d417
+  const HOME_FG = 'rgb(17, 17, 17)'     // homeClubColors.secondary #111111 (contrast 12.9:1, usable)
+  const AWAY_BG = 'rgb(0, 51, 153)'     // awayClubColors.primary   #003399
+  const AWAY_FG = 'rgb(255, 255, 255)'  // awayClubColors.secondary #ffffff (contrast 10.9:1, usable)
+
+  it('renders the key events ABOVE the narration card, not merely above the narration line inside it', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS', minute: 35, events: [HOME_GOAL, AWAY_GOAL],
+    } as never)
+    renderPage()
+
+    const card = await screen.findByTestId('narration-card')
+    const keyEvents = screen.getByTestId('key-events')
+
+    // Both halves matter: `contains` is what distinguishes "moved out of the Paper" from
+    // "reordered inside it" (a descendant would still report the card as PRECEDING, so the
+    // FOLLOWING mask alone could not tell the two apart).
+    expect(card.contains(keyEvents)).toBe(false)
+    expect(keyEvents.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // …and it really is the key-events block that moved, not an empty wrapper.
+    expect(within(keyEvents).getByText(/Samba 21'/)).toBeInTheDocument()
+    expect(within(keyEvents).getByText(/Nogueira 34'/)).toBeInTheDocument()
+  })
+
+  it('tints the narration card with the HOME kit when the latest event is a home-side one', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS', minute: 35, events: [AWAY_GOAL, HOME_GOAL],
+    } as never)
+    renderPage()
+
+    const card = await screen.findByTestId('narration-card')
+    // `sx` compiles to an emotion class and never touches the inline style attribute, so read
+    // the CASCADED value — asserting on `card.getAttribute('style')` would pass vacuously.
+    expect(getComputedStyle(card).backgroundColor).toBe(HOME_BG)
+    expect(getComputedStyle(card).backgroundColor).not.toBe(AWAY_BG)
+    // The narration text must stay legible on that background: it takes the kit's own paired
+    // foreground from cardColors, not the theme's default text colour.
+    expect(getComputedStyle(screen.getByText(/Samba abre o placar/)).color).toBe(HOME_FG)
+  })
+
+  it('tints the narration card with the AWAY kit when the latest event is an away-side one', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS', minute: 35, events: [HOME_GOAL, AWAY_GOAL],
+    } as never)
+    renderPage()
+
+    const card = await screen.findByTestId('narration-card')
+    expect(getComputedStyle(card).backgroundColor).toBe(AWAY_BG)
+    expect(getComputedStyle(card).backgroundColor).not.toBe(HOME_BG)
+    expect(getComputedStyle(screen.getByText(/Nogueira empata/)).color).toBe(AWAY_FG)
+  })
+
+  it.each<[string, Partial<typeof STATE>]>([
+    ['half-time', { minute: 45, status: 'HALF_TIME' }],
+    ['full time', { minute: 90, status: 'FULL_TIME' }],
+    ['minute 0', { minute: 0, status: 'IN_PROGRESS' }],
+    ['a forced injury pause', { minute: 30, status: 'PAUSED_INJURY' }],
+    ['a forced red-card pause', { minute: 55, status: 'PAUSED_RED' }],
+  ])('leaves the narration card neutral at %s, where its Alerts and buttons own the colours', async (_label, override) => {
+    // Carries a home-side event on purpose: the ONLY thing keeping these neutral is the
+    // actionSlotShowsButton guard, so dropping the guard turns each of these home-yellow.
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, events: [HOME_GOAL], ...override,
+    } as never)
+    renderPage()
+
+    const card = await screen.findByTestId('narration-card')
+    const bg = getComputedStyle(card).backgroundColor
+    // Non-vacuity guard: proves the cascade really resolves a colour here, so the two `not`
+    // assertions below are capable of failing rather than comparing against an empty string.
+    expect(bg).toMatch(/^rgba?\(/)
+    expect(bg).not.toBe(HOME_BG)
+    expect(bg).not.toBe(AWAY_BG)
+  })
+
+  it('leaves the narration card neutral during open play with no events yet', async () => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS', minute: 3, events: [],
+    } as never)
+    renderPage()
+
+    const card = await screen.findByTestId('narration-card')
+    const bg = getComputedStyle(card).backgroundColor
+    expect(bg).toMatch(/^rgba?\(/)
+    expect(bg).not.toBe(HOME_BG)
+    expect(bg).not.toBe(AWAY_BG)
+    expect(screen.getByText('Bola rolando.')).toBeInTheDocument()
+  })
+
+  it.each<[string, unknown]>([
+    ['null', null],
+    ['a non-hex pair', { primary: 'azul', secondary: '' }],
+  ])('falls back to a readable kit, never rgb(NaN), when the acting club\'s colours are %s', async (_label, colors) => {
+    vi.mocked(getLiveMatch).mockResolvedValue({
+      ...STATE, status: 'IN_PROGRESS', minute: 22, events: [HOME_GOAL], homeClubColors: colors,
+    } as never)
+    renderPage()
+
+    const card = await screen.findByTestId('narration-card')
+    const bg = getComputedStyle(card).backgroundColor
+    expect(bg).toMatch(/^rgba?\(/)
+    // clubKit's FALLBACK kit (#5b6670 on #ffffff). The exact value is the load-bearing
+    // assertion: jsdom DISCARDS an invalid declaration like `rgb(NaN, NaN, NaN)` outright, so
+    // the computed value silently reverts to the theme's Paper colour and could never contain
+    // the string "NaN" — a `getComputedStyle(...)` NaN check would be unfalsifiable here.
+    expect(bg).toBe('rgb(91, 102, 112)')
+    expect(getComputedStyle(screen.getByText(/Samba abre o placar/)).color).toBe('rgb(255, 255, 255)')
+    // Where NaN IS observable: emotion's injected rule text keeps whatever string it was given.
+    // This is the assertion that actually fails if the kit reaches colour maths unguarded.
+    const injectedCss = Array.from(document.querySelectorAll('style')).map(s => s.textContent ?? '').join('')
+    expect(injectedCss).toContain('background-color')  // non-vacuity: rules really were injected
+    expect(injectedCss).not.toContain('NaN')
   })
 
   it.each<[string, Partial<typeof STATE>]>([

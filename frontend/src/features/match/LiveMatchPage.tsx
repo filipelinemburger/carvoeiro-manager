@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Box, Stack, Typography, Button, Alert, Tabs, Tab } from '@mui/material'
@@ -20,6 +20,8 @@ import { MatchNarrationCard, actionSlotShowsButton } from './MatchNarrationCard'
 import { GameOptionsMenu } from './GameOptionsMenu'
 import { OpponentScoutingPanel } from './OpponentScoutingPanel'
 import { sidesOf } from './matchSides'
+import { liveStandings } from './liveStandings'
+import type { LiveResult } from './liveStandings'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { WatchStar } from '../players/WatchStar'
 
@@ -73,16 +75,36 @@ export function LiveMatchPage() {
     enabled: Boolean(saveGameId && token && selectedPlayerId),
   })
 
-  // Pre-round standings snapshot for the Rodada tab's Classificação sub-tab. staleTime Infinity
-  // so the live clock (which replaces `state` every minute) never triggers a mid-match refetch.
-  // Enabled on mount regardless of the active tab — deliberately NOT owned by RoundTab, see the
-  // comment on that component for why.
+  // Pre-round standings snapshot, the BASE the live table is built on. staleTime Infinity so the
+  // live clock (which replaces `state` every minute) never triggers a mid-match refetch — and
+  // because the server's answer genuinely cannot change while the match runs: this round's
+  // fixtures are only written back at finish(). Enabled on mount regardless of the active tab —
+  // deliberately NOT owned by RoundTab, see the comment on that component for why.
   const standingsQuery = useQuery({
     queryKey: ['standings', saveGameId, state?.competitionId],
     queryFn: () => getStandings(saveGameId, state!.competitionId, token ?? ''),
     enabled: Boolean(saveGameId && token && state?.competitionId),
     staleTime: Infinity,
   })
+
+  // The live table: pre-round base + this match's score + every parallel fixture's score.
+  // Recomputed on each tick (that is the point), but off the cached base — `liveStandings` is
+  // pure, so the React Query cache the base lives in is never written through.
+  // Undefined base stays undefined so LiveStandingsTable keeps its isLoading/empty branches.
+  const liveTable = useMemo(() => {
+    const base = standingsQuery.data
+    if (!base || !state) return base
+    // A parallel fixture the backend could not resolve carries null ids (both, always together);
+    // `!= null` also covers a fixture serialized before the ids existed, which arrives undefined.
+    const parallel: LiveResult[] = state.parallelScores.flatMap(ps =>
+      ps.homeClubId != null && ps.awayClubId != null
+        ? [{ homeClubId: ps.homeClubId, awayClubId: ps.awayClubId, homeGoals: ps.homeGoals, awayGoals: ps.awayGoals }]
+        : [])
+    return liveStandings(base, [
+      { homeClubId: state.homeClubId, awayClubId: state.awayClubId, homeGoals: state.homeGoals, awayGoals: state.awayGoals },
+      ...parallel,
+    ])
+  }, [standingsQuery.data, state])
 
   // Shares the ['saveGame', saveGameId] cache with TablePage; used only to highlight the
   // managed club's standings row.
@@ -289,6 +311,12 @@ export function LiveMatchPage() {
           "Avançar" skip actions live in GameOptionsMenu (bottom of the page). Substituir/Tática
           no longer have their own buttons — the own club card (above) is their entry point. */}
 
+      {/* Part of the HEADER — deliberately above <Tabs>, not below it. Below the tab bar it
+          rendered on top of whichever tab panel was selected, so the Partida game details were
+          repeated on all five tabs; above it, the line belongs to the club names/score block and
+          is stated once. LiveMatchPage.test.tsx pins this DOM order. */}
+      <MatchInfoLine state={state} />
+
       <Tabs value={feedTab} onChange={(_, v) => setFeedTab(v as 0 | 1 | 2 | 3 | 4)} sx={{ mt: 2, minHeight: 40 }}>
         <Tab label="Partida" sx={{ minHeight: 40 }} />
         <Tab label="Escalações" sx={{ minHeight: 40 }} />
@@ -296,7 +324,6 @@ export function LiveMatchPage() {
         <Tab label="Estatísticas do jogo" sx={{ minHeight: 40 }} />
         <Tab label="Rodada" sx={{ minHeight: 40 }} />
       </Tabs>
-      <MatchInfoLine state={state} />
 
       {/* Also rendered outside Partida (feedTab 0) whenever the action slot shows a button
           (showsActionButton — kickoff, half-time, both forced pauses, and full time): every
@@ -314,6 +341,11 @@ export function LiveMatchPage() {
             minute={state.minute}
             status={state.status}
             events={state.events}
+            // Home/away oriented, NOT managed/opponent — the card is tinted by which SIDE the
+            // latest event belongs to (`event.home`), so these must be passed straight through
+            // in the same orientation, exactly as MatchScoreboard/MatchStatsTab do.
+            homeKit={state.homeClubColors}
+            awayKit={state.awayClubColors}
             onResume={resume}
             onFinish={() => finishMut.mutate()}
             actionPending={skipping || advanceToMut.isPending || advanceMut.isPending}
@@ -335,38 +367,35 @@ export function LiveMatchPage() {
         </Box>
       )}
 
+      {/* Home LEFT, away RIGHT — always, matching the scoreboard above. These columns used to be
+          managed/opponent oriented ("Meu Time" left), which contradicted the scoreboard whenever
+          the managed club played away. Both sides therefore come from sidesOf(state), never from
+          state.playerRatings/opponentRatings directly — reaching for those is what made the
+          layout managed-oriented. `isOwnPlayer` follows side.isOwnSide, NOT the column position:
+          it drives the watch star in the details modal (opponents only), so deriving it from the
+          position would star the manager's own players whenever they are the home side. */}
       {feedTab === 2 && (
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography sx={{ fontWeight: 700, mb: 0.5 }}>Meu Time</Typography>
-            {state.playerRatings.length > 0 ? (
-              <PlayerRatingsList
-                ratings={state.playerRatings}
-                onPitchIds={new Set(state.onPitch.map(p => p.playerId))}
-                isOwnPlayer
-                onPlayerClick={openPlayerDetails}
-              />
-            ) : (
-              <Typography sx={{ color: 'text.secondary' }}>
-                As atuações aparecem conforme o jogo evolui.
-              </Typography>
-            )}
-          </Box>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography sx={{ fontWeight: 700, mb: 0.5 }}>Adversário</Typography>
-            {state.opponentRatings.length > 0 ? (
-              <PlayerRatingsList
-                ratings={state.opponentRatings}
-                onPitchIds={new Set(state.opponentOnPitch.map(p => p.playerId))}
-                isOwnPlayer={false}
-                onPlayerClick={openPlayerDetails}
-              />
-            ) : (
-              <Typography sx={{ color: 'text.secondary' }}>
-                As atuações aparecem conforme o jogo evolui.
-              </Typography>
-            )}
-          </Box>
+          {(['home', 'away'] as const).map(slot => {
+            const side = sidesOf(state)[slot]
+            return (
+              <Box key={slot} sx={{ flex: 1, minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 700, mb: 0.5 }}>{side.shortName}</Typography>
+                {side.ratings.length > 0 ? (
+                  <PlayerRatingsList
+                    ratings={side.ratings}
+                    onPitchIds={new Set(side.players.map(p => p.playerId))}
+                    isOwnPlayer={side.isOwnSide}
+                    onPlayerClick={openPlayerDetails}
+                  />
+                ) : (
+                  <Typography sx={{ color: 'text.secondary' }}>
+                    As atuações aparecem conforme o jogo evolui.
+                  </Typography>
+                )}
+              </Box>
+            )
+          })}
         </Stack>
       )}
 
@@ -387,7 +416,7 @@ export function LiveMatchPage() {
           parallelScores={state.parallelScores}
           previousScores={prevScoresRef.current}
           standingsLoading={standingsQuery.isLoading}
-          standings={standingsQuery.data}
+          standings={liveTable}
           managedClubId={managedClubId}
         />
       )}

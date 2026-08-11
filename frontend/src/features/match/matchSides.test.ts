@@ -29,8 +29,8 @@ const ZERO_STATS = {
 function baseState(overrides: Partial<LiveMatchState>): LiveMatchState {
   return {
     fixtureId: 'f1', competitionName: 'Catarinense', round: 0, matchDate: '2026-03-01',
-    stadiumName: 'Estádio', homeClubName: 'Casa FC', homeClubShortName: 'Casa',
-    awayClubName: 'Fora FC', awayClubShortName: 'Fora', managedIsHome: true,
+    stadiumName: 'Estádio', homeClubId: 'club-casa', homeClubName: 'Casa FC', homeClubShortName: 'Casa',
+    awayClubId: 'club-fora', awayClubName: 'Fora FC', awayClubShortName: 'Fora', managedIsHome: true,
     minute: 12, homeGoals: 0, awayGoals: 0, status: 'IN_PROGRESS',
     events: [],
     onPitch: [managedPlayer], bench: [], subsRemaining: 5,

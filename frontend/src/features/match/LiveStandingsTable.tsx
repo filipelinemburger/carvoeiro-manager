@@ -5,10 +5,11 @@ import type { StandingRow } from '../../api/types'
 const MANAGED_BG = 'rgba(0, 100, 200, 0.1)'
 
 /**
- * "Classificação antes da rodada" — pre-round standings snapshot, moved verbatim out of
- * `LiveMatchPage` (the old Classificação tab). The query itself (`standingsQuery`) stays in the
- * container — see the comment on it in `LiveMatchPage.tsx` for why — this component only
- * renders the `{ isLoading, data }` result handed down to it.
+ * "Classificação ao vivo" — the league table INCLUDING the round in progress. The rows arrive
+ * already live: the container folds this match's and the parallel fixtures' current scores into
+ * the pre-round base (`liveStandings`) before handing them down. Neither the query
+ * (`standingsQuery`) nor the fold belongs here — see the comment on `standingsQuery` in
+ * `LiveMatchPage.tsx` — this component only renders the `{ isLoading, data }` pair it is given.
  */
 export function LiveStandingsTable({ isLoading, data, managedClubId }: {
   isLoading: boolean
@@ -17,7 +18,9 @@ export function LiveStandingsTable({ isLoading, data, managedClubId }: {
 }) {
   return (
     <Box sx={{ mt: 1 }}>
-      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Classificação antes da rodada</Typography>
+      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+        Classificação ao vivo (com os resultados parciais da rodada)
+      </Typography>
       {isLoading ? (
         <Typography sx={{ mt: 1, color: 'text.secondary' }}>Carregando classificação…</Typography>
       ) : (data ?? []).length === 0 ? (

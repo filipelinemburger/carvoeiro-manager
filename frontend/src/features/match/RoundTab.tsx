@@ -11,6 +11,9 @@ import type { ParallelScore, StandingRow } from '../../api/types'
  * (`LiveMatchPage`) and passed straight through rather than fetched or tracked here: see the
  * comments on `prevScoresRef` and `standingsQuery` in `LiveMatchPage.tsx` for the regressions
  * that moving either down into this component would reintroduce.
+ *
+ * `standings` is already the LIVE table (`liveTable` in the container, via `liveStandings`) —
+ * this component renders rows, it does not fetch them and does not fold the round's scores in.
  */
 export function RoundTab({ parallelScores, previousScores, standingsLoading, standings, managedClubId }: {
   parallelScores: ParallelScore[]

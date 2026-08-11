@@ -36,7 +36,11 @@ export function ClubCard({ shortName, colors, caption, isOwn, onClick, clash = f
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        minWidth: 100,
+        // One of the scoreboard's three equal columns (home card | score | away card), not a
+        // pill hugging its label: grow into the free space, and keep no minimum so a long short
+        // name can't push the row wider than the screen.
+        flex: 1,
+        minWidth: 0,
         px: 2,
         py: 1,
         borderRadius: 1.5,
