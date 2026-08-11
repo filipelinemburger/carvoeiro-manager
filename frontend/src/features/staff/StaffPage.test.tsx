@@ -34,12 +34,12 @@ describe('StaffPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetStaffRoster.mockResolvedValue({
-      assistente: null, preparadorFisico: null, olheiro: null, fisioterapeuta: null,
+      tecnico: null, assistente: null, preparadorFisico: null, olheiro: null, fisioterapeuta: null,
     })
     mockGetStaffCandidates.mockResolvedValue([
-      { index: 0, name: 'Carlos Andrade', quality: 'REGULAR', wage: 20000, primaryAttribute: 10, secondaryAttribute: 9 },
-      { index: 1, name: 'Marcos Vieira', quality: 'BOM', wage: 45000, primaryAttribute: 14, secondaryAttribute: 13 },
-      { index: 2, name: 'Roberto Lima', quality: 'EXCELENTE', wage: 80000, primaryAttribute: 17, secondaryAttribute: 16 },
+      { index: 0, name: 'Carlos Andrade', quality: 'REGULAR', wage: 20000, primaryAttribute: 10, secondaryAttribute: 9, currentClubName: null },
+      { index: 1, name: 'Marcos Vieira', quality: 'BOM', wage: 45000, primaryAttribute: 14, secondaryAttribute: 13, currentClubName: null },
+      { index: 2, name: 'Roberto Lima', quality: 'EXCELENTE', wage: 80000, primaryAttribute: 17, secondaryAttribute: 16, currentClubName: null },
     ])
     localStorage.setItem('carvoeiro_manager_token', 'test-token')
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
@@ -47,7 +47,7 @@ describe('StaffPage', () => {
 
   it('shows an empty slot for each unfilled role, then hires a browsed candidate', async () => {
     mockHireStaff.mockResolvedValue({
-      assistente: null, preparadorFisico: null,
+      tecnico: null, assistente: null, preparadorFisico: null,
       olheiro: { name: 'Roberto Lima', quality: 'EXCELENTE', wage: 80000, primaryAttribute: 17, secondaryAttribute: 16 },
       fisioterapeuta: null,
     })
@@ -103,6 +103,7 @@ describe('StaffPage', () => {
 
   it('shows the two labeled attributes of a hired staff member', async () => {
     mockGetStaffRoster.mockResolvedValue({
+      tecnico: null,
       assistente: { name: 'Cléber Xavier', quality: 'EXCELENTE', wage: 80000, primaryAttribute: 17, secondaryAttribute: 16 },
       preparadorFisico: null,
       olheiro: null,
@@ -111,5 +112,31 @@ describe('StaffPage', () => {
     renderPage()
     expect(await screen.findByText(/Conhecimento Tático: 17/)).toBeInTheDocument()
     expect(screen.getByText(/Avaliação de Jogadores: 16/)).toBeInTheDocument()
+  })
+
+  it('shows the manager themselves in the head-coach slot, with nothing to hire', async () => {
+    mockGetStaffRoster.mockResolvedValue({
+      tecnico: { name: 'Filipe Linemburger', quality: null, wage: null, primaryAttribute: 0, secondaryAttribute: 0 },
+      assistente: null, preparadorFisico: null, olheiro: null, fisioterapeuta: null,
+    })
+    renderPage()
+
+    await waitFor(() => screen.getByText('Filipe Linemburger'))
+    expect(within(screen.getByTestId('staff-role-TECNICO')).queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('marks an employed candidate with the club they would be poached from', async () => {
+    mockGetStaffCandidates.mockResolvedValue([
+      { index: 0, name: 'Livre da Silva', quality: 'BOM', wage: 45000, primaryAttribute: 13, secondaryAttribute: 12, currentClubName: null },
+      { index: 1, name: 'Empregado Souza', quality: 'BOM', wage: 45000, primaryAttribute: 13, secondaryAttribute: 12, currentClubName: 'Avaí Futebol Clube' },
+    ])
+    renderPage()
+
+    await waitFor(() => screen.getByText('Olheiro'))
+    fireEvent.click(within(screen.getByTestId('staff-role-OLHEIRO')).getByRole('button', { name: /contratar/i }))
+
+    await waitFor(() => screen.getByText('Empregado Souza'))
+    expect(screen.getByText('Livre')).toBeInTheDocument()
+    expect(screen.getByText('Avaí Futebol Clube')).toBeInTheDocument()
   })
 })

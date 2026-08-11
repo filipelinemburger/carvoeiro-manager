@@ -49,11 +49,11 @@ public class StaffService {
                                                        UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         requireClubInSave(saveGameId, clubId);
-        Set<String> hiredNames = staffRepository.findBySaveGameId(saveGameId).stream()
-                .map(Staff::getName)
-                .collect(Collectors.toSet());
+        requireManagedClub(save, clubId);
+        requireHirable(role);
         List<StaffCandidate> candidates = staffCandidateGenerator.generate(
-                saveGameId, clubId, role, save.getCurrentDate(), CANDIDATE_COUNT, hiredNames);
+                saveGameId, clubId, role, save.getCurrentDate(), CANDIDATE_COUNT,
+                namesAtClub(clubId), poachTargets(saveGameId, clubId, role));
         return toCandidateResponses(candidates);
     }
 
@@ -62,16 +62,22 @@ public class StaffService {
                                     UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         requireClubInSave(saveGameId, clubId);
-        Set<String> hiredNames = staffRepository.findBySaveGameId(saveGameId).stream()
-                .map(Staff::getName)
-                .collect(Collectors.toSet());
+        requireManagedClub(save, clubId);
+        requireHirable(role);
         List<StaffCandidate> candidates = staffCandidateGenerator.generate(
-                saveGameId, clubId, role, save.getCurrentDate(), CANDIDATE_COUNT, hiredNames);
+                saveGameId, clubId, role, save.getCurrentDate(), CANDIDATE_COUNT,
+                namesAtClub(clubId), poachTargets(saveGameId, clubId, role));
         if (candidateIndex < 0 || candidateIndex >= candidates.size()) {
             throw new ApiException(ErrorCode.VALIDATION_ERROR,
                     "candidateIndex must be between 0 and " + (candidates.size() - 1));
         }
         StaffCandidate chosen = candidates.get(candidateIndex);
+
+        // Poaching: the rival loses them. Deleted before the insert for the same flush-ordering
+        // reason as the replace below — Hibernate runs pending inserts before pending deletes.
+        if (chosen.sourceStaffId() != null) {
+            staffRepository.deleteById(chosen.sourceStaffId());
+        }
 
         // Flush the delete before queuing the insert: Hibernate's flush order runs pending
         // inserts before pending deletes, so without this, replacing an already-filled role
@@ -110,6 +116,47 @@ public class StaffService {
         }
     }
 
+    /** The head coach is the player — there is nobody to browse and nobody to hire. */
+    private void requireHirable(StaffRole role) {
+        if (!StaffRole.HIRABLE.contains(role)) {
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, "Role " + role + " cannot be hired");
+        }
+    }
+
+    /**
+     * Browsing and hiring only ever apply to your own club. {@code requireClubInSave} alone is not
+     * enough — it permits any club in the caller's save, which would let a crafted request staff a
+     * rival at that rival's expense.
+     */
+    private void requireManagedClub(SaveGame save, UUID clubId) {
+        if (!clubId.equals(save.getManagedClubId())) {
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, "Staff can only be managed for your own club");
+        }
+    }
+
+    /**
+     * Names already spoken for at the hiring club. Deliberately NOT save-wide: staff employed at
+     * other clubs are poaching targets, not exclusions.
+     */
+    private Set<String> namesAtClub(UUID clubId) {
+        return staffRepository.findByClubId(clubId).stream()
+                .map(Staff::getName)
+                .collect(Collectors.toSet());
+    }
+
+    /** Real professionals working elsewhere in this save, for the given role. */
+    private List<EmployedStaff> poachTargets(UUID saveGameId, UUID hiringClubId, StaffRole role) {
+        Map<UUID, String> clubNames = clubRepository.findBySaveGameId(saveGameId).stream()
+                .collect(Collectors.toMap(Club::getId, Club::getName));
+        return staffRepository.findBySaveGameId(saveGameId).stream()
+                .filter(s -> s.getRole() == role)
+                .filter(s -> !s.getClubId().equals(hiringClubId))
+                .map(s -> new EmployedStaff(s.getId(), s.getName(),
+                        clubNames.getOrDefault(s.getClubId(), "—"),
+                        s.getPrimaryAttribute(), s.getSecondaryAttribute()))
+                .toList();
+    }
+
     private StaffRosterResponse toRosterResponse(Map<StaffRole, Staff> byRole, boolean managedClub,
                                                  String managerName) {
         // At the managed club the head coach is the player, so no row exists (see
@@ -136,7 +183,7 @@ public class StaffService {
                 .mapToObj(i -> {
                     StaffCandidate c = candidates.get(i);
                     return new StaffCandidateResponse(i, c.name(), c.quality().name(), c.wage(),
-                            c.primaryAttribute(), c.secondaryAttribute());
+                            c.primaryAttribute(), c.secondaryAttribute(), c.currentClubName());
                 })
                 .toList();
     }

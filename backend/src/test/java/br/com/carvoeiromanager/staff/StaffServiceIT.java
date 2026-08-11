@@ -2,6 +2,8 @@ package br.com.carvoeiromanager.staff;
 
 import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
+import br.com.carvoeiromanager.career.SaveGame;
+import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
@@ -15,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -33,6 +36,7 @@ class StaffServiceIT {
     @Autowired SaveGameService saveGameService;
     @Autowired UserRepository userRepository;
     @Autowired ClubRepository clubRepository;
+    @Autowired SaveGameRepository saveGameRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -43,6 +47,34 @@ class StaffServiceIT {
         User user = User.create("staff_" + UUID.randomUUID(), "hash");
         userRepository.save(user);
         return new Career(user.getId(), saveGameService.createCareer(user.getId()));
+    }
+
+    /**
+     * Browses {@code role} day by day, advancing the save's own date, until the offer contains
+     * someone employed at a rival — and leaves the save parked on that date so a follow-up
+     * {@code hire} sees the same three candidates.
+     *
+     * <p>Free professionals and rivals' employees are drawn from one market, so whether any given
+     * day offers a poachable candidate is a draw, not a certainty: PREPARADOR_FISICO has 8 free
+     * against 20 employed elsewhere, which leaves about a 1-in-60 chance that all three slots come
+     * back free. Pinning a single date would be that coin flip. Walking the calendar instead is
+     * deterministic — the candidate seed folds in the date, so 60 consecutive misses is not a
+     * number that happens.
+     */
+    private List<StaffCandidateResponse> browseUntilARivalsEmployeeIsOffered(Career c, StaffRole role) {
+        SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();
+        LocalDate browsingFrom = save.getCurrentDate();
+        for (int day = 0; day < 60; day++) {
+            save.setCurrentDate(browsingFrom.plusDays(day));
+            saveGameRepository.saveAndFlush(save);
+            List<StaffCandidateResponse> candidates =
+                    staffService.getCandidates(c.id(), c.clubId(), role, c.userId());
+            if (candidates.stream().anyMatch(x -> x.currentClubName() != null)) {
+                return candidates;
+            }
+        }
+        throw new AssertionError(
+                "No " + role + " employed at a rival club was offered in 60 days of browsing.");
     }
 
     @Test
@@ -167,6 +199,116 @@ class StaffServiceIT {
         StaffRosterResponse roster = staffService.getRoster(c.id(), rivalClubWithoutCoach, c.userId());
 
         assertThat(roster.tecnico()).isNull();
+    }
+
+    @Test
+    void candidatesIncludeStaffEmployedAtRivalClubs() {
+        // Given a fresh career, whose rivals are staffed from club-staff.json
+        Career c = createCareer();
+
+        // When the manager browses for a fitness coach
+        List<StaffCandidateResponse> candidates =
+                browseUntilARivalsEmployeeIsOffered(c, StaffRole.PREPARADOR_FISICO);
+
+        // Then someone on a rival's books is on the shortlist, named with the club they work for
+        assertThat(candidates).isNotEmpty();
+        assertThat(candidates).anySatisfy(x -> {
+            assertThat(x.currentClubName()).isNotNull();
+            // Not just any non-null string: the card must name the club that really employs them.
+            Staff onTheBooks = staffRepository.findBySaveGameId(c.id()).stream()
+                    .filter(s -> s.getRole() == StaffRole.PREPARADOR_FISICO)
+                    .filter(s -> s.getName().equals(x.name()))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError(
+                            x.name() + " is offered as employed but is on no club's books"));
+            assertThat(onTheBooks.getClubId()).isNotEqualTo(c.clubId());
+            assertThat(clubRepository.findById(onTheBooks.getClubId()).orElseThrow().getName())
+                    .isEqualTo(x.currentClubName());
+        });
+    }
+
+    @Test
+    void poachingEmptiesTheSourceClubsSlot() {
+        // Given a shortlist containing a fitness coach employed by a rival
+        Career c = createCareer();
+        List<StaffCandidateResponse> candidates =
+                browseUntilARivalsEmployeeIsOffered(c, StaffRole.PREPARADOR_FISICO);
+        StaffCandidateResponse poached = candidates.stream()
+                .filter(x -> x.currentClubName() != null)
+                .findFirst()
+                .orElseThrow();
+        UUID sourceClubId = staffRepository.findBySaveGameId(c.id()).stream()
+                .filter(s -> s.getRole() == StaffRole.PREPARADOR_FISICO)
+                .filter(s -> s.getName().equals(poached.name()))
+                .map(Staff::getClubId)
+                .findFirst()
+                .orElseThrow();
+
+        // When the manager hires them
+        staffService.hire(c.id(), c.clubId(), StaffRole.PREPARADOR_FISICO, poached.index(), c.userId());
+
+        // Then the rival really loses them — against Postgres, where the staff_club_id_role_key
+        // unique constraint and the delete/insert flush order in hire() both apply for real. The
+        // mock-level test can only prove the calls were made in that order.
+        assertThat(staffRepository.findByClubIdAndRole(sourceClubId, StaffRole.PREPARADOR_FISICO))
+                .isEmpty();
+        assertThat(staffRepository.findByClubIdAndRole(c.clubId(), StaffRole.PREPARADOR_FISICO))
+                .get()
+                .satisfies(s -> assertThat(s.getName()).isEqualTo(poached.name()));
+    }
+
+    @Test
+    void aNameAlreadyHiredAtTheClubIsNeverOfferedAgain() {
+        Career c = createCareer();
+        List<StaffCandidateResponse> before = staffService.getCandidates(
+                c.id(), c.clubId(), StaffRole.OLHEIRO, c.userId());
+        String hiredName = before.get(0).name();
+
+        staffService.hire(c.id(), c.clubId(), StaffRole.OLHEIRO, 0, c.userId());
+
+        // The exclusion narrowed from save-wide to this club only, so it must still hold for the
+        // club's own staff — otherwise the manager could be offered someone they already employ.
+        assertThat(staffService.getCandidates(c.id(), c.clubId(), StaffRole.OLHEIRO, c.userId()))
+                .extracting(StaffCandidateResponse::name)
+                .doesNotContain(hiredName);
+    }
+
+    @Test
+    void theHeadCoachCanNeverBeBrowsedOrHired() {
+        Career c = createCareer();
+
+        assertThatThrownBy(() -> staffService.getCandidates(
+                c.id(), c.clubId(), StaffRole.TECNICO, c.userId()))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> staffService.hire(
+                c.id(), c.clubId(), StaffRole.TECNICO, 0, c.userId()))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void hiringForARivalClubInYourOwnSaveIsRejected() {
+        Career c = createCareer();
+        // A real rival resolved from the save rather than pinned by short name: clubId is a free
+        // path variable on StaffController, so without requireManagedClub a crafted request would
+        // staff a rival at the rival's expense — and, since hire reports managedClub=true, would
+        // hand back the player's own manager name inside that rival's roster.
+        UUID rivalClubId = clubRepository.findBySaveGameId(c.id()).stream()
+                .map(Club::getId)
+                .filter(id -> !id.equals(c.clubId()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThatThrownBy(() -> staffService.hire(
+                c.id(), rivalClubId, StaffRole.OLHEIRO, 0, c.userId()))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException api = (ApiException) ex;
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.VALIDATION_ERROR);
+                    assertThat(api.getStatus().value()).isEqualTo(400);
+                });
+        assertThatThrownBy(() -> staffService.getCandidates(
+                c.id(), rivalClubId, StaffRole.OLHEIRO, c.userId()))
+                .isInstanceOf(ApiException.class);
     }
 
     @Test

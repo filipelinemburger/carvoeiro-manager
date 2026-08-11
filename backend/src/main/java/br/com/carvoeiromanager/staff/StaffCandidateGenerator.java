@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -17,12 +18,27 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Rolls staff candidates on demand — never persisted. Real professionals from the seed pool
- * are offered first (their authored attributes fixed, tier derived from the average, wage by
- * tier); when the role's unhired pool runs dry the remaining slots are filled with generated
- * newgen names whose attributes are rolled inside the tier band. Deterministic for a given
- * (saveGameId, clubId, role, onDate, excludedNames): re-browsing the same role on the same
- * day always shows the same candidates.
+ * Rolls staff candidates on demand — never persisted. Slots are filled from a single market of
+ * real people, whether or not they currently have a job:
+ * <ul>
+ *   <li>free professionals from the seed pool, and poachable rivals — real staff already employed
+ *       at other clubs in the save, passed in as {@link EmployedStaff} so this class stays free of
+ *       repository access. Both carry their authored attributes, with the tier derived from the
+ *       average and the wage taken from the tier;</li>
+ *   <li>generated newgen names, rolled inside a random tier band, only as a backstop when the
+ *       market cannot fill the requested slots.</li>
+ * </ul>
+ * The market used to be two ordered tiers — pool first, rivals only once it ran dry. That made
+ * poaching unreachable in practice: every role's free pool is far deeper than the three slots on
+ * offer, and a club holds at most one staff member per role, so the pool could never run dry.
+ * Merging the two means poaching frequency falls out of the seed data on its own — a role with
+ * many employed and few free professionals (PREPARADOR_FISICO) is mostly poaching, one with the
+ * opposite balance (OLHEIRO) is mostly free agents — with no tuning constant to pick.
+ * <p>
+ * Deterministic for a given (saveGameId, clubId, role, onDate, excludedNames, employedElsewhere):
+ * re-browsing the same role on the same day always shows the same candidates. The market is built
+ * in a fixed base order — free professionals by name, then poaching targets by id — before the one
+ * seeded shuffle, so the order the caller's repository query happened to return does not leak in.
  */
 @Component
 public class StaffCandidateGenerator {
@@ -43,7 +59,8 @@ public class StaffCandidateGenerator {
     private static final int MAX_NAME_DRAWS = 200;
 
     public List<StaffCandidate> generate(UUID saveGameId, UUID clubId, StaffRole role,
-                                         LocalDate onDate, int count, Set<String> excludedNames) {
+                                         LocalDate onDate, int count, Set<String> excludedNames,
+                                         List<EmployedStaff> employedElsewhere) {
         long seed = saveGameId.getMostSignificantBits()
                 ^ clubId.getMostSignificantBits()
                 ^ role.ordinal()
@@ -52,23 +69,40 @@ public class StaffCandidateGenerator {
 
         List<StaffCandidate> candidates = new ArrayList<>();
 
-        List<SeedStaff> available = poolByRole.getOrDefault(role, List.of()).stream()
-                .filter(s -> !excludedNames.contains(s.name()))
-                .collect(Collectors.toCollection(ArrayList::new));
-        Collections.shuffle(available, rng);
-        for (int i = 0; i < count && i < available.size(); i++) {
-            SeedStaff pro = available.get(i);
-            double average = (pro.primaryAttribute() + pro.secondaryAttribute()) / 2.0;
-            StaffQuality quality = StaffQuality.forAverage(average);
-            candidates.add(new StaffCandidate(pro.name(), quality, quality.monthlyWage(),
-                    pro.primaryAttribute(), pro.secondaryAttribute()));
+        // Names already spoken for: everyone the caller excluded (already hired at the hiring
+        // club), plus each candidate as it is offered.
+        Set<String> taken = new HashSet<>(excludedNames);
+
+        // One market. Free professionals and rivals' employees compete for the same slots, so a
+        // poaching target's odds are simply its share of the market for that role. Each half is
+        // put in a stable base order first — the seed pool by name, the employed list by id,
+        // because it arrives straight from a repository query with no ordering guarantee — and the
+        // halves are concatenated in a fixed order, leaving the single seeded shuffle below as the
+        // only source of variation.
+        List<StaffCandidate> market = new ArrayList<>();
+        poolByRole.getOrDefault(role, List.of()).stream()
+                .filter(pro -> !taken.contains(pro.name()))
+                .sorted(Comparator.comparing(SeedStaff::name))
+                .forEach(pro -> market.add(asFreeProfessional(pro)));
+        employedElsewhere.stream()
+                .filter(employed -> !taken.contains(employed.name()))
+                .sorted(Comparator.comparing(EmployedStaff::staffId))
+                .forEach(employed -> market.add(asPoachingTarget(employed)));
+        Collections.shuffle(market, rng);
+        for (StaffCandidate offered : market) {
+            if (candidates.size() >= count) {
+                break;
+            }
+            // taken.add, not a plain add: nothing in the two halves guarantees they name distinct
+            // people. A seed test asserts no name sits in both staff-pool.json and
+            // club-staff.json, but that assertion is all that stands between here and offering
+            // the same person twice, so do not lean on it.
+            if (taken.add(offered.name())) {
+                candidates.add(offered);
+            }
         }
 
         StaffQuality[] tiers = StaffQuality.values();
-        // Names already spoken for: the authored candidates just offered, plus everyone the
-        // caller excluded (already-hired staff, and the authored pool when it is exhausted).
-        Set<String> taken = new HashSet<>(excludedNames);
-        candidates.forEach(c -> taken.add(c.name()));
 
         while (candidates.size() < count) {
             // Generated names are drawn from the same Brazilian first/last name pools the real
@@ -97,9 +131,31 @@ public class StaffCandidateGenerator {
             StaffQuality quality = tiers[rng.nextInt(tiers.length)];
             int primary = rollAttribute(quality, rng);
             int secondary = rollAttribute(quality, rng);
-            candidates.add(new StaffCandidate(name, quality, quality.monthlyWage(), primary, secondary));
+            candidates.add(StaffCandidate.free(name, quality, quality.monthlyWage(), primary, secondary));
         }
         return candidates;
+    }
+
+    /** A seed-pool professional: authored attributes kept, tier from their average, wage by tier. */
+    private static StaffCandidate asFreeProfessional(SeedStaff pro) {
+        StaffQuality quality = qualityOf(pro.primaryAttribute(), pro.secondaryAttribute());
+        return StaffCandidate.free(pro.name(), quality, quality.monthlyWage(),
+                pro.primaryAttribute(), pro.secondaryAttribute());
+    }
+
+    /**
+     * A rival's employee, priced exactly like a free professional — the source club's own stored
+     * quality is never consulted, so the same attributes always cost the same wherever they work.
+     */
+    private static StaffCandidate asPoachingTarget(EmployedStaff employed) {
+        StaffQuality quality = qualityOf(employed.primaryAttribute(), employed.secondaryAttribute());
+        return new StaffCandidate(employed.name(), quality, quality.monthlyWage(),
+                employed.primaryAttribute(), employed.secondaryAttribute(),
+                employed.staffId(), employed.clubName());
+    }
+
+    private static StaffQuality qualityOf(int primaryAttribute, int secondaryAttribute) {
+        return StaffQuality.forAverage((primaryAttribute + secondaryAttribute) / 2.0);
     }
 
     /** Uniform roll inside the tier's band: REGULAR 8-12, BOM 12-16, EXCELENTE 15-19. */

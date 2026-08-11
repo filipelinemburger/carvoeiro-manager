@@ -12,6 +12,7 @@ vi.mock('../../api/career', () => ({
   getClubs: vi.fn(),
   getSquad: vi.fn(),
   makeOffer: vi.fn(),
+  getStaffRoster: vi.fn(),
 }))
 
 vi.mock('../../api/watchlist', () => ({
@@ -20,8 +21,10 @@ vi.mock('../../api/watchlist', () => ({
   removeFromWatchlist: vi.fn(),
 }))
 
-import { getSaveGame, getClubs, getSquad, makeOffer } from '../../api/career'
+import { getSaveGame, getClubs, getSquad, makeOffer, getStaffRoster } from '../../api/career'
 import { getWatchlist } from '../../api/watchlist'
+
+const mockGetStaffRoster = vi.mocked(getStaffRoster)
 
 const MANAGED_CLUB_ID = 'club-1'
 const OTHER_CLUB_ID = 'club-9'
@@ -74,6 +77,9 @@ describe('ClubViewPage', () => {
       players: [player()], primaryColor: '#aa0000', secondaryColor: '#ffffff',
     })
     vi.mocked(getWatchlist).mockResolvedValue([])
+    mockGetStaffRoster.mockResolvedValue({
+      tecnico: null, assistente: null, preparadorFisico: null, olheiro: null, fisioterapeuta: null,
+    })
   })
 
   it('renders the roster with market value and wage demand', async () => {
@@ -273,5 +279,54 @@ describe('ClubViewPage', () => {
     renderOnce()
     await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
     expect(getClubs).toHaveBeenCalledTimes(1)
+  })
+
+  it("shows the club's coaching staff", async () => {
+    mockGetStaffRoster.mockResolvedValue({
+      tecnico: { name: 'Cléber Xavier', quality: 'BOM', wage: 45000, primaryAttribute: 14, secondaryAttribute: 13 },
+      assistente: null,
+      preparadorFisico: { name: 'Léo Cupertino', quality: 'EXCELENTE', wage: 80000, primaryAttribute: 17, secondaryAttribute: 16 },
+      olheiro: null,
+      fisioterapeuta: null,
+    })
+    renderPage()
+
+    await waitFor(() => screen.getByText('Comissão Técnica'))
+    expect(screen.getByText('Cléber Xavier')).toBeInTheDocument()
+    expect(screen.getByText('Léo Cupertino')).toBeInTheDocument()
+    // An unresearched slot is omitted, not rendered as an empty row.
+    expect(screen.queryByText('Olheiro')).not.toBeInTheDocument()
+  })
+
+  it('shows quality, wage and attributes for a rival club employee', async () => {
+    mockGetStaffRoster.mockResolvedValue({
+      tecnico: { name: 'Cléber Xavier', quality: 'BOM', wage: 45000, primaryAttribute: 14, secondaryAttribute: 13 },
+      assistente: null, preparadorFisico: null, olheiro: null, fisioterapeuta: null,
+    })
+    renderPage()
+
+    await waitFor(() => screen.getByText('Comissão Técnica'))
+    expect(screen.getByText('Bom')).toBeInTheDocument()
+    expect(screen.getByText(/45\.000/)).toBeInTheDocument()
+    expect(screen.getByText('Trabalho Tático: 14')).toBeInTheDocument()
+    expect(screen.getByText('Motivação: 13')).toBeInTheDocument()
+  })
+
+  it('renders the managed club head-coach slot as a bare name (the player holds that job)', async () => {
+    vi.mocked(getSquad).mockResolvedValue({
+      players: [player({ id: 'mp1', name: 'Meu Jogador' })], primaryColor: '#f7d417', secondaryColor: '#111111',
+    })
+    // The managed club's own head coach is the player: no quality, no wage, attributes are 0 placeholders.
+    mockGetStaffRoster.mockResolvedValue({
+      tecnico: { name: 'Você', quality: null, wage: null, primaryAttribute: 0, secondaryAttribute: 0 },
+      assistente: null, preparadorFisico: null, olheiro: null, fisioterapeuta: null,
+    })
+    renderPage(MANAGED_CLUB_ID)
+
+    await waitFor(() => screen.getByText('Comissão Técnica'))
+    expect(screen.getByText('Você')).toBeInTheDocument()
+    expect(screen.queryByText(/\/mês/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Trabalho Tático/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Motivação/)).not.toBeInTheDocument()
   })
 })

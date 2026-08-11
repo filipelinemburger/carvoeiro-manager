@@ -9,27 +9,8 @@ import CloseIcon from '@mui/icons-material/Close'
 import { getStaffRoster, getStaffCandidates, hireStaff } from '../../api/career'
 import { useAuth } from '../../auth/AuthContext'
 import { formatBRL } from '../../lib/money'
-import type { StaffRole, StaffMember, StaffQuality } from '../../api/types'
-
-const ROLE_LABEL: Record<StaffRole, string> = {
-  ASSISTENTE: 'Auxiliar Técnico',
-  PREPARADOR_FISICO: 'Preparador Físico',
-  OLHEIRO: 'Olheiro',
-  FISIOTERAPEUTA: 'Fisioterapeuta',
-}
-
-const QUALITY_LABEL: Record<StaffQuality, string> = {
-  REGULAR: 'Regular',
-  BOM: 'Bom',
-  EXCELENTE: 'Excelente',
-}
-
-const ATTRIBUTE_LABELS: Record<StaffRole, [string, string]> = {
-  ASSISTENTE: ['Conhecimento Tático', 'Avaliação de Jogadores'],
-  PREPARADOR_FISICO: ['Preparação Física', 'Ciência Esportiva'],
-  OLHEIRO: ['Conhecimento do Mercado', 'Negociação'],
-  FISIOTERAPEUTA: ['Prevenção de Lesões', 'Reabilitação'],
-}
+import type { StaffRole, StaffMember } from '../../api/types'
+import { STAFF_ATTRIBUTE_LABELS, STAFF_QUALITY_LABEL, STAFF_ROLE_LABEL, STAFF_ROLE_ORDER } from './staffLabels'
 
 /** Color tier for a 1-20 staff attribute: >=16 gold, >=12 green, else grey (mirrors OVR tiers). */
 function attributeChipSx(value: number) {
@@ -39,7 +20,7 @@ function attributeChipSx(value: number) {
 }
 
 function AttributeChips({ role, primary, secondary }: { role: StaffRole; primary: number; secondary: number }) {
-  const [primaryLabel, secondaryLabel] = ATTRIBUTE_LABELS[role]
+  const [primaryLabel, secondaryLabel] = STAFF_ATTRIBUTE_LABELS[role]
   return (
     <Stack direction="row" spacing={1} sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 0.5 }}>
       <Chip size="small" label={`${primaryLabel}: ${primary}`} sx={attributeChipSx(primary)} />
@@ -48,7 +29,6 @@ function AttributeChips({ role, primary, secondary }: { role: StaffRole; primary
   )
 }
 
-const ROLES: StaffRole[] = ['ASSISTENTE', 'PREPARADOR_FISICO', 'OLHEIRO', 'FISIOTERAPEUTA']
 
 export function StaffPage() {
   const { token } = useAuth()
@@ -87,6 +67,7 @@ export function StaffPage() {
 
   const holderFor = (role: StaffRole): StaffMember | null => {
     switch (role) {
+      case 'TECNICO': return roster.data?.tecnico ?? null
       case 'ASSISTENTE': return roster.data?.assistente ?? null
       case 'PREPARADOR_FISICO': return roster.data?.preparadorFisico ?? null
       case 'OLHEIRO': return roster.data?.olheiro ?? null
@@ -98,30 +79,36 @@ export function StaffPage() {
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Comissão Técnica</Typography>
       <Stack spacing={1.5}>
-        {ROLES.map(role => {
+        {STAFF_ROLE_ORDER.map(role => {
           const holder = holderFor(role)
           return (
             <Card key={role} variant="outlined" data-testid={`staff-role-${role}`}>
               <CardContent>
                 <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                   <Box>
-                    <Typography variant="overline" color="text.secondary">{ROLE_LABEL[role]}</Typography>
+                    <Typography variant="overline" color="text.secondary">{STAFF_ROLE_LABEL[role]}</Typography>
                     {holder ? (
                       <Box>
                         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5 }}>
                           <Typography sx={{ fontWeight: 600 }}>{holder.name}</Typography>
-                          <Chip size="small" label={QUALITY_LABEL[holder.quality]} />
-                          <Typography variant="body2" color="text.secondary">{formatBRL(holder.wage)}/mês</Typography>
+                          {holder.quality && <Chip size="small" label={STAFF_QUALITY_LABEL[holder.quality]} />}
+                          {holder.wage !== null && (
+                            <Typography variant="body2" color="text.secondary">{formatBRL(holder.wage)}/mês</Typography>
+                          )}
                         </Stack>
-                        <AttributeChips role={role} primary={holder.primaryAttribute} secondary={holder.secondaryAttribute} />
+                        {holder.quality && (
+                          <AttributeChips role={role} primary={holder.primaryAttribute} secondary={holder.secondaryAttribute} />
+                        )}
                       </Box>
                     ) : (
                       <Typography color="text.secondary" sx={{ mt: 0.5 }}>Vaga em aberto</Typography>
                     )}
                   </Box>
-                  <Button variant="outlined" onClick={() => setBrowsingRole(role)}>
-                    {holder ? 'Substituir' : 'Contratar'}
-                  </Button>
+                  {role !== 'TECNICO' && (
+                    <Button variant="outlined" onClick={() => setBrowsingRole(role)}>
+                      {holder ? 'Substituir' : 'Contratar'}
+                    </Button>
+                  )}
                 </Stack>
               </CardContent>
             </Card>
@@ -131,7 +118,7 @@ export function StaffPage() {
 
       <Dialog open={browsingRole !== null} onClose={() => setBrowsingRole(null)} fullWidth maxWidth="xs">
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {browsingRole ? ROLE_LABEL[browsingRole] : ''}
+          {browsingRole ? STAFF_ROLE_LABEL[browsingRole] : ''}
           <IconButton onClick={() => setBrowsingRole(null)} size="small"><CloseIcon fontSize="small" /></IconButton>
         </DialogTitle>
         <DialogContent>
@@ -154,8 +141,14 @@ export function StaffPage() {
                   secondary={
                     <>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        {QUALITY_LABEL[c.quality]} · {formatBRL(c.wage)}/mês
+                        {STAFF_QUALITY_LABEL[c.quality]} · {formatBRL(c.wage)}/mês
                       </Typography>
+                      <Chip
+                        size="small"
+                        label={c.currentClubName ?? 'Livre'}
+                        sx={{ mb: 0.5, mr: 0.5 }}
+                        color={c.currentClubName ? 'warning' : 'default'}
+                      />
                       <AttributeChips role={browsingRole!} primary={c.primaryAttribute} secondary={c.secondaryAttribute} />
                     </>
                   }

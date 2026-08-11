@@ -5,7 +5,7 @@ import {
   Alert, Box, Button, Card, CardContent, Chip, Link, Paper, Stack, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Typography,
 } from '@mui/material'
-import { getClubs, getSaveGame, getSquad, makeOffer } from '../../api/career'
+import { getClubs, getSaveGame, getSquad, getStaffRoster, makeOffer } from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
@@ -13,8 +13,11 @@ import { formatBRL, formatThousandsBR } from '../../lib/money'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { WatchStar } from '../players/WatchStar'
 import { MakeOfferDialog, type OfferTarget } from '../transfer/MakeOfferDialog'
-import type { ClubSummary, PlayerResponse, TransferOffer } from '../../api/types'
+import type {
+  ClubSummary, PlayerResponse, StaffMember, StaffRole, StaffRoster, TransferOffer,
+} from '../../api/types'
 import { positionShort } from '../players/positionLabels'
+import { STAFF_ATTRIBUTE_LABELS, STAFF_QUALITY_LABEL, STAFF_ROLE_LABEL, STAFF_ROLE_ORDER } from '../staff/staffLabels'
 
 // Display order for the roster: goalkeepers, then defenders, midfielders, attackers.
 const POSITION_ORDER: Record<PlayerResponse['position'], number> = { GK: 0, DEF: 1, MID: 2, ATT: 3 }
@@ -37,6 +40,68 @@ function clubLocationLine(club: ClubSummary): string | null {
   if (place) segments.push(place)
   if (club.stadiumCapacity != null) segments.push(`${formatThousandsBR(club.stadiumCapacity)} lugares`)
   return segments.length > 0 ? segments.join(' · ') : null
+}
+
+/**
+ * A club's coaching staff, as seen from its profile page. Roles with no holder are skipped rather
+ * than shown as "Vaga em aberto". On your own staff page an empty slot is a call to action, but
+ * here it would assert something false: per the design spec, an unfilled slot on an AI club is a
+ * fact about what the research could find, not about the club — Avaí certainly employs a scout,
+ * we just could not source one.
+ *
+ * The head-coach slot is asymmetric: on a rival club it is a normal employee with a quality,
+ * a wage and real attributes, but on the managed club it stands for the player, who is not a
+ * hire — that entry arrives with a null quality/wage and placeholder attributes, so it renders
+ * as a bare name. The guard is on the null fields, never on which club is being viewed.
+ */
+function Commission({ roster }: { roster: StaffRoster | undefined }) {
+  if (!roster) return null
+  const holderFor = (role: StaffRole): StaffMember | null => ({
+    TECNICO: roster.tecnico,
+    ASSISTENTE: roster.assistente,
+    PREPARADOR_FISICO: roster.preparadorFisico,
+    OLHEIRO: roster.olheiro,
+    FISIOTERAPEUTA: roster.fisioterapeuta,
+  })[role]
+  const filled = STAFF_ROLE_ORDER.filter(role => holderFor(role) !== null)
+  if (filled.length === 0) return null
+
+  return (
+    <Box sx={{ mt: 3 }}>
+      <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>Comissão Técnica</Typography>
+      <Stack spacing={0.5}>
+        {filled.map(role => {
+          const holder = holderFor(role)!
+          const [primaryLabel, secondaryLabel] = STAFF_ATTRIBUTE_LABELS[role]
+          return (
+            <Stack
+              key={role}
+              direction="row"
+              spacing={1}
+              sx={{ alignItems: 'baseline', flexWrap: 'wrap', rowGap: 0.5 }}
+            >
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 150 }}>
+                {STAFF_ROLE_LABEL[role]}
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>{holder.name}</Typography>
+              {holder.quality && (
+                <Chip size="small" label={STAFF_QUALITY_LABEL[holder.quality]} />
+              )}
+              {holder.wage !== null && (
+                <Typography variant="body2" color="text.secondary">{formatBRL(holder.wage)}/mês</Typography>
+              )}
+              {holder.quality && (
+                <>
+                  <Chip size="small" label={`${primaryLabel}: ${holder.primaryAttribute}`} />
+                  <Chip size="small" label={`${secondaryLabel}: ${holder.secondaryAttribute}`} />
+                </>
+              )}
+            </Stack>
+          )
+        })}
+      </Stack>
+    </Box>
+  )
 }
 
 /**
@@ -74,6 +139,14 @@ export function ClubViewPage() {
     queryKey: ['squad', saveGameId, clubId],
     queryFn: () => getSquad(saveGameId, clubId, token ?? ''),
     enabled: Boolean(saveGameId && clubId && token),
+  })
+
+  // Same queryKey shape as StaffPage so both share one cache entry.
+  const staffRoster = useQuery({
+    queryKey: ['staffRoster', saveGameId, clubId],
+    queryFn: () => getStaffRoster(saveGameId, clubId, token ?? ''),
+    enabled: Boolean(saveGameId && clubId && token),
+    staleTime: Infinity,
   })
 
   const club = (clubsQuery.data ?? []).find(c => c.id === clubId)
@@ -226,6 +299,8 @@ export function ClubViewPage() {
           </TableContainer>
         )
       )}
+
+      <Commission roster={staffRoster.data} />
 
       <PlayerDetails
         player={detailsPlayer}
