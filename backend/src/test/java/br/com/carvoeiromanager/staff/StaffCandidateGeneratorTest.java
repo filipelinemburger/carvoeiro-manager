@@ -98,8 +98,10 @@ class StaffCandidateGeneratorTest {
 
     /**
      * The researched ASSISTENTE pool (staff-pool.json) — name to authored
-     * [primaryAttribute, secondaryAttribute]. Used to verify pool precedence and
-     * tier/wage derivation without pinning a specific pair picked by the seeded shuffle.
+     * [primaryAttribute, secondaryAttribute]. A superset: three of these names have since moved
+     * into club-staff.json as employed staff. Used to verify tier/wage derivation, and to tell a
+     * real free professional apart from a generated newgen, without pinning a specific pair picked
+     * by the seeded shuffle.
      */
     private static final Map<String, int[]> ASSISTENTE_POOL = Map.ofEntries(
             Map.entry("Anderson Valiñas", new int[] {13, 12}),
@@ -119,14 +121,14 @@ class StaffCandidateGeneratorTest {
             Map.entry("Márcio Goiano", new int[] {13, 12}));
 
     @Test
-    void poolMembersAreOfferedFirstWithDerivedTierAndTierWage() {
+    void aPoolProfessionalKeepsTheirAuthoredAttributesWithADerivedTierAndTierWage() {
         UUID SAVE_ID = UUID.randomUUID();
         UUID CLUB_ID = UUID.randomUUID();
         List<StaffCandidate> candidates = generator.generate(SAVE_ID, CLUB_ID,
                 StaffRole.ASSISTENTE, LocalDate.of(2026, 3, 1), 2, Set.of(), List.of());
 
-        // The pool has 15 ASSISTENTE entries (far more than requested), so both slots must
-        // come from the pool rather than a generated newgen name.
+        // Nobody is employed elsewhere here, so the market is the free pool alone — and it holds
+        // 12 ASSISTENTE against the two slots asked for, so neither can be a generated newgen.
         assertThat(candidates).hasSize(2);
         assertThat(candidates).extracting(StaffCandidate::name)
                 .doesNotHaveDuplicates()
@@ -162,7 +164,7 @@ class StaffCandidateGeneratorTest {
                 .doesNotContainAnyElementsOf(ASSISTENTE_POOL.keySet());
     }
 
-    /** Every free professional the seed pool holds for a role — tier 1 of the candidate list. */
+    /** Every free professional the seed pool holds for a role. */
     private static Set<String> freePoolNamesFor(StaffRole role) {
         return new SeedLoader().loadStaffPool().stream()
                 .filter(s -> s.role() == role)
@@ -170,20 +172,38 @@ class StaffCandidateGeneratorTest {
                 .collect(Collectors.toSet());
     }
 
+    /**
+     * Browses {@code role} day by day and returns the first offer that names {@code wanted}. A
+     * candidate's odds are their share of the market, so one given day is a coin flip — this walks
+     * the calendar instead, which is deterministic for fixed ids because the seed folds in the
+     * date.
+     */
+    private List<StaffCandidate> firstOfferNaming(String wanted, UUID saveGameId, UUID clubId,
+                                                  StaffRole role, List<EmployedStaff> employedElsewhere) {
+        for (int day = 0; day < 365; day++) {
+            List<StaffCandidate> candidates = generator.generate(saveGameId, clubId, role,
+                    LocalDate.of(2026, 1, 1).plusDays(day), 3, Set.of(), employedElsewhere);
+            if (candidates.stream().anyMatch(c -> c.name().equals(wanted))) {
+                return candidates;
+            }
+        }
+        throw new AssertionError(wanted + " was never offered in a year of browsing " + role);
+    }
+
     @Test
     void aPoachableRivalIsOfferedWithTheirCurrentClub() {
-        UUID SAVE_ID = UUID.randomUUID();
-        UUID CLUB_ID = UUID.randomUUID();
-        UUID staffId = UUID.randomUUID();
-        // Poaching is tier 2: it is only reached once the role's free pool is spent. The pool is
-        // excluded here rather than assumed shallow — staff-pool.json currently holds 14 free
-        // OLHEIRO, so with the three tiers taken strictly in order a poaching target would never
-        // surface among the three offered candidates otherwise.
-        List<StaffCandidate> candidates = generator.generate(
-                SAVE_ID, CLUB_ID, StaffRole.OLHEIRO, LocalDate.of(2026, 1, 10), 3,
-                freePoolNamesFor(StaffRole.OLHEIRO),
+        // Given a rival's scout in the same market as the 14 free OLHEIRO — no exclusions needed,
+        // because there is no pool-first tier left to empty before poaching becomes reachable
+        UUID SAVE_ID = UUID.fromString("7c0dbd8e-0000-4000-8000-000000000001");
+        UUID CLUB_ID = UUID.fromString("7c0dbd8e-0000-4000-8000-000000000002");
+        UUID staffId = UUID.fromString("7c0dbd8e-0000-4000-8000-000000000003");
+
+        // When the manager browses for a scout
+        List<StaffCandidate> candidates = firstOfferNaming("Rival Contratado", SAVE_ID, CLUB_ID,
+                StaffRole.OLHEIRO,
                 List.of(new EmployedStaff(staffId, "Rival Contratado", "Avaí Futebol Clube", 16, 15)));
 
+        // Then the rival comes with the club they would have to be taken from
         assertThat(candidates).anySatisfy(c -> {
             assertThat(c.name()).isEqualTo("Rival Contratado");
             assertThat(c.sourceStaffId()).isEqualTo(staffId);
@@ -193,6 +213,8 @@ class StaffCandidateGeneratorTest {
 
     @Test
     void aPoachedRivalIsPricedAndTieredFromTheirRealAttributes() {
+        // The free pool is excluded so the market holds exactly one person and the single offered
+        // candidate is certain to be them — not to reach any tier, which no longer exists.
         List<StaffCandidate> candidates = generator.generate(UUID.randomUUID(), UUID.randomUUID(),
                 StaffRole.OLHEIRO, LocalDate.of(2026, 1, 10), 1,
                 freePoolNamesFor(StaffRole.OLHEIRO),
@@ -209,18 +231,36 @@ class StaffCandidateGeneratorTest {
     }
 
     @Test
-    void freeProfessionalsAreOfferedBeforePoachingTargets() {
-        List<StaffCandidate> candidates = generator.generate(UUID.randomUUID(), UUID.randomUUID(),
-                StaffRole.ASSISTENTE, LocalDate.of(2026, 1, 10), 3, Set.of(),
-                List.of(new EmployedStaff(UUID.randomUUID(), "Rival Contratado", "Avaí Futebol Clube", 18, 17)));
+    void freeProfessionalsAndPoachingTargetsCompeteInOneMarket() {
+        // Given a role whose free pool (12 ASSISTENTE) and employed rivals are of similar depth
+        UUID SAVE_ID = UUID.fromString("3a51e7b2-0000-4000-8000-000000000001");
+        UUID CLUB_ID = UUID.fromString("3a51e7b2-0000-4000-8000-000000000002");
+        List<EmployedStaff> rivals = java.util.stream.IntStream.range(0, 12)
+                .mapToObj(i -> new EmployedStaff(
+                        UUID.fromString("3a51e7b2-0000-4000-8000-0000000001" + String.format("%02d", i)),
+                        "Empregado " + i, "Avaí Futebol Clube", 13, 12))
+                .toList();
 
-        // The ASSISTENTE pool is deeper than the three slots, so nobody has to be poached — even
-        // though the rival on offer is better than anyone in the pool. Tiers are strict, not a
-        // ranking.
-        assertThat(candidates).allSatisfy(c -> {
-            assertThat(c.sourceStaffId()).isNull();
-            assertThat(c.currentClubName()).isNull();
-        });
+        // When the manager browses the role every day for two months
+        boolean sawFreeProfessional = false;
+        boolean sawPoachingTarget = false;
+        boolean sawBothInOneOffer = false;
+        for (int day = 0; day < 60; day++) {
+            List<StaffCandidate> candidates = generator.generate(SAVE_ID, CLUB_ID,
+                    StaffRole.ASSISTENTE, LocalDate.of(2026, 1, 10).plusDays(day), 3, Set.of(), rivals);
+            boolean free = candidates.stream()
+                    .anyMatch(c -> c.sourceStaffId() == null && ASSISTENTE_POOL.containsKey(c.name()));
+            boolean poached = candidates.stream().anyMatch(c -> c.sourceStaffId() != null);
+            sawFreeProfessional |= free;
+            sawPoachingTarget |= poached;
+            sawBothInOneOffer |= free && poached;
+        }
+
+        // Then both kinds turn up, and turn up side by side — there is no tier that has to run dry
+        // before a rival's employee can be offered.
+        assertThat(sawFreeProfessional).isTrue();
+        assertThat(sawPoachingTarget).isTrue();
+        assertThat(sawBothInOneOffer).isTrue();
     }
 
     @Test

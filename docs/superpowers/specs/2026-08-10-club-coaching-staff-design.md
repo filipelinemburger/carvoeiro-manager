@@ -148,6 +148,38 @@ under §3.3 would let you poach a person you can already sign for free.
 
 The seed validation test (§10) enforces this.
 
+**Correction — the pool did not shrink, and one market replaced the tiers.** This section assumed
+the move would leave `staff-pool.json` thin enough that a candidate list drawn pool-first would
+run out of free professionals and reach the poaching tier. **That assumption was wrong.** Only 10
+of the pool's 59 names turned out to be employed, so it shrank to 49 and no further — nearly
+everyone the research found was someone the pool had never listed. The pool as shipped
+still holds 12 ASSISTENTE, 8 PREPARADOR_FISICO, 14 OLHEIRO and 15 FISIOTERAPEUTA — every one of
+them deeper than the 3 slots on offer. Since `UNIQUE (club_id, role)` caps the hiring club at one
+staff member per role, the exclusion set can remove at most one name, so the free tier could never
+empty and the poaching tier shipped as unreachable dead code.
+
+The corrected model, implemented in `StaffCandidateGenerator`: **free professionals and staff
+employed at rival clubs form a single market.** They are merged, shuffled once with the existing
+seeded RNG, and the first `count` are offered. Newgens top up only if the merged market cannot
+fill the slots — which, given the depths above, it always can. There is no tier order and no
+poaching-frequency constant to tune: a candidate's odds are simply their share of the market, so
+**poaching frequency comes out proportional to the employed/free ratio, per role.** For a fresh
+career at Criciúma (`hire`'s own club is excluded from the poaching targets):
+
+| Role | Free in pool | Employed at rivals | Expected share of a shortlist that is poachable |
+| --- | --- | --- | --- |
+| `PREPARADOR_FISICO` | 8 | 20 | ~71% |
+| `ASSISTENTE` | 12 | 19 | ~61% |
+| `OLHEIRO` | 14 | 7 | ~33% |
+| `FISIOTERAPEUTA` | 15 | 4 | ~21% |
+
+That spread is the research coverage of §4.2 showing through as gameplay — a well-scouted role is
+mostly a poaching market, a thinly-scouted one is mostly free agents — and it moves on its own if
+the seed research is ever extended. Determinism is unchanged: the merged list is put in a fixed
+base order (free professionals by name, then poaching targets by staff id) before the single
+shuffle, so the same (saveGameId, clubId, role, date) still yields the same offer regardless of
+what order the repository returned the employed rows in.
+
 ## 5. Domain model
 
 ### 5.1 `StaffRole` gains `TECNICO`

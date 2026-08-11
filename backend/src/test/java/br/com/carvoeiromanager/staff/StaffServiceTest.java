@@ -22,11 +22,10 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 
 /**
- * Covers the poaching wiring {@link StaffServiceIT} cannot reach. Candidates are assembled in
- * three strict tiers — free pool, then rivals' staff, then newgens — and every role's free pool in
- * {@code staff-pool.json} is deeper than {@code CANDIDATE_COUNT}, so a real career never gets far
- * enough down the list to be offered a poaching target. Stubbing the generator is the only way to
- * exercise what {@code hire} does when it is handed one.
+ * Covers the poaching wiring at the seam, with the generator stubbed. Which candidates a real
+ * career is offered is a draw against the market, so stubbing is what lets these tests state
+ * exactly what {@code hire} was handed; {@link StaffServiceIT} proves the same behaviour end to
+ * end against Postgres, where it has to walk the calendar to find a poachable candidate.
  */
 class StaffServiceTest {
 
