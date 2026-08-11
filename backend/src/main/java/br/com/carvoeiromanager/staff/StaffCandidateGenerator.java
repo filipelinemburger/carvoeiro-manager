@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -17,12 +18,16 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Rolls staff candidates on demand — never persisted. Real professionals from the seed pool
- * are offered first (their authored attributes fixed, tier derived from the average, wage by
- * tier); when the role's unhired pool runs dry the remaining slots are filled with generated
- * newgen names whose attributes are rolled inside the tier band. Deterministic for a given
- * (saveGameId, clubId, role, onDate, excludedNames): re-browsing the same role on the same
- * day always shows the same candidates.
+ * Rolls staff candidates on demand — never persisted. Slots are filled from three tiers in order:
+ * <ol>
+ *   <li>free professionals from the seed pool (their authored attributes fixed, tier derived from
+ *       the average, wage by tier);</li>
+ *   <li>poachable rivals — real staff already employed at other clubs in the save, passed in as
+ *       {@link EmployedStaff} so this class stays free of repository access;</li>
+ *   <li>generated newgen names whose attributes are rolled inside the tier band.</li>
+ * </ol>
+ * Deterministic for a given (saveGameId, clubId, role, onDate, excludedNames, employedElsewhere):
+ * re-browsing the same role on the same day always shows the same candidates.
  */
 @Component
 public class StaffCandidateGenerator {
@@ -43,7 +48,8 @@ public class StaffCandidateGenerator {
     private static final int MAX_NAME_DRAWS = 200;
 
     public List<StaffCandidate> generate(UUID saveGameId, UUID clubId, StaffRole role,
-                                         LocalDate onDate, int count, Set<String> excludedNames) {
+                                         LocalDate onDate, int count, Set<String> excludedNames,
+                                         List<EmployedStaff> employedElsewhere) {
         long seed = saveGameId.getMostSignificantBits()
                 ^ clubId.getMostSignificantBits()
                 ^ role.ordinal()
@@ -51,6 +57,10 @@ public class StaffCandidateGenerator {
         Random rng = new Random(seed);
 
         List<StaffCandidate> candidates = new ArrayList<>();
+
+        // Names already spoken for: everyone the caller excluded (already hired at the hiring
+        // club), plus each candidate as it is offered.
+        Set<String> taken = new HashSet<>(excludedNames);
 
         List<SeedStaff> available = poolByRole.getOrDefault(role, List.of()).stream()
                 .filter(s -> !excludedNames.contains(s.name()))
@@ -60,15 +70,30 @@ public class StaffCandidateGenerator {
             SeedStaff pro = available.get(i);
             double average = (pro.primaryAttribute() + pro.secondaryAttribute()) / 2.0;
             StaffQuality quality = StaffQuality.forAverage(average);
-            candidates.add(new StaffCandidate(pro.name(), quality, quality.monthlyWage(),
+            candidates.add(StaffCandidate.free(pro.name(), quality, quality.monthlyWage(),
                     pro.primaryAttribute(), pro.secondaryAttribute()));
+            taken.add(pro.name());
+        }
+
+        // Poaching targets: real professionals already working at other clubs in this save. Sorted
+        // by id before shuffling so the same day always offers the same names.
+        if (candidates.size() < count) {
+            List<EmployedStaff> poachable = employedElsewhere.stream()
+                    .filter(e -> !taken.contains(e.name()))
+                    .sorted(Comparator.comparing(EmployedStaff::staffId))
+                    .collect(Collectors.toCollection(ArrayList::new));
+            Collections.shuffle(poachable, rng);
+            for (int i = 0; i < poachable.size() && candidates.size() < count; i++) {
+                EmployedStaff e = poachable.get(i);
+                double average = (e.primaryAttribute() + e.secondaryAttribute()) / 2.0;
+                StaffQuality quality = StaffQuality.forAverage(average);
+                candidates.add(new StaffCandidate(e.name(), quality, quality.monthlyWage(),
+                        e.primaryAttribute(), e.secondaryAttribute(), e.staffId(), e.clubName()));
+                taken.add(e.name());
+            }
         }
 
         StaffQuality[] tiers = StaffQuality.values();
-        // Names already spoken for: the authored candidates just offered, plus everyone the
-        // caller excluded (already-hired staff, and the authored pool when it is exhausted).
-        Set<String> taken = new HashSet<>(excludedNames);
-        candidates.forEach(c -> taken.add(c.name()));
 
         while (candidates.size() < count) {
             // Generated names are drawn from the same Brazilian first/last name pools the real
@@ -97,7 +122,7 @@ public class StaffCandidateGenerator {
             StaffQuality quality = tiers[rng.nextInt(tiers.length)];
             int primary = rollAttribute(quality, rng);
             int secondary = rollAttribute(quality, rng);
-            candidates.add(new StaffCandidate(name, quality, quality.monthlyWage(), primary, secondary));
+            candidates.add(StaffCandidate.free(name, quality, quality.monthlyWage(), primary, secondary));
         }
         return candidates;
     }

@@ -1,6 +1,7 @@
 package br.com.carvoeiromanager.staff;
 
 import br.com.carvoeiromanager.seed.SeedLoader;
+import br.com.carvoeiromanager.seed.SeedStaff;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -9,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -19,7 +21,7 @@ class StaffCandidateGeneratorTest {
     @Test
     void generatesTheRequestedNumberOfCandidatesWithNonBlankNamesAndPositiveWages() {
         List<StaffCandidate> candidates = generator.generate(UUID.randomUUID(), UUID.randomUUID(),
-                StaffRole.PREPARADOR_FISICO, LocalDate.of(2026, 3, 1), 3, Set.of());
+                StaffRole.PREPARADOR_FISICO, LocalDate.of(2026, 3, 1), 3, Set.of(), List.of());
 
         assertThat(candidates).hasSize(3);
         assertThat(candidates).allSatisfy(c -> {
@@ -35,8 +37,8 @@ class StaffCandidateGeneratorTest {
         UUID clubId = UUID.randomUUID();
         LocalDate onDate = LocalDate.of(2026, 5, 10);
 
-        List<StaffCandidate> first = generator.generate(saveGameId, clubId, StaffRole.OLHEIRO, onDate, 3, Set.of());
-        List<StaffCandidate> second = generator.generate(saveGameId, clubId, StaffRole.OLHEIRO, onDate, 3, Set.of());
+        List<StaffCandidate> first = generator.generate(saveGameId, clubId, StaffRole.OLHEIRO, onDate, 3, Set.of(), List.of());
+        List<StaffCandidate> second = generator.generate(saveGameId, clubId, StaffRole.OLHEIRO, onDate, 3, Set.of(), List.of());
 
         assertThat(second).isEqualTo(first);
     }
@@ -47,9 +49,9 @@ class StaffCandidateGeneratorTest {
         UUID clubId = UUID.randomUUID();
 
         List<StaffCandidate> day1 = generator.generate(saveGameId, clubId, StaffRole.ASSISTENTE,
-                LocalDate.of(2026, 3, 1), 3, Set.of());
+                LocalDate.of(2026, 3, 1), 3, Set.of(), List.of());
         List<StaffCandidate> day2 = generator.generate(saveGameId, clubId, StaffRole.ASSISTENTE,
-                LocalDate.of(2026, 3, 2), 3, Set.of());
+                LocalDate.of(2026, 3, 2), 3, Set.of(), List.of());
 
         assertThat(day2).isNotEqualTo(day1);
     }
@@ -60,8 +62,8 @@ class StaffCandidateGeneratorTest {
         UUID clubId = UUID.randomUUID();
         LocalDate onDate = LocalDate.of(2026, 3, 1);
 
-        List<StaffCandidate> coach = generator.generate(saveGameId, clubId, StaffRole.PREPARADOR_FISICO, onDate, 3, Set.of());
-        List<StaffCandidate> scout = generator.generate(saveGameId, clubId, StaffRole.OLHEIRO, onDate, 3, Set.of());
+        List<StaffCandidate> coach = generator.generate(saveGameId, clubId, StaffRole.PREPARADOR_FISICO, onDate, 3, Set.of(), List.of());
+        List<StaffCandidate> scout = generator.generate(saveGameId, clubId, StaffRole.OLHEIRO, onDate, 3, Set.of(), List.of());
 
         assertThat(scout).isNotEqualTo(coach);
     }
@@ -69,7 +71,7 @@ class StaffCandidateGeneratorTest {
     @Test
     void wageMatchesTheFixedTableForEachQualityTier() {
         List<StaffCandidate> candidates = generator.generate(UUID.randomUUID(), UUID.randomUUID(),
-                StaffRole.FISIOTERAPEUTA, LocalDate.of(2026, 3, 1), 20, Set.of());
+                StaffRole.FISIOTERAPEUTA, LocalDate.of(2026, 3, 1), 20, Set.of(), List.of());
 
         assertThat(candidates).allSatisfy(c -> {
             switch (c.quality()) {
@@ -85,7 +87,7 @@ class StaffCandidateGeneratorTest {
         UUID saveId = UUID.randomUUID();
         UUID clubId = UUID.randomUUID();
         List<StaffCandidate> candidates = generator.generate(saveId, clubId,
-                StaffRole.PREPARADOR_FISICO, LocalDate.of(2026, 3, 1), 50, Set.of());
+                StaffRole.PREPARADOR_FISICO, LocalDate.of(2026, 3, 1), 50, Set.of(), List.of());
         for (StaffCandidate c : candidates) {
             int lo = switch (c.quality()) { case REGULAR -> 8; case BOM -> 12; case EXCELENTE -> 15; };
             int hi = switch (c.quality()) { case REGULAR -> 12; case BOM -> 16; case EXCELENTE -> 19; };
@@ -121,7 +123,7 @@ class StaffCandidateGeneratorTest {
         UUID SAVE_ID = UUID.randomUUID();
         UUID CLUB_ID = UUID.randomUUID();
         List<StaffCandidate> candidates = generator.generate(SAVE_ID, CLUB_ID,
-                StaffRole.ASSISTENTE, LocalDate.of(2026, 3, 1), 2, Set.of());
+                StaffRole.ASSISTENTE, LocalDate.of(2026, 3, 1), 2, Set.of(), List.of());
 
         // The pool has 15 ASSISTENTE entries (far more than requested), so both slots must
         // come from the pool rather than a generated newgen name.
@@ -154,10 +156,84 @@ class StaffCandidateGeneratorTest {
         UUID SAVE_ID = UUID.randomUUID();
         UUID CLUB_ID = UUID.randomUUID();
         List<StaffCandidate> candidates = generator.generate(SAVE_ID, CLUB_ID,
-                StaffRole.ASSISTENTE, LocalDate.of(2026, 3, 1), 20, Set.of(ASSISTENTE_POOL.keySet().toArray(new String[0])));
+                StaffRole.ASSISTENTE, LocalDate.of(2026, 3, 1), 20, Set.of(ASSISTENTE_POOL.keySet().toArray(new String[0])), List.of());
         assertThat(candidates).hasSize(20);
         assertThat(candidates).extracting(StaffCandidate::name)
                 .doesNotContainAnyElementsOf(ASSISTENTE_POOL.keySet());
+    }
+
+    /** Every free professional the seed pool holds for a role — tier 1 of the candidate list. */
+    private static Set<String> freePoolNamesFor(StaffRole role) {
+        return new SeedLoader().loadStaffPool().stream()
+                .filter(s -> s.role() == role)
+                .map(SeedStaff::name)
+                .collect(Collectors.toSet());
+    }
+
+    @Test
+    void aPoachableRivalIsOfferedWithTheirCurrentClub() {
+        UUID SAVE_ID = UUID.randomUUID();
+        UUID CLUB_ID = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        // Poaching is tier 2: it is only reached once the role's free pool is spent. The pool is
+        // excluded here rather than assumed shallow — staff-pool.json currently holds 14 free
+        // OLHEIRO, so with the three tiers taken strictly in order a poaching target would never
+        // surface among the three offered candidates otherwise.
+        List<StaffCandidate> candidates = generator.generate(
+                SAVE_ID, CLUB_ID, StaffRole.OLHEIRO, LocalDate.of(2026, 1, 10), 3,
+                freePoolNamesFor(StaffRole.OLHEIRO),
+                List.of(new EmployedStaff(staffId, "Rival Contratado", "Avaí Futebol Clube", 16, 15)));
+
+        assertThat(candidates).anySatisfy(c -> {
+            assertThat(c.name()).isEqualTo("Rival Contratado");
+            assertThat(c.sourceStaffId()).isEqualTo(staffId);
+            assertThat(c.currentClubName()).isEqualTo("Avaí Futebol Clube");
+        });
+    }
+
+    @Test
+    void aPoachedRivalIsPricedAndTieredFromTheirRealAttributes() {
+        List<StaffCandidate> candidates = generator.generate(UUID.randomUUID(), UUID.randomUUID(),
+                StaffRole.OLHEIRO, LocalDate.of(2026, 1, 10), 1,
+                freePoolNamesFor(StaffRole.OLHEIRO),
+                List.of(new EmployedStaff(UUID.randomUUID(), "Rival Contratado", "Avaí Futebol Clube", 11, 10)));
+
+        // 10.5 average, so REGULAR and the REGULAR wage — the source club's own quality column is
+        // never consulted, exactly as the authored pool derives its tier from the attributes.
+        assertThat(candidates).singleElement().satisfies(c -> {
+            assertThat(c.quality()).isEqualTo(StaffQuality.REGULAR);
+            assertThat(c.wage()).isEqualByComparingTo("20000.00");
+            assertThat(c.primaryAttribute()).isEqualTo(11);
+            assertThat(c.secondaryAttribute()).isEqualTo(10);
+        });
+    }
+
+    @Test
+    void freeProfessionalsAreOfferedBeforePoachingTargets() {
+        List<StaffCandidate> candidates = generator.generate(UUID.randomUUID(), UUID.randomUUID(),
+                StaffRole.ASSISTENTE, LocalDate.of(2026, 1, 10), 3, Set.of(),
+                List.of(new EmployedStaff(UUID.randomUUID(), "Rival Contratado", "Avaí Futebol Clube", 18, 17)));
+
+        // The ASSISTENTE pool is deeper than the three slots, so nobody has to be poached — even
+        // though the rival on offer is better than anyone in the pool. Tiers are strict, not a
+        // ranking.
+        assertThat(candidates).allSatisfy(c -> {
+            assertThat(c.sourceStaffId()).isNull();
+            assertThat(c.currentClubName()).isNull();
+        });
+    }
+
+    @Test
+    void aPoachingTargetAlreadyHiredAtTheClubIsNotOfferedAgain() {
+        Set<String> excluded = new java.util.HashSet<>(freePoolNamesFor(StaffRole.OLHEIRO));
+        excluded.add("Rival Contratado");
+
+        List<StaffCandidate> candidates = generator.generate(UUID.randomUUID(), UUID.randomUUID(),
+                StaffRole.OLHEIRO, LocalDate.of(2026, 1, 10), 3, excluded,
+                List.of(new EmployedStaff(UUID.randomUUID(), "Rival Contratado", "Avaí Futebol Clube", 16, 15)));
+
+        assertThat(candidates).extracting(StaffCandidate::name).doesNotContain("Rival Contratado");
+        assertThat(candidates).allSatisfy(c -> assertThat(c.sourceStaffId()).isNull());
     }
 
     @Test
@@ -165,9 +241,9 @@ class StaffCandidateGeneratorTest {
         UUID SAVE_ID = UUID.randomUUID();
         UUID CLUB_ID = UUID.randomUUID();
         List<StaffCandidate> a = generator.generate(SAVE_ID, CLUB_ID,
-                StaffRole.OLHEIRO, LocalDate.of(2026, 3, 1), 3, Set.of());
+                StaffRole.OLHEIRO, LocalDate.of(2026, 3, 1), 3, Set.of(), List.of());
         List<StaffCandidate> b = generator.generate(SAVE_ID, CLUB_ID,
-                StaffRole.OLHEIRO, LocalDate.of(2026, 3, 1), 3, Set.of());
+                StaffRole.OLHEIRO, LocalDate.of(2026, 3, 1), 3, Set.of(), List.of());
         assertThat(a).isEqualTo(b);
     }
 }

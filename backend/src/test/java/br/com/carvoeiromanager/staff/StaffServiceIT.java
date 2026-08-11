@@ -170,6 +170,78 @@ class StaffServiceIT {
     }
 
     @Test
+    void aFreshCareerIsOfferedOnlyFreeProfessionalsWhileThePoolOutnumbersTheSlots() {
+        Career c = createCareer();
+
+        List<StaffCandidateResponse> candidates = staffService.getCandidates(
+                c.id(), c.clubId(), StaffRole.PREPARADOR_FISICO, c.userId());
+
+        // Candidates come in three strict tiers — free pool, then rivals' staff, then newgens —
+        // and staff-pool.json still holds 8 free PREPARADOR_FISICO against 3 offered slots, so
+        // tier 2 is never reached and no candidate here carries a club to be poached from. That
+        // is a consequence of the tier order, not of the poaching code: StaffServiceTest and
+        // StaffCandidateGeneratorTest cover what happens once tier 1 runs dry. If trimming the
+        // pool (or reordering the tiers) ever makes poaching reachable at a fresh career, this
+        // test is the canary that says so.
+        assertThat(candidates).hasSize(3);
+        assertThat(candidates).allSatisfy(x -> assertThat(x.currentClubName()).isNull());
+    }
+
+    @Test
+    void aNameAlreadyHiredAtTheClubIsNeverOfferedAgain() {
+        Career c = createCareer();
+        List<StaffCandidateResponse> before = staffService.getCandidates(
+                c.id(), c.clubId(), StaffRole.OLHEIRO, c.userId());
+        String hiredName = before.get(0).name();
+
+        staffService.hire(c.id(), c.clubId(), StaffRole.OLHEIRO, 0, c.userId());
+
+        // The exclusion narrowed from save-wide to this club only, so it must still hold for the
+        // club's own staff — otherwise the manager could be offered someone they already employ.
+        assertThat(staffService.getCandidates(c.id(), c.clubId(), StaffRole.OLHEIRO, c.userId()))
+                .extracting(StaffCandidateResponse::name)
+                .doesNotContain(hiredName);
+    }
+
+    @Test
+    void theHeadCoachCanNeverBeBrowsedOrHired() {
+        Career c = createCareer();
+
+        assertThatThrownBy(() -> staffService.getCandidates(
+                c.id(), c.clubId(), StaffRole.TECNICO, c.userId()))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> staffService.hire(
+                c.id(), c.clubId(), StaffRole.TECNICO, 0, c.userId()))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void hiringForARivalClubInYourOwnSaveIsRejected() {
+        Career c = createCareer();
+        // A real rival resolved from the save rather than pinned by short name: clubId is a free
+        // path variable on StaffController, so without requireManagedClub a crafted request would
+        // staff a rival at the rival's expense — and, since hire reports managedClub=true, would
+        // hand back the player's own manager name inside that rival's roster.
+        UUID rivalClubId = clubRepository.findBySaveGameId(c.id()).stream()
+                .map(Club::getId)
+                .filter(id -> !id.equals(c.clubId()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThatThrownBy(() -> staffService.hire(
+                c.id(), rivalClubId, StaffRole.OLHEIRO, 0, c.userId()))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException api = (ApiException) ex;
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.VALIDATION_ERROR);
+                    assertThat(api.getStatus().value()).isEqualTo(400);
+                });
+        assertThatThrownBy(() -> staffService.getCandidates(
+                c.id(), rivalClubId, StaffRole.OLHEIRO, c.userId()))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
     void aClubFromADifferentSaveGameIsRejected() {
         // Two independent save games, each with its own user (createCareer mints a fresh User every
         // call) — c2's club must not be reachable through c1's save-game id, proving the
