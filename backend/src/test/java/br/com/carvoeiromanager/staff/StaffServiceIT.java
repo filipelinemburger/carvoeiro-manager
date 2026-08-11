@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
+import br.com.carvoeiromanager.career.CreateSaveGameRequest;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
@@ -47,6 +48,14 @@ class StaffServiceIT {
         User user = User.create("staff_" + UUID.randomUUID(), "hash");
         userRepository.save(user);
         return new Career(user.getId(), saveGameService.createCareer(user.getId()));
+    }
+
+    /** A career whose manager has a name of your choosing, rather than createCareer's default. */
+    private Career createCareerManagedBy(String managerName) {
+        User user = User.create("staff_" + UUID.randomUUID(), "hash");
+        userRepository.save(user);
+        return new Career(user.getId(), saveGameService.createCareer(
+                user.getId(), new CreateSaveGameRequest(managerName, "Brasil")));
     }
 
     /**
@@ -149,12 +158,15 @@ class StaffServiceIT {
 
     @Test
     void theManagedClubsHeadCoachSlotIsTheManagerThemselves() {
-        Career c = createCareer();
+        // A DISTINCTIVE manager name on purpose. createCareer's default is literally "Técnico",
+        // which is also a plausible hardcoded role label — asserting that string would pass even
+        // if toRosterResponse ignored the manager persona and emitted a constant.
+        Career c = createCareerManagedBy("Zé Ramalho");
 
         StaffRosterResponse roster = staffService.getRoster(c.id(), c.clubId(), c.userId());
 
         assertThat(roster.tecnico()).isNotNull();
-        assertThat(roster.tecnico().name()).isEqualTo("Técnico");   // createCareer's default manager name
+        assertThat(roster.tecnico().name()).isEqualTo("Zé Ramalho");
         // Null quality/wage is how the frontend recognises "this is you, not a hire".
         assertThat(roster.tecnico().quality()).isNull();
         assertThat(roster.tecnico().wage()).isNull();

@@ -70,9 +70,19 @@ class ClubStaffSeedingIT {
                 .toList();
 
         assertThat(rivalStaff).isNotEmpty();
-        // The point of the whole slice: rivals are no longer mechanically identical.
-        assertThat(rivalStaff.stream().map(Staff::attributeAverage).distinct().count())
-                .isGreaterThan(1);
+        // The point of the whole slice: rivals are no longer mechanically identical. Compared PER
+        // CLUB, not across the flattened list — different ROLES trivially have different averages,
+        // so a flat distinct() would pass even if all 30 rivals were seeded the same commission,
+        // which is the exact regression this is here to catch.
+        long distinctCommissions = rivals.stream()
+                .map(club -> staffRepository.findByClubId(club.getId()).stream()
+                        .sorted(java.util.Comparator.comparing(Staff::getRole))
+                        .map(s -> s.getRole() + ":" + s.attributeAverage())
+                        .toList())
+                .filter(signature -> !signature.isEmpty())
+                .distinct()
+                .count();
+        assertThat(distinctCommissions).isGreaterThan(rivals.size() / 2);
     }
 
     @Test
