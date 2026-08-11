@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -260,6 +261,38 @@ class LiveMatchEngineTest {
         LiveTimeline b = engine.simulate(cfg);
         assertThat(a.events()).isEqualTo(b.events());
         assertThat(a.homeGoals()).isEqualTo(b.homeGoals());
+    }
+
+    @Test
+    void aStrongHeadCoachScoresMoreGoalsOverManySeeds() {
+        // Guards the WIRING, not the arithmetic — TeamMatchInputCoachTest already covers the record
+        // itself. Without this test, deleting the withCoachMultiplier call from the engine leaves
+        // the whole backend suite green: every other simulation test stubs the multiplier to 1.0,
+        // and these mocks are lenient (plain Mockito.mock, no MockitoExtension), so the now-unused
+        // stub raises nothing. This is the only assertion that the feature reaches the pitch.
+        //
+        // Measured over many seeds rather than one. The multiplier shifts a per-minute scoring
+        // probability, so on any single seed it usually flips no draw at all — a one-seed
+        // assertion looks like a wiring failure when it is really just sampling noise.
+        int neutralGoals = 0;
+        for (long seed = 0; seed < 200; seed++) {
+            neutralGoals += engine.simulate(config(seed, List.of())).homeGoals();
+        }
+
+        // Only the HOME side gets the good coach: a symmetric multiplier merely rescales
+        // attack - opponentDefense and barely moves the goal model. Each test player carries its
+        // own random clubId and Side.all is a HashMap of XI PLUS bench, so rather than guess which
+        // player the engine samples, stub every home clubId — bench included. A specific stub beats
+        // the any() stub from the initializer, leaving the away side neutral.
+        Stream.concat(homeXi.stream(), homeBench.stream()).forEach(pl -> Mockito.when(
+                staffEffectsService.coachStrengthMultiplierFor(pl.getClubId())).thenReturn(1.04));
+
+        int coachedGoals = 0;
+        for (long seed = 0; seed < 200; seed++) {
+            coachedGoals += engine.simulate(config(seed, List.of())).homeGoals();
+        }
+
+        assertThat(coachedGoals).isGreaterThan(neutralGoals);
     }
 
     @Test

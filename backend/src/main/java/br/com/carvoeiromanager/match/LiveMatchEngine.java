@@ -601,13 +601,20 @@ public class LiveMatchEngine {
      */
     private double resolveInjuryRiskMultiplier(Side side, LiveMatchConfig cfg) {
         boolean sideManaged = side.home != Boolean.TRUE.equals(cfg.aiHome());
-        UUID clubId = side.all.values().iterator().next().getClubId();
-        return staffEffectsService.injuryRiskMultiplierFor(clubId, sideManaged);
+        return staffEffectsService.injuryRiskMultiplierFor(clubIdOf(side), sideManaged);
     }
 
     private double coachMultiplierFor(Side side) {
-        UUID clubId = side.all.values().iterator().next().getClubId();
-        return staffEffectsService.coachStrengthMultiplierFor(clubId);
+        return staffEffectsService.coachStrengthMultiplierFor(clubIdOf(side));
+    }
+
+    /**
+     * The side's club, taken from any one of its players. LiveMatchConfig carries no club id, and
+     * a side's {@code all} map is one club's XI plus its bench (see buildSide), so any member
+     * answers for all of them.
+     */
+    private static UUID clubIdOf(Side side) {
+        return side.all.values().iterator().next().getClubId();
     }
 
     private void maybeInjury(int minute, Side side, LiveMatchConfig cfg, double riskMultiplier, Random injuryRng,

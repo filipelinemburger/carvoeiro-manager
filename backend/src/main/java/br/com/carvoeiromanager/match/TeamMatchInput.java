@@ -25,9 +25,11 @@ public record TeamMatchInput(
         GameStyle gameStyle) {
 
     /**
-     * Scales attack and defense by the head coach's influence. At {@code m == 1.0} this returns an
-     * equal record, which is what keeps every seeded simulation result stable for clubs that have
-     * no head coach.
+     * Scales attack and defense by the head coach's influence. Neutrality at {@code m == 1.0} is
+     * guaranteed by IEEE-754 alone ({@code x * 1.0 == x} bit-exactly), which is what keeps every
+     * seeded simulation result stable for clubs with no head coach. The early return is therefore
+     * an allocation you don't pay for, not the thing that makes determinism hold — but it IS
+     * contractual: callers may rely on getting the same instance back.
      */
     public TeamMatchInput withCoachMultiplier(double m) {
         if (m == 1.0) {
