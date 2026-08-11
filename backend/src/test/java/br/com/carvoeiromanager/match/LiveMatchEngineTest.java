@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -1110,6 +1111,46 @@ class LiveMatchEngineTest {
             totalHomePossession += t.statsThrough(t.finalMinute()).home().possession();
         }
         assertThat(totalHomePossession / seeds).isBetween(45.0, 55.0);
+    }
+
+    @Test
+    void possessionVariesFromMatchToMatchForIdenticalSquads() {
+        // The companion to possessionAveragesNearFiftyForIdenticalSquads, which would also pass with
+        // ZERO variance: the per-minute POSSESSION_JITTER averages out to ~+-0.7pp over 90 minutes, so
+        // without a per-match offset every identical-squad fixture reads a near-deterministic 50-50.
+        // Both halves matter -- the SD catches a collapse back to that determinism, and the outlier
+        // check catches a change that widens the SD without ever producing an interesting scoreline.
+        int seeds = 150;
+        double[] possessions = new double[seeds];
+        for (int seed = 0; seed < seeds; seed++) {
+            LiveTimeline t = engine.simulate(config(seed, List.of()));
+            possessions[seed] = t.statsThrough(t.finalMinute()).home().possession();
+        }
+        double mean = Arrays.stream(possessions).average().orElseThrow();
+        double sd = Math.sqrt(Arrays.stream(possessions).map(v -> (v - mean) * (v - mean)).sum() / seeds);
+        double maxDeviationFromFifty = Arrays.stream(possessions).map(v -> Math.abs(v - 50.0)).max().orElseThrow();
+        String sample = String.format("mean %.2f, SD %.2f, min %.0f, max %.0f", mean, sd,
+                Arrays.stream(possessions).min().orElseThrow(),
+                Arrays.stream(possessions).max().orElseThrow());
+
+        assertThat(sd).as("home possession SD over %d seeds (%s)", seeds, sample).isGreaterThan(2.0);
+        assertThat(maxDeviationFromFifty)
+                .as("largest home possession deviation from 50 over %d seeds (%s)", seeds, sample)
+                .isGreaterThan(5.0);
+    }
+
+    @Test
+    void possessionIsStillDeterministicForAFixedSeed() {
+        // Pins that the per-match possession offset is drawn from a stream seeded off cfg.seed(),
+        // not from anything ambient: the same config must replay the same possession figures.
+        LiveMatchConfig cfg = config(9871L, List.of());
+        LiveTimeline first = engine.simulate(cfg);
+        LiveTimeline second = engine.simulate(cfg);
+
+        assertThat(first.minuteStats().stream().map(MinuteStats::homePossession).toList())
+                .isEqualTo(second.minuteStats().stream().map(MinuteStats::homePossession).toList());
+        assertThat(first.statsThrough(first.finalMinute()).home().possession())
+                .isEqualTo(second.statsThrough(second.finalMinute()).home().possession());
     }
 
     @Test

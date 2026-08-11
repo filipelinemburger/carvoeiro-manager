@@ -65,6 +65,10 @@ public class LiveMatchEngine {
                                                              // realism gain doesn't justify another tunable
     private static final double POSSESSION_SPREAD = 1.5;   // see rollPossession's Javadoc
     private static final double POSSESSION_JITTER = 0.12;  // see rollPossession's Javadoc
+    private static final double POSSESSION_MATCH_SPREAD = 0.08; // uniform +-8pp per MATCH (SD ~4.6pp);
+                                                             // drawn once in simulate(), see the comment
+                                                             // there for why per-minute jitter alone left
+                                                             // possession near-deterministic
 
     private final TeamStrengthCalculator teamStrengthCalculator;
     private final FitnessCalculator fitnessCalculator;
@@ -104,6 +108,10 @@ public class LiveMatchEngine {
         Random assistRng = new Random(cfg.seed() ^ 0x5A551571L);
         Random foulRng = new Random(cfg.seed() ^ 0xF0011E5L);
         Random statsRng = new Random(cfg.seed() ^ 0x57A75L);   // "STATS"
+        // Its own stream rather than a draw from statsRng: the per-minute stats draw order stays
+        // untouched, so every shot/corner/offside figure on an in-flight save reads exactly as before.
+        // mixSeed is load-bearing here and nowhere else — see its Javadoc.
+        Random possessionRng = new Random(mixSeed(cfg.seed() ^ 0x9055E5L));   // "POSSES"
 
         Side home = buildSide(true, cfg.homeXi(), cfg.homeBench());
         Side away = buildSide(false, cfg.awayXi(), cfg.awayBench());
@@ -144,6 +152,13 @@ public class LiveMatchEngine {
 
         int homeGoals = 0;
         int awayGoals = 0;
+
+        // One possession offset per MATCH, drawn before the loop so it survives LiveTimeline.statsThrough's
+        // averaging over the revealed minutes. rollPossession's per-minute jitter averages out to ~+-0.7pp
+        // over 90 minutes, which is why possession used to be a near-deterministic function of the two
+        // squads' ratings — every evenly-matched fixture read 50-50. Symmetric about zero, so neither
+        // side's mean possession moves; only the match-to-match spread does.
+        double possessionOffset = (possessionRng.nextDouble() - 0.5) * 2 * POSSESSION_MATCH_SPREAD;
 
         // Starts as a normal 90-minute match; extended to EXTRA_TIME_END below, in the loop
         // body, the instant this match's own 90-minute score is known to be level on aggregate
@@ -238,7 +253,8 @@ public class LiveMatchEngine {
             MinuteTeamStats homeMs = rollMinuteStats(homeChance, homeChances, statsRng);
             MinuteTeamStats awayMs = rollMinuteStats(awayChance, awayChances, statsRng);
             minuteStats.add(new MinuteStats(
-                    rollPossession(homeInput, awayInput, homeFf, awayFf, weatherImpact, statsRng),
+                    rollPossession(homeInput, awayInput, homeFf, awayFf, weatherImpact, possessionOffset,
+                            statsRng),
                     homeMs, awayMs));
 
             // Emit a half-time marker at the END of minute 45 (after all RNG draws for this minute).
@@ -528,19 +544,29 @@ public class LiveMatchEngine {
      * ({@code homeFf}/{@code awayFf}, which already fold in weather's decay multiplier), by tempo
      * (pressing high wins the ball back higher up the pitch), and by weather's own chance
      * multiplier (so rain punishing a passing side costs it the ball as well as the goal).
-     * Identical squads give {@code raw = 0.5} => exactly 50 — deliberately no home-advantage term.
-     * {@code POSSESSION_SPREAD = 1.5} lifts a strong-vs-weak matchup's {@code raw ~ 0.575} to a
-     * realistic ~61%. The {@code [0.25, 0.75]} clamp guarantees the away share also lands in range.
-     * {@code total <= 0} is defensive and unreachable in practice (every fielded side has positive
-     * attack + defense).
+     * Identical squads give {@code raw = 0.5} => exactly 50 before {@code matchOffset} — deliberately
+     * no home-advantage term. {@code POSSESSION_SPREAD = 1.5} lifts a strong-vs-weak matchup's
+     * {@code raw ~ 0.575} to a realistic ~61%. The {@code [0.25, 0.75]} clamp guarantees the away
+     * share also lands in range. {@code total <= 0} is defensive and unreachable in practice (every
+     * fielded side has positive attack + defense).
+     *
+     * <p>Two independent sources of randomness, deliberately kept separate. {@code matchOffset} is
+     * drawn ONCE per match from {@code possessionRng} (see {@link #simulate}) and is what gives the
+     * final figure real match-to-match spread — it is constant across the 90 minutes, so it survives
+     * {@code statsThrough}'s averaging intact. The per-minute {@code jitter} is what makes the first
+     * few revealed minutes look believably noisy on a live panel, but averaging ~90 of them collapses
+     * its contribution to ~±0.7pp, so it cannot carry the spread on its own.
+     *
+     * <p>The {@code jitter} draw stays on {@code statsRng}, in exactly this position, so that stream's
+     * per-minute ordering is byte-identical to before the match offset existed.
      */
     private int rollPossession(TeamMatchInput home, TeamMatchInput away, double homeFf, double awayFf,
-                               WeatherEffects.Impact weather, Random statsRng) {
+                               WeatherEffects.Impact weather, double matchOffset, Random statsRng) {
         double homeControl = (home.attack() + home.defense()) * homeFf * home.tempo() * weather.homeChanceMult();
         double awayControl = (away.attack() + away.defense()) * awayFf * away.tempo() * weather.awayChanceMult();
         double total = homeControl + awayControl;
         double raw = total <= 0 ? 0.5 : homeControl / total;
-        double share = 0.5 + POSSESSION_SPREAD * (raw - 0.5);
+        double share = 0.5 + POSSESSION_SPREAD * (raw - 0.5) + matchOffset;
         double jitter = (statsRng.nextDouble() - 0.5) * 2 * POSSESSION_JITTER;
         return (int) Math.round(Math.max(0.25, Math.min(0.75, share + jitter)) * 100);
     }
@@ -806,6 +832,29 @@ public class LiveMatchEngine {
             case GK -> 0;
         };
         return positionFactor * (p.getFinishing() + 10);
+    }
+
+    /**
+     * SplitMix64's finalizer, applied to the possession stream's seed before it reaches
+     * {@link Random}. Pure and deterministic, so the engine stays a pure function of {@code cfg.seed()}.
+     *
+     * <p>Why this is needed for {@code possessionRng} and for no other stream: {@link Random}'s
+     * constructor only XOR-scrambles and masks the seed to 48 bits, so two nearby seeds start one LCG
+     * step apart, and a single step multiplies the difference by just {@code 0x5DEECE66D} (~2.5e10)
+     * against a 2^48 modulus. The top bits of the FIRST {@code nextDouble()} therefore move by only
+     * ~1.5e-4 per unit of seed difference — measured over seeds 0..149, the first draw spans a mere
+     * {@code [0.022, 0.045]} instead of {@code [0, 1)}. Every other stream here draws tens to hundreds
+     * of times per match, so that initial correlation washes out and their goldens pin the exact
+     * current behaviour. The possession offset is the one value drawn EXACTLY ONCE per match, which
+     * exposes the flaw in full: without mixing, the "uniform ±8pp" offset collapses to a near-constant
+     * −7.5pp, shifting mean home possession to ~42 and adding no match-to-match spread at all
+     * (caught by {@code possessionAveragesNearFiftyForIdenticalSquads}).
+     */
+    private static long mixSeed(long seed) {
+        long z = seed;
+        z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
+        z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
+        return z ^ (z >>> 31);
     }
 
     private static boolean isGoal(EventType t) {
