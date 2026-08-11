@@ -14,9 +14,10 @@ import { PlayerDetails } from '../squad/PlayerDetails'
 import { WatchStar } from '../players/WatchStar'
 import { MakeOfferDialog, type OfferTarget } from '../transfer/MakeOfferDialog'
 import type {
-  ClubSummary, PlayerResponse, StaffMember, StaffQuality, StaffRole, StaffRoster, TransferOffer,
+  ClubSummary, PlayerResponse, StaffMember, StaffRole, StaffRoster, TransferOffer,
 } from '../../api/types'
 import { positionShort } from '../players/positionLabels'
+import { STAFF_ATTRIBUTE_LABELS, STAFF_QUALITY_LABEL, STAFF_ROLE_LABEL, STAFF_ROLE_ORDER } from '../staff/staffLabels'
 
 // Display order for the roster: goalkeepers, then defenders, midfielders, attackers.
 const POSITION_ORDER: Record<PlayerResponse['position'], number> = { GK: 0, DEF: 1, MID: 2, ATT: 3 }
@@ -41,35 +42,12 @@ function clubLocationLine(club: ClubSummary): string | null {
   return segments.length > 0 ? segments.join(' · ') : null
 }
 
-const COMMISSION_LABEL: Record<StaffRole, string> = {
-  TECNICO: 'Técnico',
-  ASSISTENTE: 'Auxiliar Técnico',
-  PREPARADOR_FISICO: 'Preparador Físico',
-  OLHEIRO: 'Olheiro',
-  FISIOTERAPEUTA: 'Fisioterapeuta',
-}
-
-const COMMISSION_QUALITY_LABEL: Record<StaffQuality, string> = {
-  REGULAR: 'Regular',
-  BOM: 'Bom',
-  EXCELENTE: 'Excelente',
-}
-
-const COMMISSION_ATTRIBUTE_LABELS: Record<StaffRole, [string, string]> = {
-  TECNICO: ['Trabalho Tático', 'Motivação'],
-  ASSISTENTE: ['Conhecimento Tático', 'Avaliação de Jogadores'],
-  PREPARADOR_FISICO: ['Preparação Física', 'Ciência Esportiva'],
-  OLHEIRO: ['Conhecimento do Mercado', 'Negociação'],
-  FISIOTERAPEUTA: ['Prevenção de Lesões', 'Reabilitação'],
-}
-
-const COMMISSION_ORDER: StaffRole[] = [
-  'TECNICO', 'ASSISTENTE', 'PREPARADOR_FISICO', 'OLHEIRO', 'FISIOTERAPEUTA',
-]
-
 /**
- * A club's coaching staff, as seen from its profile page. Roles with no holder are skipped —
- * an empty slot is real information about a small club, but a list of five "—" rows is noise.
+ * A club's coaching staff, as seen from its profile page. Roles with no holder are skipped rather
+ * than shown as "Vaga em aberto". On your own staff page an empty slot is a call to action, but
+ * here it would assert something false: per the design spec, an unfilled slot on an AI club is a
+ * fact about what the research could find, not about the club — Avaí certainly employs a scout,
+ * we just could not source one.
  *
  * The head-coach slot is asymmetric: on a rival club it is a normal employee with a quality,
  * a wage and real attributes, but on the managed club it stands for the player, who is not a
@@ -85,7 +63,7 @@ function Commission({ roster }: { roster: StaffRoster | undefined }) {
     OLHEIRO: roster.olheiro,
     FISIOTERAPEUTA: roster.fisioterapeuta,
   })[role]
-  const filled = COMMISSION_ORDER.filter(role => holderFor(role) !== null)
+  const filled = STAFF_ROLE_ORDER.filter(role => holderFor(role) !== null)
   if (filled.length === 0) return null
 
   return (
@@ -94,7 +72,7 @@ function Commission({ roster }: { roster: StaffRoster | undefined }) {
       <Stack spacing={0.5}>
         {filled.map(role => {
           const holder = holderFor(role)!
-          const [primaryLabel, secondaryLabel] = COMMISSION_ATTRIBUTE_LABELS[role]
+          const [primaryLabel, secondaryLabel] = STAFF_ATTRIBUTE_LABELS[role]
           return (
             <Stack
               key={role}
@@ -103,11 +81,11 @@ function Commission({ roster }: { roster: StaffRoster | undefined }) {
               sx={{ alignItems: 'baseline', flexWrap: 'wrap', rowGap: 0.5 }}
             >
               <Typography variant="body2" color="text.secondary" sx={{ minWidth: 150 }}>
-                {COMMISSION_LABEL[role]}
+                {STAFF_ROLE_LABEL[role]}
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>{holder.name}</Typography>
               {holder.quality && (
-                <Chip size="small" label={COMMISSION_QUALITY_LABEL[holder.quality]} />
+                <Chip size="small" label={STAFF_QUALITY_LABEL[holder.quality]} />
               )}
               {holder.wage !== null && (
                 <Typography variant="body2" color="text.secondary">{formatBRL(holder.wage)}/mês</Typography>
