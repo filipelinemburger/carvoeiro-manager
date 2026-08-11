@@ -8,6 +8,7 @@ import { formatDatePtBR } from '../../utils/date'
 import type { AdvanceResponse, Mentality, Pressing, Marking } from '../../api/types'
 import { SEVERITY_LABEL } from '../squad/injurySeverity'
 import { MENTALITY_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
+import { STAFF_ROLE_LABEL } from '../staff/staffLabels'
 import { PlayerRatingsList } from './PlayerRatingsList'
 import { WeatherChip, type WeatherCondition } from '../../components/WeatherChip'
 
@@ -433,7 +434,7 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
                   {p.stadiumName ? ` · ${p.stadiumName}` : ''}
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
-                  por {p.assistantName}, Auxiliar Técnico
+                  por {p.assistantName}, {STAFF_ROLE_LABEL.ASSISTENTE}
                 </Typography>
 
                 <WeatherChip condition={(p.weather ?? null) as WeatherCondition | null} temperatureC={p.temperatureC ?? null} />

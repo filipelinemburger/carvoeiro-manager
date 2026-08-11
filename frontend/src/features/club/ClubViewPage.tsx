@@ -56,13 +56,16 @@ function clubLocationLine(club: ClubSummary): string | null {
  */
 function Commission({ roster }: { roster: StaffRoster | undefined }) {
   if (!roster) return null
+  // `?? null` is not redundant: the object literal is typed as total, so TypeScript cannot see
+  // that a payload missing a key yields undefined — which would survive the `!== null` filter
+  // below and throw on holder.name, blanking the whole club page instead of one row.
   const holderFor = (role: StaffRole): StaffMember | null => ({
     TECNICO: roster.tecnico,
     ASSISTENTE: roster.assistente,
     PREPARADOR_FISICO: roster.preparadorFisico,
     OLHEIRO: roster.olheiro,
     FISIOTERAPEUTA: roster.fisioterapeuta,
-  })[role]
+  })[role] ?? null
   const filled = STAFF_ROLE_ORDER.filter(role => holderFor(role) !== null)
   if (filled.length === 0) return null
 
@@ -87,7 +90,9 @@ function Commission({ roster }: { roster: StaffRoster | undefined }) {
               {holder.quality && (
                 <Chip size="small" label={STAFF_QUALITY_LABEL[holder.quality]} />
               )}
-              {holder.wage !== null && (
+              {/* != null, not !== null: an absent field would otherwise reach formatBRL and
+                  render "R$ NaN/mês". */}
+              {holder.wage != null && (
                 <Typography variant="body2" color="text.secondary">{formatBRL(holder.wage)}/mês</Typography>
               )}
               {holder.quality && (

@@ -30,6 +30,6 @@ export const STAFF_ATTRIBUTE_LABELS: Record<StaffRole, [string, string]> = {
 }
 
 /** Head coach first: the most recognisable member of a comissão técnica leads the listing. */
-export const STAFF_ROLE_ORDER: StaffRole[] = [
+export const STAFF_ROLE_ORDER: readonly StaffRole[] = [
   'TECNICO', 'ASSISTENTE', 'PREPARADOR_FISICO', 'OLHEIRO', 'FISIOTERAPEUTA',
 ]

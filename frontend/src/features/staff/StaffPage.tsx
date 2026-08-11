@@ -92,7 +92,7 @@ export function StaffPage() {
                         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5 }}>
                           <Typography sx={{ fontWeight: 600 }}>{holder.name}</Typography>
                           {holder.quality && <Chip size="small" label={STAFF_QUALITY_LABEL[holder.quality]} />}
-                          {holder.wage !== null && (
+                          {holder.wage != null && (
                             <Typography variant="body2" color="text.secondary">{formatBRL(holder.wage)}/mês</Typography>
                           )}
                         </Stack>

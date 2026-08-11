@@ -294,6 +294,10 @@ describe('ClubViewPage', () => {
     await waitFor(() => screen.getByText('Comissão Técnica'))
     expect(screen.getByText('Cléber Xavier')).toBeInTheDocument()
     expect(screen.getByText('Léo Cupertino')).toBeInTheDocument()
+    // The filled roles ARE labelled. Without this, the assertion below would also pass if role
+    // labels were never rendered at all, and the commission would degrade to a nameless soup.
+    expect(screen.getByText('Técnico')).toBeInTheDocument()
+    expect(screen.getByText('Preparador Físico')).toBeInTheDocument()
     // An unresearched slot is omitted, not rendered as an empty row.
     expect(screen.queryByText('Olheiro')).not.toBeInTheDocument()
   })
@@ -328,5 +332,28 @@ describe('ClubViewPage', () => {
     expect(screen.queryByText(/\/mês/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Trabalho Tático/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Motivação/)).not.toBeInTheDocument()
+  })
+
+  it('hides quality and wage only for the null slot, not for the whole managed club', async () => {
+    vi.mocked(getSquad).mockResolvedValue({
+      players: [player({ id: 'mp1', name: 'Meu Jogador' })], primaryColor: '#f7d417', secondaryColor: '#111111',
+    })
+    // The two variables that the other tests never vary independently: this is the managed club
+    // (null head coach) AND it employs a real assistente. An implementation that keyed the guards
+    // off isManagedClub instead of off the null fields passes every other test in this file while
+    // silently stripping the wage and attributes from the manager's own hired staff.
+    mockGetStaffRoster.mockResolvedValue({
+      tecnico: { name: 'Você', quality: null, wage: null, primaryAttribute: 0, secondaryAttribute: 0 },
+      assistente: { name: 'Auxiliar Real', quality: 'BOM', wage: 45000, primaryAttribute: 14, secondaryAttribute: 13 },
+      preparadorFisico: null, olheiro: null, fisioterapeuta: null,
+    })
+    renderPage(MANAGED_CLUB_ID)
+
+    await waitFor(() => screen.getByText('Comissão Técnica'))
+    expect(screen.getByText('Auxiliar Real')).toBeInTheDocument()
+    expect(screen.getByText(/45\.000/)).toBeInTheDocument()
+    expect(screen.getByText('Conhecimento Tático: 14')).toBeInTheDocument()
+    // …while the head coach beside them still shows nothing but a name.
+    expect(screen.queryByText(/Trabalho Tático/)).not.toBeInTheDocument()
   })
 })

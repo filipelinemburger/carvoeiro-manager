@@ -122,7 +122,14 @@ describe('StaffPage', () => {
     renderPage()
 
     await waitFor(() => screen.getByText('Filipe Linemburger'))
-    expect(within(screen.getByTestId('staff-role-TECNICO')).queryByRole('button')).not.toBeInTheDocument()
+    const card = within(screen.getByTestId('staff-role-TECNICO'))
+    expect(card.queryByRole('button')).not.toBeInTheDocument()
+    // The null guards, not just the name. The API sends quality/wage as null and both attributes
+    // as 0 for this slot, so dropping either guard renders "R$ 0,00/mês" (Intl formats null as
+    // zero) or grey chips reading "Trabalho Tático: 0" — a placeholder shown as a real rating.
+    expect(card.queryByText(/\/mês/)).not.toBeInTheDocument()
+    expect(card.queryByText(/Trabalho Tático/)).not.toBeInTheDocument()
+    expect(card.queryByText(/Motivação/)).not.toBeInTheDocument()
   })
 
   it('marks an employed candidate with the club they would be poached from', async () => {
