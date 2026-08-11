@@ -114,6 +114,11 @@ public class LiveMatchEngine {
         double homeInjuryRisk = resolveInjuryRiskMultiplier(home, cfg);
         double awayInjuryRisk = resolveInjuryRiskMultiplier(away, cfg);
 
+        // Resolved once per side for the same reason as the injury multiplier: the club cannot
+        // change mid-match, and strength() is recomputed on every substitution and red card.
+        double homeCoachMult = coachMultiplierFor(home);
+        double awayCoachMult = coachMultiplierFor(away);
+
         // Initialise each side's active profile from config; tactics changes update these mid-match.
         home.currentProfile = cfg.homeProfile();
         away.currentProfile = cfg.awayProfile();
@@ -127,9 +132,9 @@ public class LiveMatchEngine {
         List<TimedInjury> injuries = new ArrayList<>();
         List<MinuteStats> minuteStats = new ArrayList<>();
 
-        TeamMatchInput homeInput = strength(home, home.currentProfile, cfg);
+        TeamMatchInput homeInput = strength(home, home.currentProfile, cfg, homeCoachMult);
         home.dirty = false;
-        TeamMatchInput awayInput = strength(away, away.currentProfile, cfg);
+        TeamMatchInput awayInput = strength(away, away.currentProfile, cfg, awayCoachMult);
         away.dirty = false;
 
         // Initial state at kickoff, from the starting game styles. Recomputed below whenever
@@ -163,8 +168,8 @@ public class LiveMatchEngine {
                 maybeAiSubstitution(minute, aiSide, cfg, events);
             }
             boolean inputsRebuilt = home.dirty || away.dirty;
-            if (home.dirty) { homeInput = strength(home, home.currentProfile, cfg); home.dirty = false; }
-            if (away.dirty) { awayInput = strength(away, away.currentProfile, cfg); away.dirty = false; }
+            if (home.dirty) { homeInput = strength(home, home.currentProfile, cfg, homeCoachMult); home.dirty = false; }
+            if (away.dirty) { awayInput = strength(away, away.currentProfile, cfg, awayCoachMult); away.dirty = false; }
             // Weather itself (cfg.weather()) never changes — only the response to it, which is a
             // pure, RNG-free function of the current homeInput/awayInput (specifically each side's
             // live gameStyle). Recomputing here, and only here, means a tactics change that flips a
@@ -418,7 +423,8 @@ public class LiveMatchEngine {
 
     // ---- strength (recomputed on change), hobble x0.5, red-card = fewer players ----
 
-    private TeamMatchInput strength(Side side, TacticalProfile profile, LiveMatchConfig cfg) {
+    private TeamMatchInput strength(Side side, TacticalProfile profile, LiveMatchConfig cfg,
+                                    double coachMultiplier) {
         List<Player> xi = side.onPitch.stream().map(side.all::get).toList();
         Map<UUID, Double> mult = new HashMap<>();
         for (UUID id : side.onPitch) {
@@ -427,7 +433,7 @@ public class LiveMatchEngine {
             if (Boolean.TRUE.equals(side.hobbled.get(id))) m *= HOBBLE_MULT;
             mult.put(id, m);
         }
-        return teamStrengthCalculator.compute(xi, profile, mult);
+        return teamStrengthCalculator.compute(xi, profile, mult).withCoachMultiplier(coachMultiplier);
     }
 
     // ---- cards, goals, injuries, attribution ----
@@ -713,6 +719,11 @@ public class LiveMatchEngine {
         boolean sideManaged = side.home != Boolean.TRUE.equals(cfg.aiHome());
         UUID clubId = side.all.values().iterator().next().getClubId();
         return staffEffectsService.injuryRiskMultiplierFor(clubId, sideManaged);
+    }
+
+    private double coachMultiplierFor(Side side) {
+        UUID clubId = side.all.values().iterator().next().getClubId();
+        return staffEffectsService.coachStrengthMultiplierFor(clubId);
     }
 
     private void maybeInjury(int minute, Side side, LiveMatchConfig cfg, double riskMultiplier, Random injuryRng,

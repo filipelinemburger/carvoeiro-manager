@@ -46,7 +46,11 @@ public final class AiSubstitutionBrain {
             List<Player> benchAvailable,
             Map<UUID, Integer> kickoffFitness) {
 
-        if (benchAvailable.isEmpty() || totalSubsMade >= MAX_SUBS) return Optional.empty();
+        // Extra time grants a sixth substitution -- to the AI as well as to the human, who gets
+        // it via LiveMatchService.maxSubsAt. Leaving this at a flat 5 handed the managed club a
+        // free advantage in every knockout tie that went past 90.
+        int maxSubs = minute > MatchMath.MINUTES ? MAX_SUBS + 1 : MAX_SUBS;
+        if (benchAvailable.isEmpty() || totalSubsMade >= maxSubs) return Optional.empty();
 
         // 1. Injury: the first hobbled on-pitch player (pitch order) that has positional cover.
         for (Player out : onPitch) {

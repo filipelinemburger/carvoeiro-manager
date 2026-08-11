@@ -32,7 +32,7 @@ public class NewsItem {
     @Column(name = "event_date")
     private LocalDate eventDate;
 
-    @Column(name = "type", nullable = false, length = 16)
+    @Column(name = "type", nullable = false, length = 32)
     private String type;
 
     @Column(name = "payload", nullable = false, columnDefinition = "TEXT")

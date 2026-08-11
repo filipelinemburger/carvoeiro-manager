@@ -38,6 +38,10 @@ class LiveMatchEngineTest {
     {
         Mockito.when(staffEffectsService.injuryRiskMultiplierFor(
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(1.0);
+        // Neutral coach multiplier: this mock has no stub without it, and Mockito's unstubbed
+        // double default (0.0) would zero out attack/defense, breaking every golden signature below.
+        Mockito.when(staffEffectsService.coachStrengthMultiplierFor(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(1.0);
     }
 
     /** Reuse the same factory pattern as TeamStrengthCalculatorTest. */

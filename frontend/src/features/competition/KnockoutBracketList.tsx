@@ -30,7 +30,9 @@ function aggregate(tie: KnockoutTie): { higher: number; lower: number } | null {
 
 /** One seed's name within a tie card, bold when it won, marked with data-managed for the club the user manages. */
 function TieClubName({ clubId, clubName, managedClubId, isWinner }: {
-  clubId: string; clubName: string; managedClubId: string; isWinner: boolean
+  // clubName is nullable on the wire: KnockoutTieService sends null when the club row cannot be
+  // resolved. Fall back to a placeholder rather than rendering an empty line.
+  clubId: string; clubName: string | null; managedClubId: string; isWinner: boolean
 }) {
   return (
     <Typography
@@ -38,7 +40,7 @@ function TieClubName({ clubId, clubName, managedClubId, isWinner }: {
       data-managed={String(clubId === managedClubId)}
       sx={{ fontWeight: isWinner ? 700 : 400 }}
     >
-      {clubName}
+      {clubName ?? '—'}
     </Typography>
   )
 }
@@ -58,6 +60,13 @@ export function KnockoutBracketList({ phaseName, ties, managedClubId }: Props) {
       <Typography variant="h6" component="h3" sx={{ fontWeight: 700 }}>
         {phaseName}
       </Typography>
+      {/* A knockout phase's ties only exist once the previous phase finishes, so a reached-but-
+          undrawn round would otherwise render as a bare heading over whitespace. */}
+      {orderedTies.length === 0 && (
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          Confrontos ainda não definidos.
+        </Typography>
+      )}
       {orderedTies.map(tie => {
         const agg = aggregate(tie)
         const hasPenalties = tie.penaltyHome != null && tie.penaltyAway != null

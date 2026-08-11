@@ -5,7 +5,6 @@ import br.com.carvoeiromanager.seed.SeedLoader;
 import br.com.carvoeiromanager.seed.SeedStaff;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -61,7 +60,7 @@ public class StaffCandidateGenerator {
             SeedStaff pro = available.get(i);
             double average = (pro.primaryAttribute() + pro.secondaryAttribute()) / 2.0;
             StaffQuality quality = StaffQuality.forAverage(average);
-            candidates.add(new StaffCandidate(pro.name(), quality, wageFor(quality),
+            candidates.add(new StaffCandidate(pro.name(), quality, quality.monthlyWage(),
                     pro.primaryAttribute(), pro.secondaryAttribute()));
         }
 
@@ -98,7 +97,7 @@ public class StaffCandidateGenerator {
             StaffQuality quality = tiers[rng.nextInt(tiers.length)];
             int primary = rollAttribute(quality, rng);
             int secondary = rollAttribute(quality, rng);
-            candidates.add(new StaffCandidate(name, quality, wageFor(quality), primary, secondary));
+            candidates.add(new StaffCandidate(name, quality, quality.monthlyWage(), primary, secondary));
         }
         return candidates;
     }
@@ -109,14 +108,6 @@ public class StaffCandidateGenerator {
             case REGULAR -> 8 + rng.nextInt(5);
             case BOM -> 12 + rng.nextInt(5);
             case EXCELENTE -> 15 + rng.nextInt(5);
-        };
-    }
-
-    private BigDecimal wageFor(StaffQuality quality) {
-        return switch (quality) {
-            case REGULAR -> new BigDecimal("20000.00");
-            case BOM -> new BigDecimal("45000.00");
-            case EXCELENTE -> new BigDecimal("80000.00");
         };
     }
 }

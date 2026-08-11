@@ -22,11 +22,16 @@ import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.season.SeasonCalendarGenerator;
 import br.com.carvoeiromanager.seed.SeedCareer;
 import br.com.carvoeiromanager.seed.SeedClub;
+import br.com.carvoeiromanager.seed.SeedClubStaff;
 import br.com.carvoeiromanager.seed.SeedCompetition;
 import br.com.carvoeiromanager.seed.SeedLoader;
 import br.com.carvoeiromanager.seed.SeedPhase;
 import br.com.carvoeiromanager.seed.SeedPhaseValidator;
 import br.com.carvoeiromanager.seed.SeedPlayer;
+import br.com.carvoeiromanager.seed.SeedStaff;
+import br.com.carvoeiromanager.staff.Staff;
+import br.com.carvoeiromanager.staff.StaffQuality;
+import br.com.carvoeiromanager.staff.StaffRole;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.context.annotation.Lazy;
@@ -188,6 +193,8 @@ public class SaveGameService {
             clubRepository.save(club);
         }
 
+        seedClubStaff(saveGame.getId(), managedClubId, clubIdByShortName);
+
         // Stagger contract lengths (1..4) deterministically so deals don't all expire together.
         Random contractRng = new Random(saveGame.getId().getMostSignificantBits());
         List<Player> allPlayers = playerRepository.findBySaveGameId(saveGame.getId()).stream()
@@ -257,7 +264,7 @@ public class SaveGameService {
 
         // 4. Route fixture and season_event creation through SeasonCalendarGenerator.
         //    Memberships are persisted above so the generator will find them.
-        seasonCalendarGenerator.generate(saveGame.getId(), seasonYear, competitions);
+        seasonCalendarGenerator.generate(saveGame.getId(), seasonYear, competitions, managedClubId);
 
         // 5. Set managed club, current date to season start, and save the SaveGame.
         LocalDate seasonStart = LocalDate.of(seasonYear, 1, 15);
@@ -347,6 +354,35 @@ public class SaveGameService {
         }
         if (seedPlayer.roles() != null && !seedPlayer.roles().isEmpty()) {
             player.setFamiliarRoles(seedPlayer.roles());
+        }
+    }
+
+    /**
+     * Persists each club's researched coaching staff. The managed club never receives a TECNICO
+     * row — that job is the player's, and {@code StaffService.getRoster} synthesises the slot from
+     * the save's manager name instead.
+     *
+     * <p>An unknown shortName fails the whole career creation rather than being skipped: a career
+     * that silently launched without a club's commission would be far harder to notice than a
+     * failure here.
+     */
+    private void seedClubStaff(UUID saveGameId, UUID managedClubId, Map<String, UUID> clubIdByShortName) {
+        for (SeedClubStaff entry : seedLoader.loadClubStaff()) {
+            UUID clubId = clubIdByShortName.get(entry.clubShortName());
+            if (clubId == null) {
+                throw new IllegalStateException(
+                        "club-staff.json references unknown club shortName: " + entry.clubShortName());
+            }
+            for (SeedStaff member : entry.staff()) {
+                if (member.role() == StaffRole.TECNICO && clubId.equals(managedClubId)) {
+                    continue;
+                }
+                double average = (member.primaryAttribute() + member.secondaryAttribute()) / 2.0;
+                StaffQuality quality = StaffQuality.forAverage(average);
+                entityManager.persist(Staff.create(saveGameId, clubId, member.role(), quality,
+                        member.name(), quality.monthlyWage(),
+                        member.primaryAttribute(), member.secondaryAttribute()));
+            }
         }
     }
 

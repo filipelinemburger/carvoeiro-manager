@@ -479,7 +479,10 @@ public class LiveMatchService {
                 fixture.getPenaltyHome(), fixture.getPenaltyAway());
         Set<UUID> userPlayedIds = allPlayed.stream().map(Player::getId).collect(Collectors.toSet());
 
-        List<PlayerRating> playerRatings = managedRatings(lm, cfg, timeline, MINUTES);
+        // Rate over the whole match, not just the first 90 -- otherwise extra-time goals and
+        // cards never reach the final grades, while the in-progress ratings (which use the
+        // true committed minute) already showed them.
+        List<PlayerRating> playerRatings = managedRatings(lm, cfg, timeline, timeline.finalMinute());
         Map<UUID, PrecomputedFixture> precomputedOthers = deserializeParallelScores(lm.getParallelScores());
         AdvanceResponse response = seasonAdvanceService.completeUserMatch(
                 save, userResult, summary, fixture.getId(), userPlayedIds, playerRatings, precomputedOthers);

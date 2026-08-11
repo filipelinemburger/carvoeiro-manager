@@ -5,6 +5,8 @@ import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.common.PageResponse;
+import br.com.carvoeiromanager.staff.StaffRepository;
+import br.com.carvoeiromanager.staff.StaffRole;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,16 +33,28 @@ class NewsFeedIT {
     @Autowired UserRepository userRepository;
     @Autowired NewsItemRepository newsItemRepository;
     @Autowired NewsController newsController;
+    @Autowired StaffRepository staffRepository;
     @Autowired tools.jackson.databind.ObjectMapper objectMapper;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
+        UUID clubId() { return save.managedClubId(); }
     }
 
     private Career createCareer() {
         User user = User.create("news_" + UUID.randomUUID(), "hash");
         userRepository.save(user);
-        return new Career(user.getId(), saveGameService.createCareer(user.getId()));
+        Career career = new Career(user.getId(), saveGameService.createCareer(user.getId()));
+        // The managed club now starts with a researched ASSISTENTE seeded at career creation
+        // (Task 4). MatchPreviewService.maybePersistPreview is self-guarding on an ASSISTENTE
+        // being hired, and every advance calls it unconditionally — so with the seeded row
+        // present, most advances also write an extra MATCH_PREVIEW news item (not filtered by
+        // nonWatchlistItems, which only excludes WATCHLIST). These tests are about the
+        // one-item-per-advance invariant, not the assistant's opponent-analysis feature (that is
+        // MatchPreviewServiceIT's job), so remove the seeded row to restore that premise.
+        staffRepository.findByClubIdAndRole(career.clubId(), StaffRole.ASSISTENTE)
+                .ifPresent(staffRepository::delete);
+        return career;
     }
 
     /**
