@@ -6,15 +6,22 @@ import java.util.UUID;
 
 /**
  * The single place that turns a hired {@link Staff} row into a numeric effect. Every consumer
- * (training, injury risk, wage-demand discounts, sponsorship) calls through here instead of
- * touching {@link StaffRepository} directly. Non-managed (AI-controlled) clubs always receive the
- * fixed baseline attribute average of 14.0 (equivalent to the old flat {@link StaffQuality#BOM})
- * — mirrors {@code TrainingService.heuristicFocusFor}'s no-roster AI-parity shape.
+ * (training, injury risk, wage-demand discounts, sponsorship, match strength) calls through here
+ * instead of touching {@link StaffRepository} directly.
+ *
+ * <p>Every club is read from its real rows. What differs is the fallback when a role is unfilled:
+ * the managed club gets a neutral effect, because there an empty slot is a fact the player can act
+ * on by hiring; an AI club gets {@link #AI_BASELINE_AVERAGE}, because there an empty slot only
+ * means the seed research found nobody — not that the club employs nobody (design §3.2a).
  */
 @Service
 public class StaffEffectsService {
 
-    /** Fixed attribute average granted to every AI-controlled club (equivalent to the old flat BOM). */
+    /**
+     * Floor for an AI club whose role the research could not fill. Equivalent to the old flat
+     * {@link StaffQuality#BOM}, so an unresearched AI club behaves exactly as it did before club
+     * staff existed. Never applied to the managed club.
+     */
     private static final double AI_BASELINE_AVERAGE = 14.0;
 
     private final StaffRepository staffRepository;
@@ -47,16 +54,13 @@ public class StaffEffectsService {
     }
 
     /**
-     * The effective attribute average for a role: the managed club's hired staff (or {@code null}
-     * for a neutral effect when the role is unfilled), or the fixed AI baseline for every other club.
+     * The effective attribute average for a role: the club's real hired staff, or — when the slot
+     * is empty — {@code null} for the managed club (neutral effect) and the baseline for an AI one.
      */
     private Double averageFor(UUID clubId, boolean managed, StaffRole role) {
-        if (!managed) {
-            return AI_BASELINE_AVERAGE;
-        }
         return staffRepository.findByClubIdAndRole(clubId, role)
                 .map(Staff::attributeAverage)
-                .orElse(null);
+                .orElseGet(() -> managed ? null : AI_BASELINE_AVERAGE);
     }
 
     /** Linear map anchored at (10, atRegular) and (17, atExcelente) — today's tier endpoints. */

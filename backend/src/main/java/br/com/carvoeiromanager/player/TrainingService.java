@@ -15,9 +15,11 @@ import java.time.temporal.IsoFields;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Weekly, manager-directed training. Once per in-game ISO week ({@link #processWeek}, guarded by
@@ -83,9 +85,6 @@ public class TrainingService {
         final UUID managedClubId = save.getManagedClubId();
         // Seeded per (save, week) and consumed in sorted-player order: reproducible rolls.
         Random rng = new Random(saveGameId.getMostSignificantBits() ^ week);
-        // Both coach bonuses are constant for the whole week — resolve once, not per player.
-        int managedBonus = staffEffectsService.trainingBonusFor(managedClubId, true);
-        int aiBonus = staffEffectsService.trainingBonusFor(managedClubId, false);
 
         Optional<Staff> physio = staffRepository
                 .findByClubIdAndRole(managedClubId, StaffRole.PREPARADOR_FISICO);
@@ -103,6 +102,15 @@ public class TrainingService {
                 .sorted(Comparator.comparing(Player::getId))
                 .toList();
 
+        // One lookup per club per week, not one per player. A single league-wide "AI bonus" no
+        // longer describes anything now that each club has its own preparador físico.
+        Map<UUID, Integer> trainingBonusByClub = players.stream()
+                .map(Player::getClubId)
+                .distinct()
+                .collect(Collectors.toMap(
+                        clubId -> clubId,
+                        clubId -> staffEffectsService.trainingBonusFor(clubId, clubId.equals(managedClubId))));
+
         for (Player p : players) {
             boolean managed = p.getClubId().equals(managedClubId);
             Attribute focus = managed ? p.getTrainingFocus() : heuristicFocusFor(p.getPosition());
@@ -110,7 +118,7 @@ public class TrainingService {
             if (focus == null) {
                 continue; // "not training" leaves the player untouched
             }
-            int bonus = intensityBonus(intensity) + (managed ? managedBonus : aiBonus);
+            int bonus = intensityBonus(intensity) + trainingBonusByClub.getOrDefault(p.getClubId(), 0);
 
             int before = anchorValue(p, focus);
             int after = before;

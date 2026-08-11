@@ -11,7 +11,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class StaffEffectsServiceTest {
@@ -79,12 +80,48 @@ class StaffEffectsServiceTest {
     }
 
     @Test
-    void aiClubsUseTheFixedBaselineAverageFourteen() {
+    void aiClubsWithAnEmptySlotFallBackToTheFixedBaselineAverageFourteen() {
+        // The row is still read — an AI club is no longer skipped outright — it is just empty.
+        when(staffRepository.findByClubIdAndRole(eq(CLUB_ID), any())).thenReturn(Optional.empty());
+
         assertThat(service.sponsorshipMultiplierFor(CLUB_ID, false)).isCloseTo(1.0 + 0.10 * 4 / 7.0, within(1e-9));
         assertThat(service.trainingBonusFor(CLUB_ID, false)).isEqualTo(1);
         assertThat(service.injuryRiskMultiplierFor(CLUB_ID, false)).isCloseTo(1.0 - 0.30 * 4 / 7.0, within(1e-9));
         assertThat(service.wageDemandMultiplierFor(CLUB_ID, false)).isCloseTo(1.0 - 0.10 * 4 / 7.0, within(1e-9));
-        verifyNoInteractions(staffRepository);
+        verify(staffRepository, atLeastOnce()).findByClubIdAndRole(eq(CLUB_ID), any());
+    }
+
+    @Test
+    void anAiClubWithRealStaffUsesThoseAttributesInsteadOfTheBaseline() {
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.FISIOTERAPEUTA))
+                .thenReturn(Optional.of(staffWith(StaffRole.FISIOTERAPEUTA, 18, 18)));
+
+        // The whole point of the slice: a researched physio beats the flat 14.0 baseline (~0.886).
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, false)).isLessThan(0.80);
+    }
+
+    @Test
+    void anAiClubWithAnEmptySlotFallsBackToTheBaseline() {
+        when(staffRepository.findByClubIdAndRole(any(), any())).thenReturn(Optional.empty());
+
+        // An empty slot on an AI club records a research gap, not a club without a physio —
+        // so it must behave exactly as it did before this slice (design §3.2a). Pinned to the
+        // exact double the production lerp() has always produced for average 14.0 (one ULP off
+        // the brief's "1.0 - 0.3 * (4.0/7.0)" due to floating-point operation ordering).
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, false)).isEqualTo(0.8285714285714285);
+        assertThat(service.trainingBonusFor(CLUB_ID, false)).isEqualTo(1);
+    }
+
+    @Test
+    void theManagedClubWithAnEmptySlotStaysNeutral() {
+        when(staffRepository.findByClubIdAndRole(any(), any())).thenReturn(Optional.empty());
+
+        // At your own club an empty slot IS a fact — you have not hired anyone — and hiring is
+        // the mechanic that fixes it. No floor here.
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
+        assertThat(service.trainingBonusFor(CLUB_ID, true)).isZero();
+        assertThat(service.wageDemandMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
+        assertThat(service.sponsorshipMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
     }
 
     @Test
