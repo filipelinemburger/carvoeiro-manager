@@ -25,15 +25,13 @@ export function MatchScoreboard({ state, onOwnClick, onOpponentClick }: {
   const clockEnd = state.status === 'EXTRA_TIME' || state.minute > 90 ? 120 : 90
 
   const homeIsOwn = state.managedIsHome
-  // No subs remain meaningful once the match is over — hide the caption rather than show a
-  // stale count. The own card is also made non-interactive below (disabled prop) — before this
-  // branch both entry points (Substituir/Tática) were gated on !fullTime; a still-clickable own
-  // card at full time let a manager queue a substitution that then failed server-side. The
-  // opponent card stays clickable post-match — its scouting panel is read-only and still useful.
-  // Only the own card is captioned — the opponent card carries no 'Adversário' label any more,
-  // so during play `Substituições (N)` is what tells the two apart (plus the kit colours and the
-  // score). At full time the caption is dropped and both cards render bare.
-  const ownCaption = fullTime ? undefined : `Substituições (${state.subsRemaining})`
+  // The own card is made non-interactive at full time (disabled prop) — before this branch both
+  // entry points (Substituir/Tática) were gated on !fullTime; a still-clickable own card at full
+  // time let a manager queue a substitution that then failed server-side. The opponent card stays
+  // clickable post-match — its scouting panel is read-only and still useful.
+  //
+  // Both cards render bare, name only: the kit colours and the aria-labels tell own from opponent.
+  // The subs-remaining count lives in the substitutions dialog, which is where it can be acted on.
 
   // Guarded through safeKit before the RGB-distance check, same guard cardColors applies
   // internally — an unguarded null/non-hex primary would otherwise feed NaN into kitsClash.
@@ -45,7 +43,6 @@ export function MatchScoreboard({ state, onOwnClick, onOpponentClick }: {
         <ClubCard
           shortName={state.homeClubShortName}
           colors={state.homeClubColors}
-          caption={homeIsOwn ? ownCaption : undefined}
           isOwn={homeIsOwn}
           onClick={homeIsOwn ? onOwnClick : onOpponentClick}
           disabled={homeIsOwn && fullTime}
@@ -62,7 +59,6 @@ export function MatchScoreboard({ state, onOwnClick, onOpponentClick }: {
         <ClubCard
           shortName={state.awayClubShortName}
           colors={state.awayClubColors}
-          caption={homeIsOwn ? undefined : ownCaption}
           isOwn={!homeIsOwn}
           onClick={homeIsOwn ? onOpponentClick : onOwnClick}
           clash={clash}

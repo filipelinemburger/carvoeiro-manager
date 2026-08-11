@@ -14,10 +14,9 @@ import type { LiveKitColors } from '../../api/types'
  * — `MatchScoreboard` sets it on the own-club card at full time, since neither of its entry
  * points (Substituir/Tática) is meaningful once the match is over.
  */
-export function ClubCard({ shortName, colors, caption, isOwn, onClick, clash = false, disabled = false }: {
+export function ClubCard({ shortName, colors, isOwn, onClick, clash = false, disabled = false }: {
   shortName: string
   colors: LiveKitColors | null
-  caption?: string
   isOwn: boolean
   onClick: () => void
   clash?: boolean
@@ -50,9 +49,6 @@ export function ClubCard({ shortName, colors, caption, isOwn, onClick, clash = f
       }}
     >
       <Typography sx={{ fontWeight: 700, color: fg, lineHeight: 1.2 }}>{shortName}</Typography>
-      {caption && (
-        <Typography variant="caption" sx={{ color: fg, lineHeight: 1.2 }}>{caption}</Typography>
-      )}
     </ButtonBase>
   )
 }

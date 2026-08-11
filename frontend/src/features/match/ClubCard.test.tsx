@@ -48,18 +48,18 @@ describe('ClubCard', () => {
     expect(card).toHaveStyle({ backgroundColor: 'rgb(91, 102, 112)', color: 'rgb(255, 255, 255)' })
   })
 
-  it('renders the short name and the caption', () => {
+  it('renders the short name alone — the card carries no caption under it', () => {
     render(
       <ClubCard
         shortName="Criciúma"
         colors={{ primary: '#f7d417', secondary: '#111111' }}
-        caption="Substituições (5)"
         isOwn
         onClick={() => {}}
       />,
     )
+    const card = screen.getByTestId('club-card-own')
     expect(screen.getByText('Criciúma')).toBeInTheDocument()
-    expect(screen.getByText('Substituições (5)')).toBeInTheDocument()
+    expect(card).toHaveTextContent(/^Criciúma$/)
   })
 
   it('fires onClick when clicked, and is reachable by its aria-label and data-testid', () => {

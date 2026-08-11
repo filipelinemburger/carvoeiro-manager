@@ -269,19 +269,21 @@ describe('LiveMatchPage', () => {
     expect(info.compareDocumentPosition(tablist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('leaves the opponent card uncaptioned, keeping "Substituições" on the own card as the distinguishing mark', async () => {
+  it('renders both scoreboard cards as bare club names, told apart by their accessible names', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue(STATE as never)
     renderPage()
-    // Scoped to the two cards on purpose: this test is about the scoreboard caption only, so it
-    // must not be satisfied — or broken — by the word appearing anywhere else on the page.
-    // (It used to head an Atuações column; those headings are the clubs' short names now.)
+    // Scoped to the two cards on purpose: this test is about the scoreboard cards only, so it
+    // must not be satisfied — or broken — by these words appearing anywhere else on the page.
+    // (Substituições still heads the pending-subs section inside the actions dialog.)
     const opponent = await screen.findByTestId('club-card-opponent')
+    const own = screen.getByTestId('club-card-own')
     expect(within(opponent).queryByText(/advers/i)).not.toBeInTheDocument()
-    // The card is still identified as the opponent's — by its testid and its accessible name.
+    // Neither card carries a caption under the club name — the count lives in the subs dialog.
+    expect(own).toHaveTextContent(/^Criciúma$/)
+    expect(opponent).toHaveTextContent(/^Rival$/)
+    // The cards are still identified as own/opponent — by their testids and accessible names.
     expect(opponent).toHaveAccessibleName('Escalação do adversário — Rival')
-    expect(within(opponent).getByText('Rival')).toBeInTheDocument()
-    // …and the own card keeps the caption that now tells the two apart during play.
-    expect(within(screen.getByTestId('club-card-own')).getByText('Substituições (5)')).toBeInTheDocument()
+    expect(own).toHaveAccessibleName('Ações do meu time — Criciúma')
   })
 
   it('at full time, Ver resumo finishes and navigates to the news', async () => {
