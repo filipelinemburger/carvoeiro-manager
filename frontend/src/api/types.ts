@@ -739,18 +739,20 @@ export type PlayerAlert = {
   detail: string | null
 }
 
-export type StaffRole = 'ASSISTENTE' | 'PREPARADOR_FISICO' | 'OLHEIRO' | 'FISIOTERAPEUTA'
+export type StaffRole = 'TECNICO' | 'ASSISTENTE' | 'PREPARADOR_FISICO' | 'OLHEIRO' | 'FISIOTERAPEUTA'
 export type StaffQuality = 'REGULAR' | 'BOM' | 'EXCELENTE'
 
 export type StaffMember = {
   name: string
-  quality: StaffQuality
-  wage: number
+  /** Null only for the managed club's head-coach slot — that entry is the player, not a hire. */
+  quality: StaffQuality | null
+  wage: number | null
   primaryAttribute: number
   secondaryAttribute: number
 }
 
 export type StaffRoster = {
+  tecnico: StaffMember | null
   assistente: StaffMember | null
   preparadorFisico: StaffMember | null
   olheiro: StaffMember | null
@@ -764,6 +766,8 @@ export type StaffCandidate = {
   wage: number
   primaryAttribute: number
   secondaryAttribute: number
+  /** Set when this candidate would have to be poached from another club. */
+  currentClubName: string | null
 }
 
 export type MakeOfferRequest = { playerId: string; amount: number; wage: number; contractYears: number }

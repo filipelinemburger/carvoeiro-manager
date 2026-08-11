@@ -12,6 +12,7 @@ import { formatBRL } from '../../lib/money'
 import type { StaffRole, StaffMember, StaffQuality } from '../../api/types'
 
 const ROLE_LABEL: Record<StaffRole, string> = {
+  TECNICO: 'Técnico',
   ASSISTENTE: 'Auxiliar Técnico',
   PREPARADOR_FISICO: 'Preparador Físico',
   OLHEIRO: 'Olheiro',
@@ -25,6 +26,7 @@ const QUALITY_LABEL: Record<StaffQuality, string> = {
 }
 
 const ATTRIBUTE_LABELS: Record<StaffRole, [string, string]> = {
+  TECNICO: ['Trabalho Tático', 'Motivação'],
   ASSISTENTE: ['Conhecimento Tático', 'Avaliação de Jogadores'],
   PREPARADOR_FISICO: ['Preparação Física', 'Ciência Esportiva'],
   OLHEIRO: ['Conhecimento do Mercado', 'Negociação'],
@@ -48,7 +50,8 @@ function AttributeChips({ role, primary, secondary }: { role: StaffRole; primary
   )
 }
 
-const ROLES: StaffRole[] = ['ASSISTENTE', 'PREPARADOR_FISICO', 'OLHEIRO', 'FISIOTERAPEUTA']
+/** The head coach leads the listing but is informational — the player holds that job themselves. */
+const ROLES: StaffRole[] = ['TECNICO', 'ASSISTENTE', 'PREPARADOR_FISICO', 'OLHEIRO', 'FISIOTERAPEUTA']
 
 export function StaffPage() {
   const { token } = useAuth()
@@ -87,6 +90,7 @@ export function StaffPage() {
 
   const holderFor = (role: StaffRole): StaffMember | null => {
     switch (role) {
+      case 'TECNICO': return roster.data?.tecnico ?? null
       case 'ASSISTENTE': return roster.data?.assistente ?? null
       case 'PREPARADOR_FISICO': return roster.data?.preparadorFisico ?? null
       case 'OLHEIRO': return roster.data?.olheiro ?? null
@@ -110,18 +114,24 @@ export function StaffPage() {
                       <Box>
                         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5 }}>
                           <Typography sx={{ fontWeight: 600 }}>{holder.name}</Typography>
-                          <Chip size="small" label={QUALITY_LABEL[holder.quality]} />
-                          <Typography variant="body2" color="text.secondary">{formatBRL(holder.wage)}/mês</Typography>
+                          {holder.quality && <Chip size="small" label={QUALITY_LABEL[holder.quality]} />}
+                          {holder.wage !== null && (
+                            <Typography variant="body2" color="text.secondary">{formatBRL(holder.wage)}/mês</Typography>
+                          )}
                         </Stack>
-                        <AttributeChips role={role} primary={holder.primaryAttribute} secondary={holder.secondaryAttribute} />
+                        {holder.quality && (
+                          <AttributeChips role={role} primary={holder.primaryAttribute} secondary={holder.secondaryAttribute} />
+                        )}
                       </Box>
                     ) : (
                       <Typography color="text.secondary" sx={{ mt: 0.5 }}>Vaga em aberto</Typography>
                     )}
                   </Box>
-                  <Button variant="outlined" onClick={() => setBrowsingRole(role)}>
-                    {holder ? 'Substituir' : 'Contratar'}
-                  </Button>
+                  {role !== 'TECNICO' && (
+                    <Button variant="outlined" onClick={() => setBrowsingRole(role)}>
+                      {holder ? 'Substituir' : 'Contratar'}
+                    </Button>
+                  )}
                 </Stack>
               </CardContent>
             </Card>
@@ -156,6 +166,12 @@ export function StaffPage() {
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
                         {QUALITY_LABEL[c.quality]} · {formatBRL(c.wage)}/mês
                       </Typography>
+                      <Chip
+                        size="small"
+                        label={c.currentClubName ?? 'Livre'}
+                        sx={{ mb: 0.5, mr: 0.5 }}
+                        color={c.currentClubName ? 'warning' : 'default'}
+                      />
                       <AttributeChips role={browsingRole!} primary={c.primaryAttribute} secondary={c.secondaryAttribute} />
                     </>
                   }
