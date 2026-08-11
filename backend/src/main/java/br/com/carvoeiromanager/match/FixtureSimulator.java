@@ -14,6 +14,7 @@ import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.player.RoleAssignment;
+import br.com.carvoeiromanager.staff.StaffEffectsService;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -64,6 +65,7 @@ public class FixtureSimulator {
     private final AttendanceCalculator attendanceCalculator;
     private final WeatherService weatherService;
     private final MatchContextResolver matchContextResolver;
+    private final StaffEffectsService staffEffectsService;
 
     public FixtureSimulator(LineupService lineupService,
                             TacticsService tacticsService,
@@ -78,7 +80,8 @@ public class FixtureSimulator {
                             FitnessCalculator fitnessCalculator,
                             AttendanceCalculator attendanceCalculator,
                             WeatherService weatherService,
-                            MatchContextResolver matchContextResolver) {
+                            MatchContextResolver matchContextResolver,
+                            StaffEffectsService staffEffectsService) {
         this.lineupService = lineupService;
         this.tacticsService = tacticsService;
         this.teamStrengthCalculator = teamStrengthCalculator;
@@ -93,6 +96,7 @@ public class FixtureSimulator {
         this.attendanceCalculator = attendanceCalculator;
         this.weatherService = weatherService;
         this.matchContextResolver = matchContextResolver;
+        this.staffEffectsService = staffEffectsService;
     }
 
     private record FixtureSim(FixtureResultResponse response, List<Player> homeXi, List<Player> awayXi,
@@ -225,8 +229,10 @@ public class FixtureSimulator {
         Map<UUID, Integer> homeFitness = effectiveFitness(homeXi, matchDate);
         Map<UUID, Integer> awayFitness = effectiveFitness(awayXi, matchDate);
 
-        TeamMatchInput homeInput = teamStrengthCalculator.compute(homeXi, homeProfile, fitnessMult(homeFitness));
-        TeamMatchInput awayInput = teamStrengthCalculator.compute(awayXi, awayProfile, fitnessMult(awayFitness));
+        TeamMatchInput homeInput = teamStrengthCalculator.compute(homeXi, homeProfile, fitnessMult(homeFitness))
+                .withCoachMultiplier(staffEffectsService.coachStrengthMultiplierFor(homeClubId));
+        TeamMatchInput awayInput = teamStrengthCalculator.compute(awayXi, awayProfile, fitnessMult(awayFitness))
+                .withCoachMultiplier(staffEffectsService.coachStrengthMultiplierFor(awayClubId));
 
         Weather weather = resolveWeather(fixture.getId(), homeClubId, matchDate);
         long seed = seedFor(saveGameId, fixture);

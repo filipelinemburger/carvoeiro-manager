@@ -132,4 +132,33 @@ class StaffEffectsServiceTest {
         assertThat(service.injuryRiskMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
         assertThat(service.wageDemandMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
     }
+
+    @Test
+    void aClubWithNoHeadCoachIsExactlyNeutral() {
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.TECNICO))
+                .thenReturn(Optional.empty());
+
+        // The managed club always lands here: it never has a TECNICO row, because the player
+        // is the head coach and their decisions are already the engine's input.
+        assertThat(service.coachStrengthMultiplierFor(CLUB_ID)).isEqualTo(1.0);
+    }
+
+    @Test
+    void theCoachMultiplierSpansTheTierAnchorsAndClamps() {
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.TECNICO))
+                .thenReturn(Optional.of(staffWith(StaffRole.TECNICO, 10, 10)));
+        assertThat(service.coachStrengthMultiplierFor(CLUB_ID)).isEqualTo(0.96, within(1e-9));
+
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.TECNICO))
+                .thenReturn(Optional.of(staffWith(StaffRole.TECNICO, 17, 17)));
+        assertThat(service.coachStrengthMultiplierFor(CLUB_ID)).isEqualTo(1.04, within(1e-9));
+
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.TECNICO))
+                .thenReturn(Optional.of(staffWith(StaffRole.TECNICO, 20, 20)));
+        assertThat(service.coachStrengthMultiplierFor(CLUB_ID)).isEqualTo(1.04, within(1e-9));
+
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.TECNICO))
+                .thenReturn(Optional.of(staffWith(StaffRole.TECNICO, 1, 1)));
+        assertThat(service.coachStrengthMultiplierFor(CLUB_ID)).isEqualTo(0.96, within(1e-9));
+    }
 }

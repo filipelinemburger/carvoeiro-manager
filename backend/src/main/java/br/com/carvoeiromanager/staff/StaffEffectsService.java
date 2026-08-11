@@ -54,6 +54,26 @@ public class StaffEffectsService {
     }
 
     /**
+     * Head-coach strength multiplier for a club, in [0.96, 1.04]. The managed club has no TECNICO
+     * row (see SaveGameService.seedClubStaff), so it always receives exactly 1.0 — the player's own
+     * tactical decisions are already what the engine reads.
+     *
+     * <p>Unlike its four neighbours above, this method takes no {@code managed} flag and never
+     * routes through {@link #AI_BASELINE_AVERAGE}. That baseline exists so an AI club's research
+     * gap never reads as a penalty — but for a multiplier centred on 1.0, the non-penalising value
+     * already IS 1.0: an unresearched club simply fields a league-average coach. Routing it through
+     * 14.0 would produce 1.0057 instead — the same effective outcome plus a rounding artefact that
+     * would perturb every seeded-simulation result for no gain. TECNICO coverage is 28/31 clubs;
+     * besides the managed club (always CRI, see SaveGameService.MANAGED_CLUB_SHORT_NAME, whose row
+     * is withheld by the same managed-club convention), only CAM and CON ever reach the
+     * {@code null} branch here — the two AI clubs the seed research never filled in.
+     */
+    public double coachStrengthMultiplierFor(UUID clubId) {
+        Double a = averageFor(clubId, StaffRole.TECNICO);
+        return a == null ? 1.0 : clamp(lerp(a, 0.96, 1.04), 0.96, 1.04);
+    }
+
+    /**
      * The effective attribute average for a role: the club's real hired staff, or — when the slot
      * is empty — {@code null} for the managed club (neutral effect) and the baseline for an AI one.
      */
@@ -61,6 +81,17 @@ public class StaffEffectsService {
         return staffRepository.findByClubIdAndRole(clubId, role)
                 .map(Staff::attributeAverage)
                 .orElseGet(() -> managed ? null : AI_BASELINE_AVERAGE);
+    }
+
+    /**
+     * Same lookup with no baseline fallback at all: {@code null} when the slot is empty, for ANY
+     * club. Used only by {@link #coachStrengthMultiplierFor} — see its javadoc for why the coach
+     * multiplier never wants the AI baseline.
+     */
+    private Double averageFor(UUID clubId, StaffRole role) {
+        return staffRepository.findByClubIdAndRole(clubId, role)
+                .map(Staff::attributeAverage)
+                .orElse(null);
     }
 
     /** Linear map anchored at (10, atRegular) and (17, atExcelente) — today's tier endpoints. */

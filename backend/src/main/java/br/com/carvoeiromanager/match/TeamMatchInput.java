@@ -23,4 +23,17 @@ public record TeamMatchInput(
         double fitnessDecay,
         Mentality mentality,
         GameStyle gameStyle) {
+
+    /**
+     * Scales attack and defense by the head coach's influence. At {@code m == 1.0} this returns an
+     * equal record, which is what keeps every seeded simulation result stable for clubs that have
+     * no head coach.
+     */
+    public TeamMatchInput withCoachMultiplier(double m) {
+        if (m == 1.0) {
+            return this;
+        }
+        return new TeamMatchInput(attack * m, defense * m, tempo, aggression, cornerThreat,
+                freeKickThreat, penaltyConversion, fitnessDecay, mentality, gameStyle);
+    }
 }

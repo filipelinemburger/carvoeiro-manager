@@ -87,6 +87,9 @@ class WeatherEngineIntegrationTest {
     {
         Mockito.when(staffEffectsService.injuryRiskMultiplierFor(
                 ArgumentMatchers.any(), ArgumentMatchers.anyBoolean())).thenReturn(1.0);
+        // Neutral coach multiplier: this mock has no stub without it, and Mockito's unstubbed
+        // double default (0.0) would zero out attack/defense, breaking the weather-response tests below.
+        Mockito.when(staffEffectsService.coachStrengthMultiplierFor(ArgumentMatchers.any())).thenReturn(1.0);
     }
 
     private static Player livePlayer(Position pos) {
