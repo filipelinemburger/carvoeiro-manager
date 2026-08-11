@@ -70,6 +70,9 @@ class StaffPoachingEffectsIT {
     /** A shortlist slot to hire, together with the row the victim currently has on its books. */
     private record PoachTarget(int candidateIndex, Staff sourceRow) {
         UUID robbedClubId() { return sourceRow.getClubId(); }
+
+        /** What the shortlist called them — a poaching target is offered under their real name. */
+        String candidateName() { return sourceRow.getName(); }
     }
 
     private Career createCareer() {
@@ -129,7 +132,7 @@ class StaffPoachingEffectsIT {
 
         // When the manager poaches them
         staffService.hire(c.id(), c.clubId(), StaffRole.FISIOTERAPEUTA,
-                target.candidateIndex(), c.userId());
+                target.candidateIndex(), target.candidateName(), c.userId());
 
         // Then the robbed club is worse off, or at best no better — never better. Before the
         // vacancy existed this landed on 0.8286: the theft bought the victim fewer injuries.
@@ -157,7 +160,7 @@ class StaffPoachingEffectsIT {
         double coachBefore = staffEffectsService.coachStrengthMultiplierFor(robbed);
 
         staffService.hire(c.id(), c.clubId(), StaffRole.FISIOTERAPEUTA,
-                target.candidateIndex(), c.userId());
+                target.candidateIndex(), target.candidateName(), c.userId());
 
         assertThat(staffEffectsService.trainingBonusFor(robbed, false)).isEqualTo(trainingBefore);
         assertThat(staffEffectsService.wageDemandMultiplierFor(robbed, false)).isEqualTo(wageBefore);
@@ -175,7 +178,7 @@ class StaffPoachingEffectsIT {
         assertThat(staffEffectsService.injuryRiskMultiplierFor(c.clubId(), true)).isEqualTo(1.0);
 
         staffService.hire(c.id(), c.clubId(), StaffRole.FISIOTERAPEUTA,
-                target.candidateIndex(), c.userId());
+                target.candidateIndex(), target.candidateName(), c.userId());
 
         assertThat(staffEffectsService.injuryRiskMultiplierFor(c.clubId(), true)).isLessThan(1.0);
         assertThat(staffRepository.findByClubIdAndRole(c.clubId(), StaffRole.FISIOTERAPEUTA))

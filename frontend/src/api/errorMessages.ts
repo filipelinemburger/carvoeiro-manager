@@ -1,7 +1,8 @@
 import { ApiError } from './client'
 
-/** pt-BR texts for backend ErrorCodes surfaced in the transfer flows. */
+/** pt-BR texts for backend ErrorCodes surfaced in the transfer and staff flows. */
 const MESSAGES: Record<string, string> = {
+  STALE_STAFF_CANDIDATES: 'A lista de candidatos mudou — atualizamos as opções, escolha novamente.',
   TRANSFER_WINDOW_CLOSED: 'Janela de transferências fechada.',
   SQUAD_FULL: 'Elenco cheio — venda antes de contratar.',
   INSUFFICIENT_FUNDS: 'Saldo insuficiente para esta proposta.',

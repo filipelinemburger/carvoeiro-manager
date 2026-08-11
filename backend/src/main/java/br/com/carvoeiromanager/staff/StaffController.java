@@ -42,6 +42,6 @@ public class StaffController {
             @PathVariable UUID saveGameId, @PathVariable UUID clubId, @PathVariable StaffRole role,
             @Valid @RequestBody HireStaffRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(staffService.hire(
-                saveGameId, clubId, role, request.candidateIndex(), userId));
+                saveGameId, clubId, role, request.candidateIndex(), request.candidateName(), userId));
     }
 }

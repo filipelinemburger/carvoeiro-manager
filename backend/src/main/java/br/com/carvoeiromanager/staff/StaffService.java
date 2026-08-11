@@ -60,9 +60,25 @@ public class StaffService {
         return toCandidateResponses(candidates);
     }
 
+    /**
+     * Signs the candidate the manager clicked — the one named in the request, at the index they
+     * clicked, and nobody else.
+     *
+     * <p>The shortlist is not stored: it is re-rolled here from the same inputs {@code
+     * getCandidates} used, and any of those inputs can have moved in between. The seed folds in the
+     * save's current date, which advances on every round; the market also shrinks by a name on
+     * every hire. Either shift reshuffles the whole list, so the index the client is holding then
+     * points at a stranger — charging the manager a wage for someone they never saw and, if that
+     * stranger happens to be employed, permanently deleting a rival's staff row on the way.
+     *
+     * <p>{@code candidateName} is what makes the request self-identifying: if the person now
+     * sitting at that index is not the person the client was showing, the shortlist has moved and
+     * the whole request is refused rather than guessed at. Rejected before any write, so a stale
+     * click costs nobody their job.
+     */
     @Transactional
     public StaffRosterResponse hire(UUID saveGameId, UUID clubId, StaffRole role, int candidateIndex,
-                                    UUID userId) {
+                                    String candidateName, UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         requireClubInSave(saveGameId, clubId);
         requireManagedClub(save, clubId);
@@ -75,6 +91,10 @@ public class StaffService {
                     "candidateIndex must be between 0 and " + (candidates.size() - 1));
         }
         StaffCandidate chosen = candidates.get(candidateIndex);
+        if (!chosen.name().equals(candidateName)) {
+            throw new ApiException(ErrorCode.STALE_STAFF_CANDIDATES,
+                    "The offer list has changed since it was shown — refresh the candidates and choose again");
+        }
 
         // Poaching: the rival loses them. Deleted before the insert for the same flush-ordering
         // reason as the replace below — Hibernate runs pending inserts before pending deletes.

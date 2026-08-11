@@ -7,9 +7,11 @@ import {
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import { getStaffRoster, getStaffCandidates, hireStaff } from '../../api/career'
+import { ApiError } from '../../api/client'
+import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { formatBRL } from '../../lib/money'
-import type { StaffRole, StaffMember } from '../../api/types'
+import type { StaffRole, StaffMember, StaffCandidate } from '../../api/types'
 import { STAFF_ATTRIBUTE_LABELS, STAFF_QUALITY_LABEL, STAFF_ROLE_LABEL, STAFF_ROLE_ORDER } from './staffLabels'
 
 /** Color tier for a 1-20 staff attribute: >=16 gold, >=12 green, else grey (mirrors OVR tiers). */
@@ -54,11 +56,22 @@ export function StaffPage() {
   })
 
   const hireMut = useMutation({
-    mutationFn: (candidateIndex: number) =>
-      hireStaff(saveGameId, clubId, browsingRole!, candidateIndex, token ?? ''),
+    // The whole candidate, not just their slot: the backend re-rolls the shortlist on every call,
+    // so the name is what proves this click meant the person the list was showing.
+    mutationFn: (candidate: StaffCandidate) =>
+      hireStaff(saveGameId, clubId, browsingRole!, candidate.index, candidate.name, token ?? ''),
     onSuccess: () => {
       setBrowsingRole(null)
       void queryClient.invalidateQueries({ queryKey: ['staffRoster', saveGameId, clubId] })
+    },
+    onError: (e: Error) => {
+      // A refused stale click means what is on screen is fiction — pull the current shortlist so
+      // the dialog stays usable and the next click acts on offers the backend would honour.
+      if (e instanceof ApiError && e.code === 'STALE_STAFF_CANDIDATES') {
+        void queryClient.invalidateQueries({
+          queryKey: ['staffCandidates', saveGameId, clubId, browsingRole],
+        })
+      }
     },
   })
 
@@ -122,7 +135,11 @@ export function StaffPage() {
           <IconButton onClick={() => setBrowsingRole(null)} size="small"><CloseIcon fontSize="small" /></IconButton>
         </DialogTitle>
         <DialogContent>
-          {hireMut.isError && <Alert severity="error" sx={{ mb: 2 }}>Não foi possível contratar.</Alert>}
+          {hireMut.isError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {errorMessage(hireMut.error, 'Não foi possível contratar.')}
+            </Alert>
+          )}
           {candidates.isLoading && <Typography>Carregando candidatos…</Typography>}
           {candidates.isError && <Alert severity="error" sx={{ mb: 2 }}>Erro ao carregar candidatos.</Alert>}
           {candidates.isSuccess && (candidates.data ?? []).length === 0 && (
@@ -133,7 +150,7 @@ export function StaffPage() {
               <ListItemButton
                 key={c.index}
                 disabled={hireMut.isPending}
-                onClick={() => hireMut.mutate(c.index)}
+                onClick={() => hireMut.mutate(c)}
                 aria-label={c.name}
               >
                 <ListItemText

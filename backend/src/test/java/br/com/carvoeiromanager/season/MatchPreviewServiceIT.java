@@ -171,8 +171,11 @@ class MatchPreviewServiceIT {
         // Hiring the ASSISTENTE via StaffService.hire(...) with a real candidate index should
         // fire the same hook and immediately deliver the pending pre-match analysis.
         Career c = createCareer();
+        // hire takes the name the shortlist showed as well as the slot, so read the offer first.
+        String offered = staffService.getCandidates(c.id(), c.clubId(), StaffRole.ASSISTENTE, c.userId())
+                .get(0).name();
 
-        staffService.hire(c.id(), c.clubId(), StaffRole.ASSISTENTE, 0, c.userId());
+        staffService.hire(c.id(), c.clubId(), StaffRole.ASSISTENTE, 0, offered, c.userId());
 
         assertThat(newsItemRepository.findFirstBySaveGameIdAndTypeOrderBySeqDesc(c.id(), "MATCH_PREVIEW"))
                 .isNotNull();

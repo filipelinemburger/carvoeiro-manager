@@ -302,13 +302,20 @@ export function getStaffCandidates(
     `/save-games/${saveGameId}/clubs/${clubId}/staff/candidates?role=${role}`, token)
 }
 
+/**
+ * Signs a candidate. The name goes along with the index because the backend re-rolls the shortlist
+ * on every call — a click on a list rendered before the date advanced, or before another hire,
+ * would otherwise land on whoever the reshuffle moved into that slot.
+ */
 export function hireStaff(
   saveGameId: string,
   clubId: string,
   role: StaffRole,
   candidateIndex: number,
+  candidateName: string,
   token: string,
 ): Promise<StaffRoster> {
   return apiPut<StaffRoster>(
-    `/save-games/${saveGameId}/clubs/${clubId}/staff/${role}`, { candidateIndex }, token)
+    `/save-games/${saveGameId}/clubs/${clubId}/staff/${role}`,
+    { candidateIndex, candidateName }, token)
 }

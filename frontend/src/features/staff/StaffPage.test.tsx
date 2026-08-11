@@ -12,6 +12,7 @@ vi.mock('../../api/career', () => ({
 }))
 
 import { getStaffRoster, getStaffCandidates, hireStaff } from '../../api/career'
+import { ApiError } from '../../api/client'
 
 const mockGetStaffRoster = vi.mocked(getStaffRoster)
 const mockGetStaffCandidates = vi.mocked(getStaffCandidates)
@@ -59,9 +60,31 @@ describe('StaffPage', () => {
     await waitFor(() => screen.getByText('Roberto Lima'))
     fireEvent.click(screen.getByRole('button', { name: /roberto lima/i }))
 
+    // The name travels with the index: it is what ties the request to the list on screen.
     await waitFor(() =>
-      expect(mockHireStaff).toHaveBeenCalledWith('sg-1', 'club-1', 'OLHEIRO', 2, 'test-token'),
+      expect(mockHireStaff).toHaveBeenCalledWith('sg-1', 'club-1', 'OLHEIRO', 2, 'Roberto Lima', 'test-token'),
     )
+  })
+
+  it('tells the manager the offer list moved on and reloads it when a hire is refused as stale', async () => {
+    // The backend re-rolls the shortlist on every call, so a click on a list rendered before the
+    // date advanced comes back 409. The generic "Não foi possível contratar." would read as "try
+    // again" against a list that is now fiction.
+    mockHireStaff.mockRejectedValue(
+      new ApiError('The offer list has changed', 'STALE_STAFF_CANDIDATES', 409))
+    renderPage()
+
+    await waitFor(() => screen.getByText('Olheiro'))
+    fireEvent.click(within(screen.getByTestId('staff-role-OLHEIRO')).getByRole('button', { name: /contratar/i }))
+
+    await waitFor(() => screen.getByText('Marcos Vieira'))
+    fireEvent.click(screen.getByRole('button', { name: /marcos vieira/i }))
+
+    expect(await screen.findByText(/lista de candidatos mudou/i)).toBeInTheDocument()
+    // The dialog stays open on a current list, not wedged: the offers were refetched and are still
+    // clickable, so the manager can pick again without leaving and coming back.
+    await waitFor(() => expect(mockGetStaffCandidates).toHaveBeenCalledTimes(2))
+    expect(screen.getByRole('button', { name: /marcos vieira/i })).toBeEnabled()
   })
 
   it('shows an error message when the candidate list fails to load', async () => {

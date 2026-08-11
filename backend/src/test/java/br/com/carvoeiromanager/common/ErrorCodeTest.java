@@ -48,6 +48,7 @@ class ErrorCodeTest {
         assertThat(ErrorCode.SEASON_NOT_FOUND.status()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(ErrorCode.SQUAD_FULL.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.SQUAD_TOO_SMALL.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(ErrorCode.STALE_STAFF_CANDIDATES.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.SUSPENDED_PLAYER.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.TRANSFER_OFFER_NOT_FOUND.status()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(ErrorCode.TRANSFER_WINDOW_CLOSED.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
@@ -57,7 +58,7 @@ class ErrorCodeTest {
     }
 
     @Test
-    void hasExactlyFortyFiveConstants() {
-        assertThat(ErrorCode.values()).hasSize(45);
+    void hasExactlyFortySixConstants() {
+        assertThat(ErrorCode.values()).hasSize(46);
     }
 }

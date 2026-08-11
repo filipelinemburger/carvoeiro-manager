@@ -89,7 +89,7 @@ class StaffServiceTest {
                 new BigDecimal("80000.00"), 16, 15, poached.getId(), "Avaí Futebol Clube"));
 
         // When the manager hires them
-        staffService.hire(saveGameId, managedClub.getId(), StaffRole.OLHEIRO, 0, userId);
+        staffService.hire(saveGameId, managedClub.getId(), StaffRole.OLHEIRO, 0, "Rival Contratado", userId);
 
         // Then the rival loses the row, and the delete is flushed before the new row is queued —
         // Hibernate would otherwise run the pending insert first.
@@ -113,7 +113,7 @@ class StaffServiceTest {
                 new BigDecimal("80000.00"), 16, 15, poached.getId(), "Avaí Futebol Clube"));
 
         // When the manager hires them
-        staffService.hire(saveGameId, managedClub.getId(), StaffRole.OLHEIRO, 0, userId);
+        staffService.hire(saveGameId, managedClub.getId(), StaffRole.OLHEIRO, 0, "Rival Contratado", userId);
 
         // Then the hole they leave is written down, against the club and role read off the
         // PERSISTED row — not off the candidate, which is an unpersisted roll.
@@ -134,7 +134,7 @@ class StaffServiceTest {
         stubCandidates(new StaffCandidate("Rival Contratado", StaffQuality.EXCELENTE,
                 new BigDecimal("80000.00"), 16, 15, poached.getId(), "Avaí Futebol Clube"));
 
-        staffService.hire(saveGameId, managedClub.getId(), StaffRole.OLHEIRO, 0, userId);
+        staffService.hire(saveGameId, managedClub.getId(), StaffRole.OLHEIRO, 0, "Rival Contratado", userId);
 
         // staff_vacancy is UNIQUE on (club_id, role): a blind insert would be a constraint
         // violation the day AI clubs start refilling their slots.
@@ -154,7 +154,7 @@ class StaffServiceTest {
         // When the manager tries to hire them, they are turned away — deleteById would silently
         // no-op, and the manager would be handed a roster claiming a hire that never emptied anyone.
         assertThatThrownBy(() -> staffService.hire(
-                saveGameId, managedClub.getId(), StaffRole.OLHEIRO, 0, userId))
+                saveGameId, managedClub.getId(), StaffRole.OLHEIRO, 0, "Fantasma da Silva", userId))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
@@ -172,7 +172,7 @@ class StaffServiceTest {
         stubCandidates(StaffCandidate.free("Livre da Silva", StaffQuality.BOM,
                 new BigDecimal("45000.00"), 13, 12));
 
-        staffService.hire(saveGameId, managedClub.getId(), StaffRole.OLHEIRO, 0, userId);
+        staffService.hire(saveGameId, managedClub.getId(), StaffRole.OLHEIRO, 0, "Livre da Silva", userId);
 
         Mockito.verify(staffRepository, Mockito.never()).deleteById(any());
         // No club lost anybody, so no club has a hole to record either.
