@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,7 +22,10 @@ class StaffEffectsServiceTest {
     private final UUID SAVE_ID = UUID.randomUUID();
 
     private final StaffRepository staffRepository = Mockito.mock(StaffRepository.class);
-    private final StaffEffectsService service = new StaffEffectsService(staffRepository);
+    private final StaffVacancyRepository staffVacancyRepository =
+            Mockito.mock(StaffVacancyRepository.class);
+    private final StaffEffectsService service =
+            new StaffEffectsService(staffRepository, staffVacancyRepository);
 
     private Staff staffWith(StaffRole role, int primary, int secondary) {
         return Staff.create(SAVE_ID, CLUB_ID, role, StaffQuality.forAverage((primary + secondary) / 2.0),
@@ -134,6 +138,82 @@ class StaffEffectsServiceTest {
     }
 
     @Test
+    void aSlotTheManagerEmptiedByPoachingIsNeutralInsteadOfFallingBackToTheBaseline() {
+        // Given an AI club with no row for any role, but a vacancy on record: the player poached
+        // the holder out of it.
+        when(staffRepository.findByClubIdAndRole(eq(CLUB_ID), any())).thenReturn(Optional.empty());
+        when(staffVacancyRepository.existsByClubIdAndRole(eq(CLUB_ID), any())).thenReturn(true);
+
+        // Then every one of the four managed-flag effects reads neutral. The baseline is a stand-in
+        // for research we never did; a vacancy is research we have — the slot really is empty.
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, false)).isEqualTo(1.0);
+        assertThat(service.trainingBonusFor(CLUB_ID, false)).isZero();
+        assertThat(service.wageDemandMultiplierFor(CLUB_ID, false)).isEqualTo(1.0);
+        assertThat(service.sponsorshipMultiplierFor(CLUB_ID, false)).isEqualTo(1.0);
+    }
+
+    @Test
+    void aVacancyNeverImprovesTheClubItWasTakenFrom() {
+        // Given a physio whose 12/11 average of 11.5 is well below the 14.0 baseline
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.FISIOTERAPEUTA))
+                .thenReturn(Optional.of(staffWith(StaffRole.FISIOTERAPEUTA, 12, 11)));
+        double whileEmployed = service.injuryRiskMultiplierFor(CLUB_ID, false);
+
+        // When they are poached away — the row goes, a vacancy replaces it
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.FISIOTERAPEUTA))
+                .thenReturn(Optional.empty());
+        when(staffVacancyRepository.existsByClubIdAndRole(CLUB_ID, StaffRole.FISIOTERAPEUTA))
+                .thenReturn(true);
+
+        // Then the robbed club is worse off, never better. Lower is better for injuries, so the
+        // multiplier must not fall. Without the vacancy this lands on 0.8286 — BELOW the 0.9357 they
+        // had while employing him, i.e. fewer injuries as a reward for being robbed.
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, false))
+                .isGreaterThanOrEqualTo(whileEmployed)
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void aNeverResearchedSlotStillGetsTheBaselineEvenThoughOtherSlotsWereVacated() {
+        // Guards against over-correcting: the vacancy lookup is per (club, role), so emptying one
+        // slot must not quietly delete the baseline from the club's other, merely unresearched ones.
+        when(staffRepository.findByClubIdAndRole(eq(CLUB_ID), any())).thenReturn(Optional.empty());
+        when(staffVacancyRepository.existsByClubIdAndRole(CLUB_ID, StaffRole.FISIOTERAPEUTA))
+                .thenReturn(true);
+
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, false)).isEqualTo(1.0);
+        assertThat(service.trainingBonusFor(CLUB_ID, false)).isEqualTo(1);          // still 14.0
+        assertThat(service.wageDemandMultiplierFor(CLUB_ID, false))
+                .isCloseTo(1.0 - 0.10 * 4 / 7.0, within(1e-9));                     // still 14.0
+    }
+
+    @Test
+    void aRealStaffRowOutranksAVacancyLeftOverForTheSameSlot() {
+        // Resolution order, top step first: if the club employs someone for the role, nothing else
+        // is consulted — a stale vacancy row cannot suppress a real hire.
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.FISIOTERAPEUTA))
+                .thenReturn(Optional.of(staffWith(StaffRole.FISIOTERAPEUTA, 17, 17)));
+        when(staffVacancyRepository.existsByClubIdAndRole(CLUB_ID, StaffRole.FISIOTERAPEUTA))
+                .thenReturn(true);
+
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, false)).isCloseTo(0.70, within(1e-9));
+    }
+
+    @Test
+    void theManagedClubIsNeutralWithOrWithoutAVacancy() {
+        // The managed club short-circuits to neutral before the vacancy step, so a vacancy row can
+        // neither change its effects nor is it ever worth a query.
+        when(staffRepository.findByClubIdAndRole(eq(CLUB_ID), any())).thenReturn(Optional.empty());
+        when(staffVacancyRepository.existsByClubIdAndRole(eq(CLUB_ID), any())).thenReturn(true);
+
+        assertThat(service.injuryRiskMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
+        assertThat(service.trainingBonusFor(CLUB_ID, true)).isZero();
+        assertThat(service.wageDemandMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
+        assertThat(service.sponsorshipMultiplierFor(CLUB_ID, true)).isEqualTo(1.0);
+        verify(staffVacancyRepository, never()).existsByClubIdAndRole(any(), any());
+    }
+
+    @Test
     void aClubWithNoHeadCoachIsExactlyNeutral() {
         when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.TECNICO))
                 .thenReturn(Optional.empty());
@@ -160,5 +240,18 @@ class StaffEffectsServiceTest {
         when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.TECNICO))
                 .thenReturn(Optional.of(staffWith(StaffRole.TECNICO, 1, 1)));
         assertThat(service.coachStrengthMultiplierFor(CLUB_ID)).isCloseTo(0.96, within(1e-9));
+    }
+
+    @Test
+    void theCoachMultiplierNeverConsultsVacancies() {
+        // It reads rawAverageFor, which has no baseline to displace, so "empty" and "vacated" are
+        // already the same neutral 1.0. Pinned so the vacancy lookup is never bolted on here by
+        // symmetry with its four neighbours — that would be a query per club per fixture for a
+        // value that cannot change.
+        when(staffRepository.findByClubIdAndRole(CLUB_ID, StaffRole.TECNICO))
+                .thenReturn(Optional.empty());
+
+        assertThat(service.coachStrengthMultiplierFor(CLUB_ID)).isEqualTo(1.0);
+        verify(staffVacancyRepository, never()).existsByClubIdAndRole(any(), any());
     }
 }

@@ -23,15 +23,18 @@ public class StaffService {
 
     private final SaveGameService saveGameService;
     private final StaffRepository staffRepository;
+    private final StaffVacancyRepository staffVacancyRepository;
     private final StaffCandidateGenerator staffCandidateGenerator;
     private final ClubRepository clubRepository;
     private final MatchPreviewService matchPreviewService;
 
     public StaffService(SaveGameService saveGameService, StaffRepository staffRepository,
+                        StaffVacancyRepository staffVacancyRepository,
                         StaffCandidateGenerator staffCandidateGenerator, ClubRepository clubRepository,
                         MatchPreviewService matchPreviewService) {
         this.saveGameService = saveGameService;
         this.staffRepository = staffRepository;
+        this.staffVacancyRepository = staffVacancyRepository;
         this.staffCandidateGenerator = staffCandidateGenerator;
         this.clubRepository = clubRepository;
         this.matchPreviewService = matchPreviewService;
@@ -76,7 +79,7 @@ public class StaffService {
         // Poaching: the rival loses them. Deleted before the insert for the same flush-ordering
         // reason as the replace below — Hibernate runs pending inserts before pending deletes.
         if (chosen.sourceStaffId() != null) {
-            staffRepository.deleteById(chosen.sourceStaffId());
+            poachFrom(saveGameId, chosen.sourceStaffId());
         }
 
         // Flush the delete before queuing the insert: Hibernate's flush order runs pending
@@ -100,6 +103,42 @@ public class StaffService {
         }
 
         return toRosterResponse(byRole, true, save.getManagerName());
+    }
+
+    /**
+     * Takes a staff member off the club that employs them, and records the hole they leave behind.
+     *
+     * <p>The vacancy is what stops the theft from BENEFITING the victim. {@code StaffEffectsService}
+     * floors an AI club's empty slot at a research baseline of 14.0, and most poachable staff score
+     * below that, so a bare delete used to hand the robbed club an upgrade it keeps forever. The
+     * source club and role are read off the persisted row rather than off the candidate: the
+     * candidate is a rolled, unpersisted view whose {@code sourceStaffId} is the only part of it the
+     * database has ever seen.
+     *
+     * <p>The lookup is also the existence check. {@code deleteById} on a missing id is a silent
+     * no-op in this Spring Data version, which made a vanished target indistinguishable from a
+     * successful poach — the caller got a roster back saying they had signed someone nobody
+     * employed. Rejecting outright is the honest answer; browsing again re-rolls the shortlist
+     * against the market as it now stands.
+     */
+    private void poachFrom(UUID saveGameId, UUID sourceStaffId) {
+        final Staff source = staffRepository.findById(sourceStaffId)
+                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_ERROR,
+                        "The chosen candidate is no longer employed at that club — browse again"));
+        recordVacancy(saveGameId, source.getClubId(), source.getRole());
+        staffRepository.deleteById(source.getId());
+    }
+
+    /**
+     * Idempotent by design: {@code staff_vacancy} is UNIQUE on (club_id, role), and a second poach
+     * of the same slot cannot happen today only because nothing ever refills it. Guarding here
+     * keeps that an implementation detail of the AI rather than a constraint violation waiting for
+     * the day AI clubs start hiring.
+     */
+    private void recordVacancy(UUID saveGameId, UUID clubId, StaffRole role) {
+        if (!staffVacancyRepository.existsByClubIdAndRole(clubId, role)) {
+            staffVacancyRepository.save(StaffVacancy.create(saveGameId, clubId, role));
+        }
     }
 
     /**

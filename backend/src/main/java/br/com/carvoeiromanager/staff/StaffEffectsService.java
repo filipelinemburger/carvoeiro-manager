@@ -12,7 +12,8 @@ import java.util.UUID;
  * <p>Every club is read from its real rows. What differs is the fallback when a role is unfilled:
  * the managed club gets a neutral effect, because there an empty slot is a fact the player can act
  * on by hiring; an AI club gets {@link #AI_BASELINE_AVERAGE}, because there an empty slot only
- * means the seed research found nobody — not that the club employs nobody (design §3.2a).
+ * means the seed research found nobody — not that the club employs nobody (design §3.2a) — unless
+ * a {@link StaffVacancy} says the player emptied it themselves.
  */
 @Service
 public class StaffEffectsService {
@@ -20,14 +21,18 @@ public class StaffEffectsService {
     /**
      * Floor for an AI club whose role the research could not fill. Equivalent to the old flat
      * {@link StaffQuality#BOM}, so an unresearched AI club behaves exactly as it did before club
-     * staff existed. Never applied to the managed club.
+     * staff existed. Never applied to the managed club, and never applied to a slot the player
+     * emptied — see {@link #averageFor}.
      */
     private static final double AI_BASELINE_AVERAGE = 14.0;
 
     private final StaffRepository staffRepository;
+    private final StaffVacancyRepository staffVacancyRepository;
 
-    public StaffEffectsService(StaffRepository staffRepository) {
+    public StaffEffectsService(StaffRepository staffRepository,
+                               StaffVacancyRepository staffVacancyRepository) {
         this.staffRepository = staffRepository;
+        this.staffVacancyRepository = staffVacancyRepository;
     }
 
     public int trainingBonusFor(UUID clubId, boolean managed) {
@@ -75,12 +80,34 @@ public class StaffEffectsService {
     }
 
     /**
-     * The effective attribute average for a role: the club's real hired staff, or — when the slot
-     * is empty — {@code null} for the managed club (neutral effect) and the baseline for an AI one.
+     * The effective attribute average for a role, resolved in this order:
+     * <ol>
+     *   <li>a real staff row — its attribute average;</li>
+     *   <li>else the managed club — {@code null}, i.e. a neutral effect: your own empty slot is a
+     *       fact you fix by hiring;</li>
+     *   <li>else a recorded {@link StaffVacancy} for that (club, role) — {@code null} as well;</li>
+     *   <li>else — {@link #AI_BASELINE_AVERAGE}.</li>
+     * </ol>
+     *
+     * <p>Steps 3 and 4 are the whole point of this method, and collapsing them is a real bug that
+     * shipped once. The baseline models a RESEARCH GAP: nobody was authored into the seed for this
+     * club's slot, so pretending the club has no physio at all would penalise them for our missing
+     * data. A vacancy models something else entirely — a slot the PLAYER emptied by poaching its
+     * holder. Both leave the {@code staff} table with no row, which is exactly why they used to be
+     * indistinguishable, and treating the second as the first inverted the point of poaching: since
+     * 46 of the 53 poachable rows are below 14.0, robbing a rival usually UPGRADED that rival to the
+     * baseline — and permanently, because nothing ever refills the slot. A vacancy is real
+     * knowledge, not a gap, so it earns the neutral effect a genuinely unstaffed club deserves.
      */
     private Double averageFor(UUID clubId, boolean managed, StaffRole role) {
         Double a = rawAverageFor(clubId, role);
-        return a != null ? a : (managed ? null : AI_BASELINE_AVERAGE);
+        if (a != null) {
+            return a;
+        }
+        if (managed) {
+            return null;
+        }
+        return staffVacancyRepository.existsByClubIdAndRole(clubId, role) ? null : AI_BASELINE_AVERAGE;
     }
 
     /**
@@ -88,6 +115,10 @@ public class StaffEffectsService {
      * slot is empty, managed club or not. Deliberately not named {@code averageFor} — it is not a
      * convenience overload with a defaulted {@code managed}, and reading it as one would silently
      * strip the AI baseline. Only {@link #coachStrengthMultiplierFor} wants this; see its javadoc.
+     *
+     * <p>It has no reason to consult {@link StaffVacancy} either: with no baseline to displace,
+     * "empty" and "vacated" already produce the same neutral 1.0. (TECNICO is not hirable, so a
+     * vacancy for that role cannot arise in the first place.)
      */
     private Double rawAverageFor(UUID clubId, StaffRole role) {
         return staffRepository.findByClubIdAndRole(clubId, role)

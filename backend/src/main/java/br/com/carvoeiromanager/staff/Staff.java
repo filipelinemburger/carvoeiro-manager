@@ -13,8 +13,8 @@ import java.util.UUID;
 /**
  * A technical-staff member: the managed club's commission (researched staff seeded at career
  * creation, until the player hires over a role) or a rival club's researched staff, also seeded
- * at career creation. {@code StaffEffectsService} still evaluates every AI club against a fixed
- * baseline rather than these rows — wiring AI effects to the seeded data is a later change.
+ * at career creation. {@code StaffEffectsService} reads these rows for every club; only a slot no
+ * row covers falls back to a baseline, and then only when no {@link StaffVacancy} explains it.
  */
 @Entity
 @Table(name = "staff")

@@ -4,6 +4,8 @@ import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
+import br.com.carvoeiromanager.common.ApiException;
+import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.season.MatchPreviewService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -17,6 +19,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -31,12 +34,14 @@ class StaffServiceTest {
 
     private final SaveGameService saveGameService = Mockito.mock(SaveGameService.class);
     private final StaffRepository staffRepository = Mockito.mock(StaffRepository.class);
+    private final StaffVacancyRepository staffVacancyRepository =
+            Mockito.mock(StaffVacancyRepository.class);
     private final StaffCandidateGenerator staffCandidateGenerator =
             Mockito.mock(StaffCandidateGenerator.class);
     private final ClubRepository clubRepository = Mockito.mock(ClubRepository.class);
     private final MatchPreviewService matchPreviewService = Mockito.mock(MatchPreviewService.class);
     private final StaffService staffService = new StaffService(saveGameService, staffRepository,
-            staffCandidateGenerator, clubRepository, matchPreviewService);
+            staffVacancyRepository, staffCandidateGenerator, clubRepository, matchPreviewService);
 
     private final UUID saveGameId = UUID.randomUUID();
     private final UUID userId = UUID.randomUUID();
@@ -67,12 +72,19 @@ class StaffServiceTest {
                 .thenReturn(List.of(candidates));
     }
 
+    /** Puts {@code poached} on the rival's books AND makes them findable by id, as in the database. */
+    private void stubEmployed(Staff poached) {
+        Mockito.when(staffRepository.findBySaveGameId(saveGameId)).thenReturn(List.of(poached));
+        Mockito.when(staffRepository.findById(poached.getId()))
+                .thenReturn(java.util.Optional.of(poached));
+    }
+
     @Test
     void hiringAPoachingTargetDeletesTheSourceClubsRow() {
         // Given a rival scout offered as a poaching target
         stubSave();
         Staff poached = rivalScout();
-        Mockito.when(staffRepository.findBySaveGameId(saveGameId)).thenReturn(List.of(poached));
+        stubEmployed(poached);
         stubCandidates(new StaffCandidate("Rival Contratado", StaffQuality.EXCELENTE,
                 new BigDecimal("80000.00"), 16, 15, poached.getId(), "Avaí Futebol Clube"));
 
@@ -92,6 +104,68 @@ class StaffServiceTest {
     }
 
     @Test
+    void poachingRecordsAVacancyForTheSourceClubAndRole() {
+        // Given a rival scout offered as a poaching target
+        stubSave();
+        Staff poached = rivalScout();
+        stubEmployed(poached);
+        stubCandidates(new StaffCandidate("Rival Contratado", StaffQuality.EXCELENTE,
+                new BigDecimal("80000.00"), 16, 15, poached.getId(), "Avaí Futebol Clube"));
+
+        // When the manager hires them
+        staffService.hire(saveGameId, managedClub.getId(), StaffRole.OLHEIRO, 0, userId);
+
+        // Then the hole they leave is written down, against the club and role read off the
+        // PERSISTED row — not off the candidate, which is an unpersisted roll.
+        ArgumentCaptor<StaffVacancy> vacancy = ArgumentCaptor.forClass(StaffVacancy.class);
+        Mockito.verify(staffVacancyRepository).save(vacancy.capture());
+        assertThat(vacancy.getValue().getClubId()).isEqualTo(rivalClub.getId());
+        assertThat(vacancy.getValue().getRole()).isEqualTo(StaffRole.OLHEIRO);
+        assertThat(vacancy.getValue().getSaveGameId()).isEqualTo(saveGameId);
+    }
+
+    @Test
+    void poachingASlotAlreadyMarkedVacantDoesNotWriteASecondRow() {
+        stubSave();
+        Staff poached = rivalScout();
+        stubEmployed(poached);
+        Mockito.when(staffVacancyRepository.existsByClubIdAndRole(rivalClub.getId(), StaffRole.OLHEIRO))
+                .thenReturn(true);
+        stubCandidates(new StaffCandidate("Rival Contratado", StaffQuality.EXCELENTE,
+                new BigDecimal("80000.00"), 16, 15, poached.getId(), "Avaí Futebol Clube"));
+
+        staffService.hire(saveGameId, managedClub.getId(), StaffRole.OLHEIRO, 0, userId);
+
+        // staff_vacancy is UNIQUE on (club_id, role): a blind insert would be a constraint
+        // violation the day AI clubs start refilling their slots.
+        Mockito.verify(staffVacancyRepository, Mockito.never()).save(any());
+        Mockito.verify(staffRepository).deleteById(poached.getId());
+    }
+
+    @Test
+    void poachingSomeoneWhoseSourceRowHasVanishedIsRejected() {
+        // Given a candidate pointing at a staff row that is no longer there
+        stubSave();
+        UUID goneStaffId = UUID.randomUUID();
+        stubCandidates(new StaffCandidate("Fantasma da Silva", StaffQuality.EXCELENTE,
+                new BigDecimal("80000.00"), 16, 15, goneStaffId, "Avaí Futebol Clube"));
+        Mockito.when(staffRepository.findById(goneStaffId)).thenReturn(java.util.Optional.empty());
+
+        // When the manager tries to hire them, they are turned away — deleteById would silently
+        // no-op, and the manager would be handed a roster claiming a hire that never emptied anyone.
+        assertThatThrownBy(() -> staffService.hire(
+                saveGameId, managedClub.getId(), StaffRole.OLHEIRO, 0, userId))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> {
+                    ApiException api = (ApiException) ex;
+                    assertThat(api.getCode()).isEqualTo(ErrorCode.VALIDATION_ERROR);
+                    assertThat(api.getStatus().value()).isEqualTo(400);
+                });
+        Mockito.verify(staffRepository, Mockito.never()).save(any());
+        Mockito.verify(staffVacancyRepository, Mockito.never()).save(any());
+    }
+
+    @Test
     void hiringAFreeProfessionalLeavesEveryOtherClubUntouched() {
         stubSave();
         Mockito.when(staffRepository.findBySaveGameId(saveGameId)).thenReturn(List.of(rivalScout()));
@@ -101,6 +175,8 @@ class StaffServiceTest {
         staffService.hire(saveGameId, managedClub.getId(), StaffRole.OLHEIRO, 0, userId);
 
         Mockito.verify(staffRepository, Mockito.never()).deleteById(any());
+        // No club lost anybody, so no club has a hole to record either.
+        Mockito.verify(staffVacancyRepository, Mockito.never()).save(any());
     }
 
     @Test
