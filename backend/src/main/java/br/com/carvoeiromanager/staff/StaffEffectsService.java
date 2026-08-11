@@ -62,14 +62,15 @@ public class StaffEffectsService {
      * routes through {@link #AI_BASELINE_AVERAGE}. That baseline exists so an AI club's research
      * gap never reads as a penalty — but for a multiplier centred on 1.0, the non-penalising value
      * already IS 1.0: an unresearched club simply fields a league-average coach. Routing it through
-     * 14.0 would produce 1.0057 instead — the same effective outcome plus a rounding artefact that
-     * would perturb every seeded-simulation result for no gain. TECNICO coverage is 28/31 clubs;
+     * 14.0 would instead produce 1.0057 — a systematic +0.57% strength bonus handed to every
+     * unresearched AI club, which no research supports and which would perturb every
+     * seeded-simulation result for no gain. TECNICO coverage is 28/31 clubs;
      * besides the managed club (always CRI, see SaveGameService.MANAGED_CLUB_SHORT_NAME, whose row
      * is withheld by the same managed-club convention), only CAM and CON ever reach the
      * {@code null} branch here — the two AI clubs the seed research never filled in.
      */
     public double coachStrengthMultiplierFor(UUID clubId) {
-        Double a = averageFor(clubId, StaffRole.TECNICO);
+        Double a = rawAverageFor(clubId, StaffRole.TECNICO);
         return a == null ? 1.0 : clamp(lerp(a, 0.96, 1.04), 0.96, 1.04);
     }
 
@@ -78,17 +79,17 @@ public class StaffEffectsService {
      * is empty — {@code null} for the managed club (neutral effect) and the baseline for an AI one.
      */
     private Double averageFor(UUID clubId, boolean managed, StaffRole role) {
-        return staffRepository.findByClubIdAndRole(clubId, role)
-                .map(Staff::attributeAverage)
-                .orElseGet(() -> managed ? null : AI_BASELINE_AVERAGE);
+        Double a = rawAverageFor(clubId, role);
+        return a != null ? a : (managed ? null : AI_BASELINE_AVERAGE);
     }
 
     /**
-     * Same lookup with no baseline fallback at all: {@code null} when the slot is empty, for ANY
-     * club. Used only by {@link #coachStrengthMultiplierFor} — see its javadoc for why the coach
-     * multiplier never wants the AI baseline.
+     * The hired staff's average with NO baseline fallback for anybody: {@code null} whenever the
+     * slot is empty, managed club or not. Deliberately not named {@code averageFor} — it is not a
+     * convenience overload with a defaulted {@code managed}, and reading it as one would silently
+     * strip the AI baseline. Only {@link #coachStrengthMultiplierFor} wants this; see its javadoc.
      */
-    private Double averageFor(UUID clubId, StaffRole role) {
+    private Double rawAverageFor(UUID clubId, StaffRole role) {
         return staffRepository.findByClubIdAndRole(clubId, role)
                 .map(Staff::attributeAverage)
                 .orElse(null);

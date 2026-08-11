@@ -256,9 +256,10 @@ receives exactly 1.0 — your own decisions are already the input the engine rea
 **This one method does not take the §3.2a baseline floor**, and needs no `managed` flag. The floor
 exists to stop a research gap from becoming a penalty, and for a multiplier centred on 1.0 the
 non-penalising value simply *is* 1.0 — an unresearched club fields a league-average coach. Routing
-it through the 14.0 baseline would instead yield 1.0057, which is the same thing plus a rounding
-artefact that would perturb existing seeded-simulation results for no gain. Only two clubs (CAM,
-CON) reach this branch.
+it through the 14.0 baseline would instead yield 1.0057 — **not** a rounding artefact, as an
+earlier draft of this section claimed, but a systematic +0.57% strength bonus handed to every
+unresearched AI club, which no research supports and which would perturb existing
+seeded-simulation results for no gain. Only two clubs (CAM, CON) reach this branch.
 
 `TeamMatchInput` gains:
 

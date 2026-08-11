@@ -942,8 +942,9 @@ git commit -m "feat: drive every club's staff effects from its real roster"
 **Why this one method takes no `managed` flag**, unlike the four beside it: Task 6 gives an AI club
 with an empty slot the 14.0 baseline so a research gap never becomes a penalty. For a multiplier
 centred on 1.0, the non-penalising value already *is* 1.0 — an unresearched club fields a
-league-average coach. Routing it through the baseline would instead produce 1.0057, the same thing
-plus a rounding artefact that would perturb existing seeded-simulation results for no gain. Only
+league-average coach. Routing it through the baseline would instead produce 1.0057 — a systematic
++0.57% bonus for every unresearched AI club (this line originally, and wrongly, called it a
+rounding artefact), which would perturb existing seeded-simulation results for no gain. Only
 CAM and CON reach this branch (`TECNICO` coverage is 28/31, and CRI has no row by design). Put that
 reasoning in the method's javadoc — the asymmetry with its four neighbours will otherwise read as
 an oversight.

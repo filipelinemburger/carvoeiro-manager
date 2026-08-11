@@ -107,6 +107,10 @@ class MatchCalibrationTest {
         Map<UUID, RoleAssignment> roles = LegacyRoles.forXi(xi);
         TacticalProfile profile = new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO,
                 AttackZone.MISTO, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of(), Map.of());
+        // Deliberately WITHOUT withCoachMultiplier: these bands measure squad talent, and folding
+        // the head coach in would let a staffing change silently re-tune the scoring curve. The
+        // seed's league-wide mean multiplier is 0.9983 and the per-side xG swing about +/-0.08,
+        // so the aggregate bands are unaffected either way — this is an exclusion, not an oversight.
         return strengthCalc.compute(xi, profile);
     }
 
