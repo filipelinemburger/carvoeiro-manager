@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,9 +24,9 @@ class SeedLoaderTest {
 
         assertThat(data.competitions().get(0).name()).isEqualTo("Campeonato Catarinense");
         assertThat(data.clubPool()).isNotEmpty();
-        // Pool size is no longer even: 31 clubs (28 + JOI/CAR/SCA from the real 12-club
-        // Catarinense field), with the lone orphan HER not tied to any competition's parity.
-        assertThat(data.clubPool()).hasSize(31);
+        // Pool size is no longer even: 50 clubs (31 + the 19 new Série A sides), with the
+        // lone orphan HER not tied to any competition's parity.
+        assertThat(data.clubPool()).hasSize(50);
         assertThat(data.clubPool()).anyMatch(c -> c.shortName().equals("CRI"));
         // Every club — Série B and Catarinense-only alike — now carries a full authored
         // squad (>= 18 players); no club is left at the old thin 14-15 placeholder size.
@@ -44,10 +45,10 @@ class SeedLoaderTest {
     }
 
     @Test
-    void clubPoolHasThirtyOneClubsAllInSomeCompetitionExceptTheOrphanHercilioLuz() {
+    void clubPoolHasFiftyClubsAllInSomeCompetitionExceptTheOrphanHercilioLuz() {
         SeedCareer data = new SeedLoader().loadCareer();
 
-        assertThat(data.clubPool()).hasSize(31);
+        assertThat(data.clubPool()).hasSize(50);
 
         Set<String> members = data.competitions().stream()
                 .flatMap(c -> c.memberShortNames().stream())
@@ -98,7 +99,7 @@ class SeedLoaderTest {
     void everyPoolPlayerCarriesAuthoredAttributes() {
         SeedCareer data = new SeedLoader().loadCareer();
 
-        // After the Catarinense data-realism pass, every one of the 31 pool clubs has a
+        // After the Catarinense data-realism pass, every one of the 50 pool clubs has a
         // hand-authored roster — there are no more derived-attribute players in the seed.
         assertThat(data.clubPool()).allSatisfy(club -> assertThat(club.players())
                 .allSatisfy(p -> assertThat(p.attributes())
@@ -111,9 +112,9 @@ class SeedLoaderTest {
         SeedCareer data = new SeedLoader().loadCareer();
 
         assertThat(data.clubPool()).allSatisfy(club -> {
-            // CRI keeps its pre-existing 27-player authored squad; every other club
-            // (Série B and Catarinense-only alike) targets 18-23.
-            int max = club.shortName().equals("CRI") ? 27 : 23;
+            // CRI keeps its pre-existing 27-player authored squad; Série A sides carry the
+            // deeper 22-24 rosters a top-flight season needs; everyone else targets 18-23.
+            int max = club.shortName().equals("CRI") ? 27 : 24;
             assertThat(club.players()).as("%s squad size", club.shortName()).hasSizeBetween(18, max);
             long gks = club.players().stream()
                     .filter(p -> "GK".equals(p.position())).count();
@@ -252,5 +253,87 @@ class SeedLoaderTest {
 
         assertThat(serieB.memberShortNames()).hasSize(20);
         assertThat(serieB.phases()).isNullOrEmpty();
+    }
+
+    @Test
+    void serieAHasTwentyMembersAndNoPhases() {
+        SeedCareer career = new SeedLoader().loadCareer();
+
+        SeedCompetition serieA = career.competitions().stream()
+                .filter(c -> c.name().equals("Série A")).findFirst().orElseThrow();
+
+        assertThat(serieA.memberShortNames()).hasSize(20);
+        assertThat(serieA.phases()).isNullOrEmpty();   // a plain double round-robin
+    }
+
+    @Test
+    void chapecoensePlaysBothTheCatarinenseAndSerieA() {
+        SeedCareer career = new SeedLoader().loadCareer();
+
+        // A club may belong to several competitions; the managed/background split is per
+        // competition, not per club, so CHA needs no duplicate pool entry.
+        assertThat(career.competitions().stream()
+                .filter(c -> c.memberShortNames().contains("CHA"))
+                .map(SeedCompetition::name))
+                .containsExactlyInAnyOrder("Campeonato Catarinense", "Série A");
+        assertThat(career.clubPool()).filteredOn(c -> c.shortName().equals("CHA")).hasSize(1);
+    }
+
+    @Test
+    void theTwoBotafogosAndTheTwoAtleticosAreDistinctClubs() {
+        SeedCareer career = new SeedLoader().loadCareer();
+
+        // Three real short-name collisions the pool has to keep apart: BOT is Botafogo-SP
+        // and predates Botafogo-RJ (BFR); ATH is Athletic Club of Minas Gerais, not
+        // Athletico Paranaense (CAP); CAM is Camboriú, not Atlético Mineiro (ATM).
+        assertThat(club(career, "BOT").state()).isEqualTo("SP");
+        assertThat(club(career, "BFR").state()).isEqualTo("RJ");
+        assertThat(club(career, "ATH").state()).isEqualTo("MG");
+        assertThat(club(career, "CAP").state()).isEqualTo("PR");
+        assertThat(club(career, "CAM").state()).isEqualTo("SC");
+        assertThat(club(career, "ATM").state()).isEqualTo("MG");
+        assertThat(club(career, "ATH").name()).isNotEqualTo(club(career, "CAP").name());
+        assertThat(club(career, "CAM").name()).isNotEqualTo(club(career, "ATM").name());
+    }
+
+    @Test
+    void criciumaDoesNotPlayInSerieA() {
+        SeedCareer career = new SeedLoader().loadCareer();
+
+        SeedCompetition serieA = career.competitions().stream()
+                .filter(c -> c.name().equals("Série A")).findFirst().orElseThrow();
+
+        // The whole point of the slice: a competition the managed club is not in, so the
+        // player has a division above them that runs without them.
+        assertThat(serieA.memberShortNames()).doesNotContain("CRI");
+    }
+
+    @Test
+    void everySerieAClubOutranksTheManagedClub() {
+        SeedCareer career = new SeedLoader().loadCareer();
+
+        SeedCompetition serieA = career.competitions().stream()
+                .filter(c -> c.name().equals("Série A")).findFirst().orElseThrow();
+        double criciuma = topElevenStrength(club(career, "CRI"));
+
+        assertThat(serieA.memberShortNames()).allSatisfy(shortName ->
+                assertThat(topElevenStrength(club(career, shortName)))
+                        .as("%s must be stronger than Criciúma", shortName)
+                        .isGreaterThan(criciuma));
+    }
+
+    private static SeedClub club(SeedCareer career, String shortName) {
+        return career.clubPool().stream()
+                .filter(c -> c.shortName().equals(shortName)).findFirst()
+                .orElseThrow(() -> new AssertionError("no club " + shortName + " in the pool"));
+    }
+
+    /** Mean best anchor over the first eleven — squads are authored strongest-XI-first. */
+    private static double topElevenStrength(SeedClub club) {
+        return club.players().stream().limit(11)
+                .mapToInt(p -> IntStream.of(p.pace(), p.finishing(), p.passing(),
+                                p.tackling(), p.goalkeeping(), p.stamina())
+                        .max().orElseThrow())
+                .average().orElseThrow();
     }
 }

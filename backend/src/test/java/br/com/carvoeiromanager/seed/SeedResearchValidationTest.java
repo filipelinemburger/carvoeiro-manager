@@ -37,19 +37,21 @@ class SeedResearchValidationTest {
     private record LabeledPlayer(String label, SeedPlayer player) {}
 
     @Test
-    void clubPoolHasThirtyOneClubsWithSixHundredEightyFourPlayersTotal() {
+    void clubPoolHasFiftyClubsWithElevenHundredThirtyThreePlayersTotal() {
         SeedCareer career = loader.loadCareer();
 
-        // 28 + 3 (JOI/CAR/SCA, the real 12-club 2026 Catarinense field) = 31 clubs;
-        // 625 + 59 (21 + 20 + 18 new players) = 684 players.
-        assertThat(career.clubPool()).hasSize(31);
+        // 31 + 19 (the 2026 Série A field, minus Chapecoense which was already in the pool
+        // for the Catarinense) = 50 clubs; 684 + 449 = 1133 players.
+        assertThat(career.clubPool()).hasSize(50);
         int total = career.clubPool().stream().mapToInt(c -> c.players().size()).sum();
-        assertThat(total).isEqualTo(684);
+        assertThat(total).isEqualTo(1133);
     }
 
     @Test
-    void freeAgentPoolHasOneHundredSeventyNinePlayers() {
-        assertThat(loader.loadFreeAgents()).hasSize(179);
+    void freeAgentPoolHasOneHundredSixtySevenPlayers() {
+        // 179 - 12: the Série A intake put twelve of them on a real club roster, and a player
+        // cannot be both employed and on the free-agent market.
+        assertThat(loader.loadFreeAgents()).hasSize(167);
     }
 
     @Test

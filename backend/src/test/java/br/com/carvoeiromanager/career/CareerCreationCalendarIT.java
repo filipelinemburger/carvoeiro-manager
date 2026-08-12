@@ -88,7 +88,8 @@ class CareerCreationCalendarIT {
 
         // SaveGameResponse exposes currentDate and competitions
         assertThat(response.currentDate()).isEqualTo(seasonStart.toString());
-        assertThat(response.competitions()).hasSize(2);
+        // Catarinense + Série B (both managed) + Série A, which runs in the background.
+        assertThat(response.competitions()).hasSize(3);
         assertThat(response.competitions()).anyMatch(c -> c.name().equals("Campeonato Catarinense") && c.type().equals("LEAGUE"));
     }
 }
