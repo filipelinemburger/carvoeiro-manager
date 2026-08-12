@@ -124,12 +124,13 @@ public class LiveMatchService {
             return toState(existing.get(), save);   // resume, idempotent
         }
 
-        SeasonEvent next = seasonEventRepository
-                .findFirstBySaveGameIdAndProcessedFalseOrderByEventDateAscSequenceAsc(saveGameId);
+        UUID managedClubId = save.getManagedClubId();
+        // Scoped to the managed club — the queue also carries background rounds the player is not
+        // in, and live-playing one of those is not a thing.
+        SeasonEvent next = seasonEventRepository.findNextManagedEvent(saveGameId, managedClubId);
         if (next == null || next.getType() != SeasonEventType.MATCH) {
             throw new ApiException(ErrorCode.NO_MATCH_TO_PLAY, "The next event is not a match");
         }
-        UUID managedClubId = save.getManagedClubId();
         List<Fixture> fixtures = fixtureRepository.findBySaveGameIdAndCompetitionIdAndRound(
                 saveGameId, next.getCompetitionId(), next.getRound());
         Fixture fixture = fixtures.stream()

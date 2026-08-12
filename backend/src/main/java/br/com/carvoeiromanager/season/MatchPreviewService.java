@@ -92,9 +92,10 @@ public class MatchPreviewService {
         }
         UUID managedClubId = save.getManagedClubId();
 
+        // Scoped to the managed club — an opponent analysis for a background fixture the player
+        // never plays would be noise in their feed.
         SeasonEvent nextMatch = seasonEventRepository
-                .findFirstBySaveGameIdAndProcessedFalseAndTypeOrderByEventDateAscSequenceAsc(
-                        saveGameId, SeasonEventType.MATCH);
+                .findNextManagedMatchEvent(saveGameId, managedClubId);
         if (nextMatch == null) {
             return;
         }

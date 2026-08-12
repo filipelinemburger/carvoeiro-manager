@@ -6,6 +6,7 @@ import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.career.SaveGameStatus;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.competition.Competition;
@@ -21,6 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
@@ -45,6 +47,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BackgroundCompetitionIT {
 
     private static final int BACKGROUND_CLUB_COUNT = 20;
+    private static final String BACKGROUND_COMPETITION_NAME = "Background League";
+    /** Covers a whole season's calendar (managed rounds + transfer stops) with room to spare. */
+    private static final int ADVANCE_GUARD = 500;
 
     @Autowired SeasonAdvanceService seasonAdvanceService;
     @Autowired BackgroundCompetitionService backgroundCompetitionService;
@@ -80,7 +85,7 @@ class BackgroundCompetitionIT {
                 .limit(BACKGROUND_CLUB_COUNT)
                 .toList();
         assertThat(members).hasSize(BACKGROUND_CLUB_COUNT);
-        Competition background = Competition.create(saveGameId, "Background League", "LEAGUE",
+        Competition background = Competition.create(saveGameId, BACKGROUND_COMPETITION_NAME, "LEAGUE",
                 response.seasonYear(), 2 * (BACKGROUND_CLUB_COUNT - 1));
         competitionRepository.save(background);
         members.forEach(club -> competitionClubRepository.save(
@@ -101,6 +106,18 @@ class BackgroundCompetitionIT {
                 .filter(e -> e.getType() == SeasonEventType.MATCH)
                 .filter(e -> c.backgroundCompetitionId().equals(e.getCompetitionId()))
                 .toList();
+    }
+
+    /** Everything the player is present for: their own rounds plus every TRANSFER stop. */
+    private List<SeasonEvent> managedEvents(Career c) {
+        return seasonEventRepository.findBySaveGameId(c.id()).stream()
+                .filter(e -> !c.backgroundCompetitionId().equals(e.getCompetitionId()))
+                .toList();
+    }
+
+    private Set<UUID> backgroundFixtureIds(Career c) {
+        return fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), c.backgroundCompetitionId())
+                .stream().map(Fixture::getId).collect(Collectors.toSet());
     }
 
     @Test
@@ -126,11 +143,87 @@ class BackgroundCompetitionIT {
 
         // The advance stops only on the player's own matches. Every result it reports must belong
         // to a competition the managed club plays in.
-        Set<UUID> backgroundFixtureIds = fixtureRepository
-                .findBySaveGameIdAndCompetitionId(c.id(), c.backgroundCompetitionId()).stream()
-                .map(Fixture::getId).collect(Collectors.toSet());
+        Set<UUID> backgroundFixtureIds = backgroundFixtureIds(c);
         assertThat(r.results()).isNotEmpty();
         assertThat(r.results()).noneMatch(res -> backgroundFixtureIds.contains(res.fixtureId()));
+    }
+
+    /**
+     * The leak this guards against is positional, so a single advance cannot see it: managed
+     * rounds land on multiples of five days while background rounds are spread proportionally
+     * (0, 7, 15, 22 ...), so the first background event the "next event" selector could wrongly
+     * pop sits between the FIRST and SECOND managed matchday. Driving the career forward is the
+     * only way to reach it — hence a whole season here rather than one advance.
+     */
+    @Test
+    void noAdvanceAnywhereInTheSeasonStopsOnABackgroundRound() {
+        Career c = createCareer();
+        Set<UUID> backgroundFixtureIds = backgroundFixtureIds(c);
+
+        // Guard against a vacuous pass: the calendar must actually contain a background round
+        // dated on a day the managed calendar has nothing of its own on. Without one, the
+        // unscoped selector would never have leaked and this test would prove nothing.
+        Set<LocalDate> managedDates = managedEvents(c).stream()
+                .map(SeasonEvent::getEventDate).collect(Collectors.toSet());
+        LocalDate lastManagedDate = managedDates.stream().max(LocalDate::compareTo).orElseThrow();
+        assertThat(backgroundMatchEvents(c).stream()
+                .map(SeasonEvent::getEventDate)
+                .filter(d -> !d.isAfter(lastManagedDate))
+                .filter(d -> !managedDates.contains(d)))
+                .isNotEmpty();
+
+        int advances = 0;
+        while (saveGameRepository.findById(c.id()).orElseThrow().getStatus() != SaveGameStatus.FINISHED
+                && advances++ < ADVANCE_GUARD) {
+            AdvanceResponse r = seasonAdvanceService.advance(c.id(), c.userId());
+
+            assertThat(r.competitionName()).isNotEqualTo(BACKGROUND_COMPETITION_NAME);
+            assertThat(r.results()).noneMatch(res -> backgroundFixtureIds.contains(res.fixtureId()));
+        }
+
+        assertThat(advances).isLessThan(ADVANCE_GUARD);
+    }
+
+    /**
+     * The terminal path: {@code advance()} now skips background events entirely, so the save flips
+     * to FINISHED on the last managed matchday while background rounds are, in principle, still
+     * on the queue. That is safe only because the calendar pins the last background round exactly
+     * on the managed finale's date, so the {@code resolveDue} call inside that final advance
+     * drains all of them.
+     *
+     * <p>The decisive assertion is {@code last.type()} being MATCH: had any background round been
+     * left unprocessed, {@code noMoreMatchEvents} would have read false, the finale would not have
+     * finished the season (nor paid the prize), and the loop would have exited one advance later
+     * through the empty-queue fallback, which reports type FINISHED instead.
+     */
+    @Test
+    void theFinalManagedMatchdayDrainsEveryRemainingBackgroundRound() {
+        Career c = createCareer();
+
+        AdvanceResponse last = null;
+        int advances = 0;
+        while (saveGameRepository.findById(c.id()).orElseThrow().getStatus() != SaveGameStatus.FINISHED
+                && advances++ < ADVANCE_GUARD) {
+            last = seasonAdvanceService.advance(c.id(), c.userId());
+        }
+
+        assertThat(advances).isLessThan(ADVANCE_GUARD);
+        assertThat(saveGameRepository.findById(c.id()).orElseThrow().getStatus())
+                .isEqualTo(SaveGameStatus.FINISHED);
+        assertThat(last).isNotNull();
+        assertThat(last.type()).isEqualTo("MATCH");
+        assertThat(last.seasonFinished()).isTrue();
+        assertThat(last.finance().prize()).isGreaterThan(BigDecimal.ZERO);
+
+        // No background round outlives the finale — neither as an event nor as an unplayed fixture.
+        LocalDate finale = saveGameRepository.findById(c.id()).orElseThrow().getCurrentDate();
+        assertThat(backgroundMatchEvents(c))
+                .isNotEmpty()
+                .allMatch(SeasonEvent::isProcessed)
+                .allMatch(e -> !e.getEventDate().isAfter(finale));
+        assertThat(fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), c.backgroundCompetitionId()))
+                .isNotEmpty()
+                .allMatch(Fixture::isPlayed);
     }
 
     @Test

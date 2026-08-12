@@ -55,8 +55,9 @@ public class AdvancePreviewService {
         UUID managedClubId = save.getManagedClubId();
         LocalDate currentDate = save.getCurrentDate();
 
-        SeasonEvent next = seasonEventRepository
-                .findFirstBySaveGameIdAndProcessedFalseOrderByEventDateAscSequenceAsc(saveGameId);
+        // Scoped to the managed club: the preview announces what the NEXT advance will stop on,
+        // and advance() itself only stops on events the player is present for.
+        SeasonEvent next = seasonEventRepository.findNextManagedEvent(saveGameId, managedClubId);
 
         String nextEventType = (next == null) ? "FINISHED" : next.getType().name();
 

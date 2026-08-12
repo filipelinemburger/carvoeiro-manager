@@ -142,8 +142,11 @@ public class SeasonAdvanceService {
             throw new ApiException(ErrorCode.LIVE_MATCH_IN_PROGRESS, "Finish the live match before advancing");
         }
 
+        // Scoped to the managed club: background rounds sit on the same queue but the player is
+        // not present for them, so popping one here would report someone else's fixture as their
+        // own match. They are drained silently by BackgroundCompetitionService instead.
         SeasonEvent event = seasonEventRepository
-                .findFirstBySaveGameIdAndProcessedFalseOrderByEventDateAscSequenceAsc(saveGameId);
+                .findNextManagedEvent(saveGameId, save.getManagedClubId());
         if (event == null) {
             // No calendar entries left to process: the season is over.
             save.setStatus(SaveGameStatus.FINISHED);
@@ -302,7 +305,7 @@ public class SeasonAdvanceService {
                                              Map<UUID, PrecomputedFixture> precomputedOthers) {
         final UUID saveGameId = save.getId();
         SeasonEvent event = seasonEventRepository
-                .findFirstBySaveGameIdAndProcessedFalseOrderByEventDateAscSequenceAsc(saveGameId);
+                .findNextManagedEvent(saveGameId, save.getManagedClubId());
         final LocalDate eventDate = event.getEventDate();
         save.setCurrentDate(eventDate);
         financeService.processMonth(saveGameId, eventDate);
