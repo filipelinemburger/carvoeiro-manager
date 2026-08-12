@@ -92,6 +92,7 @@ public class SeasonRolloverService {
     private final PreContractAgreementRepository preContractAgreementRepository;
     private final WatchlistEntryRepository watchlistEntryRepository;
     private final MatchPreviewService matchPreviewService;
+    private final BackgroundCompetitionService backgroundCompetitionService;
 
     private static final int MAX_INTAKE_PER_SEASON = 3;
     private static final int ACADEMY_TARGET = 10;
@@ -126,7 +127,8 @@ public class SeasonRolloverService {
                                  PreContractService preContractService,
                                  PreContractAgreementRepository preContractAgreementRepository,
                                  WatchlistEntryRepository watchlistEntryRepository,
-                                 MatchPreviewService matchPreviewService) {
+                                 MatchPreviewService matchPreviewService,
+                                 BackgroundCompetitionService backgroundCompetitionService) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.competitionRepository = competitionRepository;
@@ -157,6 +159,7 @@ public class SeasonRolloverService {
         this.preContractAgreementRepository = preContractAgreementRepository;
         this.watchlistEntryRepository = watchlistEntryRepository;
         this.matchPreviewService = matchPreviewService;
+        this.backgroundCompetitionService = backgroundCompetitionService;
     }
 
     @Transactional
@@ -183,7 +186,13 @@ public class SeasonRolloverService {
 
         // 1. Archive each competition from live data, then purge its results.
         for (Competition competition : competitions) {
-            archive(saveGameId, userId, competition, finishingYear, managedClubId, clubNameById);
+            // A competition the player has no club in is not part of their career history, and
+            // Season.managedClubPosition is NOT NULL with no honest value here. Only the archive is
+            // skipped: the purge below still runs, or last season's played background fixtures
+            // would survive into the regenerated calendar.
+            if (backgroundCompetitionService.isManaged(competition.getId(), managedClubId)) {
+                archive(saveGameId, userId, competition, finishingYear, managedClubId, clubNameById);
+            }
 
             List<UUID> fixtureIds = fixtureRepository
                     .findBySaveGameIdAndCompetitionId(saveGameId, competition.getId()).stream()

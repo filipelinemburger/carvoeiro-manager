@@ -233,8 +233,8 @@ public class SeasonAdvanceService {
         // this round would incorrectly read as the season's last one.
         phaseResolver.resolveIfPhaseComplete(save, event);
 
-        // The season finishes when this was the last unprocessed MATCH event.
-        boolean seasonFinished = noMoreMatchEvents(saveGameId, event.getId());
+        // The season finishes when this was the last unprocessed MATCH event the player is in.
+        boolean seasonFinished = noMoreMatchEvents(saveGameId, event.getId(), save.getManagedClubId());
         BigDecimal prize = BigDecimal.ZERO;
         if (seasonFinished) {
             save.setStatus(SaveGameStatus.FINISHED);
@@ -390,10 +390,21 @@ public class SeasonAdvanceService {
         }
     }
 
-    /** True when no other unprocessed MATCH event remains besides the one just popped. */
-    private boolean noMoreMatchEvents(UUID saveGameId, UUID currentEventId) {
+    /**
+     * True when no other unprocessed MATCH event of a competition the managed club plays in remains
+     * besides the one just popped.
+     *
+     * <p>The season ends when the <em>player</em> has no matches left. Background competitions share
+     * this queue, and holding the season open for their rounds would strand the player on a date
+     * with nothing of their own to do. The calendar happens to pin the last background round on the
+     * managed finale's date, so today an unscoped check would answer the same — but that is a
+     * property of the dating, not of what "the season is over" means, and season completion must
+     * not depend on it.
+     */
+    private boolean noMoreMatchEvents(UUID saveGameId, UUID currentEventId, UUID managedClubId) {
         return seasonEventRepository.findBySaveGameIdAndProcessedFalse(saveGameId).stream()
                 .filter(e -> !e.getId().equals(currentEventId))
-                .noneMatch(e -> e.getType() == SeasonEventType.MATCH);
+                .filter(e -> e.getType() == SeasonEventType.MATCH)
+                .noneMatch(e -> backgroundCompetitionService.isManaged(e.getCompetitionId(), managedClubId));
     }
 }

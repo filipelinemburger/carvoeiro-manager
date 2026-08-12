@@ -52,8 +52,10 @@ class BackgroundCompetitionIT {
     private static final int ADVANCE_GUARD = 500;
 
     @Autowired SeasonAdvanceService seasonAdvanceService;
+    @Autowired SeasonRolloverService seasonRolloverService;
     @Autowired BackgroundCompetitionService backgroundCompetitionService;
     @Autowired SeasonCalendarGenerator seasonCalendarGenerator;
+    @Autowired SeasonRepository seasonRepository;
     @Autowired SaveGameService saveGameService;
     @Autowired UserRepository userRepository;
     @Autowired SaveGameRepository saveGameRepository;
@@ -108,16 +110,44 @@ class BackgroundCompetitionIT {
                 .toList();
     }
 
-    /** Everything the player is present for: their own rounds plus every TRANSFER stop. */
+    /**
+     * Everything the player is present for: their own rounds plus every TRANSFER stop.
+     *
+     * <p>Derived from membership rather than "not the competition this test built", because the
+     * seed now ships Série A as a background competition too — an exclusion list of one would
+     * silently count Série A's rounds as the player's and make the guard below vacuous.
+     */
     private List<SeasonEvent> managedEvents(Career c) {
+        UUID managedClubId = saveGameRepository.findById(c.id()).orElseThrow().getManagedClubId();
         return seasonEventRepository.findBySaveGameId(c.id()).stream()
-                .filter(e -> !c.backgroundCompetitionId().equals(e.getCompetitionId()))
+                .filter(e -> e.getType() != SeasonEventType.MATCH
+                        || backgroundCompetitionService.isManaged(e.getCompetitionId(), managedClubId))
                 .toList();
     }
 
+    /**
+     * Every fixture of every competition the player is not in — this test's own Background League
+     * and the seeded Série A alike. Scoping this to one competition would let a leak from the
+     * other slip through unnoticed.
+     */
     private Set<UUID> backgroundFixtureIds(Career c) {
-        return fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), c.backgroundCompetitionId())
-                .stream().map(Fixture::getId).collect(Collectors.toSet());
+        UUID managedClubId = saveGameRepository.findById(c.id()).orElseThrow().getManagedClubId();
+        return competitionRepository.findBySaveGameId(c.id()).stream()
+                .filter(comp -> !backgroundCompetitionService.isManaged(comp.getId(), managedClubId))
+                .flatMap(comp -> fixtureRepository
+                        .findBySaveGameIdAndCompetitionId(c.id(), comp.getId()).stream())
+                .map(Fixture::getId)
+                .collect(Collectors.toSet());
+    }
+
+    /** Drives the career all the way to FINISHED, failing rather than looping forever. */
+    private void advanceToFinish(Career c) {
+        int advances = 0;
+        while (saveGameRepository.findById(c.id()).orElseThrow().getStatus() != SaveGameStatus.FINISHED
+                && advances++ < ADVANCE_GUARD) {
+            seasonAdvanceService.advance(c.id(), c.userId());
+        }
+        assertThat(advances).isLessThan(ADVANCE_GUARD);
     }
 
     @Test
@@ -191,10 +221,11 @@ class BackgroundCompetitionIT {
      * on the managed finale's date, so the {@code resolveDue} call inside that final advance
      * drains all of them.
      *
-     * <p>The decisive assertion is {@code last.type()} being MATCH: had any background round been
-     * left unprocessed, {@code noMoreMatchEvents} would have read false, the finale would not have
-     * finished the season (nor paid the prize), and the loop would have exited one advance later
-     * through the empty-queue fallback, which reports type FINISHED instead.
+     * <p>The drain is asserted directly, at the bottom: every background event processed, every
+     * background fixture played, none dated past the finale. Those are the load-bearing assertions —
+     * {@code noMoreMatchEvents} is scoped to managed competitions, so the season would now finish on
+     * the finale whether or not the background rounds had been drained, and {@code last.type()}
+     * being MATCH no longer proves anything about them.
      */
     @Test
     void theFinalManagedMatchdayDrainsEveryRemainingBackgroundRound() {
@@ -224,6 +255,43 @@ class BackgroundCompetitionIT {
         assertThat(fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), c.backgroundCompetitionId()))
                 .isNotEmpty()
                 .allMatch(Fixture::isPlayed);
+    }
+
+    /**
+     * Rollover has to survive a save containing a competition the player is not in. The background
+     * competition still gets rebuilt like any other — skipping its archive must not also skip the
+     * purge of last season's played fixtures, or the new season would start with stale results.
+     */
+    @Test
+    void aSeasonWithABackgroundCompetitionStillRollsOver() {
+        Career c = createCareer();
+        advanceToFinish(c);
+
+        seasonRolloverService.rollover(c.id(), c.userId());
+
+        assertThat(saveGameRepository.findById(c.id()).orElseThrow().getStatus())
+                .isEqualTo(SaveGameStatus.IN_PROGRESS);
+        assertThat(fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), c.backgroundCompetitionId()))
+                .isNotEmpty()
+                .noneMatch(Fixture::isPlayed);
+    }
+
+    /**
+     * The season history is the player's career record. A competition they had no club in has no
+     * champion-and-my-position story to tell — and {@code Season.managedClubPosition} is NOT NULL
+     * with no honest value to put there — so no row is archived for it at all.
+     */
+    @Test
+    void noSeasonRowIsArchivedForABackgroundCompetition() {
+        Career c = createCareer();
+        advanceToFinish(c);
+
+        seasonRolloverService.rollover(c.id(), c.userId());
+
+        // NOTE: SeasonRepository has no plain findBySaveGameId -- use the ordered finder.
+        assertThat(seasonRepository.findBySaveGameIdOrderBySeasonYearDesc(c.id()))
+                .isNotEmpty()
+                .noneMatch(s -> s.getCompetitionId().equals(c.backgroundCompetitionId()));
     }
 
     @Test
