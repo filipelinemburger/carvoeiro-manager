@@ -24,12 +24,12 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -195,22 +195,22 @@ class SeasonCalendarGeneratorIT {
         SaveGame s = SaveGame.create(u.getId(), 2026);
         saveGameRepository.save(s);
         PhasedCompetition pc = makePhasedComp(s.getId(), "Catarinense", 2026);
-        UUID saveGameId = s.getId();
+        UUID saveId = s.getId();
         UUID firstPhaseId = pc.firstPhaseId();
-        UUID managedClubId = competitionClubRepository.findByCompetitionId(pc.competition().getId())
+        UUID clubInComp = competitionClubRepository.findByCompetitionId(pc.competition().getId())
                 .get(0).getClubId();
 
         // When
-        generator.generate(saveGameId, 2026, List.of(pc.competition()), managedClubId);
+        generator.generate(saveId, 2026, List.of(pc.competition()), clubInComp);
 
         // Then: the first phase's 66 fixtures exist across rounds 0..10
-        List<Fixture> fixtures = fixtureRepository.findBySaveGameId(saveGameId);
+        List<Fixture> fixtures = fixtureRepository.findBySaveGameId(saveId);
         assertThat(fixtures).hasSize(66);
         assertThat(fixtures).allSatisfy(f -> assertThat(f.getRound()).isBetween(0, 10));
         assertThat(fixtures).allSatisfy(f -> assertThat(f.getPhaseId()).isEqualTo(firstPhaseId));
 
         // And: rounds 11..16 are reserved as MATCH events carrying a phase but no fixtures
-        List<SeasonEvent> events = seasonEventRepository.findBySaveGameId(saveGameId).stream()
+        List<SeasonEvent> events = seasonEventRepository.findBySaveGameId(saveId).stream()
                 .filter(e -> e.getType() == SeasonEventType.MATCH)
                 .sorted(Comparator.comparing(SeasonEvent::getEventDate)).toList();
         assertThat(events).hasSize(17);
@@ -226,13 +226,13 @@ class SeasonCalendarGeneratorIT {
         SaveGame s = SaveGame.create(u.getId(), 2026);
         saveGameRepository.save(s);
         PhasedCompetition pc = makePhasedComp(s.getId(), "Catarinense", 2026);
-        UUID saveGameId = s.getId();
-        UUID managedClubId = competitionClubRepository.findByCompetitionId(pc.competition().getId())
+        UUID saveId = s.getId();
+        UUID clubInComp = competitionClubRepository.findByCompetitionId(pc.competition().getId())
                 .get(0).getClubId();
 
-        generator.generate(saveGameId, 2026, List.of(pc.competition()), managedClubId);
+        generator.generate(saveId, 2026, List.of(pc.competition()), clubInComp);
 
-        List<LocalDate> dates = seasonEventRepository.findBySaveGameId(saveGameId).stream()
+        List<LocalDate> dates = seasonEventRepository.findBySaveGameId(saveId).stream()
                 .filter(e -> e.getType() == SeasonEventType.MATCH)
                 .map(SeasonEvent::getEventDate).sorted().toList();
 
@@ -249,56 +249,229 @@ class SeasonCalendarGeneratorIT {
         SaveGame s = SaveGame.create(u.getId(), 2026);
         saveGameRepository.save(s);
         Competition serieB = makeComp(s.getId(), "SerieB", 2026, 20);
-        UUID saveGameId = s.getId();
-        UUID managedClubId = competitionClubRepository.findByCompetitionId(serieB.getId())
+        UUID saveId = s.getId();
+        UUID clubInComp = competitionClubRepository.findByCompetitionId(serieB.getId())
                 .get(0).getClubId();
 
-        generator.generate(saveGameId, 2026, List.of(serieB), managedClubId);
+        generator.generate(saveId, 2026, List.of(serieB), clubInComp);
 
-        List<Fixture> fixtures = fixtureRepository.findBySaveGameId(saveGameId);
+        List<Fixture> fixtures = fixtureRepository.findBySaveGameId(saveId);
         assertThat(fixtures).hasSize(380);          // 20 clubs, double round-robin
         assertThat(fixtures).allSatisfy(f -> assertThat(f.getPhaseId()).isNull());
     }
 
-    @Test
-    void aBackgroundCompetitionDoesNotMoveAnyManagedFixture() {
-        // Given: the same save generated with and without a background competition.
-        // The managed competition's dates must be byte-identical -- adding a division the player
-        // does not play in must not change their season by one day.
-        generator.generate(saveGameId, 2026, List.of(catarinense), managedClubId);
-        List<LocalDate> before = fixtureRepository
-                .findBySaveGameIdAndCompetitionId(saveGameId, catarinense.getId()).stream()
-                .map(Fixture::getMatchDate).sorted().toList();
+    /**
+     * One fixture's schedule slot. Comparing (round, date) pairs -- not just the date multiset --
+     * is what makes a regression that permutes round-to-date while preserving the set of dates fail.
+     */
+    private record FixtureSlot(int round, LocalDate matchDate) { }
 
+    /** The identifying columns of a season event, for a before/after comparison of the queue. */
+    private record EventSlot(LocalDate eventDate, SeasonEventType type, UUID competitionId,
+                             Integer round, int sequence) { }
+
+    private static final Comparator<FixtureSlot> BY_ROUND_THEN_DATE =
+            Comparator.comparingInt(FixtureSlot::round).thenComparing(FixtureSlot::matchDate);
+
+    private static final Comparator<EventSlot> BY_EVENT_IDENTITY =
+            Comparator.comparing(EventSlot::eventDate)
+                    .thenComparing(EventSlot::type)
+                    .thenComparing(EventSlot::competitionId,
+                            Comparator.nullsFirst(Comparator.<UUID>naturalOrder()))
+                    .thenComparing(EventSlot::round,
+                            Comparator.nullsFirst(Comparator.<Integer>naturalOrder()))
+                    .thenComparingInt(EventSlot::sequence);
+
+    /** Every (round, date) slot of the given competition's fixtures in this save, sorted. */
+    private List<FixtureSlot> fixtureSlots(Competition competition) {
+        return fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, competition.getId())
+                .stream()
+                .map(f -> new FixtureSlot(f.getRound(), f.getMatchDate()))
+                .sorted(BY_ROUND_THEN_DATE)
+                .toList();
+    }
+
+    /**
+     * This save's season events restricted to the given competition plus every TRANSFER stop --
+     * the latter because the pre-contract window's end derives from the managed season's last
+     * match offset, so a change to that offset must show up here.
+     */
+    private List<EventSlot> eventSlotsFor(Competition competition) {
+        return seasonEventRepository.findBySaveGameId(saveGameId).stream()
+                .filter(e -> e.getType() == SeasonEventType.TRANSFER
+                        || competition.getId().equals(e.getCompetitionId()))
+                .map(e -> new EventSlot(e.getEventDate(), e.getType(), e.getCompetitionId(),
+                        e.getRound(), e.getSequence()))
+                .sorted(BY_EVENT_IDENTITY)
+                .toList();
+    }
+
+    private void clearGeneratedCalendar() {
         fixtureRepository.deleteAll(fixtureRepository.findBySaveGameId(saveGameId));
         seasonEventRepository.deleteAll(seasonEventRepository.findBySaveGameId(saveGameId));
+    }
+
+    /** The last date any MATCH event of the given competition is scheduled on in this save. */
+    private LocalDate lastMatchDateOf(Competition competition) {
+        return seasonEventRepository.findBySaveGameId(saveGameId).stream()
+                .filter(e -> e.getType() == SeasonEventType.MATCH)
+                .filter(e -> competition.getId().equals(e.getCompetitionId()))
+                .map(SeasonEvent::getEventDate).max(LocalDate::compareTo).orElseThrow();
+    }
+
+    private List<LocalDate> matchDatesOf(Competition competition) {
+        return seasonEventRepository.findBySaveGameId(saveGameId).stream()
+                .filter(e -> e.getType() == SeasonEventType.MATCH)
+                .filter(e -> competition.getId().equals(e.getCompetitionId()))
+                .map(SeasonEvent::getEventDate).sorted().toList();
+    }
+
+    @Test
+    void aBackgroundCompetitionDoesNotMoveAnyManagedFixture() {
+        // Given: the same save generated with and without a background competition. Adding a
+        // division the player does not play in must not change their season by one day -- so both
+        // the (round, date) slots of every managed fixture AND the managed slice of the event
+        // queue (including the TRANSFER stops, whose final window derives from the last managed
+        // match) must come back identical.
+        generator.generate(saveGameId, 2026, List.of(catarinense), managedClubId);
+        List<FixtureSlot> fixturesBefore = fixtureSlots(catarinense);
+        List<EventSlot> eventsBefore = eventSlotsFor(catarinense);
+
+        clearGeneratedCalendar();
 
         generator.generate(saveGameId, 2026, List.of(catarinense, serieA), managedClubId);
-        List<LocalDate> after = fixtureRepository
-                .findBySaveGameIdAndCompetitionId(saveGameId, catarinense.getId()).stream()
-                .map(Fixture::getMatchDate).sorted().toList();
 
-        assertThat(after).isEqualTo(before);
+        assertThat(fixtureSlots(catarinense)).isEqualTo(fixturesBefore);
+        assertThat(eventSlotsFor(catarinense)).isEqualTo(eventsBefore);
     }
 
     @Test
     void aBackgroundCompetitionIsDatedAcrossTheSameSeasonWindow() {
         generator.generate(saveGameId, 2026, List.of(catarinense, serieA), managedClubId);
 
-        LocalDate lastManaged = seasonEventRepository.findBySaveGameId(saveGameId).stream()
-                .filter(e -> e.getType() == SeasonEventType.MATCH)
-                .filter(e -> catarinense.getId().equals(e.getCompetitionId()))
-                .map(SeasonEvent::getEventDate).max(LocalDate::compareTo).orElseThrow();
-        List<LocalDate> background = seasonEventRepository.findBySaveGameId(saveGameId).stream()
-                .filter(e -> e.getType() == SeasonEventType.MATCH)
-                .filter(e -> serieA.getId().equals(e.getCompetitionId()))
-                .map(SeasonEvent::getEventDate).sorted().toList();
+        LocalDate lastManaged = lastMatchDateOf(catarinense);
+        List<LocalDate> background = matchDatesOf(serieA);
 
-        // One event per round, all inside the managed season's window, strictly increasing.
+        // One event per round, opening with the managed season and never running past its finale.
+        // isSorted() only proves non-decreasing -- two background rounds are allowed to share a
+        // date when the window is tighter than the round count.
         assertThat(background).hasSize(serieA.getTotalRounds());
-        assertThat(background.get(0)).isAfterOrEqualTo(LocalDate.of(2026, 1, 15));
+        assertThat(background.get(0)).isEqualTo(LocalDate.of(2026, 1, 15));
         assertThat(background.get(background.size() - 1)).isBeforeOrEqualTo(lastManaged);
         assertThat(background).isSorted();
+    }
+
+    @Test
+    void theLastBackgroundRoundLandsExactlyOnTheManagedSeasonFinale() {
+        generator.generate(saveGameId, 2026, List.of(catarinense, serieA), managedClubId);
+
+        List<LocalDate> background = matchDatesOf(serieA);
+
+        // Proportional dating spreads the rounds over the whole window, so the final background
+        // round is due on the same day as the managed finale -- not one interval short of it,
+        // which would leave the table unfinished when the save flips to FINISHED.
+        assertThat(background.get(background.size() - 1)).isEqualTo(lastMatchDateOf(catarinense));
+    }
+
+    @Test
+    void aBackgroundCompetitionWithMoreRoundsThanWindowDaysStillFinishesInsideTheWindow() {
+        // Given: a tiny managed competition (4 clubs -> 6 units -> a 25-day window) alongside a
+        // 20-club background league whose 38 rounds outnumber the window's days.
+        Competition tinyManaged = makeComp(saveGameId, "TinyManaged", 2026, 4, managedClubId);
+
+        generator.generate(saveGameId, 2026, List.of(tinyManaged, serieA), managedClubId);
+
+        LocalDate lastManaged = lastMatchDateOf(tinyManaged);
+        List<LocalDate> background = matchDatesOf(serieA);
+
+        assertThat(background).hasSize(serieA.getTotalRounds());
+        assertThat(background).allSatisfy(d -> assertThat(d).isBeforeOrEqualTo(lastManaged));
+        assertThat(background.get(background.size() - 1)).isEqualTo(lastManaged);
+        // Rounds necessarily share dates here; that is intentional, which is why the resolver
+        // must order due background rounds by (date, round) and not by date alone.
+        assertThat(background.stream().distinct().count()).isLessThan(background.size());
+    }
+
+    @Test
+    void twoBackgroundCompetitionsAreBothDatedAndNeitherMovesTheManagedSeason() {
+        Competition serieB = makeComp(saveGameId, "SerieB", 2026, 8); // excludes the managed club
+
+        generator.generate(saveGameId, 2026, List.of(catarinense), managedClubId);
+        List<FixtureSlot> fixturesBefore = fixtureSlots(catarinense);
+        List<EventSlot> eventsBefore = eventSlotsFor(catarinense);
+
+        clearGeneratedCalendar();
+
+        generator.generate(saveGameId, 2026, List.of(catarinense, serieA, serieB), managedClubId);
+
+        LocalDate lastManaged = lastMatchDateOf(catarinense);
+        for (Competition bg : List.of(serieA, serieB)) {
+            List<Fixture> fixtures = fixtureRepository
+                    .findBySaveGameIdAndCompetitionId(saveGameId, bg.getId());
+            assertThat(fixtures).isNotEmpty();
+            assertThat(fixtures).allSatisfy(f -> assertThat(f.getMatchDate()).isNotNull());
+
+            List<LocalDate> dates = matchDatesOf(bg);
+            assertThat(dates).hasSize(bg.getTotalRounds());
+            assertThat(dates.get(0)).isEqualTo(LocalDate.of(2026, 1, 15));
+            assertThat(dates.get(dates.size() - 1)).isEqualTo(lastManaged);
+        }
+        assertThat(fixtureSlots(catarinense)).isEqualTo(fixturesBefore);
+        assertThat(eventSlotsFor(catarinense)).isEqualTo(eventsBefore);
+    }
+
+    @Test
+    void aPhasedBackgroundCompetitionGeneratesThroughTheSamePhaseAwarePath() {
+        // A 12-club two-phase state championship the managed club is NOT in: it must build its
+        // units through the phase-aware builder, not a bare double round-robin sized to
+        // totalRounds -- which used to blow up with IndexOutOfBoundsException.
+        Competition paranaense = makePhasedComp(saveGameId, "Paranaense", 2026).competition();
+
+        generator.generate(saveGameId, 2026, List.of(catarinense, paranaense), managedClubId);
+
+        // The round-robin phase materialized (66 fixtures over rounds 0..10) and all 17 units are
+        // dated, the knockout ones reserved without fixtures.
+        List<Fixture> fixtures = fixtureRepository
+                .findBySaveGameIdAndCompetitionId(saveGameId, paranaense.getId());
+        assertThat(fixtures).hasSize(66);
+        assertThat(fixtures).allSatisfy(f -> assertThat(f.getMatchDate()).isNotNull());
+        assertThat(fixtures).allSatisfy(f -> assertThat(f.getRound()).isBetween(0, 10));
+
+        List<LocalDate> dates = matchDatesOf(paranaense);
+        assertThat(dates).hasSize(17);
+        assertThat(dates.get(0)).isEqualTo(LocalDate.of(2026, 1, 15));
+        assertThat(dates.get(16)).isEqualTo(lastMatchDateOf(catarinense));
+    }
+
+    @Test
+    void backgroundMatchEventsSortAfterTheManagedOnesOnASharedDate() {
+        generator.generate(saveGameId, 2026, List.of(catarinense, serieA), managedClubId);
+
+        List<SeasonEvent> events = seasonEventRepository.findBySaveGameId(saveGameId);
+        assertThat(events).filteredOn(e -> catarinense.getId().equals(e.getCompetitionId()))
+                .allSatisfy(e -> assertThat(e.getSequence()).isZero());
+        assertThat(events).filteredOn(e -> serieA.getId().equals(e.getCompetitionId()))
+                .isNotEmpty()
+                .allSatisfy(e -> assertThat(e.getSequence()).isEqualTo(2));
+        assertThat(events).filteredOn(e -> e.getType() == SeasonEventType.TRANSFER)
+                .allSatisfy(e -> assertThat(e.getSequence()).isEqualTo(1));
+    }
+
+    @Test
+    void generatingWithoutAManagedClubIsRejected() {
+        assertThatThrownBy(() ->
+                generator.generate(saveGameId, 2026, List.of(catarinense, serieA), null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("managedClubId");
+    }
+
+    @Test
+    void generatingWhenTheManagedClubPlaysInNoCompetitionIsRejected() {
+        // Every competition would be background: a career with zero matches of the player's own.
+        assertThatThrownBy(() ->
+                generator.generate(saveGameId, 2026, List.of(serieA), managedClubId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(managedClubId.toString());
     }
 
     @Test
