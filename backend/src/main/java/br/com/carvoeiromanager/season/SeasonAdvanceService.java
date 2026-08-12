@@ -91,6 +91,7 @@ public class SeasonAdvanceService {
     private final MatchPreviewService matchPreviewService;
     private final PhaseResolver phaseResolver;
     private final CompetitionPhaseRepository competitionPhaseRepository;
+    private final BackgroundCompetitionService backgroundCompetitionService;
 
     public SeasonAdvanceService(SaveGameService saveGameService,
                                 SaveGameRepository saveGameRepository,
@@ -108,7 +109,8 @@ public class SeasonAdvanceService {
                                 PreContractService preContractService,
                                 MatchPreviewService matchPreviewService,
                                 PhaseResolver phaseResolver,
-                                CompetitionPhaseRepository competitionPhaseRepository) {
+                                CompetitionPhaseRepository competitionPhaseRepository,
+                                BackgroundCompetitionService backgroundCompetitionService) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.seasonEventRepository = seasonEventRepository;
@@ -126,6 +128,7 @@ public class SeasonAdvanceService {
         this.matchPreviewService = matchPreviewService;
         this.phaseResolver = phaseResolver;
         this.competitionPhaseRepository = competitionPhaseRepository;
+        this.backgroundCompetitionService = backgroundCompetitionService;
     }
 
     @Transactional
@@ -215,6 +218,11 @@ public class SeasonAdvanceService {
 
         FinanceRoundResponse matchdayFinance =
                 financeService.processMatchday(saveGameId, competitionId, fixtures, eventDate);
+
+        // Catch the background world up to the date the player just reached. The return value is
+        // deliberately ignored: background results never enter the advance response — the player
+        // sees them in that competition's table, not in their own match feed.
+        backgroundCompetitionService.resolveDue(save, eventDate);
 
         // If this round just finished a round-robin phase, materialize the knockout phase after
         // it (seeded from this phase's final standings) before the season-finished check below —
