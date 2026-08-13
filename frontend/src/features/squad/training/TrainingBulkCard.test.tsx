@@ -84,4 +84,29 @@ describe('TrainingBulkCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Salvar' }))
     expect(onApply).toHaveBeenCalledTimes(1)
   })
+
+  it('disables Salvar while saving is true, even with rules present', () => {
+    const { unmount } = render(
+      <TrainingBulkCard
+        rules={[{ position: 'GOLEIRO', focus: 'REFLEXOS', intensity: 'INTENSA' }]}
+        onRulesChange={vi.fn()}
+        onApply={vi.fn()}
+        saving={false}
+      />,
+    )
+    expand()
+    expect(screen.getByRole('button', { name: 'Salvar' })).toBeEnabled()
+    unmount()
+
+    render(
+      <TrainingBulkCard
+        rules={[{ position: 'GOLEIRO', focus: 'REFLEXOS', intensity: 'INTENSA' }]}
+        onRulesChange={vi.fn()}
+        onApply={vi.fn()}
+        saving
+      />,
+    )
+    expand()
+    expect(screen.getByRole('button', { name: 'Salvar' })).toBeDisabled()
+  })
 })

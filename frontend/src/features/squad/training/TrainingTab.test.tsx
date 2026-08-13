@@ -205,4 +205,25 @@ describe('TrainingTab', () => {
     await waitFor(() => expect(onChange).toHaveBeenLastCalledWith(ASSIGNMENTS))
     expect(await screen.findByText('Erro ao salvar treino.')).toBeInTheDocument()
   })
+
+  it('guards the bulk save against double submit by calling setTraining only once', async () => {
+    // Keep the promise pending so the in-flight window is real.
+    mockSetTraining.mockReturnValue(new Promise(() => {}))
+    renderControlledTab()
+    fireEvent.click(screen.getByRole('button', { name: 'Treino por posição' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar posição' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Foco da regra 1' }), {
+      target: { value: 'REFLEXOS' },
+    })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Intensidade da regra 1' }), {
+      target: { value: 'INTENSA' },
+    })
+    const saveBulkButton = screen.getByRole('button', { name: 'Salvar' })
+    fireEvent.click(saveBulkButton)
+    // Wait for the mutation to be triggered and the button to be disabled
+    await waitFor(() => expect(saveBulkButton).toBeDisabled())
+    // Try to click again; the button is disabled so the click should have no effect
+    fireEvent.click(saveBulkButton)
+    expect(mockSetTraining).toHaveBeenCalledTimes(1)
+  })
 })

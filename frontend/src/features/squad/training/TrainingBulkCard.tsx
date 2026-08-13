@@ -20,11 +20,13 @@ const ALL_POSITIONS = Object.keys(DETAILED_POSITION_SHORT) as DetailedPosition[]
  * Rules are the caller's state and are deliberately NOT persisted: the card is a one-shot tool
  * whose OUTPUT (each player's own assignment) is what gets saved.
  */
-export function TrainingBulkCard({ rules, onRulesChange, onApply }: {
+export function TrainingBulkCard({ rules, onRulesChange, onApply, saving = false }: {
   rules: BulkTrainingRule[]
   onRulesChange: (next: BulkTrainingRule[]) => void
   /** Apply the rules to the squad and save. The caller owns the optimistic update. */
   onApply: () => void
+  /** True while a save is in flight; disables the bulk Salvar button to guard against double submit. */
+  saving?: boolean
 }) {
   const [open, setOpen] = useState(false)
 
@@ -59,7 +61,10 @@ export function TrainingBulkCard({ rules, onRulesChange, onApply }: {
         <Collapse in={open} timeout="auto" unmountOnExit>
           <Stack spacing={1.5} sx={{ mt: 1.5 }}>
             {rules.map((rule, index) => (
-              <Stack key={rule.position} direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+              // Key by index, not by position. The list only supports append and remove-by-index,
+              // never reorder, so index is stable and prevents unmount/remount when a row's own
+              // position changes, which would drop focus in the select that triggered the change.
+              <Stack key={index} direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 <NativeSelect
                   value={rule.position}
                   onChange={e => updateRule(index, { position: e.target.value as DetailedPosition })}
@@ -108,7 +113,7 @@ export function TrainingBulkCard({ rules, onRulesChange, onApply }: {
             </Box>
 
             <Box>
-              <Button size="small" color="secondary" variant="contained" disabled={rules.length === 0} onClick={onApply}>
+              <Button size="small" color="secondary" variant="contained" disabled={rules.length === 0 || saving} onClick={onApply}>
                 Salvar
               </Button>
             </Box>

@@ -53,6 +53,8 @@ export function TrainingTab({ players, saveGameId, clubId, assignments, onChange
       // Write-through: setTraining already returns a SquadResponse — the exact shape of the
       // squad query — so patch the cache directly instead of paying for a refetch.
       queryClient.setQueryData(['squad', saveGameId, clubId], data)
+      // Defense in depth: a snapshot only has meaning while its own save is in flight.
+      rollback.current = null
     },
     onError: () => {
       if (rollback.current) {
@@ -89,7 +91,7 @@ export function TrainingTab({ players, saveGameId, clubId, assignments, onChange
 
   return (
     <>
-      <TrainingBulkCard rules={rules} onRulesChange={setRules} onApply={applyRules} />
+      <TrainingBulkCard rules={rules} onRulesChange={setRules} onApply={applyRules} saving={mutation.isPending} />
 
       <TableContainer component={Paper} variant="outlined" sx={{ mb: 2, borderRadius: 2 }}>
         <Table size="small">
