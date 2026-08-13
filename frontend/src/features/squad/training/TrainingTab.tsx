@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Alert, Button, NativeSelect, Paper, Snackbar,
@@ -9,7 +9,8 @@ import { useAuth } from '../../../auth/AuthContext'
 import { squadPositionLabel } from '../../players/positionLabels'
 import type { PlayerResponse, TrainableAttribute, TrainingAssignment, TrainingIntensity } from '../../../api/types'
 import { TRAINABLE_ATTRIBUTE_LABEL, INTENSITY_LABEL } from './trainingLabels'
-import type { TrainingAssignmentsState } from './bulkTraining'
+import { TrainingBulkCard } from './TrainingBulkCard'
+import { applyBulkRules, type BulkTrainingRule, type TrainingAssignmentsState } from './bulkTraining'
 
 /**
  * The Treino panel: a per-player focus/intensity table plus its save button.
@@ -30,6 +31,12 @@ export function TrainingTab({ players, saveGameId, clubId, assignments, onChange
   const queryClient = useQueryClient()
   const [saveSuccess, setSaveSuccess] = useState(false)
 
+  // Bulk rules are one-shot page state: configure, apply, done. Nothing persists them.
+  const [rules, setRules] = useState<BulkTrainingRule[]>([])
+  // The assignments to restore if an OPTIMISTIC (bulk) save fails. Null for a plain save, which
+  // changes nothing up front and therefore has nothing to undo.
+  const rollback = useRef<TrainingAssignmentsState | null>(null)
+
   // The state to send is passed as the mutation variable rather than read from `assignments`,
   // so a save fired in the same tick as an optimistic change sends the NEW values.
   const mutation = useMutation({
@@ -47,7 +54,21 @@ export function TrainingTab({ players, saveGameId, clubId, assignments, onChange
       // squad query — so patch the cache directly instead of paying for a refetch.
       queryClient.setQueryData(['squad', saveGameId, clubId], data)
     },
+    onError: () => {
+      if (rollback.current) {
+        onChange(rollback.current)
+        rollback.current = null
+      }
+    },
   })
+
+  // Optimistic: the table updates before the round-trip, and `onError` puts it back.
+  function applyRules() {
+    const next = applyBulkRules(assignments, players, rules)
+    rollback.current = assignments
+    onChange(next)
+    mutation.mutate(next)
+  }
 
   function changeFocus(player: PlayerResponse, focus: TrainableAttribute | ''): void {
     onChange({
@@ -68,6 +89,8 @@ export function TrainingTab({ players, saveGameId, clubId, assignments, onChange
 
   return (
     <>
+      <TrainingBulkCard rules={rules} onRulesChange={setRules} onApply={applyRules} />
+
       <TableContainer component={Paper} variant="outlined" sx={{ mb: 2, borderRadius: 2 }}>
         <Table size="small">
           <TableHead>
@@ -114,7 +137,11 @@ export function TrainingTab({ players, saveGameId, clubId, assignments, onChange
         </Table>
       </TableContainer>
 
-      <Button color="secondary" disabled={mutation.isPending} onClick={() => mutation.mutate(assignments)}>
+      <Button
+        color="secondary"
+        disabled={mutation.isPending}
+        onClick={() => { rollback.current = null; mutation.mutate(assignments) }}
+      >
         {mutation.isPending ? 'Salvando…' : 'Salvar treino'}
       </Button>
 

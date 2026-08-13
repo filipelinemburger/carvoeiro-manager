@@ -162,4 +162,47 @@ describe('TrainingTab', () => {
 
     await waitFor(() => expect(qc.getQueryData(['squad', 'sg-1', 'club-1'])).toBe(savedSquad))
   })
+
+  it('applies a bulk rule to the table and saves, optimistically', async () => {
+    mockSetTraining.mockResolvedValue({ players: [] } as unknown as SquadResponse)
+    const { onChange } = renderTab()
+    fireEvent.click(screen.getByRole('button', { name: 'Treino por posição' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar posição' }))
+    // The card's rules are TrainingTab's own state, so the new row is on screen already.
+    fireEvent.change(screen.getByRole('combobox', { name: 'Foco da regra 1' }), {
+      target: { value: 'REFLEXOS' },
+    })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Intensidade da regra 1' }), {
+      target: { value: 'INTENSA' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }))
+    // Both goalkeepers get the rule; the centre-back does not.
+    expect(onChange).toHaveBeenCalledWith({
+      gk1: { focus: 'REFLEXOS', intensity: 'INTENSA' },
+      gk2: { focus: 'REFLEXOS', intensity: 'INTENSA' },
+      cb1: { focus: null, intensity: 'NORMAL' },
+    })
+    await waitFor(() => expect(mockSetTraining).toHaveBeenCalledWith(
+      'sg-1', 'club-1',
+      { assignments: [
+        { playerId: 'gk1', focus: 'REFLEXOS', intensity: 'INTENSA' },
+        { playerId: 'gk2', focus: 'REFLEXOS', intensity: 'INTENSA' },
+        { playerId: 'cb1', focus: null, intensity: 'NORMAL' },
+      ] },
+      expect.anything(),
+    ))
+  })
+
+  it('rolls the table back when the bulk save fails', async () => {
+    mockSetTraining.mockRejectedValue(new Error('boom'))
+    const { onChange } = renderTab()
+    fireEvent.click(screen.getByRole('button', { name: 'Treino por posição' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar posição' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Foco da regra 1' }), {
+      target: { value: 'REFLEXOS' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith(ASSIGNMENTS))
+    expect(await screen.findByText('Erro ao salvar treino.')).toBeInTheDocument()
+  })
 })
