@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { Pitch } from './Pitch'
 import type { TeamOnPitch, PlacedPlayer } from './Pitch'
 
@@ -379,5 +379,88 @@ describe('tap vs drag (onSlotClick)', () => {
     fireEvent.pointerDown(awayToken, { pointerId: 1, clientX: 64, clientY: 474 })
     fireEvent.pointerUp(awayToken, { pointerId: 1, clientX: 64, clientY: 474 })
     expect(onSlotClick).not.toHaveBeenCalled()
+  })
+})
+
+describe('context menu (right-click and long-press)', () => {
+  const kit = { primary: '#f7d417', secondary: '#111111' }
+
+  function fullXi(): PlacedPlayer[] {
+    const mk = (id: string, position: 'GK' | 'DEF' | 'MID' | 'ATT', slotIndex: number): PlacedPlayer =>
+      ({ id, surname: id, position, detailedPosition: null, fitness: 100, slotIndex })
+    return [
+      mk('gk', 'GK', 0),
+      mk('d1', 'DEF', 1), mk('d2', 'DEF', 2), mk('d3', 'DEF', 3), mk('d4', 'DEF', 4),
+      mk('m1', 'MID', 5), mk('m2', 'MID', 6), mk('m3', 'MID', 7),
+      mk('a1', 'ATT', 8), mk('a2', 'ATT', 9), mk('a3', 'ATT', 10),
+    ]
+  }
+
+  function renderMenuable(players = fullXi()) {
+    const onSlotClick = vi.fn()
+    const onSlotContextMenu = vi.fn()
+    const onSwap = vi.fn()
+    const { container } = render(
+      <Pitch
+        home={{ formation: '4-3-3', kit, showNames: true, players }}
+        onSwap={onSwap}
+        onSlotClick={onSlotClick}
+        onSlotContextMenu={onSlotContextMenu}
+      />,
+    )
+    const pitch = screen.getByTestId('pitch')
+    vi.spyOn(pitch, 'getBoundingClientRect').mockReturnValue({
+      left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0,
+      toJSON: () => ({}),
+    } as DOMRect)
+    const token = (slot: number) => container.querySelector(`[data-slot-index="${slot}"]`)!
+    return { onSwap, onSlotClick, onSlotContextMenu, token }
+  }
+
+  it('right-click on an occupied slot reports slotIndex and coordinates', () => {
+    const { onSlotContextMenu, token } = renderMenuable()
+    fireEvent.contextMenu(token(1), { clientX: 64, clientY: 474 })
+    expect(onSlotContextMenu).toHaveBeenCalledWith(1, 64, 474)
+  })
+
+  it('right-click on an empty slot does nothing', () => {
+    const players = fullXi().filter(p => p.slotIndex !== 10)
+    const { onSlotContextMenu, token } = renderMenuable(players)
+    fireEvent.contextMenu(token(10), { clientX: 200, clientY: 192 })
+    expect(onSlotContextMenu).not.toHaveBeenCalled()
+  })
+
+  describe('long-press', () => {
+    beforeEach(() => { vi.useFakeTimers() })
+    afterEach(() => { vi.useRealTimers() })
+
+    it('a 500ms hold fires the context menu and suppresses the tap', () => {
+      const { onSlotContextMenu, onSlotClick, onSwap, token } = renderMenuable()
+      fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+      act(() => { vi.advanceTimersByTime(500) })
+      expect(onSlotContextMenu).toHaveBeenCalledWith(1, 64, 474)
+      fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+      expect(onSlotClick).not.toHaveBeenCalled()
+      expect(onSwap).not.toHaveBeenCalled()
+    })
+
+    it('a short tap still fires onSlotClick and no context menu', () => {
+      const { onSlotContextMenu, onSlotClick, token } = renderMenuable()
+      fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+      act(() => { vi.advanceTimersByTime(200) })
+      fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+      expect(onSlotClick).toHaveBeenCalledWith(1)
+      expect(onSlotContextMenu).not.toHaveBeenCalled()
+    })
+
+    it('a hold that moves past the threshold is a drag, not a context menu', () => {
+      const { onSlotContextMenu, onSwap, token } = renderMenuable()
+      fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+      fireEvent.pointerMove(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
+      act(() => { vi.advanceTimersByTime(500) })
+      expect(onSlotContextMenu).not.toHaveBeenCalled()
+      fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
+      expect(onSwap).toHaveBeenCalledWith(1, 9)
+    })
   })
 })

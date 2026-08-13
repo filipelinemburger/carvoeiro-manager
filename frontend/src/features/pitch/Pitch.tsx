@@ -14,6 +14,10 @@ const DROP_RADIUS_FRACTION = 0.12
 // tap (fires onSlotClick) rather than a drag (fires onSwap).
 const CLICK_MOVE_THRESHOLD = 6
 
+// A pointer held this long without moving past CLICK_MOVE_THRESHOLD opens the context menu —
+// the touch equivalent of a right-click.
+const LONG_PRESS_MS = 500
+
 export type PlacedPlayer = {
   id: string
   surname: string
@@ -89,16 +93,31 @@ function place(team: TeamOnPitch): Positioned[] {
 // the interaction (not just its final resting spot) — see the tap-vs-drag resolution below.
 type Drag = { fromSlot: number; startX: number; startY: number; x: number; y: number; maxMoved: number }
 
-function TeamLayer({ team, mirror, onSwap, onSlotClick, containerRef }: {
+function TeamLayer({ team, mirror, onSwap, onSlotClick, onSlotContextMenu, containerRef }: {
   team: TeamOnPitch
   mirror: boolean
   onSwap?: (fromSlot: number, toSlot: number) => void
   onSlotClick?: (slotIndex: number) => void
+  onSlotContextMenu?: (slotIndex: number, clientX: number, clientY: number) => void
   containerRef?: React.RefObject<HTMLDivElement | null>
 }) {
   const colors = tokenColors(team.kit)
   const [drag, setDrag] = useState<Drag | null>(null)
   const positioned = place(team)
+
+  // Long-press bookkeeping. One set of refs for the whole layer, like `drag` above: only one
+  // pointer interaction is ever in flight, so per-slot refs would buy nothing.
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressFired = useRef(false)
+  const pressStart = useRef<{ x: number; y: number } | null>(null)
+
+  function cancelLongPress() {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+    pressStart.current = null
+  }
 
   // Nearest droppable slot center within DROP_RADIUS_FRACTION of the pitch width, in screen
   // pixels; the origin slot and slot 0 (GK) are never candidates. Null = snap back.
@@ -137,24 +156,58 @@ function TeamLayer({ team, mirror, onSwap, onSlotClick, containerRef }: {
         // tap is resolved below by movement distance, not by whether the slot is draggable.
         const tappable = Boolean(onSlotClick) && !mirror
         const interactive = draggable || tappable
+        // The context menu is offered only for slots that actually hold a player — there is no
+        // Função/Foco to edit on an empty placeholder.
+        const contextual = Boolean(onSlotContextMenu) && !mirror && player !== null
+        const pointerActive = interactive || contextual
         const dragging = drag?.fromSlot === i
         return (
           <Box
             key={player?.id ?? `slot-${number}`}
             data-slot-index={i}
             data-drop-candidate={dropCandidate === i ? 'true' : undefined}
-            onPointerDown={interactive ? e => {
-              e.currentTarget.setPointerCapture?.(e.pointerId)
-              setDrag({ fromSlot: i, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, maxMoved: 0 })
+            onContextMenu={contextual ? (e: React.MouseEvent) => {
+              e.preventDefault()
+              onSlotContextMenu?.(i, e.clientX, e.clientY)
             } : undefined}
-            onPointerMove={interactive ? e => {
+            onPointerDown={pointerActive ? e => {
+              e.currentTarget.setPointerCapture?.(e.pointerId)
+              longPressFired.current = false
+              if (contextual) {
+                const { clientX, clientY } = e
+                pressStart.current = { x: clientX, y: clientY }
+                longPressTimer.current = setTimeout(() => {
+                  longPressTimer.current = null
+                  longPressFired.current = true
+                  onSlotContextMenu?.(i, clientX, clientY)
+                }, LONG_PRESS_MS)
+              }
+              if (interactive) {
+                setDrag({ fromSlot: i, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, maxMoved: 0 })
+              }
+            } : undefined}
+            onPointerMove={pointerActive ? e => {
+              // Moving past the tap threshold turns the interaction into a drag, so the pending
+              // long-press is abandoned rather than firing mid-drag.
+              if (pressStart.current) {
+                const moved = Math.hypot(e.clientX - pressStart.current.x, e.clientY - pressStart.current.y)
+                if (moved > CLICK_MOVE_THRESHOLD) cancelLongPress()
+              }
               setDrag(d => {
                 if (!d || d.fromSlot !== i) return d
                 const moved = Math.hypot(e.clientX - d.startX, e.clientY - d.startY)
                 return { ...d, x: e.clientX, y: e.clientY, maxMoved: Math.max(d.maxMoved, moved) }
               })
             } : undefined}
-            onPointerUp={interactive ? e => {
+            onPointerUp={pointerActive ? e => {
+              cancelLongPress()
+              // A long-press already opened the menu; the release must not ALSO pop the slot
+              // picker on top of it.
+              if (longPressFired.current) {
+                longPressFired.current = false
+                setDrag(null)
+                return
+              }
               if (!drag || drag.fromSlot !== i) return
               // Resolve tap-vs-drag by the farthest the pointer travelled during the WHOLE
               // interaction, not just the net start→release displacement — a user who drags a
@@ -171,7 +224,11 @@ function TeamLayer({ team, mirror, onSwap, onSlotClick, containerRef }: {
               const target = dropTarget(e.clientX, e.clientY, i)
               if (target !== null) onSwap?.(i, target)
             } : undefined}
-            onPointerCancel={interactive ? () => setDrag(null) : undefined}
+            onPointerCancel={pointerActive ? () => {
+              cancelLongPress()
+              longPressFired.current = false
+              setDrag(null)
+            } : undefined}
             sx={{
               position: 'absolute',
               left: `${xPct}%`,
@@ -181,7 +238,7 @@ function TeamLayer({ team, mirror, onSwap, onSlotClick, containerRef }: {
                 : 'translate(-50%, -50%)',
               zIndex: dragging ? 10 : undefined,
               cursor: draggable ? 'grab' : tappable ? 'pointer' : undefined,
-              touchAction: interactive ? 'none' : undefined,
+              touchAction: pointerActive ? 'none' : undefined,
               ...(dropCandidate === i && { borderRadius: 1, boxShadow: '0 0 0 3px #f7d417' }),
             }}
           >
@@ -207,7 +264,7 @@ function TeamLayer({ team, mirror, onSwap, onSlotClick, containerRef }: {
   )
 }
 
-export function Pitch({ home, away, onSwap, onSlotClick }: {
+export function Pitch({ home, away, onSwap, onSlotClick, onSlotContextMenu }: {
   home: TeamOnPitch
   away?: TeamOnPitch
   /**
@@ -221,6 +278,12 @@ export function Pitch({ home, away, onSwap, onSlotClick }: {
    * slot and empty placeholders; dragging (via `onSwap`) is unaffected.
    */
   onSlotClick?: (slotIndex: number) => void
+  /**
+   * Fired with a home-team slot index and the pointer's client coordinates on a right-click or
+   * a ~500ms long-press, for slots that HOLD A PLAYER. A long-press suppresses the `onSlotClick`
+   * that its release would otherwise produce; dragging is unaffected.
+   */
+  onSlotContextMenu?: (slotIndex: number, clientX: number, clientY: number) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   return (
@@ -238,7 +301,7 @@ export function Pitch({ home, away, onSwap, onSlotClick }: {
           <rect x={28} y={129} width={44} height={18} />
         </g>
       </Box>
-      <TeamLayer team={home} mirror={false} onSwap={onSwap} onSlotClick={onSlotClick} containerRef={containerRef} />
+      <TeamLayer team={home} mirror={false} onSwap={onSwap} onSlotClick={onSlotClick} onSlotContextMenu={onSlotContextMenu} containerRef={containerRef} />
       {away && <TeamLayer team={away} mirror />}
     </Box>
   )
