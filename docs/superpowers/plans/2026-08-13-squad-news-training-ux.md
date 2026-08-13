@@ -1002,7 +1002,11 @@ Then add to `frontend/src/features/squad/SquadPage.test.tsx`, inside the **neste
     // full XI with zero goalkeepers.
     fireEvent.click(await screen.findByTestId('slot-picker-row-p-m4'))
     await waitFor(() => expect(pitch.querySelector('[data-slot-index="0"]')).toHaveTextContent('Meio Quatro'))
-    expect(screen.queryByText(/goleiro/i)).not.toBeInTheDocument()
+    // Assert on the Plantel tab, where the validation alert lives — a keeper-less XI is now
+    // legal, so no alert renders. (Do NOT match on /goleiro/i across the document: the hidden
+    // Plantel panel still lists both keepers' names, which `queryByText` would happily find.)
+    fireEvent.click(screen.getByRole('tab', { name: 'Plantel' }))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Salvar escalação' })).toBeEnabled()
   })
 
