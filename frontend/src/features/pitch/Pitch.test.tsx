@@ -462,5 +462,33 @@ describe('context menu (right-click and long-press)', () => {
       fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
       expect(onSwap).toHaveBeenCalledWith(1, 9)
     })
+
+    it('a 500ms hold on an empty slot does nothing', () => {
+      const players = fullXi().filter(p => p.slotIndex !== 10)
+      const { onSlotContextMenu, token } = renderMenuable(players)
+      fireEvent.pointerDown(token(10), { pointerId: 1, clientX: 200, clientY: 192 })
+      act(() => { vi.advanceTimersByTime(500) })
+      expect(onSlotContextMenu).not.toHaveBeenCalled()
+    })
+
+    it('a second pointer starting mid-hold does not orphan the first timer or swallow its tap', () => {
+      const { onSlotContextMenu, onSlotClick, token } = renderMenuable()
+      // Finger A presses slot 1, arming its long-press timer.
+      fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+      // Before A's timer fires, finger B presses slot 3 — this must cancel A's still-pending
+      // timer rather than silently overwrite the shared ref.
+      fireEvent.pointerDown(token(3), { pointerId: 2, clientX: 200, clientY: 300 })
+      // Finger A lifts as a quick tap.
+      fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+      // Advance past the 500ms mark from A's original press. If A's timer had been orphaned it
+      // would fire here, opening the context menu for a slot the user already released.
+      act(() => { vi.advanceTimersByTime(500) })
+      expect(onSlotContextMenu).not.toHaveBeenCalled()
+      // Finger B lifts as a legitimate short tap on slot 3 — must still resolve as a tap, not be
+      // swallowed by a stale longPressFired flag set by A's orphaned timer.
+      fireEvent.pointerUp(token(3), { pointerId: 2, clientX: 200, clientY: 300 })
+      expect(onSlotClick).toHaveBeenCalledWith(3)
+      expect(onSlotContextMenu).not.toHaveBeenCalled()
+    })
   })
 })

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Box } from '@mui/material'
 import { pitchSlots, type Slot, type Line } from './pitchSlots'
 import { PlayerToken, type TokenBadges } from './PlayerToken'
@@ -119,6 +119,10 @@ function TeamLayer({ team, mirror, onSwap, onSlotClick, onSlotContextMenu, conta
     pressStart.current = null
   }
 
+  // A timer armed on pointerdown outlives the component if it unmounts mid-hold (route change,
+  // parent re-render) — React does not touch a bare setTimeout.
+  useEffect(() => () => cancelLongPress(), [])
+
   // Nearest droppable slot center within DROP_RADIUS_FRACTION of the pitch width, in screen
   // pixels; the origin slot and slot 0 (GK) are never candidates. Null = snap back.
   function dropTarget(clientX: number, clientY: number, fromSlot: number): number | null {
@@ -172,6 +176,11 @@ function TeamLayer({ team, mirror, onSwap, onSlotClick, onSlotContextMenu, conta
             } : undefined}
             onPointerDown={pointerActive ? e => {
               e.currentTarget.setPointerCapture?.(e.pointerId)
+              // The long-press refs are shared by every slot in this layer (see above). A second
+              // pointer starting while one is still pending must not leave the first timer
+              // orphaned — an uncleared timer would fire late, into whichever slot's press state
+              // happens to occupy the shared refs by then, and swallow an unrelated tap.
+              cancelLongPress()
               longPressFired.current = false
               if (contextual) {
                 const { clientX, clientY } = e
