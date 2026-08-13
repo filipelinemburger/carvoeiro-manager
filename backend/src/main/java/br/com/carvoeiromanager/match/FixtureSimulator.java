@@ -140,6 +140,29 @@ public class FixtureSimulator {
      */
     public RoundOutcome simulateRound(SaveGame save, UUID competitionId, List<Fixture> fixtures,
                                       Set<UUID> alreadyPlayedElsewhere, Map<UUID, PrecomputedFixture> precomputed) {
+        return simulateRound(save, competitionId, fixtures, alreadyPlayedElsewhere, precomputed, true);
+    }
+
+    /**
+     * Simulates a round of a competition the managed club does not play in.
+     *
+     * <p>Identical to {@link #simulateRound} except that it does <b>not</b> run the didn't-play
+     * sweep. That sweep is save-wide: it ticks injuries, burns suspensions and drifts form and
+     * morale for every player not in this round's XIs — including the managed club's. Exactly one
+     * sweep per advance is the rule the game has always run on, and the managed round is what
+     * earns it. Letting background rounds sweep too would tick the player's squad once more for
+     * every division playing that day, so injuries and bans would expire faster the more of the
+     * football world exists. Background clubs still get their tick from that one managed sweep.
+     */
+    public RoundOutcome simulateBackgroundRound(SaveGame save, UUID competitionId,
+                                                List<Fixture> fixtures) {
+        return simulateRound(save, competitionId, fixtures, Set.of(), Map.of(), false);
+    }
+
+    private RoundOutcome simulateRound(SaveGame save, UUID competitionId, List<Fixture> fixtures,
+                                       Set<UUID> alreadyPlayedElsewhere,
+                                       Map<UUID, PrecomputedFixture> precomputed,
+                                       boolean sweepNonPlayers) {
         final UUID saveGameId = save.getId();
         final UUID managedClubId = save.getManagedClubId();
 
@@ -185,11 +208,13 @@ public class FixtureSimulator {
             sim.awayXi().forEach(p -> { playedIds.add(p.getId()); toPersist.add(p); });
         }
 
-        List<Player> nonPlayers = playerRepository.findBySaveGameId(saveGameId).stream()
-                .filter(p -> !playedIds.contains(p.getId()) && !alreadyPlayedElsewhere.contains(p.getId()))
-                .toList();
-        matchOutcomeApplier.applyNonPlayers(nonPlayers);
-        toPersist.addAll(nonPlayers);
+        if (sweepNonPlayers) {
+            List<Player> nonPlayers = playerRepository.findBySaveGameId(saveGameId).stream()
+                    .filter(p -> !playedIds.contains(p.getId()) && !alreadyPlayedElsewhere.contains(p.getId()))
+                    .toList();
+            matchOutcomeApplier.applyNonPlayers(nonPlayers);
+            toPersist.addAll(nonPlayers);
+        }
         playerRepository.saveAll(toPersist);
 
         return new RoundOutcome(List.copyOf(results), summary.bookings(), summary.newSuspensions(),

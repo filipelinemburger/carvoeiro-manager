@@ -94,7 +94,10 @@ public class BackgroundCompetitionService {
         for (SeasonEvent event : due) {
             List<Fixture> fixtures = fixtureRepository.findBySaveGameIdAndCompetitionIdAndRound(
                     saveGameId, event.getCompetitionId(), event.getRound());
-            fixtureSimulator.simulateRound(save, event.getCompetitionId(), fixtures);
+            // simulateBackgroundRound, not simulateRound: the latter also runs the save-wide
+            // didn't-play sweep, which would tick the managed club's injuries and suspensions
+            // once more for every background round resolved on the same advance.
+            fixtureSimulator.simulateBackgroundRound(save, event.getCompetitionId(), fixtures);
             // Background clubs take matchday finance like anyone else; without it their balances
             // would drift from the divisions the player can see.
             financeService.processMatchday(saveGameId, event.getCompetitionId(), fixtures,

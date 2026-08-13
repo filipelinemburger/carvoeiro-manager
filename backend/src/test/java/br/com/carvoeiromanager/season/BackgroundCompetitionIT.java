@@ -15,6 +15,9 @@ import br.com.carvoeiromanager.competition.CompetitionClubRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.match.LineupService;
+import br.com.carvoeiromanager.player.Player;
+import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +55,8 @@ class BackgroundCompetitionIT {
     private static final int ADVANCE_GUARD = 500;
 
     @Autowired SeasonAdvanceService seasonAdvanceService;
+    @Autowired PlayerRepository playerRepository;
+    @Autowired LineupService lineupService;
     @Autowired SeasonRolloverService seasonRolloverService;
     @Autowired BackgroundCompetitionService backgroundCompetitionService;
     @Autowired SeasonCalendarGenerator seasonCalendarGenerator;
@@ -317,5 +322,42 @@ class BackgroundCompetitionIT {
         int again = backgroundCompetitionService.resolveDue(save, save.getCurrentDate());
 
         assertThat(again).isZero();
+    }
+
+    /**
+     * A background round must not age the player's squad.
+     *
+     * <p>Simulating a round runs a save-wide "didn't play" sweep that ticks injuries, burns
+     * suspensions and drifts form for everyone outside the round's XIs. That sweep is meant to
+     * happen once per advance, earned by the player's own match. When background rounds ran it
+     * too, a benched injured player lost one match of injury for their own matchday and another
+     * for every background round resolved alongside it — so an injury of two cleared in a single
+     * advance, and it got worse the more divisions the world contained.
+     */
+    @Test
+    void aBackgroundRoundDoesNotTickTheManagedSquadsInjuries() {
+        Career c = createCareer();
+        UUID managedClubId = saveGameRepository.findById(c.id()).orElseThrow().getManagedClubId();
+
+        // Someone outside the XI, so they sit out the round rather than playing in it.
+        List<Player> xi = lineupService.bestXi(managedClubId);
+        Player benched = playerRepository.findByClubId(managedClubId).stream()
+                .filter(p -> xi.stream().noneMatch(x -> x.getId().equals(p.getId())))
+                .findFirst().orElseThrow();
+        benched.addInjury(3);
+        playerRepository.save(benched);
+
+        // Advance until the player's own match is played — the advance that also resolves every
+        // background round due by that date.
+        AdvanceResponse r = seasonAdvanceService.advance(c.id(), c.userId());
+        for (int guard = 0; !"MATCH".equals(r.type()) && guard < ADVANCE_GUARD; guard++) {
+            r = seasonAdvanceService.advance(c.id(), c.userId());
+        }
+        assertThat(r.type()).isEqualTo("MATCH");
+
+        // Exactly one matchday served, no matter how many background rounds resolved with it.
+        assertThat(playerRepository.findById(benched.getId()).orElseThrow().getInjuryMatches())
+                .as("one advance must cost exactly one match of injury")
+                .isEqualTo(2);
     }
 }
