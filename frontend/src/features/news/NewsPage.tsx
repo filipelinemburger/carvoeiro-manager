@@ -8,14 +8,17 @@ import { useAuth } from '../../auth/AuthContext'
 import { AdvanceEventCard } from '../match/AdvanceEventCard'
 import { formatDatePtBR } from '../../utils/date'
 import { newsTitle, newsIcon } from './newsMeta'
+import { initialSelection, nextUnread } from './newsSelection'
 import type { NewsFeedItem, PageResponse, SaveGameResponse } from '../../api/types'
 
 const NEWS_PAGE_SIZE = 10
 
 /**
  * CM-style news inbox: a compact headline list on top, the selected item's full
- * AdvanceEventCard below. The newest item is auto-selected (and marked read) on landing,
- * so the just-played result shows immediately after Avançar. Read state is optimistic.
+ * AdvanceEventCard below. The oldest unread item is auto-selected (and marked read) on
+ * landing, so the reader works forward through a batch with "Ler próxima" instead of
+ * backwards; with nothing unread, the newest item lands instead — which is also what shows
+ * right after Avançar once its fresh result has been read. Read state is optimistic.
  */
 export function NewsPage() {
   const { token } = useAuth()
@@ -100,9 +103,10 @@ export function NewsPage() {
   const lastNewestId = useRef<string | null>(null)
   const items = (data?.pages ?? []).flatMap(p => p.content)
 
-  // Auto-select the newest item on landing and whenever a strictly-newer item arrives
-  // (e.g. after Avançar prepends a fresh result), or re-select when the current selection
-  // drops out of the list. Marks the newly-selected item read if it was unread.
+  // Land on the oldest unread item (see `initialSelection`) rather than the newest, so the
+  // reader works forward in time with "Ler próxima". Re-runs on the same triggers as before:
+  // a strictly-newer item arriving (Avançar prepending a fresh result), or the current
+  // selection dropping out of the list.
   useEffect(() => {
     if (items.length === 0) {
       lastNewestId.current = null
@@ -114,8 +118,11 @@ export function NewsPage() {
     const selectionPresent = selectedId !== null && items.some(it => it.id === selectedId)
     if (newestArrived || !selectionPresent) {
       lastNewestId.current = newest.id
-      setSelectedId(newest.id)
-      if (!newest.read) markReadMutation.mutate(newest.id)
+      const target = initialSelection(items)
+      if (target) {
+        setSelectedId(target.id)
+        if (!target.read) markReadMutation.mutate(target.id)
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items.length, items[0]?.id, selectedId])
@@ -132,6 +139,7 @@ export function NewsPage() {
     setSelectedId(item.id)
     if (!item.read) markReadMutation.mutate(item.id)
   }
+  const nextItem = nextUnread(items, selectedId)
 
   return (
     <Box>
@@ -204,6 +212,17 @@ export function NewsPage() {
               </Button>
             </Box>
           )}
+
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={nextItem === null}
+              onClick={() => { if (nextItem) handleSelect(nextItem) }}
+            >
+              {`Ler próxima (${loadedUnread})`}
+            </Button>
+          </Box>
 
           {selected && (
             <AdvanceEventCard

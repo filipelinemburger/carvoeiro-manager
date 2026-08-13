@@ -82,24 +82,26 @@ describe('NewsPage (master-detail)', () => {
     vi.mocked(markAllNewsRead).mockResolvedValue()
   })
 
-  it('lists derived headlines and auto-selects the newest, showing its detail card + marking it read', async () => {
+  it('lists derived headlines and auto-selects the oldest unread, showing its detail card + marking it read', async () => {
     renderPage()
     // Both headlines appear in the list.
     await waitFor(() => expect(screen.getByText('Rodada 12 — resultados')).toBeInTheDocument())
     expect(screen.getByText('Janela de transferências — 3 proposta(s)')).toBeInTheDocument()
-    // Newest (MATCH) is auto-selected: its detail card header shows the round label.
-    await waitFor(() => expect(screen.getByText(/Série B · Rodada 12/)).toBeInTheDocument())
-    // Newest was unread → marked read on landing.
-    await waitFor(() => expect(markNewsRead).toHaveBeenCalledWith('sg-1', 'n1', 'test-token'))
+    // ITEMS is newest-first ([n1, n2]) and both are unread, so the oldest unread — n2
+    // (TRANSFER) — is auto-selected: its detail card header appears.
+    await waitFor(() => expect(screen.getByText('Janela de Transferências')).toBeInTheDocument())
+    // n2 was unread → marked read on landing.
+    await waitFor(() => expect(markNewsRead).toHaveBeenCalledWith('sg-1', 'n2', 'test-token'))
   })
 
   it('selecting a headline swaps the detail card and marks that item read', async () => {
     renderPage()
-    const transferRow = await screen.findByText('Janela de transferências — 3 proposta(s)')
-    fireEvent.click(transferRow)
-    // TRANSFER detail card header appears.
-    await waitFor(() => expect(screen.getByText('Janela de Transferências')).toBeInTheDocument())
-    await waitFor(() => expect(markNewsRead).toHaveBeenCalledWith('sg-1', 'n2', 'test-token'))
+    // Auto-lands on n2 (the oldest unread, TRANSFER); click the other headline to swap to n1.
+    const matchRow = await screen.findByText('Rodada 12 — resultados')
+    fireEvent.click(matchRow)
+    // MATCH detail card header appears (round + 1, see AdvanceEventCard's roundLabel).
+    await waitFor(() => expect(screen.getByText(/Série B · Rodada 12/)).toBeInTheDocument())
+    await waitFor(() => expect(markNewsRead).toHaveBeenCalledWith('sg-1', 'n1', 'test-token'))
   })
 
   it('"Marcar todas como lidas" marks all read', async () => {
@@ -142,12 +144,14 @@ describe('NewsPage (master-detail)', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: /carregar mais/i })).not.toBeInTheDocument())
   })
 
-  it('re-selects the newest item when a fresh one is prepended by a background refetch, even while the previous selection is still present (cached-advance path)', async () => {
+  it('re-selects the oldest unread item when a fresh one is prepended by a background refetch, even while the previous selection is still present (cached-advance path)', async () => {
     const A: NewsFeedItem = { id: 'a1', read: false, payload: match(10) }
     const B: NewsFeedItem = { id: 'b1', read: false, payload: transfer(5) }
     vi.mocked(getNews)
       .mockResolvedValueOnce({ content: [A], page: 1, size: 10, totalElements: 1, totalPages: 1 })
-      .mockResolvedValue({ content: [B, A], page: 1, size: 10, totalElements: 2, totalPages: 1 })
+      // The server-truth refetch reflects that A was already marked read by the earlier
+      // landing (below) — only the freshly-prepended B is still unread.
+      .mockResolvedValue({ content: [B, { ...A, read: true }], page: 1, size: 10, totalElements: 2, totalPages: 1 })
 
     const { qc } = renderPageWithClient()
 
@@ -162,10 +166,58 @@ describe('NewsPage (master-detail)', () => {
     // strictly-newer item B prepended — while the current selection A is still present.
     await qc.invalidateQueries({ queryKey: ['news', 'sg-1'] })
 
-    // B must become the selection: its detail card renders and it gets marked read.
-    // On the old effect (which only re-selects when the current selection drops OUT of the
-    // list) this never happens, because A remains present — B is left unopened.
+    // B must become the selection (it's the only unread item left): its detail card renders
+    // and it gets marked read. On the old effect (which only re-selects when the current
+    // selection drops OUT of the list) this never happens, because A remains present — B is
+    // left unopened.
     await waitFor(() => expect(screen.getByText('Janela de Transferências')).toBeInTheDocument())
     await waitFor(() => expect(markNewsRead).toHaveBeenCalledWith('sg-1', 'b1', 'test-token'))
+  })
+
+  it('lands on the oldest unread item, not the newest', async () => {
+    vi.mocked(getSaveGame).mockResolvedValue(SAVE_GAME)
+    vi.mocked(getNews).mockResolvedValue({
+      content: [
+        { id: 'n3', read: false, payload: match(13) },
+        { id: 'n2', read: false, payload: match(12) },
+        { id: 'n1', read: true, payload: match(11) },
+      ],
+      page: 1, size: 10, totalElements: 3, totalPages: 1,
+    })
+    vi.mocked(markNewsRead).mockResolvedValue(undefined)
+    renderPage()
+    await waitFor(() => expect(markNewsRead).toHaveBeenCalledWith('sg-1', 'n2', expect.anything()))
+  })
+
+  it('lands on the newest item when everything is already read', async () => {
+    vi.mocked(getSaveGame).mockResolvedValue(SAVE_GAME)
+    vi.mocked(getNews).mockResolvedValue({
+      content: [
+        { id: 'n3', read: true, payload: match(13) },
+        { id: 'n2', read: true, payload: match(12) },
+      ],
+      page: 1, size: 10, totalElements: 2, totalPages: 1,
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Ler próxima (0)' })).toBeDisabled())
+    expect(markNewsRead).not.toHaveBeenCalled()
+  })
+
+  it('"Ler próxima" walks forward to the next unread item and marks it read', async () => {
+    vi.mocked(getSaveGame).mockResolvedValue(SAVE_GAME)
+    vi.mocked(getNews).mockResolvedValue({
+      content: [
+        { id: 'n3', read: false, payload: match(13) },
+        { id: 'n2', read: false, payload: match(12) },
+      ],
+      page: 1, size: 10, totalElements: 2, totalPages: 1,
+    })
+    vi.mocked(markNewsRead).mockResolvedValue(undefined)
+    renderPage()
+    // Landed on n2 (the oldest unread), leaving exactly one unread.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Ler próxima (1)' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Ler próxima (1)' }))
+    await waitFor(() => expect(markNewsRead).toHaveBeenCalledWith('sg-1', 'n3', expect.anything()))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Ler próxima (0)' })).toBeDisabled())
   })
 })
