@@ -66,6 +66,17 @@ describe('TrainingBulkCard', () => {
     ])
   })
 
+  it('disables Adicionar posição once all 12 positions are claimed', () => {
+    const ALL_POSITIONS: BulkTrainingRule['position'][] = [
+      'GOLEIRO', 'ZAGUEIRO', 'LATERAL_DIREITO', 'LATERAL_ESQUERDO', 'VOLANTE', 'MEIA_CENTRAL',
+      'MEIA_ARMADOR', 'MEIA_DIREITA', 'MEIA_ESQUERDA', 'PONTA_DIREITA', 'PONTA_ESQUERDA', 'ATACANTE',
+    ]
+    const rules: BulkTrainingRule[] = ALL_POSITIONS.map(position => ({ position, focus: null, intensity: 'NORMAL' }))
+    renderCard(rules)
+    expand()
+    expect(screen.getByRole('button', { name: 'Adicionar posição' })).toBeDisabled()
+  })
+
   it('disables Salvar with no rules and enables it with one', () => {
     const { unmount } = render(
       <TrainingBulkCard rules={[]} onRulesChange={vi.fn()} onApply={vi.fn()} />,

@@ -228,9 +228,17 @@ Details:
 ### 8.3 `TrainingTab.tsx`
 
 The extracted Treino panel: the bulk card, the existing per-player table, and the existing
-`Salvar treino` button. It owns `trainingAssignments`, its hydration effect, the two change
-handlers and `trainingMutation` — all moved verbatim from `SquadPage`. It receives
-`displayPlayers`, `saveGameId`, `clubId` and the `playerNameButton` render prop.
+`Salvar treino` button. It owns the two change handlers (`changeFocus`/`changeIntensity`) and
+`trainingMutation` — moved verbatim from `SquadPage`. It receives `displayPlayers`, `saveGameId`,
+`clubId` and the `playerNameButton` render prop, plus `assignments` and `onChange`.
+
+`trainingAssignments` itself, and the effect that hydrates it from the squad query, **stay in
+`SquadPage`** rather than moving into `TrainingTab` — deliberately, not as leftover scope. The tab
+stays mounted-only-while-active (`tab === 2`, see below), so any state owned by the tab component
+itself would be discarded on every tab switch, silently losing an unsaved focus/intensity edit the
+moment the manager glances at Plantel or Táticas. `SquadPage` outlives the mount/unmount cycle, so
+state kept there survives it; `TrainingTab` only reads `assignments` and reports edits upward via
+`onChange`, the same shape `changeFocus`/`changeIntensity` already use internally.
 
 The tab stays mounted-only-while-active (`tab === 2`), for the reason already documented at
 `SquadPage.tsx:1005-1011`: mounting it always would render every player's name a second time and

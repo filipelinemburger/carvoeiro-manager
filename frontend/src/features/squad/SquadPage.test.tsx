@@ -321,6 +321,27 @@ describe('SquadPage', () => {
     expect(screen.getByRole('combobox', { name: `Intensidade de treino de ${GK.name}` })).toHaveValue('INTENSA')
   })
 
+  it('keeps an unsaved training focus change after switching away from and back to Treino', async () => {
+    // `trainingAssignments` lives in SquadPage, not TrainingTab, SPECIFICALLY because the Treino
+    // panel unmounts on tab-away (unlike Plantel/Táticas, which stay mounted-but-hidden) — state
+    // owned by the tab itself would discard this unsaved edit. Proves the invariant the whole
+    // extraction was designed around.
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Treino' }))
+    fireEvent.change(
+      screen.getByRole('combobox', { name: `Foco de treino de ${GK.name}` }),
+      { target: { value: 'REFLEXOS' } },
+    )
+    expect(screen.getByRole('combobox', { name: `Foco de treino de ${GK.name}` })).toHaveValue('REFLEXOS')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Plantel' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Treino' }))
+
+    expect(screen.getByRole('combobox', { name: `Foco de treino de ${GK.name}` })).toHaveValue('REFLEXOS')
+  })
+
   it('shows tactics controls side by side with the pitch in the Táticas de jogo tab', async () => {
     renderWithProviders()
     fireEvent.click(await screen.findByRole('tab', { name: 'Táticas de jogo' }))

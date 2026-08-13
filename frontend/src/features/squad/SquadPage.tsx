@@ -979,7 +979,7 @@ export function SquadPage() {
 
       {/* Opened by right-clicking / long-pressing a pitch token in the Táticas tab (spec §6.2). */}
       <RoleContextMenu
-        anchor={roleMenu}
+        anchor={roleMenuPlayer ? roleMenu : null}
         playerName={roleMenuPlayer?.name ?? ''}
         funcaoControl={roleMenuPlayer ? funcaoSelect(roleMenuPlayer) : null}
         focoControl={roleMenuPlayer ? focoSelect(roleMenuPlayer) : null}
