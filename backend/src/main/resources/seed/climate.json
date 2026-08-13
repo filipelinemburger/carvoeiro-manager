@@ -55,6 +55,20 @@
       { "month": 10, "minC": 23, "maxC": 31, "rainChance": 0.12, "windChance": 0.14 },
       { "month": 11, "minC": 24, "maxC": 31, "rainChance": 0.10, "windChance": 0.13 },
       { "month": 12, "minC": 24, "maxC": 32, "rainChance": 0.14, "windChance": 0.12 }
+    ],
+    "NORTE": [
+      { "month": 1,  "minC": 24, "maxC": 31, "rainChance": 0.66, "windChance": 0.03 },
+      { "month": 2,  "minC": 24, "maxC": 31, "rainChance": 0.70, "windChance": 0.03 },
+      { "month": 3,  "minC": 24, "maxC": 31, "rainChance": 0.72, "windChance": 0.03 },
+      { "month": 4,  "minC": 24, "maxC": 31, "rainChance": 0.68, "windChance": 0.03 },
+      { "month": 5,  "minC": 24, "maxC": 32, "rainChance": 0.55, "windChance": 0.04 },
+      { "month": 6,  "minC": 23, "maxC": 32, "rainChance": 0.36, "windChance": 0.04 },
+      { "month": 7,  "minC": 23, "maxC": 32, "rainChance": 0.28, "windChance": 0.05 },
+      { "month": 8,  "minC": 23, "maxC": 33, "rainChance": 0.22, "windChance": 0.05 },
+      { "month": 9,  "minC": 24, "maxC": 33, "rainChance": 0.24, "windChance": 0.05 },
+      { "month": 10, "minC": 24, "maxC": 33, "rainChance": 0.32, "windChance": 0.05 },
+      { "month": 11, "minC": 24, "maxC": 32, "rainChance": 0.44, "windChance": 0.04 },
+      { "month": 12, "minC": 24, "maxC": 32, "rainChance": 0.58, "windChance": 0.03 }
     ]
   }
 }
