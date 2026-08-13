@@ -176,9 +176,20 @@ function TeamLayer({ team, mirror, onSwap, onSlotClick, onSlotContextMenu, conta
             data-drop-candidate={dropCandidate === i ? 'true' : undefined}
             onContextMenu={contextual ? (e: React.MouseEvent) => {
               e.preventDefault()
+              // A real right-click's native sequence is pointerdown -> contextmenu -> pointerup;
+              // the trailing pointerup (button 2) still lands on this token because pointerdown
+              // captured it, so without this flag it would fall through to the tap resolution
+              // below and pop the slot picker on top of the menu that just opened. Same
+              // suppression the long-press timer sets for its own trailing pointerup.
+              longPressFired.current = true
               onSlotContextMenu?.(i, e.clientX, e.clientY)
             } : undefined}
             onPointerDown={pointerActive ? e => {
+              // Only the primary button starts a drag/tap/long-press interaction. A right-click
+              // (button 2) is handled entirely by onContextMenu below; letting it also fall
+              // through here would arm drag state that the trailing pointerup then resolves as a
+              // tap, opening the slot picker over the context menu.
+              if (e.button !== 0) return
               e.currentTarget.setPointerCapture?.(e.pointerId)
               // The long-press refs are shared by every slot in this layer (see above). A second
               // pointer starting while one is still pending must not leave the first timer
@@ -201,10 +212,19 @@ function TeamLayer({ team, mirror, onSwap, onSlotClick, onSlotContextMenu, conta
             } : undefined}
             onPointerMove={pointerActive ? e => {
               // Moving past the tap threshold turns the interaction into a drag, so the pending
-              // long-press is abandoned rather than firing mid-drag.
+              // long-press is abandoned rather than firing mid-drag. If the long-press had
+              // already FIRED (menu already open), clear that flag too — otherwise the release
+              // would return early and the drag would be silently discarded. Press-and-hold-
+              // then-drag is a common touch gesture, and the GK slot is newly draggable, so this
+              // is a real path, not just a defensive fallback. `longPressFired.current` is
+              // already false in every other case, so unconditionally clearing it here is a
+              // no-op for a plain (non-long-press) drag.
               if (pressStart.current) {
                 const moved = Math.hypot(e.clientX - pressStart.current.x, e.clientY - pressStart.current.y)
-                if (moved > CLICK_MOVE_THRESHOLD) cancelLongPress()
+                if (moved > CLICK_MOVE_THRESHOLD) {
+                  cancelLongPress()
+                  longPressFired.current = false
+                }
               }
               setDrag(d => {
                 if (!d || d.fromSlot !== i) return d

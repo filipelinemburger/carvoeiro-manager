@@ -430,6 +430,21 @@ describe('context menu (right-click and long-press)', () => {
     expect(onSlotContextMenu).not.toHaveBeenCalled()
   })
 
+  it('a real right-click (full native pointerdown -> contextmenu -> pointerup sequence) does not also open the slot picker', () => {
+    // The native sequence for a right-click is pointerdown (button 2) -> contextmenu ->
+    // pointerup (button 2). Pointer capture from the pointerdown routes the trailing pointerup
+    // to this same token, past any backdrop — so without defences in both onPointerDown (ignore
+    // non-primary buttons) and onContextMenu (suppress the trailing pointerup like a long-press
+    // does) that pointerup would resolve as a tap and pop the slot picker on top of the menu.
+    const { onSlotContextMenu, onSlotClick, token } = renderMenuable()
+    fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474, button: 2 })
+    fireEvent.contextMenu(token(1), { clientX: 64, clientY: 474 })
+    fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 64, clientY: 474, button: 2 })
+    expect(onSlotContextMenu).toHaveBeenCalledTimes(1)
+    expect(onSlotContextMenu).toHaveBeenCalledWith(1, 64, 474)
+    expect(onSlotClick).not.toHaveBeenCalled()
+  })
+
   describe('long-press', () => {
     beforeEach(() => { vi.useFakeTimers() })
     afterEach(() => { vi.useRealTimers() })
@@ -459,6 +474,19 @@ describe('context menu (right-click and long-press)', () => {
       fireEvent.pointerMove(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
       act(() => { vi.advanceTimersByTime(500) })
       expect(onSlotContextMenu).not.toHaveBeenCalled()
+      fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
+      expect(onSwap).toHaveBeenCalledWith(1, 9)
+    })
+
+    it('a hold past 500ms that then drags re-enters drag resolution instead of discarding the drop', () => {
+      // Press-and-hold-then-drag is a common touch gesture, and the GK slot is newly draggable,
+      // so this is a real path: the long-press firing must not permanently disable the drag for
+      // the rest of the interaction.
+      const { onSlotContextMenu, onSwap, token } = renderMenuable()
+      fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
+      act(() => { vi.advanceTimersByTime(600) })
+      expect(onSlotContextMenu).toHaveBeenCalledWith(1, 64, 474)
+      fireEvent.pointerMove(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
       fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 200, clientY: 192 })
       expect(onSwap).toHaveBeenCalledWith(1, 9)
     })
