@@ -58,12 +58,32 @@ class MatchCalibrationTest {
      */
     private static final String REFERENCE_CLUB = "NAU";
 
+    /**
+     * The favourite/underdog pair, pinned by name for exactly the reason above — and this is the
+     * drift that javadoc predicted. This test used to take the extremes of the whole pool, which
+     * held one tier of Brazilian football. Série A arrived and the extremes became Flamengo
+     * against a small state club: a 32-point gap the engine correctly turned into an 0.82
+     * favourite win-rate, against a band tuned for 0.60–0.70. Nothing about the engine changed.
+     *
+     * <p>Criciúma against Santa Catarina reproduces the matchup the band was tuned on (the old
+     * extremes were Criciúma and Chapecoense, a 23-point gap; Chapecoense has since been rebuilt
+     * as a Série A side, and Santa Catarina sits within half a point of where it was). A
+     * cross-tier thrashing is a real result, not a miscalibration — it is just not what this
+     * test measures.
+     */
+    private static final String FAVORITE_CLUB = "CRI";
+    private static final String UNDERDOG_CLUB = "SCA";
+
     private SeedClub referenceClub() {
+        return clubByShortName(REFERENCE_CLUB);
+    }
+
+    private SeedClub clubByShortName(String shortName) {
         return seedLoader.loadCareer().clubPool().stream()
-                .filter(c -> REFERENCE_CLUB.equals(c.shortName()))
+                .filter(c -> shortName.equals(c.shortName()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException(
-                        "Calibration reference club " + REFERENCE_CLUB + " is no longer in the seed pool"));
+                        "Calibration club " + shortName + " is no longer in the seed pool"));
     }
 
     private List<SeedClub> rankedByStrength() {
@@ -116,9 +136,8 @@ class MatchCalibrationTest {
 
     @Test
     void favoriteBeatsUnderdogInRealisticBand() {
-        List<SeedClub> ranked = rankedByStrength();
-        TeamMatchInput strong = strength(ranked.get(0));
-        TeamMatchInput weak = strength(ranked.get(ranked.size() - 1));
+        TeamMatchInput strong = strength(clubByShortName(FAVORITE_CLUB));
+        TeamMatchInput weak = strength(clubByShortName(UNDERDOG_CLUB));
 
         int favWins = 0;
         int games = 0;
