@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -192,18 +193,38 @@ class StaffPoachingEffectsIT {
         // emptied, not delete it. Only four clubs' physios were ever researched, so most rivals
         // reach the effects service with an empty FISIOTERAPEUTA slot and no vacancy to explain it.
         Career c = createCareer();
-        UUID neverResearched = clubRepository.findBySaveGameId(c.id()).stream()
-                .map(Club::getId)
-                .filter(id -> !id.equals(c.clubId()))
-                .filter(id -> staffRepository.findByClubIdAndRole(id, StaffRole.FISIOTERAPEUTA).isEmpty())
-                .findFirst()
-                .orElseThrow(() -> new AssertionError(
-                        "Expected at least one rival club with no seeded FISIOTERAPEUTA — none found."));
+        UUID noPhysio = firstRivalWithNobodyIn(c, StaffRole.FISIOTERAPEUTA);
+        UUID noFitnessCoach = firstRivalWithNobodyIn(c, StaffRole.PREPARADOR_FISICO);
 
         assertThat(staffVacancyRepository
-                .existsByClubIdAndRole(neverResearched, StaffRole.FISIOTERAPEUTA)).isFalse();
-        assertThat(staffEffectsService.injuryRiskMultiplierFor(neverResearched, false))
+                .existsByClubIdAndRole(noPhysio, StaffRole.FISIOTERAPEUTA)).isFalse();
+        assertThat(staffEffectsService.injuryRiskMultiplierFor(noPhysio, false))
                 .isEqualTo(BASELINE_INJURY_MULTIPLIER);
-        assertThat(staffEffectsService.trainingBonusFor(neverResearched, false)).isEqualTo(1);
+        assertThat(staffEffectsService.trainingBonusFor(noFitnessCoach, false)).isEqualTo(1);
+    }
+
+    /**
+     * The alphabetically first rival with no seeded row for {@code role}, resolved per role rather
+     * than once per club. (On today's seed both roles land on AME, which is researched for neither.)
+     *
+     * <p>Two hazards live here, and both bit. {@code findBySaveGameId} has no {@code order by}, so
+     * the row order is whatever the plan happens to produce; the same query returns a different
+     * first club once the table is big enough for Postgres to switch to an index scan, which is why
+     * this passed alone and failed in the full suite. Hence the explicit sort.
+     *
+     * <p>And "unresearched" is per role, not per club: MAR, BAR and SCA have no physio but do have
+     * a researched PREPARADOR_FISICO averaging 10.5–11.5, which is a real row worth a training
+     * bonus of 0. Asking one club to stand in for every role's research gap asserts the baseline
+     * against a number that was never a baseline.
+     */
+    private UUID firstRivalWithNobodyIn(Career c, StaffRole role) {
+        return clubRepository.findBySaveGameId(c.id()).stream()
+                .filter(club -> !club.getId().equals(c.clubId()))
+                .sorted(Comparator.comparing(Club::getShortName))
+                .map(Club::getId)
+                .filter(id -> staffRepository.findByClubIdAndRole(id, role).isEmpty())
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "Expected at least one rival club with no seeded " + role + " — none found."));
     }
 }
