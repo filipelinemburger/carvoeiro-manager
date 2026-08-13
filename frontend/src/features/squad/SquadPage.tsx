@@ -861,11 +861,6 @@ export function SquadPage() {
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
         Formação {formation} — Titulares {selected.length}/11 · Banco {bench.filter(Boolean).length}/9 · GOL {lineFilled('GK')}/{lineTotal('GK')} · DEF {lineFilled('DEF')}/{lineTotal('DEF')} · MEI {lineFilled('MID')}/{lineTotal('MID')} · ATA {lineFilled('ATT')}/{lineTotal('ATT')}
       </Typography>
-      {players.length > 0 && (
-        <Box sx={{ mb: 2 }}>
-          <MoodChip morale={teamMorale(players.map(p => p.morale))} prefix="Elenco: " />
-        </Box>
-      )}
       {validationError && selected.length > 0 && (
         <Alert severity="error" sx={{ mb: 2 }}>{validationError}</Alert>
       )}
@@ -885,6 +880,15 @@ export function SquadPage() {
       <Box role="tabpanel" hidden={tab !== 0} id="squad-tabpanel-0" aria-labelledby="squad-tab-0">
             {formationSelect}
             <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 2, flexWrap: 'wrap' }}>
+              <Button
+                color="secondary"
+                size="small"
+                variant="contained"
+                disabled={!canSave || mutation.isPending}
+                onClick={() => mutation.mutate()}
+              >
+                {mutation.isPending ? 'Salvando…' : 'Salvar escalação'}
+              </Button>
               <Button size="small" variant="outlined" color="secondary" onClick={autoPickBestXI}>
                 Selecionar melhores
               </Button>
@@ -959,14 +963,6 @@ export function SquadPage() {
                 </Table>
               </TableContainer>
             )}
-
-            <Button
-              color="secondary"
-              disabled={!canSave || mutation.isPending}
-              onClick={() => mutation.mutate()}
-            >
-              {mutation.isPending ? 'Salvando…' : 'Salvar escalação'}
-            </Button>
       </Box>
 
       <Box role="tabpanel" hidden={tab !== 1} id="squad-tabpanel-1" aria-labelledby="squad-tab-1">
@@ -986,6 +982,11 @@ export function SquadPage() {
           </Box>
           {pitchTeam && (
             <Box sx={{ flex: 1, minWidth: 0, mb: 2 }}>
+              {tab === 1 && players.length > 0 && (
+                <Box sx={{ mb: 1.5, display: 'flex', justifyContent: 'center' }}>
+                  <MoodChip morale={teamMorale(players.map(p => p.morale))} prefix="Elenco: " />
+                </Box>
+              )}
               <Pitch home={pitchTeam} onSwap={swapSlots} onSlotClick={slotIndex => setPickerSlot(slotIndex)} />
               <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
                 <Button

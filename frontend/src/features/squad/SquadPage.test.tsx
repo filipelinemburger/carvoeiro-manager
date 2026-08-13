@@ -800,10 +800,11 @@ describe('SquadPage', () => {
       secondaryColor: '#111111',
     })
     renderWithProviders()
-    // Team "dressing room" chip (unique prefix)
-    expect(await screen.findByText(/Elenco:/)).toBeInTheDocument()
-    // At least the player row chip renders the Contente mood
-    expect(screen.getAllByText(/Contente/).length).toBeGreaterThanOrEqual(1)
+    // Verify players render on Plantel tab
+    await screen.findByText('Feliz')
+    // Team "dressing room" chip lives in the Táticas tab, verified there
+    fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
+    expect(screen.getByText(/Elenco:/)).toBeInTheDocument()
   })
 
   it('removes auto-picked XI players from the bench when "Selecionar melhores" is clicked', async () => {
@@ -1388,5 +1389,23 @@ describe('SquadPage — slot picker and Função/Foco selects', () => {
         'test-token',
       ),
     )
+  })
+
+  it('renders Salvar escalação before Selecionar melhores, and not at the bottom of Plantel', async () => {
+    renderWithProviders()
+    await screen.findByText('Goleiro Teste')
+    // Only one save button is reachable: the Táticas panel is mounted but `hidden`, so its copy
+    // is out of the accessibility tree.
+    expect(screen.getAllByRole('button', { name: 'Salvar escalação' })).toHaveLength(1)
+    const labels = screen.getAllByRole('button').map(b => b.textContent)
+    expect(labels.indexOf('Salvar escalação')).toBeLessThan(labels.indexOf('Selecionar melhores'))
+  })
+
+  it('shows the squad morale chip in the Táticas tab, not in Plantel', async () => {
+    renderWithProviders()
+    await screen.findByText('Goleiro Teste')
+    expect(screen.queryByText(/Elenco:/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
+    expect(screen.getByText(/Elenco:/)).toBeInTheDocument()
   })
 })
