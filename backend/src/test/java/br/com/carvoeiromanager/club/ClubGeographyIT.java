@@ -45,7 +45,7 @@ class ClubGeographyIT {
     void everySeededClubHasGeographyAndARealCapacity() {
         List<Club> clubs = createCareerClubs();
 
-        assertThat(clubs).hasSize(50);
+        assertThat(clubs).hasSize(55);
         assertThat(clubs).allSatisfy(club -> {
             assertThat(club.getCity()).as("city of %s", club.getName()).isNotBlank();
             assertThat(club.getState()).as("state of %s", club.getName()).hasSize(2);

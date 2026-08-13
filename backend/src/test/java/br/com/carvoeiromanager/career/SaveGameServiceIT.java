@@ -77,11 +77,12 @@ class SaveGameServiceIT {
         // SaveGame persisted in DB
         assertThat(saveGameRepository.findById(saveGameId)).isPresent();
 
-        // All clubs from the pool are created (50 clubs: 20 Série B + 11 Catarinense-only —
-        // including the orphan HER, which plays no competition — plus the 19 Série A sides,
-        // with CRI/AVA shared by both managed competitions and CHA by Catarinense and Série A)
+        // All clubs from the pool are created (55 clubs: 20 Série B + 11 Catarinense-only —
+        // including the orphan HER, which plays no competition — plus the 19 Série A sides and
+        // the 5 Série C ones, with CRI/AVA shared by both managed competitions, CHA by
+        // Catarinense and Série A, and BRU/FIG/BAR by Catarinense and Série C)
         var clubs = clubRepository.findBySaveGameId(saveGameId);
-        assertThat(clubs).hasSize(50);
+        assertThat(clubs).hasSize(55);
 
         // Every club has at least one player
         clubs.forEach(club ->
@@ -93,12 +94,12 @@ class SaveGameServiceIT {
         // Managed club is Criciúma (short name "CRI" maps to the club's full name from seed)
         assertThat(response.managedClubName()).contains("Criciúma");
 
-        // Competition: 3 now — Catarinense + Série B, which the player plays, and Série A,
-        // which runs in the background.
+        // Competition: 4 now — Catarinense + Série B, which the player plays, and Série A and
+        // Série C, which run in the background.
         var competitions = competitionRepository.findAll().stream()
                 .filter(c -> c.getSaveGameId().equals(saveGameId))
                 .toList();
-        assertThat(competitions).hasSize(3);
+        assertThat(competitions).hasSize(4);
         var catarinense = competitions.stream()
                 .filter(c -> c.getName().contains("Catarinense"))
                 .findFirst().orElseThrow();

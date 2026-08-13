@@ -32,15 +32,15 @@ class TwoCompetitionCareerIT {
     @Autowired CompetitionClubRepository competitionClubRepository;
 
     @Test
-    void careerHasThreeCompetitionsWithCriciumaInBothManagedOnes() {
+    void careerHasFourCompetitionsWithCriciumaInBothManagedOnes() {
         User u = User.create("two_" + UUID.randomUUID(), "h");
         userRepository.save(u);
         SaveGameResponse save = saveGameService.createCareer(u.getId());
 
-        // Three competitions exist, but Criciúma plays only two of them: Série A runs in the
-        // background. The membership assertion at the bottom is what still says "in both".
+        // Four competitions exist, but Criciúma plays only two of them: Série A and Série C run
+        // in the background. The membership assertion at the bottom is what still says "in both".
         var comps = competitionRepository.findBySaveGameId(save.id());
-        assertThat(comps).hasSize(3);
+        assertThat(comps).hasSize(4);
         Competition serieB = comps.stream()
                 .filter(c -> c.getName().contains("Série B"))
                 .findFirst().orElseThrow();

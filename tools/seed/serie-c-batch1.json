@@ -1,0 +1,1725 @@
+[
+  {
+    "name": "Associação Ferroviária de Esportes",
+    "shortName": "FER",
+    "commonName": "Ferroviária",
+    "nickname": "Locomotiva",
+    "stadium": "Estádio Fonte Luminosa",
+    "city": "Araraquara",
+    "state": "SP",
+    "climateZone": "SUDESTE",
+    "stadiumCapacity": 20000,
+    "primaryColor": "#c8102e",
+    "secondaryColor": "#ffffff",
+    "formation": "4-2-3-1",
+    "mentality": "BALANCED",
+    "pressing": "MEDIUM",
+    "marking": "ZONAL",
+    "target": 43.0,
+    "roster": [
+      {
+        "name": "Dênis Júnior",
+        "position": "GK",
+        "age": 28,
+        "group": "GK",
+        "nationality": "Brasil",
+        "positions": [
+          "GOLEIRO"
+        ],
+        "roles": [
+          "GOALKEEPER++",
+          "SWEEPER_KEEPER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Lucas Rodrigues",
+        "position": "DEF",
+        "age": 27,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_DIREITO"
+        ],
+        "roles": [
+          "FULLBACK++",
+          "WINGBACK+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Gustavo Medina",
+        "position": "DEF",
+        "age": 25,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "DEFENDER++",
+          "BALL_PLAYING_DEFENDER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Carlão",
+        "position": "DEF",
+        "age": 26,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "STOPPER++",
+          "DEFENDER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Rhuan",
+        "position": "DEF",
+        "age": 25,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_ESQUERDO"
+        ],
+        "roles": [
+          "ATTACKING_WINGBACK++",
+          "FULLBACK+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Rafael Carrilho",
+        "position": "MID",
+        "age": 31,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "VOLANTE",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "HOLDING++",
+          "DEEP_LYING_PLAYMAKER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Ricardinho",
+        "position": "MID",
+        "age": 37,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_CENTRAL",
+          "VOLANTE"
+        ],
+        "roles": [
+          "BOX_TO_BOX++",
+          "PLAYMAKER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Douglas Skilo",
+        "position": "ATT",
+        "age": 31,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_DIREITA",
+          "PONTA_ESQUERDA"
+        ],
+        "roles": [
+          "WINGER++",
+          "INSIDE_FORWARD+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Albano",
+        "position": "MID",
+        "age": 29,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_ARMADOR",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "CLASSIC_10++",
+          "PLAYMAKER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Vitor Barreto",
+        "position": "ATT",
+        "age": 26,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_ESQUERDA",
+          "PONTA_DIREITA"
+        ],
+        "roles": [
+          "INSIDE_FORWARD++",
+          "WINGER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Denilson Silva",
+        "position": "ATT",
+        "age": 28,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "ATACANTE"
+        ],
+        "roles": [
+          "POACHER++",
+          "ADVANCED_FORWARD+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Gustavo Jundi",
+        "position": "GK",
+        "age": 22,
+        "group": "GK",
+        "nationality": "Brasil",
+        "positions": [
+          "GOLEIRO"
+        ],
+        "roles": [
+          "GOALKEEPER++"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Zé Vitor",
+        "position": "DEF",
+        "age": 24,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "BALL_PLAYING_DEFENDER++",
+          "DEFENDER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Erik Nascimento",
+        "position": "DEF",
+        "age": 21,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO",
+          "VOLANTE"
+        ],
+        "roles": [
+          "DEFENDER++",
+          "CENTRE_HALF+"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Vinicius Kauê",
+        "position": "DEF",
+        "age": 23,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_ESQUERDO"
+        ],
+        "roles": [
+          "FULLBACK++",
+          "INVERTED_WINGBACK+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Fernandinho",
+        "position": "MID",
+        "age": 23,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "VOLANTE",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "BOX_CRASHER++",
+          "HOLDING+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Alencar",
+        "position": "MID",
+        "age": 24,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_CENTRAL",
+          "VOLANTE"
+        ],
+        "roles": [
+          "BOX_TO_BOX++",
+          "HOLDING+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Juninho",
+        "position": "MID",
+        "age": 30,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_ARMADOR",
+          "PONTA_ESQUERDA"
+        ],
+        "roles": [
+          "HALF_WINGER++",
+          "WIDE_PLAYMAKER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Allison",
+        "position": "MID",
+        "age": 24,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_ARMADOR",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "SHADOW_STRIKER++",
+          "CLASSIC_10+"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Fábio Soares",
+        "position": "ATT",
+        "age": 21,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_ESQUERDA",
+          "PONTA_DIREITA"
+        ],
+        "roles": [
+          "WINGER++",
+          "WIDE_PLAYMAKER+"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Felipe Rodrigues",
+        "position": "ATT",
+        "age": 30,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "ATACANTE"
+        ],
+        "roles": [
+          "TARGET_FORWARD++",
+          "POACHER+"
+        ],
+        "role": "fringe"
+      }
+    ]
+  },
+  {
+    "name": "Amazonas Futebol Clube",
+    "shortName": "AMA",
+    "commonName": "Amazonas",
+    "nickname": "Onça-Pintada",
+    "stadium": "Estádio Carlos Zamith",
+    "city": "Manaus",
+    "state": "AM",
+    "climateZone": "NORTE",
+    "stadiumCapacity": 10000,
+    "primaryColor": "#f5c400",
+    "secondaryColor": "#111111",
+    "formation": "4-4-2",
+    "mentality": "DEFENSIVE",
+    "pressing": "LOW",
+    "marking": "MAN_TIGHT",
+    "target": 42.5,
+    "roster": [
+      {
+        "name": "João Lopes",
+        "position": "GK",
+        "age": 30,
+        "group": "GK",
+        "nationality": "Brasil",
+        "positions": [
+          "GOLEIRO"
+        ],
+        "roles": [
+          "GOALKEEPER++",
+          "BALL_PLAYING_KEEPER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Iury",
+        "position": "DEF",
+        "age": 33,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_DIREITO"
+        ],
+        "roles": [
+          "FULLBACK++",
+          "WINGBACK+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Marcondes",
+        "position": "DEF",
+        "age": 33,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "DEFENDER++",
+          "STOPPER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Iverton",
+        "position": "DEF",
+        "age": 25,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "BALL_PLAYING_DEFENDER++",
+          "DEFENDER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Rafael Furlan",
+        "position": "DEF",
+        "age": 31,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_ESQUERDO",
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "FULLBACK++",
+          "WIDE_BACK+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Jhonny Lucas",
+        "position": "MID",
+        "age": 26,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "VOLANTE",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "HOLDING++",
+          "BOX_TO_BOX+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Ignacio Panzariello",
+        "position": "MID",
+        "age": 36,
+        "group": "MF",
+        "nationality": "Uruguai",
+        "positions": [
+          "MEIA_CENTRAL",
+          "VOLANTE"
+        ],
+        "roles": [
+          "DEEP_LYING_PLAYMAKER++",
+          "BOX_TO_BOX+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Rafael Tavares",
+        "position": "MID",
+        "age": 35,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_ARMADOR",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "CLASSIC_10++",
+          "PLAYMAKER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Vinícius Leite",
+        "position": "ATT",
+        "age": 32,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_DIREITA",
+          "PONTA_ESQUERDA"
+        ],
+        "roles": [
+          "WINGER++",
+          "WIDE_PLAYMAKER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Nicolás Schiappacasse",
+        "position": "ATT",
+        "age": 27,
+        "group": "FW",
+        "nationality": "Uruguai",
+        "positions": [
+          "PONTA_ESQUERDA",
+          "PONTA_DIREITA"
+        ],
+        "roles": [
+          "INSIDE_FORWARD++",
+          "WINGER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Ronaldo",
+        "position": "ATT",
+        "age": 35,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "ATACANTE"
+        ],
+        "roles": [
+          "TARGET_FORWARD++",
+          "POACHER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Renan",
+        "position": "GK",
+        "age": 37,
+        "group": "GK",
+        "nationality": "Brasil",
+        "positions": [
+          "GOLEIRO"
+        ],
+        "roles": [
+          "GOALKEEPER++"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Abdul Mendy",
+        "position": "GK",
+        "age": 23,
+        "group": "GK",
+        "nationality": "Senegal",
+        "positions": [
+          "GOLEIRO"
+        ],
+        "roles": [
+          "SWEEPER_KEEPER++",
+          "GOALKEEPER+"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Diego Ivo",
+        "position": "DEF",
+        "age": 37,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO",
+          "VOLANTE"
+        ],
+        "roles": [
+          "CENTRE_HALF++",
+          "DEFENDER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Alyson",
+        "position": "DEF",
+        "age": 30,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_ESQUERDO"
+        ],
+        "roles": [
+          "ATTACKING_WINGBACK++",
+          "FULLBACK+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Raylison",
+        "position": "DEF",
+        "age": 20,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_DIREITO"
+        ],
+        "roles": [
+          "WINGBACK++",
+          "FULLBACK+"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Fabinho",
+        "position": "MID",
+        "age": 30,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_CENTRAL",
+          "VOLANTE"
+        ],
+        "roles": [
+          "BOX_TO_BOX++",
+          "HOLDING+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Yaider Mena",
+        "position": "MID",
+        "age": 21,
+        "group": "MF",
+        "nationality": "Colômbia",
+        "positions": [
+          "VOLANTE",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "HOLDING++",
+          "WIDE_HALF+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Bernardo Paias",
+        "position": "MID",
+        "age": 21,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_ARMADOR",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "HALF_WINGER++",
+          "CLASSIC_10+"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Léo Guerra",
+        "position": "ATT",
+        "age": 23,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_ESQUERDA",
+          "PONTA_DIREITA"
+        ],
+        "roles": [
+          "WINGER++",
+          "INSIDE_FORWARD+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Ezequiel",
+        "position": "ATT",
+        "age": 23,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "ATACANTE"
+        ],
+        "roles": [
+          "ADVANCED_FORWARD++",
+          "POACHER+"
+        ],
+        "role": "fringe"
+      }
+    ]
+  },
+  {
+    "name": "Volta Redonda Futebol Clube",
+    "shortName": "VRE",
+    "commonName": "Volta Redonda",
+    "nickname": "Voltaço",
+    "stadium": "Estádio Raulino de Oliveira",
+    "city": "Volta Redonda",
+    "state": "RJ",
+    "climateZone": "SUDESTE",
+    "stadiumCapacity": 20255,
+    "primaryColor": "#ffee00",
+    "secondaryColor": "#000000",
+    "formation": "4-1-4-1",
+    "mentality": "BALANCED",
+    "pressing": "MEDIUM",
+    "marking": "ZONAL",
+    "target": 42.0,
+    "roster": [
+      {
+        "name": "Deivity",
+        "position": "GK",
+        "age": 35,
+        "group": "GK",
+        "nationality": "Brasil",
+        "positions": [
+          "GOLEIRO"
+        ],
+        "roles": [
+          "GOALKEEPER++",
+          "SWEEPER_KEEPER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Wellington Silva",
+        "position": "DEF",
+        "age": 38,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_DIREITO"
+        ],
+        "roles": [
+          "FULLBACK++",
+          "WINGBACK+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Fabrício",
+        "position": "DEF",
+        "age": 36,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "DEFENDER++",
+          "STOPPER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Lucas Rocha",
+        "position": "DEF",
+        "age": 31,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO",
+          "VOLANTE"
+        ],
+        "roles": [
+          "CENTRE_HALF++",
+          "DEFENDER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Juninho Monteiro",
+        "position": "DEF",
+        "age": 27,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_ESQUERDO"
+        ],
+        "roles": [
+          "ATTACKING_WINGBACK++",
+          "FULLBACK+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Bruno Barra",
+        "position": "MID",
+        "age": 40,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "VOLANTE",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "HOLDING++",
+          "DEEP_LYING_PLAYMAKER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Henrique Silva",
+        "position": "MID",
+        "age": 32,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "VOLANTE",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "BOX_CRASHER++",
+          "HOLDING+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Luciano Naninho",
+        "position": "MID",
+        "age": 34,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_ARMADOR",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "CLASSIC_10++",
+          "PLAYMAKER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Romarinho",
+        "position": "ATT",
+        "age": 30,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_DIREITA",
+          "PONTA_ESQUERDA"
+        ],
+        "roles": [
+          "WINGER++",
+          "INSIDE_FORWARD+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Ygor Catatau",
+        "position": "ATT",
+        "age": 31,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_ESQUERDA",
+          "PONTA_DIREITA"
+        ],
+        "roles": [
+          "INSIDE_FORWARD++",
+          "WINGER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Heliardo",
+        "position": "ATT",
+        "age": 34,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "ATACANTE"
+        ],
+        "roles": [
+          "TARGET_FORWARD++",
+          "POACHER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Felipe Avelino",
+        "position": "GK",
+        "age": 27,
+        "group": "GK",
+        "nationality": "Brasil",
+        "positions": [
+          "GOLEIRO"
+        ],
+        "roles": [
+          "GOALKEEPER++"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Heitor Silva",
+        "position": "GK",
+        "age": 26,
+        "group": "GK",
+        "nationality": "Brasil",
+        "positions": [
+          "GOLEIRO"
+        ],
+        "roles": [
+          "GOALKEEPER++"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Lucas Adell",
+        "position": "DEF",
+        "age": 26,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "BALL_PLAYING_DEFENDER++",
+          "DEFENDER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Alan Ferreira",
+        "position": "DEF",
+        "age": 25,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "DEFENDER++",
+          "WIDE_BACK+"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Jean Victor",
+        "position": "DEF",
+        "age": 32,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_ESQUERDO"
+        ],
+        "roles": [
+          "FULLBACK++",
+          "INVERTED_WINGBACK+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Dener",
+        "position": "MID",
+        "age": 34,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_CENTRAL",
+          "VOLANTE"
+        ],
+        "roles": [
+          "BOX_TO_BOX++",
+          "PLAYMAKER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Wagninho",
+        "position": "MID",
+        "age": 26,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "VOLANTE",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "HOLDING++",
+          "WIDE_HALF+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Du Fernandes",
+        "position": "MID",
+        "age": 25,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "VOLANTE",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "DEEP_LYING_PLAYMAKER++",
+          "HOLDING+"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Marquinhos",
+        "position": "ATT",
+        "age": 28,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_ESQUERDA",
+          "PONTA_DIREITA"
+        ],
+        "roles": [
+          "WINGER++",
+          "WIDE_PLAYMAKER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Rafael Furtado",
+        "position": "ATT",
+        "age": 26,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "ATACANTE"
+        ],
+        "roles": [
+          "ADVANCED_FORWARD++",
+          "FALSE_9+"
+        ],
+        "role": "fringe"
+      }
+    ]
+  },
+  {
+    "name": "Paysandu Sport Club",
+    "shortName": "PAY",
+    "commonName": "Paysandu",
+    "nickname": "Papão",
+    "stadium": "Estádio Leônidas Sodré de Castro",
+    "city": "Belém",
+    "state": "PA",
+    "climateZone": "NORTE",
+    "stadiumCapacity": 16200,
+    "primaryColor": "#0099ff",
+    "secondaryColor": "#ffffff",
+    "formation": "4-3-3",
+    "mentality": "ATTACKING",
+    "pressing": "HIGH",
+    "marking": "ZONAL",
+    "target": 43.5,
+    "roster": [
+      {
+        "name": "Jean Drosny",
+        "position": "GK",
+        "age": 32,
+        "group": "GK",
+        "nationality": "Brasil",
+        "positions": [
+          "GOLEIRO"
+        ],
+        "roles": [
+          "GOALKEEPER++",
+          "BALL_PLAYING_KEEPER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Edílson",
+        "position": "DEF",
+        "age": 31,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_DIREITO"
+        ],
+        "roles": [
+          "FULLBACK++",
+          "WINGBACK+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Bruno Bispo",
+        "position": "DEF",
+        "age": 30,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "DEFENDER++",
+          "BALL_PLAYING_DEFENDER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Castro",
+        "position": "DEF",
+        "age": 31,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "STOPPER++",
+          "DEFENDER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Facundo Bonifazi",
+        "position": "DEF",
+        "age": 30,
+        "group": "DF",
+        "nationality": "Uruguai",
+        "positions": [
+          "LATERAL_ESQUERDO"
+        ],
+        "roles": [
+          "ATTACKING_WINGBACK++",
+          "FULLBACK+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Caio Mello",
+        "position": "MID",
+        "age": 26,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "VOLANTE",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "HOLDING++",
+          "BOX_CRASHER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Matheus Vargas",
+        "position": "MID",
+        "age": 30,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_CENTRAL",
+          "VOLANTE"
+        ],
+        "roles": [
+          "BOX_TO_BOX++",
+          "PLAYMAKER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Kleiton Pego",
+        "position": "ATT",
+        "age": 27,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_DIREITA",
+          "PONTA_ESQUERDA"
+        ],
+        "roles": [
+          "WINGER++",
+          "INSIDE_FORWARD+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Marcinho",
+        "position": "MID",
+        "age": 31,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_ARMADOR",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "CLASSIC_10++",
+          "HALF_WINGER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Thayllon",
+        "position": "ATT",
+        "age": 24,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_DIREITA",
+          "PONTA_ESQUERDA"
+        ],
+        "roles": [
+          "INSIDE_FORWARD++",
+          "WINGER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Ítalo Carvalho",
+        "position": "ATT",
+        "age": 29,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "ATACANTE"
+        ],
+        "roles": [
+          "TARGET_FORWARD++",
+          "POACHER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Gabriel Mesquita",
+        "position": "GK",
+        "age": 27,
+        "group": "GK",
+        "nationality": "Brasil",
+        "positions": [
+          "GOLEIRO"
+        ],
+        "roles": [
+          "GOALKEEPER++"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Marcão",
+        "position": "GK",
+        "age": 23,
+        "group": "GK",
+        "nationality": "Brasil",
+        "positions": [
+          "GOLEIRO"
+        ],
+        "roles": [
+          "SWEEPER_KEEPER++",
+          "GOALKEEPER+"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Pedro Carrerete",
+        "position": "DEF",
+        "age": 27,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "BALL_PLAYING_DEFENDER++",
+          "DEFENDER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Iarley",
+        "position": "DEF",
+        "age": 21,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO",
+          "VOLANTE"
+        ],
+        "roles": [
+          "DEFENDER++",
+          "CENTRE_HALF+"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Luciano Taboca",
+        "position": "DEF",
+        "age": 32,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_ESQUERDO",
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "FULLBACK++",
+          "WIDE_BACK+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Tiago Índio",
+        "position": "MID",
+        "age": 24,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "VOLANTE",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "WIDE_HALF++",
+          "HOLDING+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Henrico",
+        "position": "MID",
+        "age": 21,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "VOLANTE",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "HOLDING++",
+          "DEEP_LYING_PLAYMAKER+"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Radsley",
+        "position": "MID",
+        "age": 31,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_ARMADOR",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "PLAYMAKER++",
+          "CLASSIC_10+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Peu",
+        "position": "ATT",
+        "age": 23,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_DIREITA",
+          "PONTA_ESQUERDA"
+        ],
+        "roles": [
+          "WINGER++",
+          "WIDE_PLAYMAKER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Kauã Hinkel",
+        "position": "ATT",
+        "age": 19,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_ESQUERDA",
+          "PONTA_DIREITA"
+        ],
+        "roles": [
+          "WINGER++",
+          "INSIDE_FORWARD+"
+        ],
+        "role": "fringe"
+      }
+    ]
+  },
+  {
+    "name": "Sociedade Esportiva e Recreativa Caxias do Sul",
+    "shortName": "CAX",
+    "commonName": "Caxias",
+    "nickname": "Grená",
+    "stadium": "Estádio Centenário",
+    "city": "Caxias do Sul",
+    "state": "RS",
+    "climateZone": "SUL",
+    "stadiumCapacity": 22132,
+    "primaryColor": "#900020",
+    "secondaryColor": "#000080",
+    "formation": "4-4-1-1",
+    "mentality": "BALANCED",
+    "pressing": "HIGH",
+    "marking": "MAN_TIGHT",
+    "target": 42.0,
+    "roster": [
+      {
+        "name": "Gustavo Busatto",
+        "position": "GK",
+        "age": 35,
+        "group": "GK",
+        "nationality": "Brasil",
+        "positions": [
+          "GOLEIRO"
+        ],
+        "roles": [
+          "GOALKEEPER++",
+          "SWEEPER_KEEPER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Felipe Albuquerque",
+        "position": "DEF",
+        "age": 26,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_DIREITO"
+        ],
+        "roles": [
+          "FULLBACK++",
+          "WINGBACK+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Windson",
+        "position": "DEF",
+        "age": 31,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "DEFENDER++",
+          "STOPPER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Ianson",
+        "position": "DEF",
+        "age": 31,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO",
+          "VOLANTE"
+        ],
+        "roles": [
+          "CENTRE_HALF++",
+          "DEFENDER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Roberto",
+        "position": "DEF",
+        "age": 35,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_ESQUERDO"
+        ],
+        "roles": [
+          "FULLBACK++",
+          "INVERTED_WINGBACK+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Breno Santos",
+        "position": "MID",
+        "age": 28,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "VOLANTE",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "HOLDING++",
+          "DEEP_LYING_PLAYMAKER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Marcelo Freitas",
+        "position": "MID",
+        "age": 32,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_CENTRAL",
+          "VOLANTE"
+        ],
+        "roles": [
+          "BOX_TO_BOX++",
+          "HOLDING+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "João Lucas",
+        "position": "ATT",
+        "age": 25,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_DIREITA",
+          "PONTA_ESQUERDA"
+        ],
+        "roles": [
+          "WINGER++",
+          "INSIDE_FORWARD+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Matheus Anjos",
+        "position": "MID",
+        "age": 27,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_ARMADOR",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "CLASSIC_10++",
+          "PLAYMAKER+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Calyson",
+        "position": "ATT",
+        "age": 33,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_ESQUERDA",
+          "PONTA_DIREITA"
+        ],
+        "roles": [
+          "INSIDE_FORWARD++",
+          "WINGER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Salatiel",
+        "position": "ATT",
+        "age": 33,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "ATACANTE"
+        ],
+        "roles": [
+          "POACHER++",
+          "TARGET_FORWARD+"
+        ],
+        "role": "starter"
+      },
+      {
+        "name": "Marcelo Dal Soler",
+        "position": "GK",
+        "age": 25,
+        "group": "GK",
+        "nationality": "Brasil",
+        "positions": [
+          "GOLEIRO"
+        ],
+        "roles": [
+          "GOALKEEPER++"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Gabriel Toebe",
+        "position": "GK",
+        "age": 23,
+        "group": "GK",
+        "nationality": "Brasil",
+        "positions": [
+          "GOLEIRO"
+        ],
+        "roles": [
+          "GOALKEEPER++"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Maurício",
+        "position": "DEF",
+        "age": 35,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "DEFENDER++",
+          "BALL_PLAYING_DEFENDER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "André",
+        "position": "DEF",
+        "age": 27,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "ZAGUEIRO"
+        ],
+        "roles": [
+          "BALL_PLAYING_DEFENDER++",
+          "DEFENDER+"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Vitinho",
+        "position": "DEF",
+        "age": 24,
+        "group": "DF",
+        "nationality": "Brasil",
+        "positions": [
+          "LATERAL_ESQUERDO"
+        ],
+        "roles": [
+          "ATTACKING_WINGBACK++",
+          "FULLBACK+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Grígor",
+        "position": "MID",
+        "age": 25,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "VOLANTE",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "BOX_CRASHER++",
+          "HOLDING+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Matheus Nunes",
+        "position": "MID",
+        "age": 23,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "VOLANTE",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "HOLDING++",
+          "WIDE_HALF+"
+        ],
+        "role": "fringe"
+      },
+      {
+        "name": "Ravanelli",
+        "position": "MID",
+        "age": 28,
+        "group": "MF",
+        "nationality": "Brasil",
+        "positions": [
+          "MEIA_ARMADOR",
+          "MEIA_CENTRAL"
+        ],
+        "roles": [
+          "HALF_WINGER++",
+          "SHADOW_STRIKER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Vitor Feijão",
+        "position": "ATT",
+        "age": 30,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_ESQUERDA",
+          "PONTA_DIREITA"
+        ],
+        "roles": [
+          "WINGER++",
+          "WIDE_PLAYMAKER+"
+        ],
+        "role": "rotation"
+      },
+      {
+        "name": "Dentinho",
+        "position": "ATT",
+        "age": 29,
+        "group": "FW",
+        "nationality": "Brasil",
+        "positions": [
+          "PONTA_ESQUERDA",
+          "PONTA_DIREITA"
+        ],
+        "roles": [
+          "WINGER++",
+          "INSIDE_FORWARD+"
+        ],
+        "role": "fringe"
+      }
+    ]
+  }
+]

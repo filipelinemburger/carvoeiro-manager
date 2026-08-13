@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Guards the researched real-player data (Task 6) against drift from the {@link DetailedPosition}
- * / {@link RoleArchetype} enums: every one of the 863 seeded players (684 club + 179 free agent)
+ * / {@link RoleArchetype} enums: every one of the 1404 seeded players (1238 club + 166 free agent)
  * must carry researched {@code positions}/{@code roles} that are internally consistent and valid
  * per the live enums — not a hand-copied snapshot of them.
  */
@@ -37,21 +37,22 @@ class SeedResearchValidationTest {
     private record LabeledPlayer(String label, SeedPlayer player) {}
 
     @Test
-    void clubPoolHasFiftyClubsWithElevenHundredThirtyThreePlayersTotal() {
+    void clubPoolHasFiftyFiveClubsWithTwelveHundredThirtyEightPlayersTotal() {
         SeedCareer career = loader.loadCareer();
 
-        // 31 + 19 (the 2026 Série A field, minus Chapecoense which was already in the pool
-        // for the Catarinense) = 50 clubs; 684 + 449 = 1133 players.
-        assertThat(career.clubPool()).hasSize(50);
+        // 50 + 5 (Série C batch 1: the four Série B relegados plus Caxias; Brusque, Figueirense
+        // and Barra were already in the pool) = 55 clubs; 1133 + 105 = 1238 players.
+        assertThat(career.clubPool()).hasSize(55);
         int total = career.clubPool().stream().mapToInt(c -> c.players().size()).sum();
-        assertThat(total).isEqualTo(1133);
+        assertThat(total).isEqualTo(1238);
     }
 
     @Test
-    void freeAgentPoolHasOneHundredSixtySevenPlayers() {
-        // 179 - 12: the Série A intake put twelve of them on a real club roster, and a player
-        // cannot be both employed and on the free-agent market.
-        assertThat(loader.loadFreeAgents()).hasSize(167);
+    void freeAgentPoolHasOneHundredSixtySixPlayers() {
+        // 179 - 12 - 1: the Série A intake put twelve of them on a real club roster, and the
+        // Série C intake one more (Rafael Tavares, Amazonas' number 10). A player cannot be
+        // both employed and on the free-agent market.
+        assertThat(loader.loadFreeAgents()).hasSize(166);
     }
 
     @Test

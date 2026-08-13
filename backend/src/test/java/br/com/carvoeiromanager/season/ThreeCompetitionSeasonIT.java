@@ -58,6 +58,7 @@ class ThreeCompetitionSeasonIT {
     private static final String CATARINENSE = "Campeonato Catarinense";
     private static final String SERIE_B = "Série B";
     private static final String SERIE_A = "Série A";
+    private static final String SERIE_C = "Série C";
 
     private static final int SERIE_A_CLUBS = 20;
     private static final int SERIE_A_ROUNDS = 2 * (SERIE_A_CLUBS - 1);
@@ -94,11 +95,13 @@ class ThreeCompetitionSeasonIT {
         UUID saveGameId = career.id();
         UUID managedClubId = saveGameRepository.findById(saveGameId).orElseThrow().getManagedClubId();
 
-        // The seed ships all three; no fixture in this test builds one. Two are the player's, one
-        // is not — membership is the only thing that decides which.
+        // The seed ships all four; no fixture in this test builds one. Two are the player's, two
+        // are not — membership is the only thing that decides which. Série C is the first
+        // background competition with knockout phases, so its mere presence exercises
+        // PhaseResolver on a division the player never plays.
         Map<String, Competition> byName = competitionRepository.findBySaveGameId(saveGameId).stream()
                 .collect(Collectors.toMap(Competition::getName, Function.identity()));
-        assertThat(byName).containsOnlyKeys(CATARINENSE, SERIE_B, SERIE_A);
+        assertThat(byName).containsOnlyKeys(CATARINENSE, SERIE_B, SERIE_A, SERIE_C);
         UUID serieAId = byName.get(SERIE_A).getId();
         assertThat(backgroundCompetitionService.isManaged(byName.get(CATARINENSE).getId(), managedClubId))
                 .isTrue();
