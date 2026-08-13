@@ -8,3 +8,13 @@ app:
   jwt:
     secret: test-secret-test-secret-test-secret-0123456789
     expiration-minutes: 60
+carvoeiro:
+  seed:
+    # Tests get the two competitions the managed club plays, and no background division.
+    # Seeding Série A costs every career 19 extra clubs and 449 extra players, and every season
+    # advanced 380 extra simulated fixtures — which took the suite from ~20 minutes to ~2 hours,
+    # nearly all of it paid by tests that never look at Série A. The classes that DO care about
+    # background competitions ask for the whole seed back with:
+    #   @TestPropertySource(properties = "carvoeiro.seed.competitions=")
+    # Production sets nothing here and therefore loads every competition.
+    competitions: Campeonato Catarinense,Série B

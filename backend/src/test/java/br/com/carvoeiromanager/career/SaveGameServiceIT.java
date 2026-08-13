@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -24,6 +25,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(PostgresTestContainer.class)
+// Runs on the FULL seed, Série A included: it asserts what career creation really produces, so it must see the production seed.
+// The test profile otherwise trims the seed to the player's own competitions to keep
+// the suite fast — see carvoeiro.seed.competitions in application-test.yml.
+@TestPropertySource(properties = "carvoeiro.seed.competitions=")
 class SaveGameServiceIT {
 
     @Autowired

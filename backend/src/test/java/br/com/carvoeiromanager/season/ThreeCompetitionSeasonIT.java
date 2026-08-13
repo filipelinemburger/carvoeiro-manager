@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -48,6 +49,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(PostgresTestContainer.class)
+// Runs on the FULL seed, Série A included: the whole point of this test is the three-competition season.
+// The test profile otherwise trims the seed to the player's own competitions to keep
+// the suite fast — see carvoeiro.seed.competitions in application-test.yml.
+@TestPropertySource(properties = "carvoeiro.seed.competitions=")
 class ThreeCompetitionSeasonIT {
 
     private static final String CATARINENSE = "Campeonato Catarinense";

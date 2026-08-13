@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 
 import java.util.List;
 import java.util.UUID;
@@ -23,6 +24,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(PostgresTestContainer.class)
+// Runs on the FULL seed, Série A included: it checks every seeded club has real geography, so it must see every seeded club.
+// The test profile otherwise trims the seed to the player's own competitions to keep
+// the suite fast — see carvoeiro.seed.competitions in application-test.yml.
+@TestPropertySource(properties = "carvoeiro.seed.competitions=")
 class ClubGeographyIT {
 
     @Autowired SaveGameService saveGameService;
@@ -40,7 +45,7 @@ class ClubGeographyIT {
     void everySeededClubHasGeographyAndARealCapacity() {
         List<Club> clubs = createCareerClubs();
 
-        assertThat(clubs).hasSize(31);
+        assertThat(clubs).hasSize(50);
         assertThat(clubs).allSatisfy(club -> {
             assertThat(club.getCity()).as("city of %s", club.getName()).isNotBlank();
             assertThat(club.getState()).as("state of %s", club.getName()).hasSize(2);
