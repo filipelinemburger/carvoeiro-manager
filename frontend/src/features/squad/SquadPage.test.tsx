@@ -145,6 +145,16 @@ function renderWithProviders(saveGameId = 'sg-1', clubId = 'club-1') {
 // shows their position abbreviation (GK/DC/MC/AT), a substitute shows "Sub N", unpicked "+".
 const pickBtn = (name: string) => screen.getByRole('button', { name: new RegExp(`escalar ${name}`, 'i') })
 
+// Opens the Função/Foco menu for a starter by right-clicking their token on the pitch — the
+// desktop route now that the Plantel table no longer carries those columns (RoleContextMenu).
+// Switches to the Táticas de jogo tab first, matching the real user flow.
+function openRoleMenu(name: string) {
+  fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
+  const pitch = screen.getByTestId('pitch')
+  const token = within(pitch).getByText(name).closest('[data-slot-index]')
+  fireEvent.contextMenu(token as HTMLElement, { clientX: 100, clientY: 200 })
+}
+
 describe('SquadPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -590,6 +600,7 @@ describe('SquadPage', () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Defensor Um'))
     fireEvent.click(pickBtn('defensor um'))
+    openRoleMenu('Defensor Um')
     const select = screen.getByRole('combobox', { name: /função de defensor um/i })
     expect(select).toBeInTheDocument()
     // DEF1 carries LATERAL_ESQUERDO, so the default 4-3-3's "le" slot is its exact match —
@@ -603,6 +614,7 @@ describe('SquadPage', () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Meio Um'))
     fireEvent.click(pickBtn('meio um'))
+    openRoleMenu('Meio Um')
     const select = screen.getByRole('combobox', { name: /função de meio um/i })
     expect(select).toBeInTheDocument()
     // MID1 has no detailed position, so it lands in the first free MID slot of the default
@@ -615,6 +627,7 @@ describe('SquadPage', () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Atacante Um'))
     fireEvent.click(pickBtn('atacante um'))
+    openRoleMenu('Atacante Um')
     const select = screen.getByRole('combobox', { name: /função de atacante um/i })
     expect(select).toBeInTheDocument()
     // ATT1 has no detailed position, so it lands in the first free ATT slot of the default
@@ -1333,6 +1346,7 @@ describe('SquadPage — slot picker and Função/Foco selects', () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Teste'))
     fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+    openRoleMenu('Defensor Um')
 
     // WINGBACK ("Ala") beats the vanilla FULLBACK ("Lateral") default because it's familiar.
     expect(screen.getByRole('combobox', { name: /função de defensor um/i })).toHaveValue('WINGBACK')
@@ -1344,6 +1358,7 @@ describe('SquadPage — slot picker and Função/Foco selects', () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Teste'))
     fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+    openRoleMenu('Defensor Um')
 
     // DEF1 (in the base fixtures) carries no familiarRoles at all → FULLBACK, the vanilla
     // default for LATERAL_ESQUERDO.
@@ -1354,6 +1369,7 @@ describe('SquadPage — slot picker and Função/Foco selects', () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Defensor Um'))
     fireEvent.click(pickBtn('defensor um')) // lands in the exact "le" (LATERAL_ESQUERDO) slot
+    openRoleMenu('Defensor Um')
 
     const funcaoSelect = screen.getByRole('combobox', { name: /função de defensor um/i })
     const focoSelect = screen.getByRole('combobox', { name: /foco de defensor um/i })
@@ -1369,10 +1385,16 @@ describe('SquadPage — slot picker and Função/Foco selects', () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Defensor Um'))
     fireEvent.click(pickBtn('defensor um'))
+    openRoleMenu('Defensor Um')
     fireEvent.change(
       screen.getByRole('combobox', { name: /função de defensor um/i }),
       { target: { value: 'ATTACKING_WINGBACK' } },
     )
+    // Close the menu (Escape) — while open, MUI marks the rest of the app aria-hidden, which
+    // hides the Plantel tab from the accessibility tree — then switch back to it: the pitch's
+    // pickBtn-equivalent squad table is only reachable there.
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    fireEvent.click(await screen.findByRole('tab', { name: /plantel/i }))
     // Complete the XI so saving is enabled.
     for (const player of [GK, DEF2, DEF3, DEF4, MID1, MID2, MID3, ATT1, ATT2, ATT3]) {
       fireEvent.click(pickBtn(player.name))
@@ -1408,5 +1430,24 @@ describe('SquadPage — slot picker and Função/Foco selects', () => {
     expect(screen.queryByText(/Elenco:/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
     expect(screen.getByText(/Elenco:/)).toBeInTheDocument()
+  })
+
+  it('no longer shows Função and Foco columns in the Plantel table', async () => {
+    renderWithProviders()
+    await screen.findByText('Goleiro Teste')
+    expect(screen.queryByRole('columnheader', { name: 'Função' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Foco' })).not.toBeInTheDocument()
+  })
+
+  it('right-clicking a pitch token opens the Função/Foco menu for that player', async () => {
+    renderWithProviders()
+    await screen.findByText('Goleiro Teste')
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+    fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
+    // Auto-pick puts the higher-rated keeper (Goleiro Dois, OVR 75) in slot 0.
+    const gkToken = screen.getByTestId('pitch').querySelector('[data-slot-index="0"]')!
+    fireEvent.contextMenu(gkToken, { clientX: 100, clientY: 200 })
+    expect(await screen.findByRole('combobox', { name: 'Função de Goleiro Dois' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Foco de Goleiro Dois' })).toBeInTheDocument()
   })
 })

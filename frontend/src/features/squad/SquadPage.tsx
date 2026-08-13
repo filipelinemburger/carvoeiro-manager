@@ -21,6 +21,7 @@ import { MoodChip } from './MoodChip'
 import { teamMorale } from './morale'
 import { SEVERITY_LABEL } from './injurySeverity'
 import { SlotPickerDialog } from './SlotPickerDialog'
+import { RoleContextMenu, type RoleMenuAnchor } from './RoleContextMenu'
 import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
 import { FORMATION_CODES, pitchSlots } from '../pitch/pitchSlots'
 import { assignSlots, type AssignablePlayer } from '../pitch/slotAssign'
@@ -195,6 +196,9 @@ export function SquadPage() {
   const [slotByPlayerId, setSlotByPlayerId] = useState<Record<string, number>>({})
   // The pitch slot index a tap opened the picker for; null when the picker is closed.
   const [pickerSlot, setPickerSlot] = useState<number | null>(null)
+  // The player whose Função/Foco menu is open (right-click / long-press on their pitch token),
+  // plus the pointer position to anchor it at; null when the menu is closed.
+  const [roleMenu, setRoleMenu] = useState<RoleMenuAnchor | null>(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['squad', saveGameId, clubId],
@@ -248,6 +252,7 @@ export function SquadPage() {
   // Tracks the query cache (rather than a snapshot taken at click time) so the open dialog
   // reflects updates — e.g. an optimistic contract renewal — without the user closing/reopening.
   const detailsPlayer = players.find(p => p.id === detailsPlayerId) ?? null
+  const roleMenuPlayer = players.find(p => p.id === roleMenu?.playerId) ?? null
 
   // Squad list ordered by position (GK → DEF → MEI → ATA), then overall within each line.
   const displayPlayers = [...players].sort(
@@ -928,37 +933,30 @@ export function SquadPage() {
                       <TableCell align="center">Forma</TableCell>
                       <TableCell align="center">Moral</TableCell>
                       <TableCell align="center">Condição</TableCell>
-                      <TableCell align="center">Função</TableCell>
-                      <TableCell align="center">Foco</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {displayPlayers.map(player => {
-                      const inv = involvementOf(player.id)
-                      return (
-                        <TableRow key={player.id}>
-                          <TableCell align="center" className="sq-sticky-cell" sx={{ position: 'sticky', left: 0, zIndex: 2, bgcolor: 'background.paper' }}>
-                            {statusButton(player)}
-                          </TableCell>
-                          <TableCell className="sq-sticky-cell" sx={{ position: 'sticky', left: 96, zIndex: 2, bgcolor: 'background.paper' }}>
-                            {playerNameButton(player)}
-                            {availabilityBadge(player)}
-                            {listedBadge(player)}
-                          </TableCell>
-                          <TableCell align="center">{positionLabel(player)}</TableCell>
-                          <TableCell align="center">
-                            <Box component="span" sx={{ display: 'inline-block', minWidth: 30, px: 1, py: 0.25, borderRadius: 1, ...ovrBadgeSx(player.overall) }}>
-                              {player.overall}
-                            </Box>
-                          </TableCell>
-                          <TableCell align="center">{formLabel(player.form)}</TableCell>
-                          <TableCell align="center"><MoodChip morale={player.morale} emojiOnly /></TableCell>
-                          <TableCell align="center"><FitnessBar fitness={player.fitness} /></TableCell>
-                          <TableCell align="center">{inv.kind === 'TITULAR' && funcaoSelect(player)}</TableCell>
-                          <TableCell align="center">{inv.kind === 'TITULAR' && focoSelect(player)}</TableCell>
-                        </TableRow>
-                      )
-                    })}
+                    {displayPlayers.map(player => (
+                      <TableRow key={player.id}>
+                        <TableCell align="center" className="sq-sticky-cell" sx={{ position: 'sticky', left: 0, zIndex: 2, bgcolor: 'background.paper' }}>
+                          {statusButton(player)}
+                        </TableCell>
+                        <TableCell className="sq-sticky-cell" sx={{ position: 'sticky', left: 96, zIndex: 2, bgcolor: 'background.paper' }}>
+                          {playerNameButton(player)}
+                          {availabilityBadge(player)}
+                          {listedBadge(player)}
+                        </TableCell>
+                        <TableCell align="center">{positionLabel(player)}</TableCell>
+                        <TableCell align="center">
+                          <Box component="span" sx={{ display: 'inline-block', minWidth: 30, px: 1, py: 0.25, borderRadius: 1, ...ovrBadgeSx(player.overall) }}>
+                            {player.overall}
+                          </Box>
+                        </TableCell>
+                        <TableCell align="center">{formLabel(player.form)}</TableCell>
+                        <TableCell align="center"><MoodChip morale={player.morale} emojiOnly /></TableCell>
+                        <TableCell align="center"><FitnessBar fitness={player.fitness} /></TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -987,7 +985,15 @@ export function SquadPage() {
                   <MoodChip morale={teamMorale(players.map(p => p.morale))} prefix="Elenco: " />
                 </Box>
               )}
-              <Pitch home={pitchTeam} onSwap={swapSlots} onSlotClick={slotIndex => setPickerSlot(slotIndex)} />
+              <Pitch
+                home={pitchTeam}
+                onSwap={swapSlots}
+                onSlotClick={slotIndex => setPickerSlot(slotIndex)}
+                onSlotContextMenu={(slotIndex, x, y) => {
+                  const playerId = Object.keys(slotByPlayerId).find(id => slotByPlayerId[id] === slotIndex)
+                  if (playerId) setRoleMenu({ playerId, x, y })
+                }}
+              />
               <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
                 <Button
                   color="secondary"
@@ -1080,6 +1086,15 @@ export function SquadPage() {
           ? Object.keys(slotByPlayerId).find(id => slotByPlayerId[id] === pickerSlot)
           : undefined}
         onPick={player => { if (pickerSlot !== null) pickForSlot(pickerSlot, player) }}
+      />
+
+      {/* Opened by right-clicking / long-pressing a pitch token in the Táticas tab (spec §6.2). */}
+      <RoleContextMenu
+        anchor={roleMenu}
+        playerName={roleMenuPlayer?.name ?? ''}
+        funcaoControl={roleMenuPlayer ? funcaoSelect(roleMenuPlayer) : null}
+        focoControl={roleMenuPlayer ? focoSelect(roleMenuPlayer) : null}
+        onClose={() => setRoleMenu(null)}
       />
 
       {/* Save outcome shown as a transient toast rather than pinned into the layout. */}
