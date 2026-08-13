@@ -25,7 +25,7 @@ import { RoleContextMenu, type RoleMenuAnchor } from './RoleContextMenu'
 import { Pitch, type PlacedPlayer, type TeamOnPitch } from '../pitch/Pitch'
 import { FORMATION_CODES, pitchSlots } from '../pitch/pitchSlots'
 import { assignSlots, type AssignablePlayer } from '../pitch/slotAssign'
-import { DETAILED_POSITION_SHORT, positionShort } from '../players/positionLabels'
+import { DETAILED_POSITION_SHORT, squadPositionLabel } from '../players/positionLabels'
 import {
   ARCHETYPE_LABEL, FOCUS_LABEL, ARCHETYPES_FOR_POSITION, FOCUSES_FOR, defaultArchetypeFor,
   parseFamiliarRoles, archetypesByFamiliarity, bestFamiliarArchetypeFor,
@@ -107,14 +107,6 @@ const INTENSITY_LABEL: Record<TrainingIntensity, string> = {
 
 // Criciúma yellow — every starter's selection button.
 const CRICIUMA_YELLOW = '#f7d417'
-
-// Coarse fallbacks when a player has no detailed position (legacy payloads).
-const COARSE_POS_SHORT: Record<PlayerResponse['position'], string> = { GK: 'GK', DEF: 'DEF', MID: 'MEI', ATT: 'ATA' }
-
-/** Short position abbr for a squad-table cell: detailed when present, else coarse. */
-function positionLabel(player: PlayerResponse): string {
-  return positionShort(player, COARSE_POS_SHORT)
-}
 
 function formLabel(form: number): string {
   if (form > 0) return `▲ +${form}`
@@ -953,7 +945,7 @@ export function SquadPage() {
                           {availabilityBadge(player)}
                           {listedBadge(player)}
                         </TableCell>
-                        <TableCell align="center">{positionLabel(player)}</TableCell>
+                        <TableCell align="center">{squadPositionLabel(player)}</TableCell>
                         <TableCell align="center">
                           <Box component="span" sx={{ display: 'inline-block', minWidth: 30, px: 1, py: 0.25, borderRadius: 1, ...ovrBadgeSx(player.overall) }}>
                             {player.overall}
@@ -1039,7 +1031,7 @@ export function SquadPage() {
                   {displayPlayers.map(player => (
                     <TableRow key={player.id}>
                       <TableCell>{playerNameButton(player)}</TableCell>
-                      <TableCell align="center">{positionLabel(player)}</TableCell>
+                      <TableCell align="center">{squadPositionLabel(player)}</TableCell>
                       <TableCell align="center">{trainingFocusSelect(player)}</TableCell>
                       <TableCell align="center">{trainingIntensitySelect(player)}</TableCell>
                     </TableRow>
@@ -1201,7 +1193,7 @@ function MobileSquadRow({ player, statusButton, playerNameButton, availabilityBa
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 1, flexWrap: 'wrap' }}>
             {availabilityBadge(player)}
             {listedBadge(player)}
-            <Chip size="small" label={positionLabel(player)} />
+            <Chip size="small" label={squadPositionLabel(player)} />
             <Chip size="small" label={`OVR ${player.overall}`} sx={ovrBadgeSx(player.overall)} />
             <Box sx={{ width: 84 }}><FitnessBar fitness={player.fitness} /></Box>
           </Stack>

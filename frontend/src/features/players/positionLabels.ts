@@ -1,4 +1,4 @@
-import type { DetailedPosition } from '../../api/types'
+import type { DetailedPosition, PlayerResponse } from '../../api/types'
 
 /** Full PT-BR label for each detailed position (matches the backend `DetailedPosition.label()`). */
 export const DETAILED_POSITION_LABEL: Record<DetailedPosition, string> = {
@@ -58,6 +58,16 @@ export function positionLabel(p: WithPosition, coarseLabel: Record<string, strin
 /** The detailed short abbreviation when present, else the coarse abbreviation (legacy/fallback). */
 export function positionShort(p: WithPosition, coarseShort: Record<string, string>): string {
   return p.detailedPosition ? DETAILED_POSITION_SHORT[p.detailedPosition] : (coarseShort[p.position] ?? p.position)
+}
+
+/** Coarse fallbacks for a player with no detailed position (legacy payloads). */
+export const COARSE_POS_SHORT: Record<PlayerResponse['position'], string> = {
+  GK: 'GK', DEF: 'DEF', MID: 'MEI', ATT: 'ATA',
+}
+
+/** Short position abbr for a squad-table cell: detailed when present, else coarse. */
+export function squadPositionLabel(player: PlayerResponse): string {
+  return positionShort(player, COARSE_POS_SHORT)
 }
 
 /**
