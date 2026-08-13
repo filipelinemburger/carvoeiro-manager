@@ -1,5 +1,7 @@
 package br.com.carvoeiromanager.seed;
 
+import br.com.carvoeiromanager.competition.FixtureScheduler;
+
 import java.util.List;
 
 /**
@@ -46,7 +48,11 @@ public final class SeedPhaseValidator {
         for (SeedPhase phase : phases) {
             String at = where + ", phase '" + phase.name() + "'";
             if ("ROUND_ROBIN".equals(phase.kind())) {
-                int expectedRounds = phase.legs() == 1 ? members - 1 : (members - 1) * 2;
+                // An odd field needs a bye round per club, so it is `members` rounds a leg, not
+                // `members - 1`. FixtureScheduler owns that arithmetic; asking it keeps this
+                // check and the fixtures it guards from ever disagreeing.
+                int roundsPerLeg = FixtureScheduler.roundsPerLeg(members);
+                int expectedRounds = phase.legs() == 1 ? roundsPerLeg : roundsPerLeg * 2;
                 if (phase.rounds() != expectedRounds) {
                     throw new IllegalStateException(at + ": rounds=" + phase.rounds() + " but "
                             + members + " members over " + phase.legs() + " leg(s) produce "

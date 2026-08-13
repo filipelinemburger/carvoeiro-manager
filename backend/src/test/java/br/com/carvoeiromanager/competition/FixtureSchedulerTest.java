@@ -90,6 +90,84 @@ class FixtureSchedulerTest {
         }
     }
 
+    // An odd field cannot pair everyone off every round. Série C sits at 13 members between the
+    // seed's Série C intakes, so the scheduler has to hand out byes rather than reject the size.
+    @ParameterizedTest
+    @ValueSource(ints = {3, 5, 9, 13, 19})
+    void singleRoundRobinPlaysEveryPairExactlyOnceWithAnOddField(int teamCount) {
+        List<ScheduledFixture> fixtures = new FixtureScheduler().singleRoundRobin(teamCount);
+
+        int expectedMatches = teamCount * (teamCount - 1) / 2;
+        assertThat(fixtures).as("teamCount %d", teamCount).hasSize(expectedMatches);
+
+        Set<Set<Integer>> pairs = fixtures.stream()
+                .map(f -> Set.of(f.homeIndex(), f.awayIndex()))
+                .collect(Collectors.toSet());
+        assertThat(pairs).as("teamCount %d", teamCount).hasSize(expectedMatches);
+        assertThat(fixtures).as("no club index may exceed the field", teamCount)
+                .allSatisfy(f -> {
+                    assertThat(f.homeIndex()).isLessThan(teamCount);
+                    assertThat(f.awayIndex()).isLessThan(teamCount);
+                });
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {3, 5, 9, 13, 19})
+    void anOddFieldTakesOneMoreRoundAndGivesEveryClubExactlyOneBye(int teamCount) {
+        List<ScheduledFixture> fixtures = new FixtureScheduler().singleRoundRobin(teamCount);
+
+        // teamCount rounds, not teamCount - 1: each club sits out exactly one of them.
+        assertThat(FixtureScheduler.roundsPerLeg(teamCount)).isEqualTo(teamCount);
+        assertThat(fixtures.stream().map(ScheduledFixture::round).distinct().count())
+                .as("teamCount %d", teamCount).isEqualTo((long) teamCount);
+
+        for (int round = 0; round < teamCount; round++) {
+            final int r = round;
+            List<Integer> clubs = fixtures.stream().filter(f -> f.round() == r)
+                    .flatMap(f -> Stream.of(f.homeIndex(), f.awayIndex())).sorted().toList();
+            assertThat(clubs).as("teamCount %d round %d", teamCount, r)
+                    .hasSize(teamCount - 1).doesNotHaveDuplicates();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {3, 5, 9, 13, 19})
+    void anOddFieldStillBalancesHomeAndAwayWithinOne(int teamCount) {
+        List<ScheduledFixture> fixtures = new FixtureScheduler().singleRoundRobin(teamCount);
+
+        for (int club = 0; club < teamCount; club++) {
+            final int c = club;
+            long home = fixtures.stream().filter(f -> f.homeIndex() == c).count();
+            long away = fixtures.stream().filter(f -> f.awayIndex() == c).count();
+            assertThat(home + away).as("teamCount %d club %d match count", teamCount, c)
+                    .isEqualTo(teamCount - 1L);
+            assertThat(Math.abs(home - away))
+                    .as("teamCount %d club %d home=%d away=%d", teamCount, c, home, away)
+                    .isLessThanOrEqualTo(1);
+        }
+    }
+
+    @Test
+    void doubleRoundRobinAlsoHandlesAnOddField() {
+        List<ScheduledFixture> fixtures = new FixtureScheduler().doubleRoundRobin(5);
+
+        assertThat(fixtures).hasSize(20);                 // 5 * 4 ordered pairs
+        assertThat(fixtures.stream().map(ScheduledFixture::round).distinct().count())
+                .isEqualTo(10L);                          // 2 * roundsPerLeg(5)
+        assertThat(FixtureScheduler.roundsPerLeg(4)).isEqualTo(3);
+        Set<String> ordered = fixtures.stream()
+                .map(f -> f.homeIndex() + "-" + f.awayIndex()).collect(Collectors.toSet());
+        assertThat(ordered).hasSize(20);
+    }
+
+    @Test
+    void aFieldOfFewerThanTwoIsStillRejected() {
+        assertThatThrownBy(() -> new FixtureScheduler().singleRoundRobin(1))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new FixtureScheduler().doubleRoundRobin(1))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test
     void knockoutPairingsSeedBestAgainstWorst() {
         List<int[]> ties = new FixtureScheduler().knockoutPairings(8);

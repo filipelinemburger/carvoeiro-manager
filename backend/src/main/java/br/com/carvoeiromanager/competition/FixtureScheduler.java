@@ -5,12 +5,31 @@ import java.util.List;
 
 public class FixtureScheduler {
 
+    /**
+     * How many rounds a single leg of a round-robin needs for {@code teamCount} clubs. An even
+     * field pairs everyone off every round and is done in {@code teamCount - 1}; an odd field
+     * cannot, so one club sits out each round and it takes {@code teamCount} rounds instead.
+     * {@code SeedPhaseValidator} uses this to check a seeded phase's declared round count against
+     * what the scheduler will actually produce.
+     */
+    public static int roundsPerLeg(int teamCount) {
+        return teamCount % 2 == 0 ? teamCount - 1 : teamCount;
+    }
+
+    /**
+     * Circle-method slots: an odd field borrows one phantom slot so the rotation still pairs the
+     * whole circle. Whoever draws the phantom (any index {@code >= teamCount}) has a bye.
+     */
+    private static int slots(int teamCount) {
+        return teamCount % 2 == 0 ? teamCount : teamCount + 1;
+    }
+
     public List<ScheduledFixture> doubleRoundRobin(int teamCount) {
-        if (teamCount < 2 || teamCount % 2 != 0) {
-            throw new IllegalArgumentException("teamCount must be even and >= 2");
+        if (teamCount < 2) {
+            throw new IllegalArgumentException("teamCount must be >= 2");
         }
         List<ScheduledFixture> result = new ArrayList<>();
-        int n = teamCount;
+        int n = slots(teamCount);
         int[] arr = new int[n];
         for (int i = 0; i < n; i++) arr[i] = i;
 
@@ -19,6 +38,7 @@ public class FixtureScheduler {
             for (int i = 0; i < n / 2; i++) {
                 int home = arr[i];
                 int away = arr[n - 1 - i];
+                if (home >= teamCount || away >= teamCount) continue; // phantom slot: a bye
                 // alternate home/away by round for fairness
                 if (round % 2 == 1) { int tmp = home; home = away; away = tmp; }
                 result.add(new ScheduledFixture(round, home, away));               // first leg
@@ -30,33 +50,40 @@ public class FixtureScheduler {
     }
 
     /**
-     * One leg only: every pair meets exactly once over {@code teamCount - 1} rounds. Uses the
+     * One leg only: every pair meets exactly once over {@link #roundsPerLeg(int)} rounds. Uses the
      * same circle method as {@link #doubleRoundRobin(int)} to decide who plays whom and when,
-     * but a single leg gives each club an odd number of matches ({@code teamCount - 1}), so a
-     * fixed round-parity swap (as used by {@link #doubleRoundRobin(int)}, where every club plays
-     * an even number of matches) is not enough to keep every club balanced — the fixed anchor
-     * club at position 0 skews the rotation. Instead, each match's home side is whichever of the
-     * two clubs currently has fewer home games minus away games so far; ties (both clubs equally
-     * balanced) are broken by alternating a running match counter, so no club is systematically
-     * favored. This keeps every club's home/away split within one of each other.
+     * but a single leg over an even field gives each club an odd number of matches
+     * ({@code teamCount - 1}), so a fixed round-parity swap (as used by
+     * {@link #doubleRoundRobin(int)}, where every club plays an even number of matches) is not
+     * enough to keep every club balanced — the fixed anchor club at position 0 skews the
+     * rotation. Instead, each match's home side is whichever of the two clubs currently has fewer
+     * home games minus away games so far; ties (both clubs equally balanced) are broken by
+     * alternating a running match counter, so no club is systematically favored. This keeps every
+     * club's home/away split within one of each other.
+     *
+     * <p>An odd field cannot pair everyone off every round, so one phantom slot joins the circle
+     * and whoever draws it takes a bye: {@code teamCount} rounds of {@code (teamCount - 1) / 2}
+     * matches each. Série C spends the seed's intake at 13 members before it reaches 20.
      */
     public List<ScheduledFixture> singleRoundRobin(int teamCount) {
-        if (teamCount < 2 || teamCount % 2 != 0) {
-            throw new IllegalArgumentException("teamCount must be even and >= 2");
+        if (teamCount < 2) {
+            throw new IllegalArgumentException("teamCount must be >= 2");
         }
         List<ScheduledFixture> result = new ArrayList<>();
-        int n = teamCount;
+        int n = slots(teamCount);
         int[] arr = new int[n];
         for (int i = 0; i < n; i++) arr[i] = i;
 
         int[] homeCount = new int[n];
         int[] awayCount = new int[n];
         int matchIndex = 0;
+        boolean evenField = teamCount % 2 == 0;
 
         for (int round = 0; round < n - 1; round++) {
             for (int i = 0; i < n / 2; i++) {
                 int clubA = arr[i];
                 int clubB = arr[n - 1 - i];
+                if (clubA >= teamCount || clubB >= teamCount) continue; // phantom slot: a bye
                 int balanceA = homeCount[clubA] - awayCount[clubA];
                 int balanceB = homeCount[clubB] - awayCount[clubB];
                 int home;
@@ -65,7 +92,11 @@ public class FixtureScheduler {
                     home = clubA; away = clubB;
                 } else if (balanceB < balanceA) {
                     home = clubB; away = clubA;
-                } else if (matchIndex % 2 == 0) {
+                } else if (evenField ? matchIndex % 2 == 0 : (round + i) % 2 == 0) {
+                    // Tie-break when both clubs are equally balanced. An even field alternates on
+                    // a running match counter; a bye makes that counter drift out of step with
+                    // the circle, so an odd field alternates on the slot's position in the round
+                    // instead, which lands every club on an exact home/away split.
                     home = clubA; away = clubB;
                 } else {
                     home = clubB; away = clubA;
