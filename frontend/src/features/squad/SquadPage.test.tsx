@@ -800,8 +800,9 @@ describe('SquadPage', () => {
       secondaryColor: '#111111',
     })
     renderWithProviders()
-    // Verify players render on Plantel tab
+    // Verify per-player mood chip renders in Plantel tab
     await screen.findByText('Feliz')
+    expect(screen.getByLabelText('Contente')).toBeInTheDocument()
     // Team "dressing room" chip lives in the Táticas tab, verified there
     fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
     expect(screen.getByText(/Elenco:/)).toBeInTheDocument()
