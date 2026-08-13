@@ -21,7 +21,7 @@ vi.mock('../../api/career', () => ({
 
 vi.mock('../../lib/useIsMobile', () => ({ useIsMobile: vi.fn(() => false) }))
 
-import { getSquad, getLineup, setLineup, getTactics, renewContract, listPlayer, unlistPlayer, setTraining } from '../../api/career'
+import { getSquad, getLineup, setLineup, getTactics, renewContract, listPlayer, unlistPlayer } from '../../api/career'
 
 const mockGetSquad = vi.mocked(getSquad)
 const mockGetLineup = vi.mocked(getLineup)
@@ -29,7 +29,6 @@ const mockSetLineup = vi.mocked(setLineup)
 const mockRenewContract = vi.mocked(renewContract)
 const mockListPlayer = vi.mocked(listPlayer)
 const mockUnlistPlayer = vi.mocked(unlistPlayer)
-const mockSetTraining = vi.mocked(setTraining)
 
 // `as const` narrows injurySeverity to the literal 'NONE' so it satisfies
 // PlayerResponse's union type (not widened to string) when spread into fixtures.
@@ -304,49 +303,22 @@ describe('SquadPage', () => {
     expect(tacticsPanel).not.toBeVisible()
   })
 
-  it('lets the user set a training focus/intensity and saves them for the whole squad', async () => {
-    mockSetTraining.mockResolvedValue(squad)
+  it('renders training controls seeded from the squad payload when the Treino tab is selected', async () => {
+    // Proves the wiring only (the controls' own behaviour — options, changes, saving — is
+    // TrainingTab's own test suite now): SquadPage seeds `trainingAssignments` from the squad
+    // query and passes it straight through as TrainingTab's `assignments` prop.
+    mockGetSquad.mockResolvedValue({
+      ...squad,
+      players: squad.players.map(p =>
+        p.id === GK.id ? { ...p, trainingFocus: 'REFLEXOS' as const, trainingIntensity: 'INTENSA' as const } : p),
+    })
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Teste'))
 
     fireEvent.click(screen.getByRole('tab', { name: 'Treino' }))
 
-    fireEvent.change(
-      screen.getByRole('combobox', { name: `Foco de treino de ${GK.name}` }),
-      { target: { value: 'REFLEXOS' } },
-    )
-    fireEvent.change(
-      screen.getByRole('combobox', { name: `Intensidade de treino de ${GK.name}` }),
-      { target: { value: 'INTENSA' } },
-    )
-    fireEvent.click(screen.getByRole('button', { name: /salvar treino/i }))
-
-    await waitFor(() =>
-      expect(mockSetTraining).toHaveBeenCalledWith(
-        'sg-1', 'club-1',
-        expect.objectContaining({
-          assignments: expect.arrayContaining([
-            expect.objectContaining({ playerId: GK.id, focus: 'REFLEXOS', intensity: 'INTENSA' }),
-          ]),
-        }),
-        'test-token',
-      ),
-    )
-  })
-
-  it('offers all twelve trainable attributes plus Nenhum as training focus options', async () => {
-    renderWithProviders()
-    await waitFor(() => screen.getByText('Goleiro Teste'))
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Treino' }))
-
-    const select = screen.getByRole('combobox', { name: `Foco de treino de ${GK.name}` })
-    const options = within(select).getAllByRole('option').map(o => o.textContent)
-    expect(options).toEqual([
-      'Nenhum',
-      'Velocidade', 'Finalização', 'Passe', 'Desarme', 'Reflexos', 'Fôlego',
-      'Cabeceio', 'Cruzamento', 'Marcação', 'Drible', 'Visão de jogo', 'Força',
-    ])
+    expect(screen.getByRole('combobox', { name: `Foco de treino de ${GK.name}` })).toHaveValue('REFLEXOS')
+    expect(screen.getByRole('combobox', { name: `Intensidade de treino de ${GK.name}` })).toHaveValue('INTENSA')
   })
 
   it('shows tactics controls side by side with the pitch in the Táticas de jogo tab', async () => {
@@ -428,19 +400,6 @@ describe('SquadPage', () => {
     )
     // getLineup itself was only called once (the initial mount) — no extra round-trip.
     expect(mockGetLineup).toHaveBeenCalledTimes(1)
-  })
-
-  it('writes the saved training result directly into the squad cache without an extra fetch', async () => {
-    mockSetTraining.mockResolvedValue(squad)
-    renderWithProviders()
-    await waitFor(() => screen.getByText('Goleiro Teste'))
-    expect(mockGetSquad).toHaveBeenCalledTimes(1)
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Treino' }))
-    fireEvent.click(screen.getByRole('button', { name: /salvar treino/i }))
-
-    await waitFor(() => expect(mockSetTraining).toHaveBeenCalled())
-    expect(mockGetSquad).toHaveBeenCalledTimes(1)
   })
 
   it('does not refetch the squad on a second mount when the query client is reused', async () => {
