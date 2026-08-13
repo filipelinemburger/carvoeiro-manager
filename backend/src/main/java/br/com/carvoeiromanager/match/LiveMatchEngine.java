@@ -41,10 +41,8 @@ import java.util.function.ToIntFunction;
 @Service
 public class LiveMatchEngine {
 
-    // ~1.35 cards per side per 90 at aggression 1.0. Lowered from 0.02 (spec 2026-08-13 §9).
-    // MUST stay in lockstep with MatchSimulationService's copy.
-    private static final double BASE_CARD_RATE = 0.015;
-    private static final double RED_SHARE = 0.06;
+    // BASE_CARD_RATE and RED_SHARE live in MatchMath — shared with MatchSimulationService so the
+    // live and instant paths book cards at the identical rate by construction.
     private static final double CHANCE_RATE = 0.12;   // flavor near-miss/save rate per side per minute
     private static final double HOBBLE_MULT = 0.5;    // an injured player who plays on contributes at half
     private static final double ASSIST_CHANCE = 0.65;
@@ -458,8 +456,8 @@ public class LiveMatchEngine {
 
     private void maybeCard(int minute, Side side, TeamMatchInput input, Random rng, Random attrRng,
                            List<LiveTimelineEvent> events) {
-        if (rng.nextDouble() < BASE_CARD_RATE * input.aggression() && !side.onPitch.isEmpty()) {
-            EventType t = rng.nextDouble() < RED_SHARE ? EventType.RED_CARD : EventType.YELLOW_CARD;
+        if (rng.nextDouble() < MatchMath.BASE_CARD_RATE * input.aggression() && !side.onPitch.isEmpty()) {
+            EventType t = rng.nextDouble() < MatchMath.RED_SHARE ? EventType.RED_CARD : EventType.YELLOW_CARD;
             // Fouls skew toward aggressive tacklers; the +1 keeps everyone eligible (unchanged formula).
             // MARCACAO_DURA raises that player's booking risk ×1.5; no instruction = the base tackling+1.
             UUID booked = pickByWeight(side,

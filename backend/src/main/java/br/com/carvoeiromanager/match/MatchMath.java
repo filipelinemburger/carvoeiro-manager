@@ -1,9 +1,10 @@
 package br.com.carvoeiromanager.match;
 
 /**
- * Shared, pure match-scoring math used by both simulation engines ({@link LiveMatchEngine} and
- * {@link MatchSimulationService}), mirroring the {@link SetPieces} static-utility pattern. Keeping
- * a single copy guarantees the live and instant paths score identically. No RNG, no I/O, no Spring.
+ * Shared, pure match-scoring math and calibration constants used by both simulation engines
+ * ({@link LiveMatchEngine} and {@link MatchSimulationService}), mirroring the {@link SetPieces}
+ * static-utility pattern. Keeping a single copy guarantees the live and instant paths score —
+ * and book — identically. No RNG, no I/O, no Spring.
  */
 final class MatchMath {
 
@@ -11,6 +12,13 @@ final class MatchMath {
     }
 
     static final int MINUTES = 90;
+
+    // ~1.35 cards per side per 90 at aggression 1.0. Lowered from 0.02 (spec 2026-08-13 §9): the
+    // old rate produced a card storm. A single copy here — rather than one in each engine kept in
+    // lockstep by convention — makes the live and instant paths use the identical rate by
+    // construction.
+    public static final double BASE_CARD_RATE = 0.015;
+    public static final double RED_SHARE = 0.06;
 
     /**
      * Last minute of extra time. NOTE: {@link #MINUTES} stays 90 — it is the per-minute rate

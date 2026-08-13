@@ -53,12 +53,26 @@ class FixtureSimulatorCardsIT {
     @Test
     void aSecondYellowAlwaysComesWithASameMinuteRedAndEndsThePlayersMatch() {
         Competition competition = competitionRepository.findBySaveGameId(saveGameId).get(0);
-        // 80 AI fixtures make at least one same-player double booking statistically certain
-        // (expected occurrences well over 10; P(zero) < 1e-6).
+        // 160 AI fixtures make at least one same-player double booking statistically certain.
+        // Arithmetic (BASE_CARD_RATE 0.02 -> 0.015, spec 2026-08-13 §9; RED_SHARE 0.06 unchanged;
+        // ~11 on-pitch players per side, weighted by tackling+1 but treated as roughly uniform for
+        // this order-of-magnitude estimate):
+        //   - Yellow cards per side per 90 at aggression ~1.0: old 90*0.02*0.94 = 1.692,
+        //     new 90*0.015*0.94 = 1.269.
+        //   - A same-player double booking needs two of one side's yellows to land on the same of
+        //     ~11 players — a birthday-paradox collision, so its rate scales with the SQUARE of the
+        //     yellow rate: expected collisions per side per match ~= lambda^2 / (2*11).
+        //     Old: 1.692^2 / 22 = 0.1302/side -> 0.2604/match (both sides).
+        //     New: 1.269^2 / 22 = 0.0732/side -> 0.1464/match — a ~44% drop, matching (0.75)^2.
+        //   - Over 80 fixtures the new rate gives an expected 0.1464*80 = 11.7 occurrences and
+        //     P(zero) = e^-11.7 ~= 8e-6 — an order of magnitude thinner margin than the pre-cut
+        //     P(zero) ~= 9e-10 at the same fixture count, on a repo that already suffers from
+        //     flaky ITs. Doubling to 160 fixtures restores it: expected 0.1464*160 = 23.4
+        //     occurrences, P(zero) = e^-23.4 ~= 7e-11 — safer than the original 80-fixture margin.
         List<Fixture> aiFixtures = fixtureRepository
                 .findBySaveGameIdAndCompetitionId(saveGameId, competition.getId()).stream()
                 .filter(f -> !f.getHomeClubId().equals(managedClubId) && !f.getAwayClubId().equals(managedClubId))
-                .limit(80)
+                .limit(160)
                 .toList();
         assertThat(aiFixtures).isNotEmpty();
         SaveGame save = saveGameRepository.findById(saveGameId).orElseThrow();
@@ -97,7 +111,7 @@ class FixtureSimulatorCardsIT {
             }
         }
         assertThat(sawSecondYellow)
-                .as("80 AI fixtures should produce at least one second-yellow send-off")
+                .as("160 AI fixtures should produce at least one second-yellow send-off")
                 .isTrue();
     }
 }

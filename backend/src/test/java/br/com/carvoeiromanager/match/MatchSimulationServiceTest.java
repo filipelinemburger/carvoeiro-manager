@@ -105,7 +105,7 @@ class MatchSimulationServiceTest {
     }
 
     @Test
-    void cardsPerMatchSitAroundTwoAndAHalf() {
+    void cardsPerSidePerMatchSitAroundOneAndAThird() {
         // Calibration guard (spec 2026-08-13 §9): ~1.35 cards per side per 90 at aggression 1.0,
         // so ~2.7 per match. Asserted as a band over 200 seeds, wide enough to absorb RNG noise
         // but tight enough that a changed BASE_CARD_RATE trips it.
