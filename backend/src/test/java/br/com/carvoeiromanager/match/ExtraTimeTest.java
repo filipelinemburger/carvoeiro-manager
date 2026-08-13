@@ -38,8 +38,11 @@ class ExtraTimeTest {
      * these — NOT synthesized.
      */
     private static final long[] SEEDS = {1L, 2L, 3L, 42L, 100L, 777L, 12345L, 999999L};
-    private static final int[] GOLDEN_HOME = {0, 4, 4, 1, 2, 3, 1, 1};
-    private static final int[] GOLDEN_AWAY = {4, 1, 2, 1, 0, 1, 1, 2};
+    // Recomputed for spec 2026-08-13 §9 (BASE_CARD_RATE 0.02 -> 0.015): the per-minute RNG draw
+    // order means a card draw's outcome shifts every subsequent draw in the same seeded stream,
+    // so goal counts on some seeds changed even though goal logic itself was untouched.
+    private static final int[] GOLDEN_HOME = {0, 4, 4, 1, 3, 2, 1, 0};
+    private static final int[] GOLDEN_AWAY = {4, 1, 2, 1, 0, 0, 1, 3};
 
     @Test
     void aLeagueMatchIsByteIdenticalToTheGoldenResult() {

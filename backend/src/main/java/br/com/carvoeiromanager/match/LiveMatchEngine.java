@@ -41,7 +41,9 @@ import java.util.function.ToIntFunction;
 @Service
 public class LiveMatchEngine {
 
-    private static final double BASE_CARD_RATE = 0.02;
+    // ~1.35 cards per side per 90 at aggression 1.0. Lowered from 0.02 (spec 2026-08-13 §9).
+    // MUST stay in lockstep with MatchSimulationService's copy.
+    private static final double BASE_CARD_RATE = 0.015;
     private static final double RED_SHARE = 0.06;
     private static final double CHANCE_RATE = 0.12;   // flavor near-miss/save rate per side per minute
     private static final double HOBBLE_MULT = 0.5;    // an injured player who plays on contributes at half

@@ -25,7 +25,10 @@ import java.util.Random;
 @Service
 public class MatchSimulationService {
 
-    private static final double BASE_CARD_RATE = 0.02;
+    // ~1.35 cards per side per 90 at aggression 1.0. Lowered from 0.02 (spec 2026-08-13 §9):
+    // the old rate produced a card storm. MUST stay in lockstep with LiveMatchEngine's copy —
+    // the instant and live paths are calibrated against each other.
+    private static final double BASE_CARD_RATE = 0.015;
     private static final double RED_SHARE = 0.06;
 
     /** Existing entry point: a normal 90-minute match. */

@@ -104,6 +104,18 @@ class MatchSimulationServiceTest {
         assertThat(fieryCards).isGreaterThan(calmCards);
     }
 
+    @Test
+    void cardsPerMatchSitAroundTwoAndAHalf() {
+        // Calibration guard (spec 2026-08-13 §9): ~1.35 cards per side per 90 at aggression 1.0,
+        // so ~2.7 per match. Asserted as a band over 200 seeds, wide enough to absorb RNG noise
+        // but tight enough that a changed BASE_CARD_RATE trips it.
+        TeamMatchInput neutral = new TeamMatchInput(70, 65, 1.0, 1.0, 0.5, 0.5, 0.82, 0.15,
+                Mentality.BALANCED, GameStyle.EQUILIBRADO);
+        long homeCards = countCards(neutral);
+        double perSidePerMatch = homeCards / 200.0;
+        assertThat(perSidePerMatch).isBetween(1.15, 1.55);
+    }
+
     private long countCards(TeamMatchInput side) {
         long total = 0;
         TeamMatchInput opp = new TeamMatchInput(70, 65, 1.0, 1.0, 0.5, 0.5, 0.82, 0.15, Mentality.BALANCED, GameStyle.EQUILIBRADO);

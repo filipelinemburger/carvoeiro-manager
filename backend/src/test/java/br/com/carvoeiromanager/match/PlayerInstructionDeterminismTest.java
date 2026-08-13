@@ -33,12 +33,21 @@ class PlayerInstructionDeterminismTest {
 
     // Golden signatures captured from the pre-instruction engine (seed 1234, default MISTO profile,
     // no per-player instructions). See the temporary capture harness in the task notes.
+    // Recomputed for spec 2026-08-13 §9 (BASE_CARD_RATE 0.02 -> 0.015). Two things moved: fewer
+    // cards are drawn at all (5 yellows + 1 red -> 3 yellows), and because a card draw that fires
+    // consumes extra draws for player attribution, every subsequent draw in the same seeded stream
+    // shifts — so the foul and instant-score goldens below moved too, even though neither foul nor
+    // scoring logic was touched. A drift here that is NOT accompanied by a rate change is still the
+    // real break this test exists to catch.
     private static final String GOLDEN_CARDS =
-            "2:A:YELLOW_CARD:3|16:H:YELLOW_CARD:1|22:A:YELLOW_CARD:10|35:A:YELLOW_CARD:3|35:A:RED_CARD:3|66:A:YELLOW_CARD:8";
+            "42:A:YELLOW_CARD:3|63:A:YELLOW_CARD:1|68:H:YELLOW_CARD:9";
     private static final String GOLDEN_FOULS =
+            // Every foul MINUTE is unchanged from the pre-0.015 golden; only five attributions moved
+            // (36, 41, 45, 53, 60 — all away side), which is exactly the narrow drift expected when
+            // the card draws ahead of them consume a different number of RNG values.
             "5:A:FOUL:7|6:A:FOUL:10|14:H:FOUL:1|20:H:FOUL:4|21:H:FOUL:6|24:A:FOUL:4|27:H:FOUL:7|27:A:FOUL:9|"
-            + "30:A:FOUL:1|33:H:FOUL:4|35:H:FOUL:1|36:A:FOUL:1|38:H:FOUL:5|41:A:FOUL:7|45:A:FOUL:2|47:H:FOUL:3|"
-            + "49:H:FOUL:6|53:A:FOUL:1|60:A:FOUL:6|61:H:FOUL:2|62:H:FOUL:3|68:H:FOUL:10|76:H:FOUL:5|78:H:FOUL:8|"
+            + "30:A:FOUL:1|33:H:FOUL:4|35:H:FOUL:1|36:A:FOUL:3|38:H:FOUL:5|41:A:FOUL:4|45:A:FOUL:6|47:H:FOUL:3|"
+            + "49:H:FOUL:6|53:A:FOUL:9|60:A:FOUL:4|61:H:FOUL:2|62:H:FOUL:3|68:H:FOUL:10|76:H:FOUL:5|78:H:FOUL:8|"
             + "83:H:FOUL:9|86:H:FOUL:1";
     // Instant engine (TeamStrengthCalculator -> MatchSimulationService), seeds 0..11.
     // Re-baselined when MatchMath.ANCHOR moved 1.35 -> 1.44 in the live-weather calibration task
@@ -46,7 +55,10 @@ class PlayerInstructionDeterminismTest {
     // a legitimate consequence of a global scoring recalibration, not an engine defect. Only the
     // seed-10 result changed (0-0 -> 0-1); the other eleven seeds are byte-identical to the prior
     // golden.
-    private static final String GOLDEN_INSTANT = "1-3|0-4|1-1|2-2|2-1|2-1|2-1|2-0|2-0|3-2|0-1|0-2|";
+    // Re-baselined again for spec 2026-08-13 §9 (BASE_CARD_RATE 0.02 -> 0.015): the instant engine
+    // draws its card roll from the same per-minute stream as its scoring rolls, so a changed card
+    // outcome shifts every later draw for that seed. Scoring logic itself is untouched.
+    private static final String GOLDEN_INSTANT = "1-1|0-4|0-1|2-2|3-2|2-1|2-1|3-0|2-0|1-1|0-0|0-0|";
 
     private final br.com.carvoeiromanager.staff.StaffEffectsService staff =
             Mockito.mock(br.com.carvoeiromanager.staff.StaffEffectsService.class);

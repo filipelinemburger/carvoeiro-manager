@@ -196,9 +196,12 @@ class LiveMatchEngineTest {
         // whose scorer/assist weights equal the pre-AttackZone formulas, so the goal scorer/assister
         // attribution for a fixed seed must match this golden signature captured from the neutral run.
         // A drift here means MISTO stopped being the neutral no-op (seeded results would shift).
+        // Recomputed for spec 2026-08-13 §9 (BASE_CARD_RATE 0.02 -> 0.015): the per-minute RNG
+        // draw order means a card draw's outcome shifts every subsequent draw in the seeded
+        // stream, so the goal minutes/scorers moved even though goal logic itself is untouched.
         LiveMatchConfig cfg = config(1234L, List.of());
         LiveTimeline t = engine.simulate(cfg);
-        assertThat(goalSignature(t)).isEqualTo("42:H:GOAL:8:9|63:H:GOAL:5:2");
+        assertThat(goalSignature(t)).isEqualTo("36:H:GOAL:7:9|67:H:GOAL:9:2");
     }
 
     /**
@@ -235,6 +238,11 @@ class LiveMatchEngineTest {
         // unchanged immediately after wiring it in. If this ever needs its golden value edited, that
         // means the stats stream is drawing from an existing RNG stream — find the leak, don't touch
         // the golden.
+        // Recomputed for spec 2026-08-13 §9 (BASE_CARD_RATE 0.02 -> 0.015): the per-minute RNG
+        // draw order means a card draw's outcome shifts every subsequent draw in the seeded
+        // stream, so the full event signature moved even though nothing but the card rate
+        // constant changed. See the class-level note above for what would make this golden
+        // legitimately stale (a real leak) versus this expected, whole-sequence drift.
         List<LiveSub> subs = List.of(new LiveSub(60, true, homeXi.get(5).getId(), homeBench.get(0).getId()));
         List<TimedTactics> tactics = List.of(
                 new TimedTactics(30, true, Mentality.ATTACKING, null, null, Pressing.HIGH, Marking.ZONAL, "4-3-3"));
@@ -245,17 +253,18 @@ class LiveMatchEngineTest {
         homePool.addAll(homeBench);
 
         assertThat(fullEventSignature(t, homePool, awayXi)).isEqualTo(
-                "1:H:FOUL:7|1:A:CHANCE:5|4:H:YELLOW_CARD:9|4:H:CHANCE:1|5:H:FOUL:3|5:A:FOUL:10|6:H:FOUL:3"
-                        + "|9:A:INJURY:0|10:A:YELLOW_CARD:10|11:H:FOUL:4|11:A:CHANCE:9|12:H:FOUL:7|12:H:CHANCE:7"
-                        + "|13:A:FOUL:3|13:H:CHANCE:7|19:H:CHANCE:9|25:H:RED_CARD:8|25:A:CHANCE:10"
-                        + "|30:H:TACTICS_CHANGE:0|30:A:FOUL:10|30:H:CHANCE:9|32:H:FOUL:0|33:A:FOUL:0"
-                        + "|33:H:CHANCE:10|34:H:GOAL:10|34:A:FOUL:1|37:H:YELLOW_CARD:3|38:H:CHANCE:9|39:H:GOAL:10"
-                        + "|41:H:FOUL:3|41:A:FOUL:7|43:A:YELLOW_CARD:5|43:H:FOUL:3|43:A:CHANCE:9|44:H:FOUL:2"
-                        + "|45:A:GOAL:8|45:H:FOUL:7|45:H:HALF_TIME:0|46:A:FOUL:6|47:H:FOUL:0|47:A:FOUL:0"
-                        + "|50:H:FOUL:2|54:A:FOUL:9|57:H:FOUL:9|58:A:CHANCE:8|60:H:SUBSTITUTION:5|62:H:FOUL:3"
-                        + "|62:A:FOUL:6|63:A:CHANCE:5|64:H:FOUL:6|66:A:CHANCE:10|66:H:INJURY:2|68:H:FOUL:11"
-                        + "|69:A:CHANCE:7|72:A:CHANCE:10|73:H:FOUL:1|78:H:FOUL:3|78:H:CHANCE:9|79:A:FOUL:3"
-                        + "|86:A:FOUL:8|86:A:CHANCE:8|90:H:FOUL:10");
+                "1:H:FOUL:7|1:A:CHANCE:5|4:A:CHANCE:10|5:H:FOUL:3|5:A:FOUL:10|6:H:FOUL:3"
+                        + "|9:A:INJURY:0|10:H:CHANCE:1|11:H:FOUL:4|12:H:FOUL:7|13:A:FOUL:3"
+                        + "|15:H:CHANCE:4|23:A:CHANCE:9|25:H:CHANCE:7|25:A:CHANCE:7"
+                        + "|30:H:TACTICS_CHANGE:0|30:A:FOUL:10|31:A:CHANCE:9|32:H:FOUL:8|33:A:FOUL:0"
+                        + "|34:A:FOUL:1|35:H:CHANCE:7|36:A:CHANCE:10|38:H:GOAL:8|38:H:CHANCE:1|39:H:CHANCE:10"
+                        + "|41:H:FOUL:8|41:A:FOUL:7|43:H:FOUL:10|43:A:CHANCE:9|44:H:YELLOW_CARD:7"
+                        + "|44:H:FOUL:8|44:H:CHANCE:9|45:H:FOUL:0|45:H:HALF_TIME:0|46:H:GOAL:4|46:A:FOUL:6"
+                        + "|47:H:FOUL:0|47:A:FOUL:0|50:H:FOUL:5|52:A:CHANCE:9|53:A:CHANCE:8|54:A:FOUL:9"
+                        + "|57:H:FOUL:8|59:H:CHANCE:8|60:H:SUBSTITUTION:5|62:H:FOUL:9|62:A:FOUL:6"
+                        + "|64:H:FOUL:10|64:H:CHANCE:4|66:H:INJURY:3|67:H:CHANCE:11|68:H:FOUL:7"
+                        + "|70:H:CHANCE:9|72:A:CHANCE:10|73:H:FOUL:9|73:H:CHANCE:10|78:H:FOUL:7"
+                        + "|79:A:FOUL:3|86:A:FOUL:8|87:H:CHANCE:7|90:H:FOUL:8");
     }
 
     /**
