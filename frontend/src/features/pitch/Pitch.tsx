@@ -124,7 +124,9 @@ function TeamLayer({ team, mirror, onSwap, onSlotClick, onSlotContextMenu, conta
   useEffect(() => () => cancelLongPress(), [])
 
   // Nearest droppable slot center within DROP_RADIUS_FRACTION of the pitch width, in screen
-  // pixels; the origin slot and slot 0 (GK) are never candidates. Null = snap back.
+  // pixels; only the origin slot is excluded. The GK slot is a valid drop target like any
+  // other — improvising an outfielder in goal is the manager's call, not the UI's. Null = snap
+  // back.
   function dropTarget(clientX: number, clientY: number, fromSlot: number): number | null {
     const rect = containerRef?.current?.getBoundingClientRect()
     if (!rect || rect.width === 0) return null
@@ -132,7 +134,7 @@ function TeamLayer({ team, mirror, onSwap, onSlotClick, onSlotContextMenu, conta
     // Reduce (rather than a mutable outer `let` reassigned inside forEach) so TS can narrow
     // `best` cleanly at the end — a `let` mutated inside a nested closure loses that narrowing.
     const best = positioned.reduce<{ slot: number; d: number } | null>((acc, { slot }, i) => {
-      if (i === fromSlot || i === 0) return acc
+      if (i === fromSlot) return acc
       const cx = rect.left + (mirror ? 1 - slot.x : slot.x) * rect.width
       const cy = rect.top + (mirror ? 1 - slot.y : slot.y) * rect.height
       const d = Math.hypot(clientX - cx, clientY - cy)
@@ -155,7 +157,9 @@ function TeamLayer({ team, mirror, onSwap, onSlotClick, onSlotContextMenu, conta
         // when the picker itself would call them natural.
         const posLabel = DETAILED_POSITION_SHORT[slot.accepted[0]]
         const outOfPosition = !!player?.detailedPosition && !isNatural(player, slot.accepted)
-        const draggable = Boolean(onSwap) && !mirror && i !== 0 && player !== null
+        // The GK slot is draggable and droppable like any other: improvising an outfielder in
+        // goal is the manager's decision, not the UI's.
+        const draggable = Boolean(onSwap) && !mirror && player !== null
         // Any slot (including GK and empties) is tappable when a click handler is supplied; a
         // tap is resolved below by movement distance, not by whether the slot is draggable.
         const tappable = Boolean(onSlotClick) && !mirror

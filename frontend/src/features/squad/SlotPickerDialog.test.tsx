@@ -79,12 +79,15 @@ describe('SlotPickerDialog', () => {
     expect(within(improvisedRow).getByTitle(/Improvisado — posição natural: ME · PE/)).toBeInTheDocument()
   })
 
-  it('excludes GK-position players from an outfield slot (the XI allows at most 1 goalkeeper)', () => {
+  it('offers GK-position players for an outfield slot, flagged as improvised', () => {
     const keeper = mkPlayer({ id: 'gk1', name: 'Goleiro Um', position: 'GK', detailedPosition: 'GOLEIRO' })
     const defender = mkPlayer({ id: 'd1', name: 'Zagueiro Um', detailedPosition: 'LATERAL_ESQUERDO' })
     renderDialog({ slot: LE_SLOT, players: [keeper, defender] })
 
-    expect(screen.queryByText('Goleiro Um')).not.toBeInTheDocument()
+    // Improvising a keeper outfield is the manager's call; the dialog informs, it does not filter.
+    expect(screen.getByText('Goleiro Um')).toBeInTheDocument()
+    expect(screen.getByTestId('slot-picker-row-gk1')).toHaveAttribute('data-natural', 'false')
+    expect(within(screen.getByTestId('slot-picker-row-gk1')).getByText('Improvisado')).toBeInTheDocument()
     expect(screen.getByText('Zagueiro Um')).toBeInTheDocument()
   })
 

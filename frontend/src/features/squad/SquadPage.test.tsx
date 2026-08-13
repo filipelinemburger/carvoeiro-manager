@@ -464,7 +464,7 @@ describe('SquadPage', () => {
     expect(mockGetSquad).toHaveBeenCalledTimes(1)
   })
 
-  it('blocks selecting more attackers than the formation allows', async () => {
+  it('an extra attacker beyond the formation\'s ATT slots still starts, taking any other free slot rather than the bench', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Atacante Um'))
 
@@ -475,10 +475,11 @@ describe('SquadPage', () => {
     // The chip names the SLOT, so a 4-3-3 attacker reads as one of that line's slots.
     expect(pickBtn('atacante um')).toHaveTextContent(/^(PD|ATA|PE)$/)
 
-    // The attacking line is full, so a 4th attacker can't take a starting slot — the click
-    // sends them to the bench instead.
+    // The attacking line is full, but firstFreeSlotFor's last-resort fallback offers ANY free
+    // slot rather than the bench — fielding a 4th attacker out of position (here, in the still-
+    // open GK slot) is the manager's call, not something the UI refuses on their behalf.
     fireEvent.click(pickBtn('atacante quatro'))
-    expect(pickBtn('atacante quatro')).toHaveTextContent(/sub/i)
+    expect(pickBtn('atacante quatro')).toHaveTextContent('GOL')
   })
 
   it('keeps button disabled when fewer than 11 are selected', async () => {
@@ -491,17 +492,18 @@ describe('SquadPage', () => {
     expect(saveBtn).toBeDisabled()
   })
 
-  it('blocks selecting a second goalkeeper', async () => {
+  it('a second goalkeeper still starts, taking any other free slot rather than the bench (blocked only at save time)', async () => {
     renderWithProviders()
     await waitFor(() => screen.getByText('Goleiro Dois'))
 
     fireEvent.click(pickBtn('goleiro teste'))
     expect(pickBtn('goleiro teste')).toHaveTextContent('GOL')
 
-    // Only one keeper can start, so clicking a second keeper can't take the GK slot — they go
-    // to the bench instead.
+    // The GK slot is taken, but firstFreeSlotFor's last-resort fallback offers ANY free slot —
+    // Goleiro Dois starts outfield instead of dropping to the bench. Two goalkeepers in the XI
+    // is still illegal, but that's enforced by `validate` at save time, not by slot assignment.
     fireEvent.click(pickBtn('goleiro dois'))
-    expect(pickBtn('goleiro dois')).toHaveTextContent(/sub/i)
+    expect(pickBtn('goleiro dois')).toHaveTextContent('LD')
   })
 
   it('does not let a suspended player be selected', async () => {
@@ -1449,5 +1451,51 @@ describe('SquadPage — slot picker and Função/Foco selects', () => {
     fireEvent.contextMenu(gkToken, { clientX: 100, clientY: 200 })
     expect(await screen.findByRole('combobox', { name: 'Função de Goleiro Dois' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Foco de Goleiro Dois' })).toBeInTheDocument()
+  })
+
+  it('allows an XI with no recognised goalkeeper', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+    fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
+
+    const pitch = screen.getByTestId('pitch')
+    vi.spyOn(pitch, 'getBoundingClientRect').mockReturnValue(mockRect())
+    // Slot 0 (GK) center in the default 4-3-3 layout.
+    const slot0 = pitch.querySelector('[data-slot-index="0"]')!
+    fireEvent.pointerDown(slot0, { pointerId: 1, clientX: 200, clientY: 564 })
+    fireEvent.pointerUp(slot0, { pointerId: 1, clientX: 200, clientY: 564 })
+
+    // Put an unpicked outfielder in goal; the displaced keeper drops to the bench, leaving a
+    // full XI with zero goalkeepers.
+    fireEvent.click(await screen.findByTestId('slot-picker-row-p-m4'))
+    await waitFor(() => expect(pitch.querySelector('[data-slot-index="0"]')).toHaveTextContent('Meio Quatro'))
+    // Wait for the dialog's exit transition to actually finish: MUI keeps the rest of the tree
+    // aria-hidden until then, and a role-based query issued mid-transition would find nothing.
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    // Assert on the Plantel tab, where the validation alert lives — a keeper-less XI is now
+    // legal, so no alert renders. (Do NOT match on /goleiro/i across the document: the hidden
+    // Plantel panel still lists both keepers' names, which `queryByText` would happily find.)
+    fireEvent.click(screen.getByRole('tab', { name: 'Plantel' }))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Salvar escalação' })).toBeEnabled()
+  })
+
+  it('blocks an XI containing two goalkeepers', async () => {
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Goleiro Teste'))
+    fireEvent.click(screen.getByRole('button', { name: /selecionar melhores/i }))
+    fireEvent.click(screen.getByRole('tab', { name: /táticas de jogo/i }))
+
+    const pitch = screen.getByTestId('pitch')
+    vi.spyOn(pitch, 'getBoundingClientRect').mockReturnValue(mockRect())
+    // Slot 4 ("le", LATERAL_ESQUERDO) center — an outfield slot.
+    const slot4 = pitch.querySelector('[data-slot-index="4"]')!
+    fireEvent.pointerDown(slot4, { pointerId: 1, clientX: 336, clientY: 474 })
+    fireEvent.pointerUp(slot4, { pointerId: 1, clientX: 336, clientY: 474 })
+
+    // Auto-pick fields Goleiro Dois (OVR 75) in goal; adding Goleiro Teste outfield makes two.
+    fireEvent.click(await screen.findByTestId('slot-picker-row-p-gk'))
+    expect(await screen.findByText('No máximo 1 goleiro na escalação')).toBeInTheDocument()
   })
 })

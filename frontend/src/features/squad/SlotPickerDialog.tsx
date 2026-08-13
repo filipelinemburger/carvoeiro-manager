@@ -65,12 +65,11 @@ function PlayerRow({ player, slot, isCurrent, onPick }: {
 }
 
 /**
- * Opened by tapping a pitch slot (spec §5.1/§5.2). Lists the whole eligible squad — GK-position
- * players are excluded from an outfield slot's list (the backend allows at most 1 GK in the XI,
- * so an improvised keeper outfield would always 422) — natural fits for the slot first (by
- * overall desc), then everyone else flagged "Improvisado" with their real position(s). The
- * current occupant (if any) is highlighted. Picking a player is reported via `onPick`; the caller
- * decides the swap-vs-place logic and closes the dialog.
+ * Opened by tapping a pitch slot (spec §5.1/§5.2). Every eligible player is offered for every
+ * slot — natural fits for the slot first (by overall desc), then everyone else flagged
+ * "Improvisado" with their real position(s). The current occupant (if any) is highlighted.
+ * Picking a player is reported via `onPick`; the caller decides the swap-vs-place logic and
+ * closes the dialog.
  */
 export function SlotPickerDialog({ open, onClose, slot, players, currentOccupantId, onPick }: {
   open: boolean
@@ -82,8 +81,9 @@ export function SlotPickerDialog({ open, onClose, slot, players, currentOccupant
   currentOccupantId?: string
   onPick: (player: PlayerResponse) => void
 }) {
-  const isGkSlot = Boolean(slot?.accepted.includes('GOLEIRO'))
-  const candidates = slot ? players.filter(p => isGkSlot || p.position !== 'GK') : []
+  // No position filter: a goalkeeper may be listed for an outfield slot and vice versa. Both
+  // land in `improvised` below and carry the warning chip, which informs without deciding.
+  const candidates = slot ? players : []
   const naturals = slot ? candidates.filter(p => isNatural(p, slot.accepted)).sort((a, b) => b.overall - a.overall) : []
   const improvised = slot ? candidates.filter(p => !isNatural(p, slot.accepted)).sort((a, b) => b.overall - a.overall) : []
   const slotShort = slot ? DETAILED_POSITION_SHORT[slot.accepted[0]] : ''

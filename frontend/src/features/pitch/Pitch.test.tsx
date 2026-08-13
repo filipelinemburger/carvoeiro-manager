@@ -248,18 +248,18 @@ describe('drag and drop', () => {
     expect(onSwap).not.toHaveBeenCalled()
   })
 
-  it('the GK token is not draggable', () => {
+  it('the GK token is draggable — an outfielder may be improvised in goal', () => {
     const { onSwap, token } = renderDraggable()
     fireEvent.pointerDown(token(0), { pointerId: 1, clientX: 200, clientY: 564 })
     fireEvent.pointerUp(token(0), { pointerId: 1, clientX: 200, clientY: 192 })
-    expect(onSwap).not.toHaveBeenCalled()
+    expect(onSwap).toHaveBeenCalledWith(0, 9)
   })
 
-  it('the GK slot is never a drop target', () => {
+  it('the GK slot is a valid drop target', () => {
     const { onSwap, token } = renderDraggable()
     fireEvent.pointerDown(token(1), { pointerId: 1, clientX: 64, clientY: 474 })
     fireEvent.pointerUp(token(1), { pointerId: 1, clientX: 200, clientY: 564 })
-    expect(onSwap).not.toHaveBeenCalled()
+    expect(onSwap).toHaveBeenCalledWith(1, 0)
   })
 
   it('highlights the drop candidate while dragging over it', () => {
@@ -317,7 +317,7 @@ describe('tap vs drag (onSlotClick)', () => {
     expect(onSwap).not.toHaveBeenCalled()
   })
 
-  it('a tap on the GK slot fires onSlotClick even though the GK token is never draggable', () => {
+  it('a tap on the GK slot fires onSlotClick', () => {
     const { onSwap, onSlotClick, token } = renderTappable()
     fireEvent.pointerDown(token(0), { pointerId: 1, clientX: 200, clientY: 564 })
     fireEvent.pointerUp(token(0), { pointerId: 1, clientX: 200, clientY: 564 })

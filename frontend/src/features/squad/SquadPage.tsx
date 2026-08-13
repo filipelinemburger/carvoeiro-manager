@@ -136,9 +136,13 @@ function validate(selected: string[], players: PlayerResponse[],
   if (selected.length !== 11) {
     return `Selecione exatamente 11 jogadores (${selected.length}/11)`
   }
+  // The ONLY position rule left. Playing a player out of position — including an outfielder
+  // improvised in goal, or no recognised goalkeeper at all — is the manager's call, and the
+  // backend accepts it (LineupService validateGkCount permits 0 or 1). A SECOND keeper is not
+  // accepted there, so it is still blocked here rather than surfaced as a 422.
   const counts = countByPosition(selected, players)
-  if (counts.GK !== 1) {
-    return 'A escalação precisa de exatamente 1 goleiro'
+  if (counts.GK > 1) {
+    return 'No máximo 1 goleiro na escalação'
   }
   // Every starter needs a distinct formation slot (drag-and-drop / auto-assign keeps this
   // true; the guard catches degenerate states like a saved starter no longer in the squad).
@@ -416,14 +420,17 @@ export function SquadPage() {
   } : null
 
   // First free slot for a newly picked starter: an exact detailed-position slot first, else
-  // any free slot of the player's coarse line. Cross-line placement only happens by dragging.
+  // any free slot of the player's coarse line, else any free slot at all.
   function firstFreeSlotFor(player: PlayerResponse): number | null {
     const taken = new Set(Object.values(slotByPlayerId))
     const free = slots.map((slot, index) => ({ slot, index })).filter(x => !taken.has(x.index))
     const exact = player.detailedPosition
       ? free.find(x => x.slot.accepted.includes(player.detailedPosition!))
       : undefined
-    return (exact ?? free.find(x => x.slot.line === player.position))?.index ?? null
+    // Preference order: a slot that accepts the player's exact detailed position, then any free
+    // slot on their own coarse line, then ANY free slot at all. The last fallback is what lets a
+    // defender be pushed into a full-elsewhere XI rather than being bounced to the bench.
+    return (exact ?? free.find(x => x.slot.line === player.position) ?? free[0])?.index ?? null
   }
 
   type Involvement = { kind: 'OUT' } | { kind: 'TITULAR' } | { kind: 'RESERVA'; sub: number }
