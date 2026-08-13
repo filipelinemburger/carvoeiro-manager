@@ -60,7 +60,9 @@ class ClubGeographyIT {
         List<Club> clubs = createCareerClubs();
 
         assertThat(byShortName(clubs, "FOR").getStadiumCapacity()).isEqualTo(63903);
-        assertThat(byShortName(clubs, "BAR").getStadiumCapacity()).isEqualTo(3000);
+        // Arena Barra FC opened in January 2025 at 5,500 (5,000 covered home + 500 away). The
+        // seeded 3,000 predated the ground and was inherited from the Catarinense seed.
+        assertThat(byShortName(clubs, "BAR").getStadiumCapacity()).isEqualTo(5500);
         // The old derived formula (8000 + reputation*500) could never produce a sub-8000 capacity.
         assertThat(byShortName(clubs, "BAR").getStadiumCapacity()).isLessThan(8000);
     }

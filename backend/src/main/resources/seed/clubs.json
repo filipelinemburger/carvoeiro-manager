@@ -256,7 +256,7 @@
       ]
     },
     {
-      "name": "Associação Desportiva Barra",
+      "name": "Barra Futebol Clube",
       "shortName": "BAR",
       "commonName": "Barra",
       "nickname": "Tigrão",
@@ -264,7 +264,7 @@
       "city": "Balneário Camboriú",
       "state": "SC",
       "climateZone": "SUL",
-      "stadiumCapacity": 3000,
+      "stadiumCapacity": 5500,
       "primaryColor": "#ff6600",
       "secondaryColor": "#000000",
       "formation": "4-2-3-1",
