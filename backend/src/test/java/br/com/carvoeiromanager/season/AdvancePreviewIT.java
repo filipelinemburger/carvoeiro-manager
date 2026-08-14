@@ -6,6 +6,12 @@ import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.club.Club;
+import br.com.carvoeiromanager.club.ClubRepository;
+import br.com.carvoeiromanager.competition.Competition;
+import br.com.carvoeiromanager.competition.CompetitionClub;
+import br.com.carvoeiromanager.competition.CompetitionClubRepository;
+import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.match.LineupResponse;
 import br.com.carvoeiromanager.match.LineupService;
 import br.com.carvoeiromanager.match.LineupStarter;
@@ -53,6 +59,10 @@ class AdvancePreviewIT {
     @Autowired SeasonEventRepository seasonEventRepository;
     @Autowired TransferOfferRepository transferOfferRepository;
     @Autowired TransferWindow transferWindow;
+    @Autowired BackgroundCompetitionService backgroundCompetitionService;
+    @Autowired ClubRepository clubRepository;
+    @Autowired CompetitionRepository competitionRepository;
+    @Autowired CompetitionClubRepository competitionClubRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -148,6 +158,91 @@ class AdvancePreviewIT {
         UUID expectedLast = lastPlayedMatchCompetition(c.id());
         AdvancePreviewResponse after = advancePreviewService.preview(c.id(), c.userId());
         assertThat(after.defaultStandingsCompetitionId()).isEqualTo(expectedLast.toString());
+    }
+
+    /**
+     * The Classificação default must stay on a competition the player is actually in.
+     *
+     * <p>The default is a {@code max}/{@code min} over MATCH events by {@code (date, sequence)},
+     * and the sequence tiebreak used to work against it: a background round carries
+     * {@link SeasonCalendarGenerator#BACKGROUND_MATCH_SEQUENCE} (2) against the managed
+     * {@link SeasonCalendarGenerator#MANAGED_MATCH_SEQUENCE} (0), so on any shared date the
+     * background competition won and the player landed on a third-division table right after their
+     * own match. Background rounds are dated proportionally, so those collisions are structural.
+     *
+     * <p>Both branches are pinned — the "next scheduled" one before any match is played and the
+     * "last played" one after — because each picks the wrong competition for a different reason:
+     * an earlier date on the way in, and a higher sequence on the way out.
+     */
+    @Test
+    void aBackgroundCompetitionNeverBecomesTheDefaultStandingsCompetition() {
+        // Given a career and a competition the managed club has no membership row in
+        Career c = createCareer();
+        UUID backgroundCompetitionId = createBackgroundCompetition(c);
+
+        // --- Branch 1: no match played yet, so the default is the NEXT scheduled match.
+        SeasonEvent earliestManaged = seasonEventRepository.findNextManagedMatchEvent(c.id(), c.clubId());
+        assertThat(earliestManaged).isNotNull();
+        // A background round dated a day earlier would win an unscoped `min` outright.
+        SeasonEvent earlyBackground = SeasonEvent.createMatch(c.id(),
+                earliestManaged.getEventDate().minusDays(1), backgroundCompetitionId, 0,
+                SeasonCalendarGenerator.BACKGROUND_MATCH_SEQUENCE);
+        seasonEventRepository.save(earlyBackground);
+
+        AdvancePreviewResponse beforeAnyMatch = advancePreviewService.preview(c.id(), c.userId());
+        assertThat(beforeAnyMatch.defaultStandingsCompetitionId())
+                .isEqualTo(earliestManaged.getCompetitionId().toString());
+
+        // --- Branch 2: after a match is played, the default is the LAST played match.
+        // Drop the planted event first, so the advance's background sweep never sees it and this
+        // branch is exercised in isolation.
+        seasonEventRepository.delete(earlyBackground);
+        advanceOneMatch(c);
+
+        SeasonEvent lastManaged = lastPlayedManagedMatchEvent(c);
+        // A background round on the SAME date wins the (date, sequence) tiebreak unscoped, because
+        // its sequence is the higher of the two. Guard against a vacuous pass.
+        assertThat(SeasonCalendarGenerator.BACKGROUND_MATCH_SEQUENCE)
+                .isGreaterThan(lastManaged.getSequence());
+        SeasonEvent sameDayBackground = SeasonEvent.createMatch(c.id(), lastManaged.getEventDate(),
+                backgroundCompetitionId, 0, SeasonCalendarGenerator.BACKGROUND_MATCH_SEQUENCE);
+        sameDayBackground.markProcessed();
+        seasonEventRepository.save(sameDayBackground);
+
+        AdvancePreviewResponse afterAMatch = advancePreviewService.preview(c.id(), c.userId());
+        assertThat(afterAMatch.defaultStandingsCompetitionId())
+                .isEqualTo(lastManaged.getCompetitionId().toString());
+        assertThat(afterAMatch.defaultStandingsCompetitionId())
+                .isNotEqualTo(backgroundCompetitionId.toString());
+    }
+
+    /**
+     * A competition built from the save's own clubs with the managed club deliberately left out —
+     * that absence is the entire definition of "background". No fixtures: the default-competition
+     * logic reads season events only.
+     */
+    private UUID createBackgroundCompetition(Career c) {
+        List<Club> members = clubRepository.findBySaveGameId(c.id()).stream()
+                .filter(club -> !club.getId().equals(c.clubId()))
+                .sorted(Comparator.comparing(Club::getShortName))
+                .limit(4)
+                .toList();
+        assertThat(members).hasSize(4);
+        Competition background = Competition.create(c.id(), "Preview Background", "LEAGUE",
+                c.save().seasonYear(), 6);
+        competitionRepository.save(background);
+        members.forEach(club -> competitionClubRepository.save(
+                CompetitionClub.create(c.id(), background.getId(), club.getId())));
+        return background.getId();
+    }
+
+    private SeasonEvent lastPlayedManagedMatchEvent(Career c) {
+        return seasonEventRepository.findBySaveGameId(c.id()).stream()
+                .filter(e -> e.getType() == SeasonEventType.MATCH && e.isProcessed())
+                .filter(e -> backgroundCompetitionService.isManaged(e.getCompetitionId(), c.clubId()))
+                .max(Comparator.comparing(SeasonEvent::getEventDate)
+                        .thenComparingInt(SeasonEvent::getSequence))
+                .orElseThrow();
     }
 
     @Test

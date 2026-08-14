@@ -19,7 +19,9 @@ import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Computes a non-mutating look-ahead at the next {@link #preview} advance so the UI can decide
@@ -34,19 +36,22 @@ public class AdvancePreviewService {
     private final LineupService lineupService;
     private final TransferWindow transferWindow;
     private final TransferOfferRepository transferOfferRepository;
+    private final BackgroundCompetitionService backgroundCompetitionService;
 
     public AdvancePreviewService(SaveGameService saveGameService,
                                  SeasonEventRepository seasonEventRepository,
                                  FixtureRepository fixtureRepository,
                                  LineupService lineupService,
                                  TransferWindow transferWindow,
-                                 TransferOfferRepository transferOfferRepository) {
+                                 TransferOfferRepository transferOfferRepository,
+                                 BackgroundCompetitionService backgroundCompetitionService) {
         this.saveGameService = saveGameService;
         this.seasonEventRepository = seasonEventRepository;
         this.fixtureRepository = fixtureRepository;
         this.lineupService = lineupService;
         this.transferWindow = transferWindow;
         this.transferOfferRepository = transferOfferRepository;
+        this.backgroundCompetitionService = backgroundCompetitionService;
     }
 
     @Transactional(readOnly = true)
@@ -89,7 +94,7 @@ public class AdvancePreviewService {
         int pendingTransfers = transferOfferRepository.findBySaveGameIdAndStatusIn(saveGameId,
                 List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED)).size();
 
-        UUID defaultStandingsCompetitionId = defaultStandingsCompetition(saveGameId);
+        UUID defaultStandingsCompetitionId = defaultStandingsCompetition(saveGameId, managedClubId);
 
         return new AdvancePreviewResponse(
                 nextEventType,
@@ -110,10 +115,32 @@ public class AdvancePreviewService {
      * The competition the Classificação screen should default to: the most recently <em>played</em>
      * match's competition, or — if no match has been played yet — the next scheduled match's
      * competition. Null only when the save has no MATCH events at all.
+     *
+     * <p>Scoped to competitions the managed club is actually in. The screen answers "how did MY
+     * last match leave the table", and the player is never present for a background round: the
+     * whole background world is drained silently inside the same advance. Unscoped, the
+     * {@code (date, sequence)} tiebreak actively worked against that — a background event carries
+     * {@code BACKGROUND_MATCH_SEQUENCE = 2} against the managed {@code 0}, so on every shared date
+     * the background competition <em>won</em> and the player was sent to a division they do not
+     * play in. Proportional dating makes such collisions structural, not incidental.
+     *
+     * <p>Membership via {@link BackgroundCompetitionService#isManaged} rather than a second
+     * membership query here — the same predicate the calendar, the advance loop and rollover all
+     * use, so "managed" cannot come to mean two different things.
      */
-    private UUID defaultStandingsCompetition(UUID saveGameId) {
-        List<SeasonEvent> matchEvents = seasonEventRepository.findBySaveGameId(saveGameId).stream()
+    private UUID defaultStandingsCompetition(UUID saveGameId, UUID managedClubId) {
+        List<SeasonEvent> allMatchEvents = seasonEventRepository.findBySaveGameId(saveGameId).stream()
                 .filter(e -> e.getType() == SeasonEventType.MATCH)
+                .toList();
+        // isManaged is a query, and a season has hundreds of MATCH events over a handful of
+        // competitions — resolve membership once per competition, not once per event.
+        Set<UUID> managedCompetitionIds = allMatchEvents.stream()
+                .map(SeasonEvent::getCompetitionId)
+                .distinct()
+                .filter(id -> backgroundCompetitionService.isManaged(id, managedClubId))
+                .collect(Collectors.toSet());
+        List<SeasonEvent> matchEvents = allMatchEvents.stream()
+                .filter(e -> managedCompetitionIds.contains(e.getCompetitionId()))
                 .toList();
 
         Comparator<SeasonEvent> byDateThenSeq =
