@@ -190,13 +190,20 @@ average:
 
 | Tier | Clubs | Mean | Range |
 |---|---|---|---|
-| Série A | 20 | 58.0 | 53.9 – 62.6 |
-| Série B | 20 | 48.4 | 44.3 – 55.3 |
-| Série C | 20 | **~41 (target)** | ~36 – 45 |
+| Série A | 20 | 57.83 | 54.17 (Vasco) – 60.81 (Flamengo) |
+| Série B | 20 | 49.82 | 44.97 (Londrina) – 56.20 (Criciúma) |
+| Série C | 20 | **~41 (target)** | ~37 – 45.75 |
+
+> **Numbers corrected after Task 6.** The figures first published in this table and the paragraph
+> below it were measured wrongly — they were wrong on the day this spec was written, not stale.
+> Every number here is now computed by the canonical measure, the one `tools/seed/generate_squad.py`
+> itself uses: per player, the mean over all 28 keys (6 anchors + 22 `attributes`); per club, the
+> mean of the top 11 such players. Recomputing at this spec's own commit reproduces the corrected
+> values exactly, which is how the error was identified as mine rather than as drift.
 
 The three already-seeded clubs are **not re-authored** — their squads are real and hand-tuned, and
-they land at Brusque 45.1, Figueirense 43.8, Barra 42.8. To put the tier mean on 41 with those three
-fixed, the seventeen new clubs need a mean of about **40.5**.
+they land at **Brusque 45.75, Figueirense 45.20, Barra 44.21**. To put the tier mean on exactly 41
+with those three fixed, the seventeen new clubs need a mean of about **40.3**.
 
 Per-club strength targets are set from 2025 finishing position, which the regulation's Anexo B gives
 exhaustively:
@@ -205,16 +212,20 @@ exhaustively:
 - **Retained, 5th–16th in Série C 2025** — the middle.
 - **Promoted from Série D 2025** (Barra, Santa Cruz, Inter de Limeira, Maranhão) — bottom.
 
-**Known exception:** Barra was promoted from Série D yet sits at 42.8, above several retained clubs.
+**Known exception:** Barra was promoted from Série D yet sits at 44.21, above several retained clubs.
 Its squad is real and hand-authored; re-authoring it downwards to satisfy a rule of thumb would be
 bending real data to fit a heuristic. Accepted as-is.
 
 ### 5.2a The bands overlap at the edges, deliberately
 
-Série C's strongest club is stronger than Série B's weakest: Brusque 45.1 against Londrina 44.3.
-This is correct and should not be calibrated away — a strong third-tier side really is better than a
-struggling second-tier one, and that overlap is what makes promotion and relegation plausible rather
-than a cliff.
+Série C's strongest clubs are stronger than Série B's weakest. **Two** of them clear it, not one:
+Brusque 45.75 and Figueirense 45.20 both sit above Londrina 44.97. This is correct and should not be
+calibrated away — a strong third-tier side really is better than a struggling second-tier one, and
+that overlap is what makes promotion and relegation plausible rather than a cliff.
+
+(This section originally cited "Brusque 45.1 against Londrina 44.3" and named a single overlapping
+club. The corrected measure widens the overlap rather than narrowing it, so the conclusion below
+holds a fortiori.)
 
 The consequence for testing is that "every Série C club is weaker than every Série B club" is a
 **false** claim and must not be asserted. Separation is a property of the tier *means*, not of every
