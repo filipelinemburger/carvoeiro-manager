@@ -11,8 +11,18 @@ public class FixtureScheduler {
      * cannot, so one club sits out each round and it takes {@code teamCount} rounds instead.
      * {@code SeedPhaseValidator} uses this to check a seeded phase's declared round count against
      * what the scheduler will actually produce.
+     *
+     * <p>Guarded at 2 like {@link #doubleRoundRobin(int)} and {@link #singleRoundRobin(int)}: a
+     * field of one cannot play itself. Unguarded, {@code roundsPerLeg(0)} returned {@code -1} and
+     * that nonsense travelled — {@code SeedPhaseValidator} reported "0 members over 1 leg(s)
+     * produce -1" instead of naming the real problem, and {@code SaveGameService.totalRoundsFor}
+     * would have persisted a {@code Competition} with {@code totalRounds = -2}. Both failed
+     * eventually anyway; failing here makes the message match the fault.
      */
     public static int roundsPerLeg(int teamCount) {
+        if (teamCount < 2) {
+            throw new IllegalArgumentException("teamCount must be >= 2");
+        }
         return teamCount % 2 == 0 ? teamCount - 1 : teamCount;
     }
 

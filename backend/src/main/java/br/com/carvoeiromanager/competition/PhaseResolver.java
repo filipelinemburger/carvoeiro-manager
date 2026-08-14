@@ -34,6 +34,28 @@ public class PhaseResolver {
 
     private static final Logger log = LoggerFactory.getLogger(PhaseResolver.class);
 
+    /**
+     * Order of a knockout phase's two reserved rounds: {@code (event_date, round)} — never date
+     * alone. {@code reserved.get(0)} becomes leg 1 and {@code reserved.get(1)} leg 2, so this
+     * comparator decides which leg is which.
+     *
+     * <p><strong>The {@code round} tiebreak is load-bearing; do not "simplify" it away.</strong>
+     * A managed competition's rounds sit at strict 5-day intervals and could never tie, but a
+     * background competition's units are dated <em>proportionally</em> across the managed season's
+     * window ({@code SeasonCalendarGenerator.generateBackground}) and may legitimately share a
+     * date — which is also why
+     * {@code BackgroundCompetitionService.BY_DATE_COMPETITION_ROUND} exists. On a tie a date-only
+     * sort falls back to arbitrary DB order, so leg 1 can be stamped onto the LATER round. The
+     * calendar then plays "leg 2" first, {@code FixtureSimulator.needsExtraTime} sees an unplayed
+     * leg 1 and skips the shootout, and a level tie reaches {@link TieResolver#winner} with no
+     * penalties recorded. That throws out of {@code resolveDue} and rolls the advance back —
+     * including every {@code markProcessed()} — so the next advance replays the identical failure
+     * and the save is permanently unadvanceable with a 500.
+     */
+    private static final Comparator<SeasonEvent> RESERVED_ROUND_ORDER =
+            Comparator.comparing(SeasonEvent::getEventDate)
+                    .thenComparing(SeasonEvent::getRound);
+
     private final CompetitionPhaseRepository competitionPhaseRepository;
     private final CompetitionRepository competitionRepository;
     private final FixtureRepository fixtureRepository;
@@ -120,7 +142,19 @@ public class PhaseResolver {
             // index 1 plays index 2, exactly as the spec requires.
             List<Fixture> played =
                     fixtureRepository.findBySaveGameIdAndPhaseId(save.getId(), current.getId());
-            seeds = TieResolver.tiesOf(played).stream().map(TieResolver::winner).toList();
+            try {
+                seeds = TieResolver.tiesOf(played).stream().map(TieResolver::winner).toList();
+            } catch (IllegalStateException undecided) {
+                // Deliberately NOT swallowed: an undecided tie in a phase the caller has already
+                // confirmed complete means the bracket is corrupt, and continuing would seed the
+                // next phase from a lie. But TieResolver only knows the tie id, and this throws
+                // out of advance() into a 500 the player cannot get past — so re-throw naming the
+                // competition and both phases, which is the whole diagnosis in the log line.
+                throw new IllegalStateException("Cannot seed " + next.getName() + " of "
+                        + competitionName(current.getCompetitionId()) + ": phase " + current.getName()
+                        + " (" + current.getId() + ") is complete but a tie is undecided — "
+                        + undecided.getMessage(), undecided);
+            }
         }
 
         materialize(save.getId(), current.getCompetitionId(), next, seeds);
@@ -222,16 +256,37 @@ public class PhaseResolver {
         try {
             winnerId = TieResolver.winner(ties.get(0));
         } catch (IllegalStateException notYetDecided) {
+            // The caller has already confirmed this phase complete, so every leg should be played
+            // and every level tie should carry a shootout: reaching here is a real bug, not a
+            // benign race. Staying a no-op is still right — a missing headline must not brick the
+            // season the way the propagated variant at the seeding call site would — but silence
+            // is not, so this logs the same diagnosis that one throws.
+            log.warn("No CHAMPION news for final phase {} ({}) of {}: {}", finalPhase.getName(),
+                    finalPhase.getId(), competitionName(finalPhase.getCompetitionId()),
+                    notYetDecided.getMessage());
             return;
         }
         String winnerName = clubRepository.findById(winnerId).map(Club::getName).orElse("Campeão");
         String headline = winnerName + " é o campeão!";
         // A competition row that cannot be found is not a reason to drop the announcement: fall
         // back to the bare headline rather than prefixing a "null:" the player would have to read.
+        // competition_phase.competition_id is an FK, so a miss here is a data-integrity fault and
+        // has to leave a trace even though the news still goes out.
         String competitionName = competitionRepository.findById(finalPhase.getCompetitionId())
                 .map(Competition::getName).orElse(null);
+        if (competitionName == null) {
+            log.warn("Competition {} has no row while announcing the champion of phase {} ({}); "
+                    + "emitting the headline unqualified", finalPhase.getCompetitionId(),
+                    finalPhase.getName(), finalPhase.getId());
+        }
         String message = competitionName == null ? headline : competitionName + ": " + headline;
         persistNews(save.getId(), save.getCurrentDate(), "CHAMPION", message);
+    }
+
+    /** A competition's name for log lines and exception messages; its id when the row is missing. */
+    private String competitionName(UUID competitionId) {
+        return competitionRepository.findById(competitionId)
+                .map(Competition::getName).orElseGet(() -> String.valueOf(competitionId));
     }
 
     /**
@@ -278,7 +333,7 @@ public class PhaseResolver {
     private void materialize(UUID saveGameId, UUID competitionId, CompetitionPhase phase, List<UUID> seeds) {
         List<SeasonEvent> reserved = seasonEventRepository.findBySaveGameId(saveGameId).stream()
                 .filter(e -> phase.getId().equals(e.getPhaseId()))
-                .sorted(Comparator.comparing(SeasonEvent::getEventDate)).toList();
+                .sorted(RESERVED_ROUND_ORDER).toList();
 
         // A two-legged knockout round needs exactly two reserved (dated, fixture-less) rounds —
         // one per leg. Anything else means the calendar generator and this resolver have drifted

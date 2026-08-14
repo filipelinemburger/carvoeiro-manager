@@ -247,6 +247,57 @@ class PhaseResolverTest {
                 .hasSize(8);
     }
 
+    /**
+     * The two reserved rounds of a knockout phase must be assigned to legs by {@code round}, not
+     * by date alone.
+     *
+     * <p>Managed competitions are dated at strict 5-day intervals so their rounds can never tie,
+     * but a background competition's units are dated proportionally across the managed season's
+     * window and {@code SeasonCalendarGenerator.generateBackground} says explicitly that two of
+     * them may share a date. On a tie, a date-only sort falls back to arbitrary DB order and leg 1
+     * can be stamped onto the LATER round — after which the calendar plays "leg 2" first, no
+     * shootout is ever recorded, and a level tie throws out of {@code advance()} into a rollback
+     * that replays forever. Hence a collision is forced here rather than waited for.
+     *
+     * <p>The two reserved events are re-inserted <em>highest round first</em>, so an unfixed
+     * date-only sort has nothing left to reorder them by and hands back the higher round at index
+     * 0 — this fails without the {@code round} tiebreak rather than passing by luck.
+     */
+    @Test
+    void reservedRoundsSharingADateAreStillAssignedToLegsByRound() {
+        Scenario s = buildScenario("collide");
+
+        // Collapse both reserved QF rounds onto one date. SeasonEvent has no date setter (dates
+        // are the calendar generator's business), so they are deleted and rebuilt.
+        seasonEventRepository.deleteAll(List.of(s.firstQuarterFinalEvent(), s.lastQuarterFinalEvent()));
+        LocalDate sharedDate = s.firstQuarterFinalEvent().getEventDate();
+        int firstLegRound = s.firstQuarterFinalEvent().getRound();
+        int secondLegRound = s.lastQuarterFinalEvent().getRound();
+        assertThat(secondLegRound).isGreaterThan(firstLegRound);
+        seasonEventRepository.save(SeasonEvent.createPhased(s.saveGameId(), sharedDate,
+                s.competitionId(), s.quarterFinalPhaseId(), secondLegRound, 2));
+        seasonEventRepository.save(SeasonEvent.createPhased(s.saveGameId(), sharedDate,
+                s.competitionId(), s.quarterFinalPhaseId(), firstLegRound, 2));
+
+        boolean resolved = phaseResolver.resolveIfPhaseComplete(s.save(), s.lastFirstPhaseEvent());
+
+        assertThat(resolved).isTrue();
+        List<Fixture> qf = fixtureRepository.findBySaveGameIdAndPhaseId(s.saveGameId(), s.quarterFinalPhaseId());
+        assertThat(qf).hasSize(8);
+        // Leg 1 is the earlier round, leg 2 the later one — the order the season will play them in.
+        assertThat(qf).filteredOn(f -> f.getLeg() == 1).hasSize(4)
+                .allMatch(f -> f.getRound() == firstLegRound);
+        assertThat(qf).filteredOn(f -> f.getLeg() == 2).hasSize(4)
+                .allMatch(f -> f.getRound() == secondLegRound);
+
+        // And the crossover still holds: the higher seed is away in leg 1 and hosts leg 2, which
+        // is what TieResolver.winner aggregates against.
+        for (KnockoutTie tie : TieResolver.tiesOf(qf)) {
+            assertThat(tie.firstLeg().getAwayClubId()).isEqualTo(tie.higherSeedClubId());
+            assertThat(tie.secondLeg().getHomeClubId()).isEqualTo(tie.higherSeedClubId());
+        }
+    }
+
     @Test
     void resolvingTwiceDoesNotDuplicateFixtures() {
         Scenario s = buildScenario("idempotent");

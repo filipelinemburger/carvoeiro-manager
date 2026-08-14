@@ -163,6 +163,21 @@ class FixtureSchedulerTest {
                 .containsExactly(new ScheduledFixture(0, 0, 1));
     }
 
+    /**
+     * Below two there is no schedule, and the arithmetic silently produced one: {@code
+     * roundsPerLeg(0)} returned -1 and {@code roundsPerLeg(1)} returned 1. Callers carried that
+     * onward — {@code SeedPhaseValidator} reported "0 members over 1 leg(s) produce -1" instead of
+     * "too few members", and {@code SaveGameService.totalRoundsFor} would have built a competition
+     * with {@code totalRounds = -2}. The guard matches the one on both instance methods.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {Integer.MIN_VALUE, -1, 0, 1})
+    void roundsPerLegRejectsAFieldTooSmallToPlay(int teamCount) {
+        assertThatThrownBy(() -> FixtureScheduler.roundsPerLeg(teamCount))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("teamCount must be >= 2");
+    }
+
     @Test
     void doubleRoundRobinAlsoHandlesAnOddField() {
         List<ScheduledFixture> fixtures = new FixtureScheduler().doubleRoundRobin(5);
