@@ -252,10 +252,48 @@ class PhaseTransitionNewsIT {
         assertThat(resolved).isFalse();
 
         String championName = clubName(managedClubId);
+        String competitionName = competitionRepository.findById(s.competitionId()).orElseThrow().getName();
         List<NewsItem> news = newsItemRepository.findBySaveGameIdOrderBySeqDesc(s.saveGameId());
         assertThat(news).anySatisfy(n -> {
             assertThat(n.getType()).isEqualTo("CHAMPION");
-            assertThat(n.getPayload()).contains(championName);
+            // The competition leads the message, so two champions crowned in one season are
+            // distinguishable. Asserted as the whole string: a `contains(championName)` passes
+            // just as well against the old un-prefixed "X é o campeão!".
+            assertThat(n.getPayload()).contains(competitionName + ": " + championName + " é o campeão!");
         });
+    }
+
+    /**
+     * The behaviour Task 9 unlocked: a phased competition the managed club has nothing to do with
+     * still resolves its own knockouts, so its champion is announced too. Nothing pinned that the
+     * announcement identifies WHICH competition — which is the whole point once a season crowns
+     * more than one champion. The managed club here is an outsider, not a member of the
+     * competition at all, exactly as the player's club is to Série C.
+     */
+    @Test
+    void aBackgroundCompetitionsChampionIsAnnouncedWithItsOwnName() {
+        Scenario s = buildScenario("background");
+        Club outsider = Club.create(s.saveGameId(), "Outsider FC", "OUT");
+        clubRepository.save(outsider);
+        s.save().setManagedClubId(outsider.getId());
+        saveGameRepository.save(s.save());
+
+        phaseResolver.resolveIfPhaseComplete(s.save(), s.lastFirstPhaseEvent());
+        higherSeedWinsEveryTie(s.saveGameId(), s.quarterFinalPhaseId(), s.firstQuarterFinalEvent());
+        phaseResolver.resolveIfPhaseComplete(s.save(), s.lastQuarterFinalEvent());
+        higherSeedWinsEveryTie(s.saveGameId(), s.finalPhaseId(), s.firstFinalEvent());
+        phaseResolver.resolveIfPhaseComplete(s.save(), s.lastFinalEvent());
+
+        String championName = clubName(s.clubIds().get(0));
+        String competitionName = competitionRepository.findById(s.competitionId()).orElseThrow().getName();
+        List<NewsItem> news = newsItemRepository.findBySaveGameIdOrderBySeqDesc(s.saveGameId());
+        assertThat(news).anySatisfy(n -> {
+            assertThat(n.getType()).isEqualTo("CHAMPION");
+            assertThat(n.getPayload()).contains(competitionName + ": " + championName + " é o campeão!");
+        });
+        // The managed club is not a member, so it gets no qualified/eliminated card — the
+        // champion announcement is genuinely un-gated, not a side effect of following the club.
+        assertThat(news).noneMatch(n -> n.getType().equals("PHASE_QUALIFIED"));
+        assertThat(news).noneMatch(n -> n.getType().equals("PHASE_ELIMINATED"));
     }
 }

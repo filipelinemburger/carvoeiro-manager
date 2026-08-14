@@ -35,6 +35,7 @@ public class PhaseResolver {
     private static final Logger log = LoggerFactory.getLogger(PhaseResolver.class);
 
     private final CompetitionPhaseRepository competitionPhaseRepository;
+    private final CompetitionRepository competitionRepository;
     private final FixtureRepository fixtureRepository;
     private final SeasonEventRepository seasonEventRepository;
     private final StandingsService standingsService;
@@ -44,6 +45,7 @@ public class PhaseResolver {
     private final FixtureScheduler fixtureScheduler = new FixtureScheduler();
 
     public PhaseResolver(CompetitionPhaseRepository competitionPhaseRepository,
+                         CompetitionRepository competitionRepository,
                          FixtureRepository fixtureRepository,
                          SeasonEventRepository seasonEventRepository,
                          StandingsService standingsService,
@@ -51,6 +53,7 @@ public class PhaseResolver {
                          NewsItemRepository newsItemRepository,
                          ObjectMapper objectMapper) {
         this.competitionPhaseRepository = competitionPhaseRepository;
+        this.competitionRepository = competitionRepository;
         this.fixtureRepository = fixtureRepository;
         this.seasonEventRepository = seasonEventRepository;
         this.standingsService = standingsService;
@@ -190,6 +193,24 @@ public class PhaseResolver {
      * CHAMPION once the final's winner is known. {@code finalPhase} is confirmed complete by the
      * caller, so {@link TieResolver#winner} should not throw here — but a defensive catch keeps
      * this a no-op rather than a 500 if that invariant is ever wrong.
+     *
+     * <p>The message names the competition. It has to: background phased competitions resolve
+     * their own knockouts now, so a single season crowns both the state championship and Série C,
+     * and an unqualified "X é o campeão!" left the player with two cards they could not tell
+     * apart. The news is deliberately NOT gated to the managed club's own competitions —
+     * promotion and relegation hang on Série C's result, so the tier below is genuinely the
+     * player's business.
+     *
+     * <p><strong>Why "{competition}: {club} é o campeão!" and not "campeão da {competition}".</strong>
+     * The natural phrasing needs a gendered contraction — <em>da</em> Série C but <em>do</em>
+     * Campeonato Catarinense — and nothing in the data says which. {@link Competition} stores a
+     * free-text {@code name} straight from the seed JSON and a {@code type} that is a format tag,
+     * not a grammatical gender. Guessing from the ending is not safe either: "Série" ends in -e
+     * and is feminine, so the usual -a/-o rule already needs a special case on the very first
+     * name, and every future seed entry ("Copa…", "Torneio…", "Troféu…") is another chance to
+     * silently emit text a Brazilian player reads as broken. Leading with the competition and a
+     * colon is idiomatic sports-headline Portuguese, needs no article at all, and puts the
+     * distinguishing word first — which is what the reader is scanning for.
      */
     private void emitChampionNews(SaveGame save, CompetitionPhase finalPhase) {
         List<Fixture> fixtures = fixtureRepository.findBySaveGameIdAndPhaseId(save.getId(), finalPhase.getId());
@@ -204,7 +225,13 @@ public class PhaseResolver {
             return;
         }
         String winnerName = clubRepository.findById(winnerId).map(Club::getName).orElse("Campeão");
-        persistNews(save.getId(), save.getCurrentDate(), "CHAMPION", winnerName + " é o campeão!");
+        String headline = winnerName + " é o campeão!";
+        // A competition row that cannot be found is not a reason to drop the announcement: fall
+        // back to the bare headline rather than prefixing a "null:" the player would have to read.
+        String competitionName = competitionRepository.findById(finalPhase.getCompetitionId())
+                .map(Competition::getName).orElse(null);
+        String message = competitionName == null ? headline : competitionName + ": " + headline;
+        persistNews(save.getId(), save.getCurrentDate(), "CHAMPION", message);
     }
 
     /**
