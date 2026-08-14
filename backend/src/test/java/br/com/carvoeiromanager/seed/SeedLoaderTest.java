@@ -24,9 +24,9 @@ class SeedLoaderTest {
 
         assertThat(data.competitions().get(0).name()).isEqualTo("Campeonato Catarinense");
         assertThat(data.clubPool()).isNotEmpty();
-        // Pool size is no longer even: 60 clubs (31 + the 19 Série A sides + the 10 Série C
-        // ones from batches 1 and 2), with the lone orphan HER not tied to any competition's
-        // parity.
+        // 60 clubs (31 + the 19 Série A sides + the 10 Série C ones from batches 1 and 2). The
+        // pool's own size carries no meaning: the lone orphan HER belongs to no competition, so
+        // pool size is not tied to any competition's parity.
         assertThat(data.clubPool()).hasSize(60);
         assertThat(data.clubPool()).anyMatch(c -> c.shortName().equals("CRI"));
         // Every club — Série B and Catarinense-only alike — now carries a full authored

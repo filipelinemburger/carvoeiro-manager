@@ -10,6 +10,7 @@ import br.com.carvoeiromanager.competition.CompetitionClub;
 import br.com.carvoeiromanager.competition.CompetitionPhase;
 import br.com.carvoeiromanager.competition.CompetitionPhaseRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
+import br.com.carvoeiromanager.competition.FixtureScheduler;
 import br.com.carvoeiromanager.competition.PhaseKind;
 import br.com.carvoeiromanager.finance.FinanceCalculator;
 import br.com.carvoeiromanager.player.AttributeDeriver;
@@ -234,11 +235,7 @@ public class SaveGameService {
             // that cannot roll over at all. See SeedPhaseValidator for each rule's failure mode.
             SeedPhaseValidator.validate(seedComp);
 
-            // A phased competition's length is the sum of its phases' match-units; an unphased
-            // one keeps the legacy double-round-robin count.
-            int totalRounds = (seedComp.phases() == null || seedComp.phases().isEmpty())
-                    ? (seedComp.memberShortNames().size() - 1) * 2
-                    : seedComp.phases().stream().mapToInt(SeedPhase::rounds).sum();
+            int totalRounds = totalRoundsFor(seedComp);
 
             Competition competition = Competition.create(
                     saveGame.getId(), seedComp.name(), seedComp.type(), seedComp.seasonYear(), totalRounds);
@@ -318,6 +315,24 @@ public class SaveGameService {
 
     private ApiException saveGameNotFound() {
         return new ApiException(ErrorCode.SAVE_GAME_NOT_FOUND, "Save game not found");
+    }
+
+    /**
+     * How many rounds a seeded competition's season runs for. A phased competition's length is the
+     * sum of its phases' match-units; an unphased one is a plain double round-robin.
+     *
+     * <p>The unphased branch asks {@link FixtureScheduler#roundsPerLeg(int)} rather than assuming
+     * {@code members - 1}: an odd field cannot pair everyone off every round, so it needs one extra
+     * bye round per leg. Keeping the arithmetic in the scheduler is what stops this count and the
+     * fixtures it sizes from ever disagreeing — {@code SeasonCalendarGenerator} buckets fixtures by
+     * round into a list sized from this number, so an undercount throws {@code IndexOutOfBounds}
+     * mid-career-creation. {@code SeedPhaseValidator} guards the phased branch the same way, but
+     * returns early for unphased competitions, so this is the only check they get.
+     */
+    static int totalRoundsFor(SeedCompetition seedComp) {
+        return (seedComp.phases() == null || seedComp.phases().isEmpty())
+                ? FixtureScheduler.roundsPerLeg(seedComp.memberShortNames().size()) * 2
+                : seedComp.phases().stream().mapToInt(SeedPhase::rounds).sum();
     }
 
     /** Whether this competition has any {@link CompetitionPhase} rows — see {@link CompetitionSummary}. */
