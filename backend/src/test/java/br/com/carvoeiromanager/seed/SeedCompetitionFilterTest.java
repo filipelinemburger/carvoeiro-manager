@@ -35,15 +35,15 @@ class SeedCompetitionFilterTest {
 
         assertThat(competitionNames(full))
                 .containsExactlyInAnyOrder(CATARINENSE, SERIE_B, SERIE_A, SERIE_C);
-        assertThat(full.clubPool()).hasSize(64);
+        assertThat(full.clubPool()).hasSize(67);
     }
 
     @Test
     void blankFilterIsTreatedAsNoFilter() {
         // The opt-in escape hatch is @TestPropertySource("carvoeiro.seed.competitions="), so an
         // empty value has to mean "everything" rather than "nothing".
-        assertThat(new SeedLoader("").loadCareer().clubPool()).hasSize(64);
-        assertThat(new SeedLoader("   ").loadCareer().clubPool()).hasSize(64);
+        assertThat(new SeedLoader("").loadCareer().clubPool()).hasSize(67);
+        assertThat(new SeedLoader("   ").loadCareer().clubPool()).hasSize(67);
     }
 
     @Test

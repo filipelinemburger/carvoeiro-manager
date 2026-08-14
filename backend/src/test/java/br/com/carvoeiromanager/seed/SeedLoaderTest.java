@@ -24,10 +24,10 @@ class SeedLoaderTest {
 
         assertThat(data.competitions().get(0).name()).isEqualTo("Campeonato Catarinense");
         assertThat(data.clubPool()).isNotEmpty();
-        // 64 clubs (31 + the 19 Série A sides + the 14 Série C ones from batches 1 to 3). The
+        // 67 clubs (31 + the 19 Série A sides + the 17 Série C ones from batches 1 to 4). The
         // pool's own size carries no meaning: the lone orphan HER belongs to no competition, so
         // pool size is not tied to any competition's parity.
-        assertThat(data.clubPool()).hasSize(64);
+        assertThat(data.clubPool()).hasSize(67);
         assertThat(data.clubPool()).anyMatch(c -> c.shortName().equals("CRI"));
         // Every club — Série B and Catarinense-only alike — now carries a full authored
         // squad (>= 18 players); no club is left at the old thin 14-15 placeholder size.
@@ -46,10 +46,10 @@ class SeedLoaderTest {
     }
 
     @Test
-    void clubPoolHasSixtyFourClubsAllInSomeCompetitionExceptTheOrphanHercilioLuz() {
+    void clubPoolHasSixtySevenClubsAllInSomeCompetitionExceptTheOrphanHercilioLuz() {
         SeedCareer data = new SeedLoader().loadCareer();
 
-        assertThat(data.clubPool()).hasSize(64);
+        assertThat(data.clubPool()).hasSize(67);
 
         Set<String> members = data.competitions().stream()
                 .flatMap(c -> c.memberShortNames().stream())
