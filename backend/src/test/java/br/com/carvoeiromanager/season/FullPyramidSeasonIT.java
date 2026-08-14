@@ -9,6 +9,7 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.career.SaveGameStatus;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClubRepository;
+import br.com.carvoeiromanager.competition.CompetitionPhaseRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
@@ -32,12 +33,15 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The whole slice, end to end, on the real seed: a career now ships three competitions — Campeonato
- * Catarinense and Série B, which the managed club (Criciúma) plays, and Série A, which it does not.
- * One season is driven from creation to FINISHED and both halves of the promise are checked:
+ * The whole slice, end to end, on the real seed: a career now ships the full four-competition
+ * pyramid — Campeonato Catarinense and Série B, which the managed club (Criciúma) plays, and
+ * Série A and Série C, which it does not. One season is driven from creation to FINISHED and both
+ * halves of the promise are checked:
  *
  * <ul>
- *   <li>Série A really played out — all 380 fixtures, a full 20-club table, everyone on 38 games;</li>
+ *   <li>the background divisions really played out — Série A's 380 fixtures and Série C's 190
+ *       first-phase ones, full tables at the end (Série C's bracket does not materialize in the
+ *       background today — see {@link #SERIE_C_FIRST_PHASE_FIXTURES});</li>
  *   <li>and it cost the player nothing — their last matchday is still on the same day of the same
  *       270-day window it fell on before background competitions existed.</li>
  * </ul>
@@ -49,11 +53,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(PostgresTestContainer.class)
-// Runs on the FULL seed, Série A included: the whole point of this test is the three-competition season.
-// The test profile otherwise trims the seed to the player's own competitions to keep
-// the suite fast — see carvoeiro.seed.competitions in application-test.yml.
+// Runs on the FULL seed, Série A and Série C included: the whole point of this test is the
+// four-competition season. The test profile otherwise trims the seed to the player's own
+// competitions to keep the suite fast — see carvoeiro.seed.competitions in application-test.yml.
 @TestPropertySource(properties = "carvoeiro.seed.competitions=")
-class ThreeCompetitionSeasonIT {
+class FullPyramidSeasonIT {
 
     private static final String CATARINENSE = "Campeonato Catarinense";
     private static final String SERIE_B = "Série B";
@@ -65,11 +69,32 @@ class ThreeCompetitionSeasonIT {
     private static final int SERIE_A_FIXTURES = SERIE_A_ROUNDS * (SERIE_A_CLUBS / 2);
 
     /**
+     * Série C is phased, so the flat {@code 2*(n-1)} formula above does not describe it. Twenty
+     * clubs play a SINGLE round-robin — 19 rounds × 10 matches = 190 first-phase fixtures — and the
+     * top 8 should then contest a two-legged bracket: 4 quarter-final ties, 2 semi-finals and 1
+     * final, 7 ties × 2 legs = 14 more, for 204 in all.
+     *
+     * <p><b>Only the 190 are asserted below, and that is a finding, not an oversight.</b> A
+     * knockout phase's fixtures are reserved-but-empty at generation and materialized later by
+     * {@code PhaseResolver.resolveIfPhaseComplete} — which today has exactly one production call
+     * site, {@code SeasonAdvanceService.recordMatchRound}, and that site passes the MANAGED
+     * event. {@code BackgroundCompetitionService.resolveDue} never calls it, so a background
+     * phased competition marks its reserved knockout rounds processed with zero fixtures and its
+     * bracket never happens: this season ends with 190 Série C fixtures, not 204. The Catarinense
+     * does not expose this because the player is in it. Fixing that is engine work and belongs
+     * with the dedicated Série C background-season IT, not with this rename.
+     */
+    private static final int SERIE_C_CLUBS = 20;
+    private static final int SERIE_C_FIRST_PHASE_ROUNDS = SERIE_C_CLUBS - 1;
+    private static final int SERIE_C_FIRST_PHASE_FIXTURES =
+            SERIE_C_FIRST_PHASE_ROUNDS * (SERIE_C_CLUBS / 2);
+
+    /**
      * The managed season's width in days, unchanged by this slice: 55 interleaved match-units
      * (Catarinense's 11 + 2 + 2 + 2 phase rounds, Série B's 38) at
      * {@link SeasonCalendarGenerator#MATCH_INTERVAL_DAYS}-day spacing, so the finale sits
-     * 54 × 5 = 270 days after the 15 January opening. Série A adds 38 more rounds and must not
-     * move it.
+     * 54 × 5 = 270 days after the 15 January opening. The background divisions add rounds of their
+     * own — Série A's 38, Série C's 19 + 2 + 2 + 2 — and neither may move it.
      */
     private static final int MANAGED_SEASON_DAYS = 270;
 
@@ -84,12 +109,13 @@ class ThreeCompetitionSeasonIT {
     @Autowired SaveGameRepository saveGameRepository;
     @Autowired CompetitionRepository competitionRepository;
     @Autowired CompetitionClubRepository competitionClubRepository;
+    @Autowired CompetitionPhaseRepository competitionPhaseRepository;
     @Autowired FixtureRepository fixtureRepository;
     @Autowired SeasonEventRepository seasonEventRepository;
 
     @Test
-    void aFullSeasonRunsThreeCompetitionsWithoutLengtheningThePlayersYear() {
-        User user = User.create("three_comp_" + UUID.randomUUID(), "hash");
+    void aFullSeasonRunsAllFourCompetitionsWithoutLengtheningThePlayersYear() {
+        User user = User.create("full_pyramid_" + UUID.randomUUID(), "hash");
         userRepository.save(user);
         SaveGameResponse career = saveGameService.createCareer(user.getId());
         UUID saveGameId = career.id();
@@ -103,12 +129,15 @@ class ThreeCompetitionSeasonIT {
                 .collect(Collectors.toMap(Competition::getName, Function.identity()));
         assertThat(byName).containsOnlyKeys(CATARINENSE, SERIE_B, SERIE_A, SERIE_C);
         UUID serieAId = byName.get(SERIE_A).getId();
+        UUID serieCId = byName.get(SERIE_C).getId();
         assertThat(backgroundCompetitionService.isManaged(byName.get(CATARINENSE).getId(), managedClubId))
                 .isTrue();
         assertThat(backgroundCompetitionService.isManaged(byName.get(SERIE_B).getId(), managedClubId))
                 .isTrue();
         assertThat(backgroundCompetitionService.isManaged(serieAId, managedClubId)).isFalse();
+        assertThat(backgroundCompetitionService.isManaged(serieCId, managedClubId)).isFalse();
         assertThat(competitionClubRepository.findByCompetitionId(serieAId)).hasSize(SERIE_A_CLUBS);
+        assertThat(competitionClubRepository.findByCompetitionId(serieCId)).hasSize(SERIE_C_CLUBS);
 
         // --- The player's year is untouched ------------------------------------------------
         LocalDate seasonStart = LocalDate.of(career.seasonYear(), 1, 15);
@@ -133,8 +162,8 @@ class ThreeCompetitionSeasonIT {
 
         SaveGame finished = saveGameRepository.findById(saveGameId).orElseThrow();
         assertThat(finished.getStatus()).isEqualTo(SaveGameStatus.FINISHED);
-        // The season ended on the player's last match, not on Série A's — the 380 background
-        // fixtures never pushed the clock past the finale.
+        // The season ended on the player's last match, not on a background division's — neither
+        // Série A's 380 fixtures nor Série C's 190 pushed the clock past the finale.
         assertThat(finished.getCurrentDate()).isEqualTo(lastManagedDate);
 
         // --- Série A played out in the background ------------------------------------------
@@ -156,9 +185,30 @@ class ThreeCompetitionSeasonIT {
         // The player's club never appears in it — the whole reason Série A is background.
         assertThat(table).noneMatch(r -> r.clubId().equals(managedClubId));
 
+        // --- Série C's first phase played out too -------------------------------------------
+        // The other background division, and the only phased one. Its 190 first-phase fixtures
+        // exist from creation and must all be played by the finale, exactly as Série A's 380 are.
+        List<Fixture> serieCFixtures =
+                fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, serieCId);
+        assertThat(serieCFixtures).hasSize(SERIE_C_FIRST_PHASE_FIXTURES).allMatch(Fixture::isPlayed);
+        assertThat(serieCFixtures).allMatch(f -> !f.getMatchDate().isAfter(lastManagedDate));
+
+        UUID serieCFirstPhaseId = competitionPhaseRepository
+                .findByCompetitionIdOrderByOrdinalAsc(serieCId).get(0).getId();
+        List<StandingRow> serieCTable =
+                standingsService.computeStandings(finished, serieCId, serieCFirstPhaseId, null);
+        assertThat(serieCTable).hasSize(SERIE_C_CLUBS);
+        assertThat(serieCTable).allSatisfy(r ->
+                assertThat(r.played()).isEqualTo(SERIE_C_FIRST_PHASE_ROUNDS));
+        assertThat(serieCTable.stream().mapToInt(StandingRow::goalsFor).sum())
+                .isEqualTo(serieCTable.stream().mapToInt(StandingRow::goalsAgainst).sum());
+        assertThat(serieCTable.stream().mapToInt(StandingRow::goalsFor).sum()).isPositive();
+        // The player's club is not in this division either.
+        assertThat(serieCTable).noneMatch(r -> r.clubId().equals(managedClubId));
+
         // --- And the player's own league finished too ---------------------------------------
         // Série B is the same shape as Série A but the player is in it: both 20-club double
-        // round-robins must end complete, which is what makes "three competitions ran" true
+        // round-robins must end complete, which is what makes "all four competitions ran" true
         // rather than "one ran and one was skipped".
         UUID serieBId = byName.get(SERIE_B).getId();
         assertThat(fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, serieBId))

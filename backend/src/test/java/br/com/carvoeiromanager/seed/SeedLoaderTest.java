@@ -235,6 +235,32 @@ class SeedLoaderTest {
     }
 
     @Test
+    void serieCHasTwentyMembersAndTheTwoPhaseFormat() {
+        SeedCareer career = new SeedLoader().loadCareer();
+
+        SeedCompetition serieC = career.competitions().stream()
+                .filter(c -> c.name().equals("Série C")).findFirst().orElseThrow();
+
+        assertThat(serieC.memberShortNames()).hasSize(20);
+        // Single round-robin over 20 clubs is 19 rounds, then the top 8 into a two-legged
+        // bracket — the Catarinense's phase block with rounds changed from 11.
+        assertThat(serieC.phases()).extracting(SeedPhase::name)
+                .containsExactly("Primeira Fase", "Quartas de final", "Semifinal", "Final");
+        assertThat(serieC.phases().get(0).kind()).isEqualTo("ROUND_ROBIN");
+        assertThat(serieC.phases().get(0).legs()).isEqualTo(1);
+        assertThat(serieC.phases().get(0).rounds()).isEqualTo(19);
+        assertThat(serieC.phases().get(0).qualifiers()).isEqualTo(8);
+        assertThat(serieC.phases().subList(1, 4)).allSatisfy(p -> {
+            assertThat(p.kind()).isEqualTo("KNOCKOUT");
+            assertThat(p.legs()).isEqualTo(2);
+            assertThat(p.rounds()).isEqualTo(2);
+            assertThat(p.qualifiers()).isNull();
+        });
+        // Criciúma must not have drifted into a third competition.
+        assertThat(serieC.memberShortNames()).doesNotContain("CRI");
+    }
+
+    @Test
     void hercilioLuzStaysInThePoolAsAnOrphan() {
         SeedCareer career = new SeedLoader().loadCareer();
 
