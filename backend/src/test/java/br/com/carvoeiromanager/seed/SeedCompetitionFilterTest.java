@@ -35,15 +35,15 @@ class SeedCompetitionFilterTest {
 
         assertThat(competitionNames(full))
                 .containsExactlyInAnyOrder(CATARINENSE, SERIE_B, SERIE_A, SERIE_C);
-        assertThat(full.clubPool()).hasSize(60);
+        assertThat(full.clubPool()).hasSize(64);
     }
 
     @Test
     void blankFilterIsTreatedAsNoFilter() {
         // The opt-in escape hatch is @TestPropertySource("carvoeiro.seed.competitions="), so an
         // empty value has to mean "everything" rather than "nothing".
-        assertThat(new SeedLoader("").loadCareer().clubPool()).hasSize(60);
-        assertThat(new SeedLoader("   ").loadCareer().clubPool()).hasSize(60);
+        assertThat(new SeedLoader("").loadCareer().clubPool()).hasSize(64);
+        assertThat(new SeedLoader("   ").loadCareer().clubPool()).hasSize(64);
     }
 
     @Test
@@ -51,12 +51,13 @@ class SeedCompetitionFilterTest {
         SeedCareer trimmed = new SeedLoader(CATARINENSE + "," + SERIE_B).loadCareer();
 
         assertThat(competitionNames(trimmed)).containsExactlyInAnyOrder(CATARINENSE, SERIE_B);
-        // Exactly the pool as it stood before Série A landed — dropping Série C takes its ten
-        // exclusive members with it, and BRU/FIG/BAR stay for the Catarinense.
+        // Exactly the pool as it stood before Série A landed — dropping Série C takes its
+        // fourteen exclusive members with it, and BRU/FIG/BAR stay for the Catarinense.
         assertThat(trimmed.clubPool()).hasSize(31);
         assertThat(shortNames(trimmed)).doesNotContain("FLA", "PAL", "CRU", "ATM", "BFR");
         assertThat(shortNames(trimmed)).doesNotContain("FER", "AMA", "VRE", "PAY", "CAX");
         assertThat(shortNames(trimmed)).doesNotContain("GUA", "FLO", "CFZ", "YPI", "MGA");
+        assertThat(shortNames(trimmed)).doesNotContain("ITU", "BPB", "ANA", "ITB");
         assertThat(shortNames(trimmed)).contains("BRU", "FIG", "BAR");
     }
 

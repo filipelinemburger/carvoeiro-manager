@@ -77,12 +77,12 @@ class SaveGameServiceIT {
         // SaveGame persisted in DB
         assertThat(saveGameRepository.findById(saveGameId)).isPresent();
 
-        // All clubs from the pool are created (60 clubs: 20 Série B + 11 Catarinense-only —
+        // All clubs from the pool are created (64 clubs: 20 Série B + 11 Catarinense-only —
         // including the orphan HER, which plays no competition — plus the 19 Série A sides and
-        // the 10 Série C ones, with CRI/AVA shared by both managed competitions, CHA by
+        // the 14 Série C ones, with CRI/AVA shared by both managed competitions, CHA by
         // Catarinense and Série A, and BRU/FIG/BAR by Catarinense and Série C)
         var clubs = clubRepository.findBySaveGameId(saveGameId);
-        assertThat(clubs).hasSize(60);
+        assertThat(clubs).hasSize(64);
 
         // Every club has at least one player
         clubs.forEach(club ->
