@@ -87,6 +87,7 @@ class BackgroundCompetitionIT {
     @Autowired BackgroundCompetitionService backgroundCompetitionService;
     @Autowired SeasonCalendarGenerator seasonCalendarGenerator;
     @Autowired SeasonRepository seasonRepository;
+    @Autowired SeasonStandingRepository seasonStandingRepository;
     @Autowired SaveGameService saveGameService;
     @Autowired UserRepository userRepository;
     @Autowired SaveGameRepository saveGameRepository;
@@ -333,7 +334,7 @@ class BackgroundCompetitionIT {
 
     /**
      * Rollover has to survive a save containing a competition the player is not in. The background
-     * competition still gets rebuilt like any other — skipping its archive must not also skip the
+     * competition gets archived and then rebuilt like any other — archiving it must not skip the
      * purge of last season's played fixtures, or the new season would start with stale results.
      */
     @Test
@@ -350,22 +351,85 @@ class BackgroundCompetitionIT {
                 .noneMatch(Fixture::isPlayed);
     }
 
+    /** The archived row for this career's background competition, or a failure if there is none. */
+    private Season archivedBackgroundSeason(Career c) {
+        // NOTE: SeasonRepository has no plain findBySaveGameId -- use the ordered finder.
+        return seasonRepository.findBySaveGameIdOrderBySeasonYearDesc(c.id()).stream()
+                .filter(s -> s.getCompetitionId().equals(c.backgroundCompetitionId()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "no Season row was archived for the background competition"));
+    }
+
     /**
-     * The season history is the player's career record. A competition they had no club in has no
-     * champion-and-my-position story to tell — and {@code Season.managedClubPosition} is NOT NULL
-     * with no honest value to put there — so no row is archived for it at all.
+     * A background competition's champion is part of the world's history and must survive rollover.
+     * Until this test it did not: rollover archived only competitions the managed club played in,
+     * so "Remo é o campeão!" was true in season 1 and gone from every screen in season 2 — no
+     * Season row, no standings, and no news either, because the feed is purged wholesale.
+     *
+     * <p>The player has no club in it, so the managed triple is <b>null</b>. That is the whole
+     * reason this was not a one-line change: {@code archive()} would not have failed without the
+     * old skip, it would have lied. {@code finalOrder.indexOf(managedClubId)} is -1 for a
+     * non-member, {@code +1} makes it 0, and the defensive branch rewrote 0 as
+     * {@code finalOrder.size()} — recording the player as having finished LAST in a competition
+     * they never entered.
      */
     @Test
-    void noSeasonRowIsArchivedForABackgroundCompetition() {
+    void aBackgroundCompetitionIsArchivedWithItsChampionAndNoManagedPosition() {
         Career c = createCareer();
         advanceToFinish(c);
 
+        // The champion as the live table has it, captured before rollover purges the fixtures.
+        SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();
+        UUID expectedChampionId = standingsService
+                .computeStandings(save, c.backgroundCompetitionId(), null, null)
+                .get(0).clubId();
+        String expectedChampionName = clubRepository.findById(expectedChampionId).orElseThrow().getName();
+
         seasonRolloverService.rollover(c.id(), c.userId());
 
-        // NOTE: SeasonRepository has no plain findBySaveGameId -- use the ordered finder.
-        assertThat(seasonRepository.findBySaveGameIdOrderBySeasonYearDesc(c.id()))
-                .isNotEmpty()
-                .noneMatch(s -> s.getCompetitionId().equals(c.backgroundCompetitionId()));
+        Season archived = archivedBackgroundSeason(c);
+        assertThat(archived.getCompetitionName()).isEqualTo(BACKGROUND_COMPETITION_NAME);
+        assertThat(archived.getChampionClubId()).isEqualTo(expectedChampionId);
+        assertThat(archived.getChampionClubName()).isEqualTo(expectedChampionName);
+        assertThat(archived.getManagedClubPosition())
+                .as("a competition the player is not in has no honest position for them")
+                .isNull();
+        assertThat(archived.getManagedClubId()).isNull();
+        assertThat(archived.getManagedClubName()).isNull();
+
+        // The table survives alongside the champion — the other half of what the history shows.
+        assertThat(seasonStandingRepository.findBySeasonIdOrderByPosition(archived.getId()))
+                .hasSize(BACKGROUND_CLUB_COUNT);
+    }
+
+    /**
+     * The Série C shape, and the risky half of archiving a background competition:
+     * {@code SeasonRolloverService.finalClassificationOrder} throws when a declared knockout phase
+     * has no materialized fixtures, and until now it only ever ran for managed competitions. It now
+     * runs for a phased background one, so its champion must be the club that won the FINAL, not
+     * whoever topped the first-phase table — and the archive must not blow up on the way there.
+     */
+    @Test
+    void aPhasedBackgroundCompetitionArchivesItsKnockoutWinnerAsChampion() {
+        Career c = createPhasedCareer();
+        advanceToFinish(c);
+
+        List<CompetitionPhase> phases =
+                competitionPhaseRepository.findByCompetitionIdOrderByOrdinalAsc(c.backgroundCompetitionId());
+        List<Fixture> finalLegs = fixtureRepository.findBySaveGameIdAndPhaseId(c.id(), phases.get(2).getId());
+        List<KnockoutTie> finalTies = TieResolver.tiesOf(finalLegs);
+        assertThat(finalTies).hasSize(1);
+        UUID cupWinner = TieResolver.winner(finalTies.get(0));
+
+        seasonRolloverService.rollover(c.id(), c.userId());
+
+        Season archived = archivedBackgroundSeason(c);
+        assertThat(archived.getCompetitionName()).isEqualTo(PHASED_COMPETITION_NAME);
+        assertThat(archived.getChampionClubId())
+                .as("the archived champion must be the bracket winner, not the table leader")
+                .isEqualTo(cupWinner);
+        assertThat(archived.getManagedClubPosition()).isNull();
     }
 
     @Test

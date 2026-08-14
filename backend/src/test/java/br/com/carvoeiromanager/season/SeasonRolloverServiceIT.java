@@ -163,7 +163,11 @@ class SeasonRolloverServiceIT {
                 .findFirst().orElseThrow();
         assertThat(catSeason.getSeasonYear()).isEqualTo(oldYear);
         assertThat(catSeason.getChampionClubName()).isEqualTo(championName);
-        assertThat(catSeason.getManagedClubPosition()).isBetween(1, clubCount);
+        // Both seeded test competitions are ones the player is IN, so the managed triple must stay
+        // fully populated — the regression that matters now that background rows archive it null.
+        assertThat(catSeason.getManagedClubPosition()).isNotNull().isBetween(1, clubCount);
+        assertThat(catSeason.getManagedClubId()).isEqualTo(c.clubId());
+        assertThat(catSeason.getManagedClubName()).isNotBlank();
         assertThat(seasonStandingRepository.findBySeasonIdOrderByPosition(catSeason.getId()))
                 .hasSize(clubCount)
                 .extracting(SeasonStanding::getPosition).first().isEqualTo(1);

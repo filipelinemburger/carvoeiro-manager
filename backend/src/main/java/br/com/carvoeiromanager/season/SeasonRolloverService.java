@@ -186,13 +186,18 @@ public class SeasonRolloverService {
 
         // 1. Archive each competition from live data, then purge its results.
         for (Competition competition : competitions) {
-            // A competition the player has no club in is not part of their career history, and
-            // Season.managedClubPosition is NOT NULL with no honest value here. Only the archive is
-            // skipped: the purge below still runs, or last season's played background fixtures
-            // would survive into the regenerated calendar.
-            if (backgroundCompetitionService.isManaged(competition.getId(), managedClubId)) {
-                archive(saveGameId, userId, competition, finishingYear, managedClubId, clubNameById);
-            }
+            // EVERY competition is archived, background ones included: a division the player is not
+            // in still crowns a champion, and that title is part of the world's history — skipping
+            // the archive erased it from every screen, because the news feed is purged below too.
+            //
+            // Membership decides which archive shape is written, and it is asked of
+            // BackgroundCompetitionService.isManaged — the same membership predicate the simulator
+            // uses. It must NEVER be inferred from the final classification: indexOf() returns -1
+            // for a non-member, which the managed branch below turns into "finished last", quietly
+            // recording the player in a competition they never entered.
+            boolean managed = backgroundCompetitionService.isManaged(competition.getId(), managedClubId);
+            archive(saveGameId, userId, competition, finishingYear,
+                    managed ? managedClubId : null, clubNameById);
 
             List<UUID> fixtureIds = fixtureRepository
                     .findBySaveGameIdAndCompetitionId(saveGameId, competition.getId()).stream()
@@ -366,8 +371,20 @@ public class SeasonRolloverService {
                 List.copyOf(watchlistEvents));
     }
 
+    /**
+     * Archives one finished competition: its champion, its first-phase table, its top scorers and
+     * its per-player aggregates.
+     *
+     * @param memberManagedClubId the managed club's id when it is a <b>member</b> of this
+     *                             competition, and {@code null} when it is not. Null is what marks
+     *                             a background competition here, and the caller derives it from
+     *                             {@link BackgroundCompetitionService#isManaged} — never from the
+     *                             final classification. Passing null does not merely blank three
+     *                             columns: it puts the managed club out of this method's reach
+     *                             entirely, so no position can be fabricated for it.
+     */
     private void archive(UUID saveGameId, UUID userId, Competition competition, int finishingYear,
-                         UUID managedClubId, Map<UUID, String> clubNameById) {
+                         UUID memberManagedClubId, Map<UUID, String> clubNameById) {
         // SeasonStanding archives the first phase's table — the honest league record. For a
         // phase-less competition (e.g. Série B), phases is empty and phaseId is null, which is
         // today's "whole competition" behaviour, unchanged.
@@ -380,18 +397,27 @@ public class SeasonRolloverService {
 
         // Season.championClubId/managedClubPosition come from the final classification — the
         // knockout winner, not the (now purely-league) table leader.
-        List<UUID> finalOrder = finalClassificationOrder(saveGameId, competition.getId(), phases, table);
+        List<UUID> finalOrder = finalClassificationOrder(saveGameId, competition, phases, table);
         UUID championClubId = finalOrder.get(0);
         String championClubName = clubNameById.getOrDefault(championClubId, "");
-        int managedPosition = finalOrder.indexOf(managedClubId) + 1;
-        if (managedPosition == 0) {
-            managedPosition = finalOrder.size(); // defensive: managed club should always be present
-        }
-        String managedName = clubNameById.getOrDefault(managedClubId, "");
 
-        Season season = Season.create(saveGameId, competition.getId(), finishingYear,
-                competition.getName(), championClubId, championClubName,
-                managedClubId, managedName, managedPosition);
+        Season season;
+        if (memberManagedClubId == null) {
+            // Background competition: champion and table only. No managed club, no position —
+            // null, not a stand-in. See Season.createForBackgroundCompetition and V52.
+            season = Season.createForBackgroundCompetition(saveGameId, competition.getId(),
+                    finishingYear, competition.getName(), championClubId, championClubName);
+        } else {
+            int managedPosition = finalOrder.indexOf(memberManagedClubId) + 1;
+            if (managedPosition == 0) {
+                // Defensive only, and reachable solely for a club that IS a member: membership is
+                // established by the caller, so a miss here means the classification lost a member.
+                managedPosition = finalOrder.size();
+            }
+            season = Season.create(saveGameId, competition.getId(), finishingYear,
+                    competition.getName(), championClubId, championClubName, memberManagedClubId,
+                    clubNameById.getOrDefault(memberManagedClubId, ""), managedPosition);
+        }
         seasonRepository.save(season);
 
         int position = 1;
@@ -431,10 +457,16 @@ public class SeasonRolloverService {
      * over: this record is persisted history, so archiving the table order instead would record
      * a plausible-looking champion that never won anything, with nothing surfacing the fault.
      * Fail loudly instead.
+     *
+     * <p>This now runs for background competitions too, whose brackets are materialized and played
+     * by {@link BackgroundCompetitionService#resolveDue} via {@code PhaseResolver}. Should that
+     * ever regress, the failure surfaces here — at rollover, far from its cause — so the message
+     * names the competition by name as well as by id.
      */
-    private List<UUID> finalClassificationOrder(UUID saveGameId, UUID competitionId,
+    private List<UUID> finalClassificationOrder(UUID saveGameId, Competition competition,
                                                  List<CompetitionPhase> phases,
                                                  List<StandingRow> firstPhaseTable) {
+        UUID competitionId = competition.getId();
         List<CompetitionPhase> knockoutPhases = phases.stream()
                 .filter(p -> p.getKind() == PhaseKind.KNOCKOUT)
                 .toList();
@@ -450,7 +482,8 @@ public class SeasonRolloverService {
                 .findFirst()
                 .ifPresent(p -> { throw new IllegalStateException(
                         "Knockout phase " + p.getName() + " (" + p.getId() + ") has no fixtures; "
-                        + "cannot archive a final classification for competition " + competitionId); });
+                        + "cannot archive a final classification for competition "
+                        + competition.getName() + " (" + competitionId + ")"); });
         return FinalClassification.compute(firstPhaseTable, knockoutPhases, fixturesByPhase);
     }
 }

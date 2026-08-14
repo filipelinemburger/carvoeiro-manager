@@ -35,6 +35,11 @@ export function SeasonHistoryPage() {
 
   const seasons = history.data ?? []
 
+  // A background competition (Série C for a Catarinense/Série B career) is archived for its
+  // champion, but the player has no placing in it — the API sends null, and a dash is the honest
+  // rendering. `${null}º` would read "nullº".
+  const positionLabel = (position: number | null) => (position === null ? '—' : `${position}º`)
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Histórico de Temporadas</Typography>
@@ -43,11 +48,12 @@ export function SeasonHistoryPage() {
       {isMobile ? (
         <Stack spacing={1} sx={{ mb: 3 }}>
           {seasons.map(s => (
-            <Card key={s.seasonYear} variant="outlined">
+            <Card key={`${s.seasonYear}-${s.competitionName}`} variant="outlined">
               <CardContent>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>{s.seasonYear}</Typography>
-                  <Chip size="small" label={`${s.managedClubPosition}º`} />
+                  <Chip size="small" label={positionLabel(s.managedClubPosition)} />
+                  <Typography variant="body2" color="text.secondary">{s.competitionName}</Typography>
                 </Stack>
                 <Typography variant="body2">Campeão: {s.championClubName}</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -66,6 +72,7 @@ export function SeasonHistoryPage() {
             <TableHead>
               <TableRow>
                 <TableCell>Ano</TableCell>
+                <TableCell>Competição</TableCell>
                 <TableCell>Campeão</TableCell>
                 <TableCell align="center">Sua posição</TableCell>
                 <TableCell>Artilheiro</TableCell>
@@ -74,10 +81,11 @@ export function SeasonHistoryPage() {
             </TableHead>
             <TableBody>
               {seasons.map(s => (
-                <TableRow key={s.seasonYear}>
+                <TableRow key={`${s.seasonYear}-${s.competitionName}`}>
                   <TableCell>{s.seasonYear}</TableCell>
+                  <TableCell>{s.competitionName}</TableCell>
                   <TableCell>{s.championClubName}</TableCell>
-                  <TableCell align="center">{s.managedClubPosition}º</TableCell>
+                  <TableCell align="center">{positionLabel(s.managedClubPosition)}</TableCell>
                   <TableCell>{s.topScorerName ? `${s.topScorerName} (${s.topScorerGoals})` : '—'}</TableCell>
                   <TableCell>
                     <Button size="small" variant="outlined" onClick={() => setSelectedYear(s.seasonYear)}>

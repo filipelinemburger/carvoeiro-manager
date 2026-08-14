@@ -47,6 +47,27 @@ describe('SeasonHistoryPage', () => {
     expect(screen.getByText('Artilheiro (21)')).toBeInTheDocument()
   })
 
+  it('renders a null position as a dash for a background competition', async () => {
+    // Given: the same year archived twice — the player's own league, and a background one they
+    // have no club in, whose managedClubPosition the API sends as null
+    vi.mocked(getSeasonHistory).mockResolvedValue([
+      { seasonYear: 2026, competitionName: 'Campeonato Catarinense', championClubName: 'Campeao FC', managedClubPosition: 2, topScorerName: 'Artilheiro', topScorerGoals: 21 },
+      { seasonYear: 2026, competitionName: 'Série C', championClubName: 'Remo', managedClubPosition: null, topScorerName: 'Goleador', topScorerGoals: 14 },
+    ])
+
+    // When: the page renders
+    renderPage()
+
+    // Then: the background row shows a dash, never "nullº", and both rows survive (no key collision)
+    await waitFor(() => expect(screen.getByText('Remo')).toBeInTheDocument())
+    expect(screen.getByRole('cell', { name: '—' })).toBeInTheDocument()
+    expect(screen.queryByText('nullº')).not.toBeInTheDocument()
+    expect(screen.getByText('2º')).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'Série C' })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'Campeonato Catarinense' })).toBeInTheDocument()
+    expect(screen.getAllByRole('cell', { name: '2026' })).toHaveLength(2)
+  })
+
   it('loads the season detail when a season is selected', async () => {
     vi.mocked(getSeason).mockResolvedValue({
       seasonYear: 2026,

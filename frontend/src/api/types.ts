@@ -560,7 +560,8 @@ export type SeasonSummary = {
   seasonYear: number
   competitionName: string
   championClubName: string
-  managedClubPosition: number
+  /** Null for a background competition the managed club is not a member of — render it as a dash. */
+  managedClubPosition: number | null
   topScorerName: string | null
   topScorerGoals: number
 }
