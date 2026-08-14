@@ -39,9 +39,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * halves of the promise are checked:
  *
  * <ul>
- *   <li>the background divisions really played out — Série A's 380 fixtures and Série C's 190
- *       first-phase ones, full tables at the end (Série C's bracket does not materialize in the
- *       background today — see {@link #SERIE_C_FIRST_PHASE_FIXTURES});</li>
+ *   <li>the background divisions really played out — Série A's 380 fixtures and Série C's 204
+ *       (190 first-phase plus a bracket materialized mid-season), full tables at the end;</li>
  *   <li>and it cost the player nothing — their last matchday is still on the same day of the same
  *       270-day window it fell on before background competitions existed.</li>
  * </ul>
@@ -71,23 +70,26 @@ class FullPyramidSeasonIT {
     /**
      * Série C is phased, so the flat {@code 2*(n-1)} formula above does not describe it. Twenty
      * clubs play a SINGLE round-robin — 19 rounds × 10 matches = 190 first-phase fixtures — and the
-     * top 8 should then contest a two-legged bracket: 4 quarter-final ties, 2 semi-finals and 1
-     * final, 7 ties × 2 legs = 14 more, for 204 in all.
+     * top 8 then contest a two-legged bracket: 4 quarter-final ties, 2 semi-finals and 1 final,
+     * 7 ties × 2 legs = 14 more, for 204 in all.
      *
-     * <p><b>Only the 190 are asserted below, and that is a finding, not an oversight.</b> A
-     * knockout phase's fixtures are reserved-but-empty at generation and materialized later by
-     * {@code PhaseResolver.resolveIfPhaseComplete} — which today has exactly one production call
-     * site, {@code SeasonAdvanceService.recordMatchRound}, and that site passes the MANAGED
-     * event. {@code BackgroundCompetitionService.resolveDue} never calls it, so a background
-     * phased competition marks its reserved knockout rounds processed with zero fixtures and its
-     * bracket never happens: this season ends with 190 Série C fixtures, not 204. The Catarinense
-     * does not expose this because the player is in it. Fixing that is engine work and belongs
-     * with the dedicated Série C background-season IT, not with this rename.
+     * <p>The bracket's 14 exist only because they were materialized <em>during</em> the season: a
+     * knockout phase's fixtures are reserved-but-empty at generation and filled in by
+     * {@code PhaseResolver.resolveIfPhaseComplete} once the phase before it finishes. Until that
+     * resolver was wired into {@code BackgroundCompetitionService.resolveDue} its only call site
+     * passed the MANAGED event, so a background phased competition marked its reserved knockout
+     * rounds processed with zero fixtures and ended the season on 190. Asserting the full 204 here
+     * is what keeps that regression visible from the seed's own pyramid — the dedicated
+     * {@link SerieCBackgroundSeasonIT} then checks the bracket's shape and its champion.
      */
     private static final int SERIE_C_CLUBS = 20;
     private static final int SERIE_C_FIRST_PHASE_ROUNDS = SERIE_C_CLUBS - 1;
     private static final int SERIE_C_FIRST_PHASE_FIXTURES =
             SERIE_C_FIRST_PHASE_ROUNDS * (SERIE_C_CLUBS / 2);
+    /** 4 quarter-final ties + 2 semi-finals + 1 final, two legs each. */
+    private static final int SERIE_C_KNOCKOUT_FIXTURES = 2 * (4 + 2 + 1);
+    private static final int SERIE_C_FIXTURES =
+            SERIE_C_FIRST_PHASE_FIXTURES + SERIE_C_KNOCKOUT_FIXTURES;
 
     /**
      * The managed season's width in days, unchanged by this slice: 55 interleaved match-units
@@ -163,7 +165,7 @@ class FullPyramidSeasonIT {
         SaveGame finished = saveGameRepository.findById(saveGameId).orElseThrow();
         assertThat(finished.getStatus()).isEqualTo(SaveGameStatus.FINISHED);
         // The season ended on the player's last match, not on a background division's — neither
-        // Série A's 380 fixtures nor Série C's 190 pushed the clock past the finale.
+        // Série A's 380 fixtures nor Série C's 204 pushed the clock past the finale.
         assertThat(finished.getCurrentDate()).isEqualTo(lastManagedDate);
 
         // --- Série A played out in the background ------------------------------------------
@@ -185,12 +187,14 @@ class FullPyramidSeasonIT {
         // The player's club never appears in it — the whole reason Série A is background.
         assertThat(table).noneMatch(r -> r.clubId().equals(managedClubId));
 
-        // --- Série C's first phase played out too -------------------------------------------
+        // --- Série C played out too, bracket and all ----------------------------------------
         // The other background division, and the only phased one. Its 190 first-phase fixtures
-        // exist from creation and must all be played by the finale, exactly as Série A's 380 are.
+        // exist from creation and must all be played by the finale, exactly as Série A's 380 are —
+        // and its 14 bracket fixtures, which do NOT exist at creation, must have been materialized
+        // and played inside the same window.
         List<Fixture> serieCFixtures =
                 fixtureRepository.findBySaveGameIdAndCompetitionId(saveGameId, serieCId);
-        assertThat(serieCFixtures).hasSize(SERIE_C_FIRST_PHASE_FIXTURES).allMatch(Fixture::isPlayed);
+        assertThat(serieCFixtures).hasSize(SERIE_C_FIXTURES).allMatch(Fixture::isPlayed);
         assertThat(serieCFixtures).allMatch(f -> !f.getMatchDate().isAfter(lastManagedDate));
 
         UUID serieCFirstPhaseId = competitionPhaseRepository
