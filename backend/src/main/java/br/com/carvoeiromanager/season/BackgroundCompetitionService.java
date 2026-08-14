@@ -105,6 +105,16 @@ public class BackgroundCompetitionService {
         for (SeasonEvent event : due) {
             List<Fixture> fixtures = fixtureRepository.findBySaveGameIdAndCompetitionIdAndRound(
                     saveGameId, event.getCompetitionId(), event.getRound());
+            // A phased round with no fixtures is a reserved knockout round PhaseResolver never
+            // filled in — the whole bracket silently evaporating. Everything below still no-ops
+            // and marks it processed, which is right (a genuinely empty round must not brick the
+            // save), but it must not do so without a word: the pre-fix version of exactly this
+            // bug shipped and only a new integration test ever noticed. Deliberately not thrown.
+            if (event.getPhaseId() != null && fixtures.isEmpty()) {
+                log.warn("Background phased round {} of competition {} (phase {}) resolved with no "
+                                + "fixtures — its knockout bracket was never materialized",
+                        event.getRound(), event.getCompetitionId(), event.getPhaseId());
+            }
             // simulateBackgroundRound, not simulateRound: the latter also runs the save-wide
             // didn't-play sweep, which would tick the managed club's injuries and suspensions
             // once more for every background round resolved on the same advance.
