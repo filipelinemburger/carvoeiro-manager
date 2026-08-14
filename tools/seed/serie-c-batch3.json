@@ -64,21 +64,21 @@
       { "name": "Yan Souto", "position": "DEF", "age": 24, "group": "DF", "nationality": "Brasil", "positions": ["ZAGUEIRO"], "roles": ["DEFENDER++", "STOPPER+"], "role": "starter" },
       { "name": "Igor Morais", "position": "DEF", "age": 28, "group": "DF", "nationality": "Brasil", "positions": ["ZAGUEIRO"], "roles": ["STOPPER++", "DEFENDER+"], "role": "rotation" },
       { "name": "Octávio Metzker", "position": "DEF", "age": 24, "group": "DF", "nationality": "Brasil", "positions": ["ZAGUEIRO"], "roles": ["BALL_PLAYING_DEFENDER++", "DEFENDER+"], "role": "rotation" },
-      { "name": "Erick", "position": "DEF", "age": 23, "group": "DF", "nationality": "Brasil", "positions": ["LATERAL_DIREITO"], "roles": ["WINGBACK++", "FULLBACK+"], "role": "starter" },
+      { "name": "Erick", "position": "DEF", "age": 22, "group": "DF", "nationality": "Brasil", "positions": ["LATERAL_DIREITO"], "roles": ["WINGBACK++", "FULLBACK+"], "role": "starter" },
       { "name": "Diogo Mateus", "position": "DEF", "age": 33, "group": "DF", "nationality": "Brasil", "positions": ["LATERAL_DIREITO"], "roles": ["FULLBACK++", "WINGBACK+"], "role": "fringe" },
       { "name": "Patric Calmon", "position": "DEF", "age": 32, "group": "DF", "nationality": "Brasil", "positions": ["LATERAL_ESQUERDO"], "roles": ["FULLBACK++", "ATTACKING_WINGBACK+"], "role": "rotation" },
       { "name": "Bull", "position": "DEF", "age": 25, "group": "DF", "nationality": "Brasil", "positions": ["LATERAL_ESQUERDO"], "roles": ["ATTACKING_WINGBACK++", "FULLBACK+"], "role": "rotation" },
       { "name": "Igor Maduro", "position": "MID", "age": 25, "group": "MF", "nationality": "Brasil", "positions": ["VOLANTE", "MEIA_CENTRAL"], "roles": ["HOLDING++", "DEEP_LYING_PLAYMAKER+"], "role": "starter" },
       { "name": "Jhonata Varela", "position": "MID", "age": 26, "group": "MF", "nationality": "Brasil", "positions": ["VOLANTE", "MEIA_CENTRAL"], "roles": ["BOX_CRASHER++", "HOLDING+"], "role": "starter" },
       { "name": "Nenê", "position": "MID", "age": 45, "group": "MF", "nationality": "Brasil", "positions": ["MEIA_ARMADOR", "MEIA_CENTRAL"], "roles": ["CLASSIC_10++", "PLAYMAKER+"], "role": "starter" },
-      { "name": "Dudu Nardini", "position": "MID", "age": 29, "group": "MF", "nationality": "Brasil", "positions": ["MEIA_CENTRAL", "VOLANTE"], "roles": ["BOX_TO_BOX++", "HOLDING+"], "role": "rotation" },
+      { "name": "Lucas Cândido", "position": "MID", "age": 32, "group": "MF", "nationality": "Brasil", "positions": ["VOLANTE", "MEIA_CENTRAL"], "roles": ["HOLDING++", "BOX_TO_BOX+"], "role": "rotation" },
       { "name": "Thallyson", "position": "MID", "age": 30, "group": "MF", "nationality": "Brasil", "positions": ["VOLANTE", "MEIA_CENTRAL"], "roles": ["HOLDING++", "WIDE_HALF+"], "role": "rotation" },
       { "name": "Gabriel Tota", "position": "MID", "age": 24, "group": "MF", "nationality": "Brasil", "positions": ["MEIA_ARMADOR", "MEIA_CENTRAL"], "roles": ["HALF_WINGER++", "SHADOW_STRIKER+"], "role": "fringe" },
       { "name": "Henrique Dourado", "position": "ATT", "age": 36, "group": "FW", "nationality": "Brasil", "positions": ["ATACANTE"], "roles": ["TARGET_FORWARD++", "POACHER+"], "role": "starter" },
       { "name": "Gustavo Balotelli", "position": "ATT", "age": 30, "group": "FW", "nationality": "Brasil", "positions": ["ATACANTE"], "roles": ["POACHER++", "TARGET_FORWARD+"], "role": "rotation" },
       { "name": "Dudu Hatamoto", "position": "ATT", "age": 23, "group": "FW", "nationality": "Brasil", "positions": ["PONTA_ESQUERDA", "PONTA_DIREITA"], "roles": ["INSIDE_FORWARD++", "WINGER+"], "role": "rotation" },
       { "name": "Kayon", "position": "ATT", "age": 22, "group": "FW", "nationality": "Brasil", "positions": ["PONTA_ESQUERDA", "PONTA_DIREITA"], "roles": ["WINGER++", "WIDE_PLAYMAKER+"], "role": "rotation" },
-      { "name": "Felipe Azevedo", "position": "ATT", "age": 39, "group": "FW", "nationality": "Brasil", "positions": ["PONTA_ESQUERDA", "PONTA_DIREITA"], "roles": ["WINGER++", "INSIDE_FORWARD+"], "role": "fringe" }
+      { "name": "Diego Tavares", "position": "ATT", "age": 35, "group": "FW", "nationality": "Brasil", "positions": ["PONTA_ESQUERDA", "PONTA_DIREITA"], "roles": ["WINGER++", "INSIDE_FORWARD+"], "role": "fringe" }
     ]
   },
   {
@@ -158,7 +158,7 @@
       { "name": "Rodrigo Alves", "position": "ATT", "age": 30, "group": "FW", "nationality": "Brasil", "positions": ["PONTA_ESQUERDA", "PONTA_DIREITA"], "roles": ["INSIDE_FORWARD++", "WINGER+"], "role": "starter" },
       { "name": "Leilson", "position": "ATT", "age": 33, "group": "FW", "nationality": "Brasil", "positions": ["PONTA_ESQUERDA", "PONTA_DIREITA"], "roles": ["WINGER++", "WIDE_PLAYMAKER+"], "role": "rotation" },
       { "name": "Everton Kanela", "position": "ATT", "age": 30, "group": "FW", "nationality": "Brasil", "positions": ["ATACANTE"], "roles": ["ADVANCED_FORWARD++", "POACHER+"], "role": "rotation" },
-      { "name": "Denílson", "position": "ATT", "age": 26, "group": "FW", "nationality": "Brasil", "positions": ["PONTA_DIREITA", "PONTA_ESQUERDA"], "roles": ["WINGER++", "INSIDE_FORWARD+"], "role": "rotation" },
+      { "name": "Denílson", "position": "ATT", "age": 25, "group": "FW", "nationality": "Brasil", "positions": ["PONTA_DIREITA", "PONTA_ESQUERDA"], "roles": ["WINGER++", "INSIDE_FORWARD+"], "role": "rotation" },
       { "name": "Elimar", "position": "ATT", "age": 28, "group": "FW", "nationality": "Brasil", "positions": ["PONTA_DIREITA", "PONTA_ESQUERDA"], "roles": ["WINGER++", "INSIDE_FORWARD+"], "role": "fringe" },
       { "name": "Brandon Mondaca", "position": "ATT", "age": 21, "group": "FW", "nationality": "Chile", "positions": ["ATACANTE"], "roles": ["POACHER++", "TARGET_FORWARD+"], "role": "fringe" }
     ]
