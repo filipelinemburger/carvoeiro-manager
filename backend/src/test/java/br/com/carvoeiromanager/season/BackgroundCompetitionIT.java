@@ -454,6 +454,75 @@ class BackgroundCompetitionIT {
                 .hasSize(PHASED_TOTAL_FIXTURES);
     }
 
+    /**
+     * A phased background competition must survive rollover: season 2 has to reserve its knockout
+     * rounds again and materialize a fresh bracket from the new season's table.
+     *
+     * <p>Nothing covered this. Both full-seed ITs stop at FINISHED, and every {@code *RolloverIT}
+     * runs on the trimmed test seed, which ships no phased background division at all. The
+     * mechanism is indirect enough to be worth pinning: rollover purges fixtures and season events
+     * but leaves {@code competition_phase} rows alone, and {@code SeasonCalendarGenerator} reads
+     * those live rows — so the reservation happens again only because the phases were never
+     * transient in the first place. A rollover that "cleaned up" phases along with the fixtures
+     * would leave a competition that quietly degrades into a bare round-robin in season 2, with no
+     * champion for promotion to read and nothing failing loudly.
+     */
+    @Test
+    void aPhasedBackgroundCompetitionsBracketReMaterializesAfterRollover() {
+        // Given a season in which the whole bracket was played out
+        Career c = createPhasedCareer();
+        advanceToFinish(c);
+        List<CompetitionPhase> phases =
+                competitionPhaseRepository.findByCompetitionIdOrderByOrdinalAsc(c.backgroundCompetitionId());
+        assertThat(fixtureRepository.findBySaveGameIdAndPhaseId(c.id(), phases.get(2).getId()))
+                .as("season 1 must have produced a final for this test to be about season 2")
+                .hasSize(PHASED_FINAL_FIXTURES);
+
+        // When the season rolls over
+        seasonRolloverService.rollover(c.id(), c.userId());
+
+        // Then season 2 opens with the phases intact and the knockout rounds reserved again:
+        // dated, unprocessed, fixture-less — the state PhaseResolver is the only thing that fills.
+        // The SAME phase rows, not a rebuilt set — every fixture lookup below uses the ids
+        // captured before rollover, and identical ids are what makes those lookups meaningful.
+        assertThat(competitionPhaseRepository.findByCompetitionIdOrderByOrdinalAsc(c.backgroundCompetitionId()))
+                .extracting(CompetitionPhase::getId)
+                .containsExactlyElementsOf(phases.stream().map(CompetitionPhase::getId).toList());
+        assertThat(backgroundMatchEvents(c))
+                .hasSize(PHASED_UNITS)
+                .noneMatch(SeasonEvent::isProcessed);
+        assertThat(fixtureRepository.findBySaveGameIdAndPhaseId(c.id(), phases.get(1).getId())).isEmpty();
+        assertThat(fixtureRepository.findBySaveGameIdAndPhaseId(c.id(), phases.get(2).getId())).isEmpty();
+
+        // And sweeping the new season rebuilds and plays the bracket exactly as season 1 did.
+        SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();
+        LocalDate lastBackgroundDate = backgroundMatchEvents(c).stream()
+                .map(SeasonEvent::getEventDate).max(LocalDate::compareTo).orElseThrow();
+        assertThat(backgroundCompetitionService.resolveDue(save, lastBackgroundDate))
+                .isEqualTo(PHASED_UNITS);
+
+        assertThat(fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), c.backgroundCompetitionId()))
+                .hasSize(PHASED_TOTAL_FIXTURES)
+                .allMatch(Fixture::isPlayed);
+
+        // Seeded from season 2's own table, not from a stale season-1 one.
+        List<Fixture> semis = fixtureRepository.findBySaveGameIdAndPhaseId(c.id(), phases.get(1).getId());
+        List<StandingRow> table = standingsService.computeStandings(
+                save, c.backgroundCompetitionId(), phases.get(0).getId(), null);
+        Set<UUID> semifinalists = semis.stream()
+                .flatMap(f -> java.util.stream.Stream.of(f.getHomeClubId(), f.getAwayClubId()))
+                .collect(Collectors.toSet());
+        assertThat(semifinalists).isEqualTo(table.subList(0, PHASED_QUALIFIERS).stream()
+                .map(StandingRow::clubId).collect(Collectors.toSet()));
+
+        // ...and ends in a decided champion again.
+        List<Fixture> finalLegs = fixtureRepository.findBySaveGameIdAndPhaseId(c.id(), phases.get(2).getId());
+        List<KnockoutTie> finalTies = TieResolver.tiesOf(finalLegs);
+        assertThat(finalTies).hasSize(1);
+        assertThat(TieResolver.winner(finalTies.get(0)))
+                .isIn(finalLegs.get(0).getHomeClubId(), finalLegs.get(0).getAwayClubId());
+    }
+
     @Test
     void resolvingIsIdempotent() {
         Career c = createCareer();
