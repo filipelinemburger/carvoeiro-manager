@@ -224,6 +224,29 @@ class PhaseResolverTest {
         assertThat(tie.get(1).getAwayClubId()).isEqualTo(eighth);
     }
 
+    /**
+     * The managed path ({@code SeasonAdvanceService.recordMatchRound}) resolves BEFORE it marks
+     * the event processed; the background loop
+     * ({@code BackgroundCompetitionService.resolveDue}) resolves AFTER. Both must work, and they
+     * do because {@code phaseComplete} accepts an event that is either already processed or the
+     * one just handled. Pinned here because tightening that disjunction to "not processed" would
+     * leave the managed path green and silently kill every background bracket.
+     */
+    @Test
+    void resolvesEvenWhenTheTriggeringEventIsAlreadyMarkedProcessed() {
+        // Short label on purpose: buildScenario stamps it into a username, and user.username is
+        // VARCHAR(50) with a 36-char UUID already taking most of it.
+        Scenario s = buildScenario("preproc");
+        s.lastFirstPhaseEvent().markProcessed();
+        seasonEventRepository.save(s.lastFirstPhaseEvent());
+
+        boolean resolved = phaseResolver.resolveIfPhaseComplete(s.save(), s.lastFirstPhaseEvent());
+
+        assertThat(resolved).isTrue();
+        assertThat(fixtureRepository.findBySaveGameIdAndPhaseId(s.saveGameId(), s.quarterFinalPhaseId()))
+                .hasSize(8);
+    }
+
     @Test
     void resolvingTwiceDoesNotDuplicateFixtures() {
         Scenario s = buildScenario("idempotent");

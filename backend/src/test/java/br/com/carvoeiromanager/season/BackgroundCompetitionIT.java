@@ -12,9 +12,16 @@ import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClub;
 import br.com.carvoeiromanager.competition.CompetitionClubRepository;
+import br.com.carvoeiromanager.competition.CompetitionPhase;
+import br.com.carvoeiromanager.competition.CompetitionPhaseRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.competition.KnockoutTie;
+import br.com.carvoeiromanager.competition.PhaseKind;
+import br.com.carvoeiromanager.competition.StandingRow;
+import br.com.carvoeiromanager.competition.StandingsService;
+import br.com.carvoeiromanager.competition.TieResolver;
 import br.com.carvoeiromanager.match.LineupService;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
@@ -54,7 +61,26 @@ class BackgroundCompetitionIT {
     /** Covers a whole season's calendar (managed rounds + transfer stops) with room to spare. */
     private static final int ADVANCE_GUARD = 500;
 
+    // A phased background competition, shaped like Série C but small enough to sweep in one call:
+    // 8 clubs, a single round-robin first phase, then a two-legged semifinal and final.
+    private static final String PHASED_COMPETITION_NAME = "Background Cup";
+    private static final int PHASED_CLUB_COUNT = 8;
+    private static final int PHASED_QUALIFIERS = 4;
+    private static final int PHASED_FIRST_PHASE_ROUNDS = PHASED_CLUB_COUNT - 1;
+    private static final int PHASED_KNOCKOUT_ROUNDS_PER_PHASE = 2;
+    /** 7 first-phase rounds + 2 semifinal legs + 2 final legs. */
+    private static final int PHASED_UNITS =
+            PHASED_FIRST_PHASE_ROUNDS + 2 * PHASED_KNOCKOUT_ROUNDS_PER_PHASE;
+    private static final int PHASED_SEMIFINAL_FIXTURES = 4; // 2 ties x 2 legs
+    private static final int PHASED_FINAL_FIXTURES = 2;     // 1 tie x 2 legs
+    /** 7 x 4 first-phase fixtures, plus the bracket's 6. */
+    private static final int PHASED_TOTAL_FIXTURES =
+            PHASED_FIRST_PHASE_ROUNDS * (PHASED_CLUB_COUNT / 2)
+                    + PHASED_SEMIFINAL_FIXTURES + PHASED_FINAL_FIXTURES;
+
     @Autowired SeasonAdvanceService seasonAdvanceService;
+    @Autowired StandingsService standingsService;
+    @Autowired CompetitionPhaseRepository competitionPhaseRepository;
     @Autowired PlayerRepository playerRepository;
     @Autowired LineupService lineupService;
     @Autowired SeasonRolloverService seasonRolloverService;
@@ -106,6 +132,49 @@ class BackgroundCompetitionIT {
                 competitionRepository.findBySaveGameId(saveGameId), managedClubId);
 
         return new Career(user.getId(), saveGameId, background.getId());
+    }
+
+    /**
+     * A fresh career plus one <em>phased</em> background competition — the shape Série C has and
+     * the shape nothing exercised before: a competition the player is not in whose knockout rounds
+     * are reserved (dated, fixture-less) at generation and can only be filled in by
+     * {@link br.com.carvoeiromanager.competition.PhaseResolver}.
+     */
+    private Career createPhasedCareer() {
+        User user = User.create("phased_" + UUID.randomUUID(), "hash");
+        userRepository.save(user);
+        SaveGameResponse response = saveGameService.createCareer(user.getId());
+        UUID saveGameId = response.id();
+        UUID managedClubId = saveGameRepository.findById(saveGameId).orElseThrow().getManagedClubId();
+
+        List<Club> members = clubRepository.findBySaveGameId(saveGameId).stream()
+                .filter(club -> !club.getId().equals(managedClubId))
+                .sorted(Comparator.comparing(Club::getShortName))
+                .limit(PHASED_CLUB_COUNT)
+                .toList();
+        assertThat(members).hasSize(PHASED_CLUB_COUNT);
+
+        Competition cup = Competition.create(saveGameId, PHASED_COMPETITION_NAME, "CUP",
+                response.seasonYear(), PHASED_UNITS);
+        competitionRepository.save(cup);
+        members.forEach(club -> competitionClubRepository.save(
+                CompetitionClub.create(saveGameId, cup.getId(), club.getId())));
+
+        competitionPhaseRepository.save(CompetitionPhase.create(saveGameId, cup.getId(), 0,
+                "Primeira Fase", PhaseKind.ROUND_ROBIN, 1, PHASED_FIRST_PHASE_ROUNDS, PHASED_QUALIFIERS));
+        competitionPhaseRepository.save(CompetitionPhase.create(saveGameId, cup.getId(), 1,
+                "Semifinal", PhaseKind.KNOCKOUT, 2, PHASED_KNOCKOUT_ROUNDS_PER_PHASE, null));
+        competitionPhaseRepository.save(CompetitionPhase.create(saveGameId, cup.getId(), 2,
+                "Final", PhaseKind.KNOCKOUT, 2, PHASED_KNOCKOUT_ROUNDS_PER_PHASE, null));
+
+        // As in createCareer: throw away the calendar built before this competition existed and
+        // regenerate, so its rounds are dated across the managed season's window.
+        fixtureRepository.deleteAll(fixtureRepository.findBySaveGameId(saveGameId));
+        seasonEventRepository.deleteAll(seasonEventRepository.findBySaveGameId(saveGameId));
+        seasonCalendarGenerator.generate(saveGameId, response.seasonYear(),
+                competitionRepository.findBySaveGameId(saveGameId), managedClubId);
+
+        return new Career(user.getId(), saveGameId, cup.getId());
     }
 
     private List<SeasonEvent> backgroundMatchEvents(Career c) {
@@ -311,6 +380,78 @@ class BackgroundCompetitionIT {
             assertThat(f.getHomeGoals()).isNotNull();
             assertThat(f.getAwayGoals()).isNotNull();
         });
+    }
+
+    /**
+     * A phased background competition must play its knockout phases, not just its round-robin.
+     *
+     * <p>Before {@code resolveDue} called {@link br.com.carvoeiromanager.competition.PhaseResolver},
+     * a competition the player was not in had its reserved knockout rounds marked processed with
+     * zero fixtures: the bracket never materialized, so there was no champion and nothing for the
+     * promotion slice to read. {@code PhaseResolver} had exactly one production call site and it
+     * was passed the MANAGED event.
+     *
+     * <p>The whole calendar is swept in a <b>single</b> {@code resolveDue} call on purpose. That
+     * puts the last first-phase round and every reserved knockout round in one {@code due} list
+     * inside one transaction, which is what pins the two things the fix depends on:
+     * <ul>
+     *   <li><b>ordering</b> — the (date, competition, round) sort must place each phase's rounds
+     *       ahead of the reserved rounds of the phase after it, so materialization happens before
+     *       the loop reaches the round that needs the fixtures;</li>
+     *   <li><b>flush visibility</b> — the fixtures {@code PhaseResolver} persists must be found by
+     *       the next iteration's {@code findBySaveGameIdAndCompetitionIdAndRound} in the same
+     *       transaction.</li>
+     * </ul>
+     * Driving the season advance by advance would exercise neither: the proportional dating spaces
+     * these rounds days apart, so each would land in its own call and its own transaction.
+     */
+    @Test
+    void oneSweepMaterializesAndPlaysAPhasedBackgroundCompetitionsWholeBracket() {
+        Career c = createPhasedCareer();
+        SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();
+        LocalDate lastBackgroundDate = backgroundMatchEvents(c).stream()
+                .map(SeasonEvent::getEventDate)
+                .max(LocalDate::compareTo).orElseThrow();
+
+        int resolved = backgroundCompetitionService.resolveDue(save, lastBackgroundDate);
+
+        // Every round of this competition, first phase and bracket alike. (The trimmed test seed
+        // ships no other background division, so this count is exactly its own.)
+        assertThat(resolved).isEqualTo(PHASED_UNITS);
+
+        List<CompetitionPhase> phases =
+                competitionPhaseRepository.findByCompetitionIdOrderByOrdinalAsc(c.backgroundCompetitionId());
+        assertThat(phases).hasSize(3);
+
+        List<Fixture> all = fixtureRepository
+                .findBySaveGameIdAndCompetitionId(c.id(), c.backgroundCompetitionId());
+        assertThat(all).hasSize(PHASED_TOTAL_FIXTURES).allMatch(Fixture::isPlayed);
+
+        List<Fixture> semis = fixtureRepository.findBySaveGameIdAndPhaseId(c.id(), phases.get(1).getId());
+        List<Fixture> finalLegs = fixtureRepository.findBySaveGameIdAndPhaseId(c.id(), phases.get(2).getId());
+        assertThat(semis).hasSize(PHASED_SEMIFINAL_FIXTURES).allMatch(Fixture::isPlayed);
+        assertThat(finalLegs).hasSize(PHASED_FINAL_FIXTURES).allMatch(Fixture::isPlayed);
+
+        // The bracket is seeded from the first phase's table, not from an arbitrary set of clubs.
+        List<StandingRow> table = standingsService.computeStandings(
+                save, c.backgroundCompetitionId(), phases.get(0).getId(), null);
+        assertThat(table).hasSize(PHASED_CLUB_COUNT);
+        Set<UUID> semifinalists = semis.stream()
+                .flatMap(f -> java.util.stream.Stream.of(f.getHomeClubId(), f.getAwayClubId()))
+                .collect(Collectors.toSet());
+        assertThat(semifinalists).isEqualTo(table.subList(0, PHASED_QUALIFIERS).stream()
+                .map(StandingRow::clubId).collect(Collectors.toSet()));
+
+        // ...and the chain ends in a decided champion, which is what promotion will read.
+        List<KnockoutTie> finalTies = TieResolver.tiesOf(finalLegs);
+        assertThat(finalTies).hasSize(1);
+        UUID champion = TieResolver.winner(finalTies.get(0));
+        assertThat(champion).isIn(finalLegs.get(0).getHomeClubId(), finalLegs.get(0).getAwayClubId());
+
+        // Still idempotent with phase resolution in the loop: nothing due, nothing re-materialized.
+        assertThat(backgroundCompetitionService.resolveDue(save, lastBackgroundDate)).isZero();
+        assertThat(fixtureRepository.findBySaveGameIdAndCompetitionId(c.id(), c.backgroundCompetitionId()))
+                .hasSize(PHASED_TOTAL_FIXTURES);
     }
 
     @Test

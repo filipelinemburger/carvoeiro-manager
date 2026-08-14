@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.competition.CompetitionClub;
 import br.com.carvoeiromanager.competition.CompetitionClubRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.competition.PhaseResolver;
 import br.com.carvoeiromanager.finance.FinanceService;
 import br.com.carvoeiromanager.match.FixtureSimulator;
 import org.slf4j.Logger;
@@ -35,6 +36,13 @@ public class BackgroundCompetitionService {
      * later round from a table that has not yet been updated by the earlier one. Sequence is
      * useless as a tiebreak here: every background MATCH event carries the same constant
      * ({@link SeasonCalendarGenerator#BACKGROUND_MATCH_SEQUENCE}).
+     *
+     * <p>For a phased competition this ordering carries a second guarantee. Round numbers run
+     * consecutively across phases ({@code SeasonCalendarGenerator.phasedUnits} offsets each phase
+     * by the rounds before it), so every round of a phase sorts ahead of every reserved round of
+     * the phase after it — even when the proportional dating puts them on the same day. That is
+     * what lets {@link br.com.carvoeiromanager.competition.PhaseResolver} materialize the next
+     * phase's fixtures in time for the loop below to find them.
      */
     private static final Comparator<SeasonEvent> BY_DATE_COMPETITION_ROUND =
             Comparator.comparing(SeasonEvent::getEventDate)
@@ -46,17 +54,20 @@ public class BackgroundCompetitionService {
     private final FixtureRepository fixtureRepository;
     private final FixtureSimulator fixtureSimulator;
     private final FinanceService financeService;
+    private final PhaseResolver phaseResolver;
 
     public BackgroundCompetitionService(SeasonEventRepository seasonEventRepository,
                                         CompetitionClubRepository competitionClubRepository,
                                         FixtureRepository fixtureRepository,
                                         FixtureSimulator fixtureSimulator,
-                                        FinanceService financeService) {
+                                        FinanceService financeService,
+                                        PhaseResolver phaseResolver) {
         this.seasonEventRepository = seasonEventRepository;
         this.competitionClubRepository = competitionClubRepository;
         this.fixtureRepository = fixtureRepository;
         this.fixtureSimulator = fixtureSimulator;
         this.financeService = financeService;
+        this.phaseResolver = phaseResolver;
     }
 
     /**
@@ -104,6 +115,25 @@ public class BackgroundCompetitionService {
                     event.getEventDate());
             event.markProcessed();
             seasonEventRepository.save(event);
+            // A background competition can be phased too (Série C: a round-robin first phase and
+            // three knockout phases the player is never in). Its knockout rounds are reserved —
+            // dated, fixture-less — at generation, and only PhaseResolver ever fills them in.
+            // Without this call the reserved rounds are marked processed with zero fixtures and
+            // the bracket never happens: no semifinalists, no champion, nothing for promotion to
+            // read. The resolver keys off the event's own competition and phase and does not care
+            // whether the competition is managed, so this is the same call
+            // SeasonAdvanceService.recordMatchRound makes for the player's own rounds.
+            //
+            // Safe to call after markProcessed(): PhaseResolver.phaseComplete accepts an event
+            // that is EITHER processed OR the one just handled, so both orders agree.
+            //
+            // The newly materialized fixtures are visible to the next iteration's
+            // findBySaveGameIdAndCompetitionIdAndRound because that is a derived (JPQL) query and
+            // Hibernate auto-flushes the pending inserts before running it — and `due` is ordered
+            // (date, competition, round), which puts every round of a phase ahead of the reserved
+            // rounds of the phase after it, so materialization always precedes the round that
+            // needs it.
+            phaseResolver.resolveIfPhaseComplete(save, event);
         }
         if (!due.isEmpty()) {
             log.info("Resolved {} background round(s) through {}", due.size(), throughDate);
