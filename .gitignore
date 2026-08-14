@@ -31,3 +31,7 @@ frontend/.vite/
 .DS_Store
 Thumbs.db
 *.log
+
+# Python bytecode from the seed tooling
+__pycache__/
+*.pyc

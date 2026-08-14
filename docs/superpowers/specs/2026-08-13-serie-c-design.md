@@ -77,6 +77,28 @@ This is byte-for-byte the Catarinense's phase block with `rounds` changed from 1
 production code changes for the format.** `PhaseResolver`, `FinalClassification`, extra time,
 penalties, per-phase standings and the phase-aware competition page all apply unchanged.
 
+### 3.1a Amendment: odd fields, and why the engine changed anyway
+
+The claim above holds for the **finished** competition — 20 clubs is even and needs nothing new. It
+did not hold for the road to get there. The plan grows Série C in four batches of 8 → 13 → 17 → 20,
+and 13 and 17 are odd. No seeded competition had ever been odd-sized, so `FixtureScheduler` simply
+rejected them (`teamCount must be even and >= 2`) and career creation died in
+`SeasonCalendarGenerator` the moment batch 2 landed.
+
+That is a flaw in the plan's batch sizes, not in the seed data — but the underlying gap is real and
+independent of Série C. Real state championships routinely run odd fields, and the roadmap includes
+them. So `FixtureScheduler` now seats an odd field on a phantom slot and gives whoever draws it a
+bye, which costs a round: a 13-club single round-robin is **13 rounds**, not 12. `roundsPerLeg()` is
+now the single source of that arithmetic and `SeedPhaseValidator` calls it instead of assuming
+`members - 1`.
+
+**Even fields are provably unchanged** — same pairings, same rounds, same hosts. The home/away
+tie-break only becomes position-aware when a bye is actually in play, because the bye is what
+desynchronises the running match counter.
+
+Landed in `6ffa78e` alongside batch 2. Recorded here so a later reader does not find production
+code in a slice the spec advertised as data-only.
+
 | | value |
 |---|---|
 | Match-units | 25 (19 + 2 + 2 + 2) |
