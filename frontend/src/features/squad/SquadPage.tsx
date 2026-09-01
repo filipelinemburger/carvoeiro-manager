@@ -9,13 +9,14 @@ import {
 import HealingIcon from '@mui/icons-material/Healing'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
-import { getSquad, getLineup, setLineup, renewContract, listPlayer, unlistPlayer } from '../../api/career'
+import { getSquad, getLineup, setLineup, renewContract, listPlayer, unlistPlayer, getFinances, terminateContract } from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import type { PlayerResponse, RoleArchetype, RoleFocus, DetailedPosition, PlayerInstruction, LineupStarter, SquadResponse } from '../../api/types'
 import { TacticsPanel } from './TacticsPanel'
 import { PlayerDetails } from './PlayerDetails'
+import { TerminateDialog } from './TerminateDialog'
 import { FitnessBar } from './FitnessBar'
 import { MoodChip } from './MoodChip'
 import { teamMorale } from './morale'
@@ -163,6 +164,7 @@ export function SquadPage() {
   const [instructions, setInstructions] = useState<Record<string, PlayerInstruction | ''>>({})
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [detailsPlayerId, setDetailsPlayerId] = useState<string | null>(null)
+  const [terminatingId, setTerminatingId] = useState<string | null>(null)
   const [tab, setTab] = useState(0)
   const [trainingAssignments, setTrainingAssignments] = useState<TrainingAssignmentsState>({})
   // playerId -> formation slot index (0 = GK). Keys ⊆ selected; values unique. The pitch
@@ -177,6 +179,15 @@ export function SquadPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['squad', saveGameId, clubId],
     queryFn: () => getSquad(saveGameId, clubId, token ?? ''),
+    enabled: Boolean(saveGameId && clubId && token),
+    staleTime: Infinity,
+  })
+
+  // Same key FinancesPage already uses and TransferMarketPage already invalidates — the cache
+  // is shared, so the balance shown here is never a separate fetch from the Finances page.
+  const finances = useQuery({
+    queryKey: ['finances', saveGameId, clubId],
+    queryFn: () => getFinances(saveGameId, clubId, token ?? ''),
     enabled: Boolean(saveGameId && clubId && token),
     staleTime: Infinity,
   })
@@ -336,6 +347,18 @@ export function SquadPage() {
       if (context?.previous) queryClient.setQueryData(['squad', saveGameId, clubId], context.previous)
     },
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] }) },
+  })
+
+  const terminateMut = useMutation({
+    mutationFn: (playerId: string) => terminateContract(saveGameId, playerId, token ?? ''),
+    onSuccess: () => {
+      setTerminatingId(null)
+      setDetailsPlayerId(null)
+      void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] })
+      void queryClient.invalidateQueries({ queryKey: ['finances', saveGameId, clubId] })
+      void queryClient.invalidateQueries({ queryKey: ['freeAgents', saveGameId] })
+      void queryClient.invalidateQueries({ queryKey: ['lineup', saveGameId, clubId] })
+    },
   })
 
   const listMut = useMutation({
@@ -744,6 +767,35 @@ export function SquadPage() {
     )
   }
 
+  /** Mirrors SquadRules.MIN_SQUAD_SIZE on the backend; the server is still the authority. */
+  const MIN_SQUAD_SIZE = 14
+
+  /** Why this player cannot be released right now, or null when he can be. Explains only —
+   * the backend enforces all three rules regardless. */
+  function terminationBlockedReason(player: PlayerResponse): string | null {
+    const senior = players
+    if (senior.length <= MIN_SQUAD_SIZE) {
+      return `O elenco ficaria abaixo do mínimo de ${MIN_SQUAD_SIZE} jogadores.`
+    }
+    if (player.position === 'GK' && senior.filter(p => p.position === 'GK').length <= 1) {
+      return 'Este é o seu último goleiro.'
+    }
+    const balance = finances.data?.balance
+    if (balance !== undefined && balance < (player.terminationFee ?? 0)) {
+      return 'Saldo insuficiente para a multa.'
+    }
+    return null
+  }
+
+  function terminateButton(player: PlayerResponse) {
+    return (
+      <Button size="small" color="error" disabled={terminateMut.isPending}
+        onClick={() => setTerminatingId(player.id)}>
+        Rescindir
+      </Button>
+    )
+  }
+
   function listingButton(player: PlayerResponse) {
     const busy = listMut.isPending || unlistMut.isPending
     return player.transferListed ? (
@@ -961,8 +1013,25 @@ export function SquadPage() {
         instructionControl={isMobile && detailsPlayer && selected.includes(detailsPlayer.id) && detailsPlayer.position !== 'GK'
           ? instructionSelect(detailsPlayer)
           : undefined}
-        contractAction={detailsPlayer ? renewButton(detailsPlayer) : undefined}
+        contractAction={detailsPlayer ? (
+          <Stack direction="row" spacing={1}>
+            {renewButton(detailsPlayer)}
+            {terminateButton(detailsPlayer)}
+          </Stack>
+        ) : undefined}
         listingAction={detailsPlayer ? listingButton(detailsPlayer) : undefined}
+      />
+
+      <TerminateDialog
+        player={players.find(p => p.id === terminatingId) ?? null}
+        balance={finances.data?.balance}
+        blockedReason={(() => {
+          const p = players.find(x => x.id === terminatingId)
+          return p ? terminationBlockedReason(p) : null
+        })()}
+        pending={terminateMut.isPending}
+        onConfirm={() => { if (terminatingId) terminateMut.mutate(terminatingId) }}
+        onClose={() => setTerminatingId(null)}
       />
 
       {/* Opened by tapping a pitch slot in the Táticas tab (spec §5.1/§5.2). */}
@@ -1017,6 +1086,23 @@ export function SquadPage() {
           sx={{ width: '100%' }}
         >
           {errorMessage(listMut.error ?? unlistMut.error, 'Erro ao atualizar a lista de transferências.')}
+        </Alert>
+      </Snackbar>
+
+      {/* Termination failure, shown the same way as the listing/unlisting toast above. */}
+      <Snackbar
+        open={terminateMut.isError}
+        autoHideDuration={4000}
+        onClose={() => terminateMut.reset()}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="error"
+          variant="filled"
+          onClose={() => terminateMut.reset()}
+          sx={{ width: '100%' }}
+        >
+          {errorMessage(terminateMut.error, 'Erro ao rescindir o contrato.')}
         </Alert>
       </Snackbar>
     </Box>

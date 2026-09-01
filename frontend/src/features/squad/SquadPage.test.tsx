@@ -17,11 +17,13 @@ vi.mock('../../api/career', () => ({
   renewContract: vi.fn(),
   listPlayer: vi.fn(),
   unlistPlayer: vi.fn(),
+  getFinances: vi.fn(),
+  terminateContract: vi.fn(),
 }))
 
 vi.mock('../../lib/useIsMobile', () => ({ useIsMobile: vi.fn(() => false) }))
 
-import { getSquad, getLineup, setLineup, getTactics, renewContract, listPlayer, unlistPlayer } from '../../api/career'
+import { getSquad, getLineup, setLineup, getTactics, renewContract, listPlayer, unlistPlayer, getFinances, terminateContract } from '../../api/career'
 
 const mockGetSquad = vi.mocked(getSquad)
 const mockGetLineup = vi.mocked(getLineup)
@@ -29,10 +31,12 @@ const mockSetLineup = vi.mocked(setLineup)
 const mockRenewContract = vi.mocked(renewContract)
 const mockListPlayer = vi.mocked(listPlayer)
 const mockUnlistPlayer = vi.mocked(unlistPlayer)
+const mockGetFinances = vi.mocked(getFinances)
+const mockTerminateContract = vi.mocked(terminateContract)
 
 // `as const` narrows injurySeverity to the literal 'NONE' so it satisfies
 // PlayerResponse's union type (not widened to string) when spread into fixtures.
-const STATE = { detailedPosition: null, detailedPositionLabel: null, form: 0, morale: 0, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0, injurySeverity: 'NONE' as const, eligible: true, role: null, contractYears: 2, value: 1500000, wageDemand: 90000, fitness: 100, attributes: [
+const STATE = { detailedPosition: null, detailedPositionLabel: null, form: 0, morale: 0, yellowCards: 0, suspensionRemaining: 0, injuryMatches: 0, injurySeverity: 'NONE' as const, eligible: true, role: null, contractYears: 2, value: 1500000, wageDemand: 90000, terminationFee: 5880000, fitness: 100, attributes: [
   { key: 'FINALIZACAO', label: 'Finalização', group: 'TECNICO' as const, value: 55 },
   { key: 'VISAO', label: 'Visão de jogo', group: 'MENTAL' as const, value: 50 },
   { key: 'VELOCIDADE', label: 'Velocidade', group: 'FISICO' as const, value: 60 },
@@ -170,6 +174,7 @@ describe('SquadPage', () => {
       mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', attackZone: 'MISTO', pressing: 'MEDIUM', marking: 'ZONAL',
       penaltyTakerId: null, freekickTakerId: null, cornerTakerId: null,
     })
+    mockGetFinances.mockResolvedValue({ balance: 20000000, transactions: [] })
     localStorage.setItem('carvoeiro_manager_token', 'test-token')
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
   })
@@ -552,6 +557,41 @@ describe('SquadPage', () => {
 
     // Rolled back once the rejection settles.
     await waitFor(() => expect(within(dialog).getByText(/2 ano\(s\)/)).toBeInTheDocument())
+  })
+
+  it('opens the termination dialog from the contract tab and terminates on confirm', async () => {
+    mockTerminateContract.mockResolvedValue({
+      playerId: 'p-m1', playerName: 'Meio Um', fee: 5880000, newBalance: 14120000,
+    })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Meio Um'))
+    fireEvent.click(screen.getByText('Meio Um'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /^rescindir$/i }))
+
+    // TerminateDialog renders its own MUI Dialog on top of the still-open details dialog, so a
+    // bare `dialog` role query is now ambiguous — scope by the terminate dialog's own content
+    // (its data-testid and its own buttons) instead.
+    expect(screen.getByTestId('termination-fee')).toHaveTextContent('5.880.000')
+    fireEvent.click(screen.getByRole('button', { name: /confirmar rescisão/i }))
+
+    await waitFor(() =>
+      expect(mockTerminateContract).toHaveBeenCalledWith('sg-1', 'p-m1', expect.any(String)))
+  })
+
+  it('blocks termination when the balance will not cover the fee', async () => {
+    mockGetFinances.mockResolvedValue({ balance: 1000, transactions: [] })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Meio Um'))
+    fireEvent.click(screen.getByText('Meio Um'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /^rescindir$/i }))
+
+    expect(screen.getByRole('button', { name: /confirmar rescisão/i })).toBeDisabled()
+    expect(screen.getByText(/saldo insuficiente/i)).toBeInTheDocument()
+    expect(mockTerminateContract).not.toHaveBeenCalled()
   })
 
   it('shows a "Listado" badge for a listed player and lets the user unlist them', async () => {
@@ -1117,6 +1157,7 @@ describe('SquadPage — slot picker and Função/Foco selects', () => {
       mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', attackZone: 'MISTO', pressing: 'MEDIUM', marking: 'ZONAL',
       penaltyTakerId: null, freekickTakerId: null, cornerTakerId: null,
     })
+    mockGetFinances.mockResolvedValue({ balance: 20000000, transactions: [] })
     localStorage.setItem('carvoeiro_manager_token', 'test-token')
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
   })
