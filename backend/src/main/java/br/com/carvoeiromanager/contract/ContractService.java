@@ -2,9 +2,15 @@ package br.com.carvoeiromanager.contract;
 
 import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.club.Club;
+import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.common.SquadDeparture;
 import br.com.carvoeiromanager.common.SquadRules;
+import br.com.carvoeiromanager.finance.FinanceTransaction;
+import br.com.carvoeiromanager.finance.FinanceTransactionRepository;
+import br.com.carvoeiromanager.finance.FinanceTransactionType;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.staff.StaffEffectsService;
@@ -31,19 +37,28 @@ public class ContractService {
     private final TransferWindow transferWindow;
     private final StaffEffectsService staffEffectsService;
     private final PreContractAgreementRepository preContractAgreementRepository;
+    private final ClubRepository clubRepository;
+    private final FinanceTransactionRepository financeTransactionRepository;
+    private final SquadDeparture squadDeparture;
 
     public ContractService(SaveGameService saveGameService,
                            PlayerRepository playerRepository,
                            ContractValuation contractValuation,
                            TransferWindow transferWindow,
                            StaffEffectsService staffEffectsService,
-                           PreContractAgreementRepository preContractAgreementRepository) {
+                           PreContractAgreementRepository preContractAgreementRepository,
+                           ClubRepository clubRepository,
+                           FinanceTransactionRepository financeTransactionRepository,
+                           SquadDeparture squadDeparture) {
         this.saveGameService = saveGameService;
         this.playerRepository = playerRepository;
         this.contractValuation = contractValuation;
         this.transferWindow = transferWindow;
         this.staffEffectsService = staffEffectsService;
         this.preContractAgreementRepository = preContractAgreementRepository;
+        this.clubRepository = clubRepository;
+        this.financeTransactionRepository = financeTransactionRepository;
+        this.squadDeparture = squadDeparture;
     }
 
     @Transactional
@@ -86,6 +101,55 @@ public class ContractService {
         player.setClubId(save.getManagedClubId()); // joins the squad; no fee, no ledger
         playerRepository.save(player);
         return toResponse(player);
+    }
+
+    /**
+     * Tears up a player's contract: the club buys out half of what it still owes, the player
+     * leaves as a free agent, and the dressing room takes it badly. Unlike signing, this is
+     * allowed with the transfer window shut — a termination is not a transfer, and a bloated
+     * squad in mid-season is exactly when it is needed.
+     */
+    @Transactional
+    public TerminationResponse terminateContract(UUID saveGameId, UUID userId, UUID playerId) {
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        UUID managedClubId = save.getManagedClubId();
+
+        Player player = playerRepository.findById(playerId)
+                .filter(p -> p.getSaveGameId().equals(saveGameId))
+                .filter(p -> managedClubId.equals(p.getClubId()))
+                .filter(p -> !p.isYouthProspect())
+                .orElseThrow(() -> new ApiException(ErrorCode.PLAYER_NOT_FOUND,
+                        "Player not found in your professional squad"));
+
+        List<Player> squad = squadDeparture.seniorSquad(managedClubId);
+        squadDeparture.requireDepartureAllowed(squad, player);
+
+        BigDecimal fee = contractValuation.terminationFee(
+                player.getOverall(), player.getAge(), player.getContractYears());
+        Club club = clubRepository.findById(managedClubId).orElseThrow();
+        if (club.getBalance().compareTo(fee) < 0) {
+            throw new ApiException(ErrorCode.INSUFFICIENT_FUNDS,
+                    "The club cannot afford the termination fee of " + fee);
+        }
+
+        club.adjustBalance(fee.negate());
+        clubRepository.save(club);
+        financeTransactionRepository.save(FinanceTransaction.create(
+                saveGameId, managedClubId, save.getSeasonYear(), save.getCurrentRound(),
+                FinanceTransactionType.TERMINATION, fee.negate(), "Rescisão: " + player.getName()));
+
+        // The dressing room reads a release as a threat, so everyone still there takes the hit.
+        List<Player> remaining = squad.stream()
+                .filter(p -> !p.getId().equals(player.getId()))
+                .toList();
+        remaining.forEach(p -> p.applyMorale(-1));
+        playerRepository.saveAll(remaining);
+
+        player.releaseFrom(managedClubId);
+        playerRepository.save(player);
+        squadDeparture.cleanManagedLineup(saveGameId, managedClubId, player.getId());
+
+        return new TerminationResponse(player.getId(), player.getName(), fee, club.getBalance());
     }
 
     private void requireWindowOpen(SaveGame save) {

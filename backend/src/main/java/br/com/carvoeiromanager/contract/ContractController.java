@@ -43,4 +43,11 @@ public class ContractController {
         return ResponseEntity.ok(contractService.signFreeAgent(
                 saveGameId, userId, playerId, request.wage(), request.contractYears()));
     }
+
+    @PostMapping("/players/{playerId}/terminate")
+    public ResponseEntity<TerminationResponse> terminate(
+            @PathVariable UUID saveGameId, @PathVariable UUID playerId,
+            @CurrentUser UUID userId) {
+        return ResponseEntity.ok(contractService.terminateContract(saveGameId, userId, playerId));
+    }
 }
