@@ -136,4 +136,24 @@ class RolloverContractsIT {
         assertThat(playerRepository.findBySaveGameIdAndClubIdIsNull(c.id()).size())
                 .isLessThanOrEqualTo(poolBefore);
     }
+
+    @Test
+    void aReleaseMarkExpiresAtRollover() {
+        Career c = playToSeasonEnd();
+        List<Player> squad = playerRepository.findByClubId(c.clubId());
+        squad.forEach(p -> p.setContractYears(5));   // keep everyone else off the lapse path
+        Player released = probePlayer(c.id(), squad);
+        playerRepository.saveAll(squad);
+
+        released.releaseFrom(c.clubId());
+        playerRepository.save(released);
+        assertThat(playerRepository.findById(released.getId()).orElseThrow().getReleasedByClubId())
+                .isEqualTo(c.clubId());
+
+        rolloverService.rollover(c.id(), c.userId());
+
+        Player reloaded = playerRepository.findById(released.getId()).orElseThrow();
+        assertThat(reloaded.getReleasedByClubId()).isNull();
+        assertThat(reloaded.isFreeAgent()).isTrue();
+    }
 }

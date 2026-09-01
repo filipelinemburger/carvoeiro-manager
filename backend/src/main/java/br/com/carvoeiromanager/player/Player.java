@@ -127,6 +127,14 @@ public class Player {
     @Column(name = "listed_reason", length = 16)
     private ListedReason listedReason;
 
+    /**
+     * The club that terminated this player's contract, or null. Blocks that club — and only
+     * that club — from re-signing him as a free agent, until {@link #resetSeasonState()}
+     * clears it at rollover.
+     */
+    @Column(name = "released_by_club_id")
+    private UUID releasedByClubId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "training_focus", length = 20)
     private Attribute trainingFocus;
@@ -395,6 +403,7 @@ public class Player {
         this.lastMatchDate = null;
         this.transferListed = false;
         this.listedReason = null;
+        this.releasedByClubId = null;
         this.seasonAppearances = 0;
         this.trainingProgress = 0;
     }
@@ -409,6 +418,7 @@ public class Player {
 
     public boolean isTransferListed() { return transferListed; }
     public ListedReason getListedReason() { return listedReason; }
+    public UUID getReleasedByClubId() { return releasedByClubId; }
 
     public Attribute getTrainingFocus() { return trainingFocus; }
     public TrainingIntensity getTrainingIntensity() { return trainingIntensity; }
@@ -435,5 +445,18 @@ public class Player {
     public void unlist() {
         this.transferListed = false;
         this.listedReason = null;
+    }
+
+    /**
+     * Terminates this player's contract on behalf of {@code clubId}: he leaves the squad as a
+     * free agent with no terms, carrying the mark that bars that club from re-signing him this
+     * season. The fee, the ledger row and the squad's morale are the service's business.
+     */
+    public void releaseFrom(UUID clubId) {
+        this.clubId = null;
+        this.wage = BigDecimal.ZERO;
+        this.contractYears = 0;
+        this.releasedByClubId = clubId;
+        unlist();
     }
 }
