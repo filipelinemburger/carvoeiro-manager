@@ -97,6 +97,11 @@ public class ContractService {
                 .filter(Player::isFreeAgent)
                 .orElseThrow(() -> new ApiException(ErrorCode.PLAYER_NOT_FOUND, "Free agent not found"));
 
+        if (save.getManagedClubId().equals(player.getReleasedByClubId())) {
+            throw new ApiException(ErrorCode.INVALID_TRANSFER,
+                    "You released this player; he cannot return until next season");
+        }
+
         applyTerms(player, wage, contractYears, save.getManagedClubId());   // validates length/wage + acceptance
         player.setClubId(save.getManagedClubId()); // joins the squad; no fee, no ledger
         playerRepository.save(player);

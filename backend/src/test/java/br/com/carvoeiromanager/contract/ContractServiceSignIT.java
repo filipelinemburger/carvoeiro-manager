@@ -6,11 +6,14 @@ import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.club.Club;
+import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
+import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +23,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +40,7 @@ class ContractServiceSignIT {
     @Autowired ContractService contractService;
     @Autowired ContractValuation contractValuation;
     @Autowired PlayerRepository playerRepository;
+    @Autowired ClubRepository clubRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -125,6 +130,48 @@ class ContractServiceSignIT {
 
         assertThat(r.contractYears()).isEqualTo(3);
         assertThat(playerRepository.findById(fa.playerId()).orElseThrow().getClubId())
+                .isEqualTo(c.clubId());
+    }
+
+    @Test
+    void aPlayerThisClubReleasedCannotBeReSignedThisSeason() {
+        Career c = createCareer();
+        Club club = clubRepository.findById(c.clubId()).orElseThrow();
+        club.adjustBalance(new BigDecimal("1000000000").subtract(club.getBalance()));
+        clubRepository.save(club);
+
+        Player p = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).stream()
+                .filter(o -> o.getPosition() != Position.GK)
+                .min(Comparator.comparing(Player::getId)).orElseThrow();
+        contractService.terminateContract(c.id(), c.userId(), p.getId());
+
+        BigDecimal demand = contractValuation.wageDemand(p.getOverall(), p.getAge());
+        assertThatThrownBy(() -> contractService.signFreeAgent(c.id(), c.userId(), p.getId(), demand, 3))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.INVALID_TRANSFER));
+
+        assertThat(playerRepository.findById(p.getId()).orElseThrow().isFreeAgent()).isTrue();
+    }
+
+    @Test
+    void aPlayerAnotherClubReleasedSignsNormally() {
+        Career c = createCareer();
+        Player free = playerRepository.findBySaveGameIdAndClubIdIsNull(c.id()).stream()
+                .min(Comparator.comparing(Player::getId)).orElseThrow();
+        UUID rivalClubId = playerRepository.findBySaveGameId(c.id()).stream()
+                .map(Player::getClubId)
+                .filter(id -> id != null && !id.equals(c.clubId()))
+                .findFirst().orElseThrow();
+        free.releaseFrom(rivalClubId);   // released elsewhere; our club is unaffected
+        playerRepository.save(free);
+
+        BigDecimal demand = contractValuation.wageDemand(free.getOverall(), free.getAge())
+                .multiply(new BigDecimal("2"));   // clear any scout discount comfortably
+
+        contractService.signFreeAgent(c.id(), c.userId(), free.getId(), demand, 3);
+
+        assertThat(playerRepository.findById(free.getId()).orElseThrow().getClubId())
                 .isEqualTo(c.clubId());
     }
 }
