@@ -3,12 +3,10 @@ package br.com.carvoeiromanager.transfer;
 import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
+import br.com.carvoeiromanager.common.SquadDeparture;
 import br.com.carvoeiromanager.finance.FinanceTransaction;
 import br.com.carvoeiromanager.finance.FinanceTransactionRepository;
 import br.com.carvoeiromanager.finance.FinanceTransactionType;
-import br.com.carvoeiromanager.match.Lineup;
-import br.com.carvoeiromanager.match.LineupPlayerRepository;
-import br.com.carvoeiromanager.match.LineupRepository;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.watchlist.WatchlistNotifier;
@@ -29,22 +27,19 @@ public class TransferExecutor {
     private final PlayerRepository playerRepository;
     private final ClubRepository clubRepository;
     private final FinanceTransactionRepository financeTransactionRepository;
-    private final LineupRepository lineupRepository;
-    private final LineupPlayerRepository lineupPlayerRepository;
     private final WatchlistNotifier watchlistNotifier;
+    private final SquadDeparture squadDeparture;
 
     public TransferExecutor(PlayerRepository playerRepository,
                             ClubRepository clubRepository,
                             FinanceTransactionRepository financeTransactionRepository,
-                            LineupRepository lineupRepository,
-                            LineupPlayerRepository lineupPlayerRepository,
-                            WatchlistNotifier watchlistNotifier) {
+                            WatchlistNotifier watchlistNotifier,
+                            SquadDeparture squadDeparture) {
         this.playerRepository = playerRepository;
         this.clubRepository = clubRepository;
         this.financeTransactionRepository = financeTransactionRepository;
-        this.lineupRepository = lineupRepository;
-        this.lineupPlayerRepository = lineupPlayerRepository;
         this.watchlistNotifier = watchlistNotifier;
+        this.squadDeparture = squadDeparture;
     }
 
     public void execute(SaveGame saveGame, TransferOffer offer, BigDecimal fee) {
@@ -96,7 +91,7 @@ public class TransferExecutor {
             record(saveGame, FinanceTransactionType.TRANSFER_OUT, fee,
                     "Venda: " + player.getName());
             // The sold player can no longer be in the managed lineup (no-cascade FK safety).
-            cleanManagedLineup(saveGameId, managedClubId, player.getId());
+            squadDeparture.cleanManagedLineup(saveGameId, managedClubId, player.getId());
         }
 
         // Watchlist: a watched rival moving to another club is the "you missed out" alert.
@@ -106,19 +101,6 @@ public class TransferExecutor {
             watchlistNotifier.notifySold(saveGameId, saveGame.getCurrentDate(), player,
                     buyer.getName(), fee);
         }
-    }
-
-    private void cleanManagedLineup(UUID saveGameId, UUID managedClubId, UUID playerId) {
-        lineupRepository.findBySaveGameIdAndClubId(saveGameId, managedClubId).ifPresent(lineup -> {
-            lineupPlayerRepository.deleteByLineupIdAndPlayerId(lineup.getId(), playerId);
-            boolean takerChanged = false;
-            if (playerId.equals(lineup.getPenaltyTakerId())) { lineup.setPenaltyTakerId(null); takerChanged = true; }
-            if (playerId.equals(lineup.getFreekickTakerId())) { lineup.setFreekickTakerId(null); takerChanged = true; }
-            if (playerId.equals(lineup.getCornerTakerId())) { lineup.setCornerTakerId(null); takerChanged = true; }
-            if (takerChanged) {
-                lineupRepository.save(lineup);
-            }
-        });
     }
 
     private void record(SaveGame saveGame, FinanceTransactionType type, BigDecimal amount, String description) {

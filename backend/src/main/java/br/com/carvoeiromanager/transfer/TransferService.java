@@ -8,13 +8,13 @@ import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.common.PageResponse;
+import br.com.carvoeiromanager.common.SquadDeparture;
 import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.contract.ContractValuation;
 import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.player.ListedReason;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.watchlist.WatchlistNotifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,8 +37,6 @@ import java.util.stream.Collectors;
 @Service
 public class TransferService {
 
-    static final int MIN_SQUAD_SIZE = 14;
-
     private static final double BID_CHANCE = 0.15;
     private static final double LISTED_BID_CHANCE = 0.45;
     private static final int MAX_BIDS_PER_ROUND = 3;
@@ -58,6 +56,7 @@ public class TransferService {
     private final AiTransferEngine aiTransferEngine;
     private final SellerContextFactory sellerContextFactory;
     private final WatchlistNotifier watchlistNotifier;
+    private final SquadDeparture squadDeparture;
 
     public TransferService(SaveGameService saveGameService,
                            SaveGameRepository saveGameRepository,
@@ -73,7 +72,8 @@ public class TransferService {
                            AiListingEngine aiListingEngine,
                            AiTransferEngine aiTransferEngine,
                            SellerContextFactory sellerContextFactory,
-                           WatchlistNotifier watchlistNotifier) {
+                           WatchlistNotifier watchlistNotifier,
+                           SquadDeparture squadDeparture) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.playerRepository = playerRepository;
@@ -89,6 +89,7 @@ public class TransferService {
         this.aiTransferEngine = aiTransferEngine;
         this.sellerContextFactory = sellerContextFactory;
         this.watchlistNotifier = watchlistNotifier;
+        this.squadDeparture = squadDeparture;
     }
 
     /** Convenience overload for callers that don't need filtering/paging (e.g. internal checks). */
@@ -381,14 +382,7 @@ public class TransferService {
     }
 
     private void requireSellAllowed(UUID managedClubId, Player player) {
-        List<Player> squad = playerRepository.findByClubIdAndYouthProspectFalse(managedClubId);
-        if (squad.size() <= MIN_SQUAD_SIZE) {
-            throw new ApiException(ErrorCode.SQUAD_TOO_SMALL, "Squad would be too small");
-        }
-        if (player.getPosition() == Position.GK
-                && squad.stream().filter(p -> p.getPosition() == Position.GK).count() <= 1) {
-            throw new ApiException(ErrorCode.SQUAD_TOO_SMALL, "Cannot sell your last goalkeeper");
-        }
+        squadDeparture.requireDepartureAllowed(squadDeparture.seniorSquad(managedClubId), player);
     }
 
     // ---- shared helpers (also used by Task 7's selling methods) ----

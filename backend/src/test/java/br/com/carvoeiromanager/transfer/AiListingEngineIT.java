@@ -6,6 +6,7 @@ import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
+import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.player.ListedReason;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
@@ -64,7 +65,7 @@ class AiListingEngineIT {
         Club club = clubRepository.findBySaveGameId(c.id()).stream()
                 .filter(cl -> "BRU".equals(cl.getShortName())).findFirst().orElseThrow();
         List<Player> squad = new ArrayList<>();
-        for (int i = 0; i < TransferService.MIN_SQUAD_SIZE; i++) {
+        for (int i = 0; i < SquadRules.MIN_SQUAD_SIZE; i++) {
             squad.add(Player.create(c.id(), club.getId(), "P-" + UUID.randomUUID(), Position.ATT,
                     25, "Brasil", 60, 60, 60, 60, 60, 60, 60));
         }

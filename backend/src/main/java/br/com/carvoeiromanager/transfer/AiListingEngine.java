@@ -2,6 +2,7 @@ package br.com.carvoeiromanager.transfer;
 
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
+import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.player.ListedReason;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
@@ -62,7 +63,7 @@ public class AiListingEngine {
 
     private void refreshClubListings(Club club, int currentRound, UUID saveGameId, LocalDate eventDate) {
         List<Player> squad = playerRepository.findByClubIdAndYouthProspectFalse(club.getId());
-        if (squad.size() <= TransferService.MIN_SQUAD_SIZE) {
+        if (squad.size() <= SquadRules.MIN_SQUAD_SIZE) {
             return;
         }
 

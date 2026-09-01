@@ -192,7 +192,7 @@ public class AiTransferEngine {
 
     /** The seller keeps a squad of at least MIN_SQUAD_SIZE and at least one goalkeeper. */
     private boolean sellerCanLet(Player candidate, List<Player> sellerSquad) {
-        if (sellerSquad.size() - 1 < TransferService.MIN_SQUAD_SIZE) {
+        if (sellerSquad.size() - 1 < SquadRules.MIN_SQUAD_SIZE) {
             return false;
         }
         if (candidate.getPosition() == Position.GK) {

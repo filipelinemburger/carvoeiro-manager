@@ -10,6 +10,7 @@ import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.match.LiveMatch;
 import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.player.Player;
@@ -236,10 +237,10 @@ class TransferServiceSellingIT {
         Career c = createCareer();
         // Trim seniors to exactly the minimum so the squad sits on the floor.
         List<Player> seniors = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId());
-        List<Player> drop = seniors.subList(TransferService.MIN_SQUAD_SIZE, seniors.size());
+        List<Player> drop = seniors.subList(SquadRules.MIN_SQUAD_SIZE, seniors.size());
         playerRepository.deleteAll(drop);
         List<Player> kept = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId());
-        assertThat(kept).hasSize(TransferService.MIN_SQUAD_SIZE);
+        assertThat(kept).hasSize(SquadRules.MIN_SQUAD_SIZE);
 
         // Add prospects that MUST NOT be counted toward the squad minimum.
         for (int i = 0; i < 5; i++) {

@@ -8,6 +8,7 @@ import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
+import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.player.ListedReason;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
@@ -276,8 +277,8 @@ class AiTransferEngineIT {
         Player target = player(c, seller, Position.ATT, 70);
         target.listForTransfer(ListedReason.SURPLUS);
         sellerSquad.add(target);
-        sellerSquad.addAll(filler(c, seller, Position.ATT, TransferService.MIN_SQUAD_SIZE - 1, 60));
-        assertThat(sellerSquad).hasSize(TransferService.MIN_SQUAD_SIZE);
+        sellerSquad.addAll(filler(c, seller, Position.ATT, SquadRules.MIN_SQUAD_SIZE - 1, 60));
+        assertThat(sellerSquad).hasSize(SquadRules.MIN_SQUAD_SIZE);
         replaceSquad(c, seller, sellerSquad);
         setBalance(seller, new BigDecimal("1000000.00"));
 
