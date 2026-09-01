@@ -69,6 +69,12 @@ public class FinanceCalculator {
     /** Operational cost per stadium seat per match played (home or away). */
     private static final BigDecimal MATCH_COST_PER_SEAT = new BigDecimal("2");
     private static final BigDecimal PRIZE_BASE = new BigDecimal("500000");
+    /**
+     * Charged months in one season (Jan–Oct). The whole monthly model — wages, sponsorship,
+     * upkeep — bills this many times per season, so anything priced in "a season of wages"
+     * must multiply by this and not by 12.
+     */
+    public static final int MONTHS_PER_SEASON = 10;
 
     // --- Legacy per-round constants (kept for backward-compat uses in tests/seeding) ---
     private static final BigDecimal SPONSORSHIP_PER_REP = new BigDecimal("8000");

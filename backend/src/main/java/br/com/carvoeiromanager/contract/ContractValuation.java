@@ -15,6 +15,8 @@ import java.math.RoundingMode;
 public class ContractValuation {
 
     static final BigDecimal DEMAND_PREMIUM = new BigDecimal("1.15");
+    /** Share of the remaining wage bill a club buys out to tear up a contract. */
+    static final BigDecimal TERMINATION_FACTOR = new BigDecimal("0.50");
     static final int DEFAULT_CONTRACT_YEARS = 3;
     static final int MIN_CONTRACT_YEARS = 1;
     static final int MAX_CONTRACT_YEARS = 5;
@@ -28,6 +30,18 @@ public class ContractValuation {
     public BigDecimal wageDemand(int overall, int age) {
         return financeCalculator.weeklyWage(overall, age)
                 .multiply(DEMAND_PREMIUM).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * What it costs to tear up a contract with {@code contractYears} still to run: half of the
+     * wages the club would otherwise still pay. Denominated in monthly wages so it lands in the
+     * same currency as the wage bill it replaces.
+     */
+    public BigDecimal terminationFee(int overall, int age, int contractYears) {
+        return financeCalculator.monthlyWage(overall, age)
+                .multiply(BigDecimal.valueOf((long) contractYears * FinanceCalculator.MONTHS_PER_SEASON))
+                .multiply(TERMINATION_FACTOR)
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     public boolean acceptsWage(int overall, int age, BigDecimal offered) {
