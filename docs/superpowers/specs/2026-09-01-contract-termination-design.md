@@ -169,10 +169,13 @@ be undone.
   re-signed by this club until next season. Confirm button in `color="error"`.
 - **Disabled with a visible reason** when termination is impossible — squad at the minimum, player
   is the last goalkeeper, or the balance will not cover the fee. Failing only after the click, via
-  an error toast, would be worse than the current UI. These three reasons are derived client-side
-  from data the squad page already holds (the squad list and the club balance); only the fee itself
-  comes from the server. The backend still enforces all three — the client-side check is for
-  explanation, never for authority.
+  an error toast, would be worse than the current UI. The squad-size and goalkeeper reasons come
+  from the squad list `SquadPage` already holds; the fee comes from the server on each player. The
+  **balance does not** — `SquadPage` currently loads only `squad` and `lineup`, so it must also read
+  the shared `['finances', saveGameId, clubId]` query that `FinancesPage` already populates and
+  `TransferMarketPage` already invalidates. That same query is what lets the dialog state the
+  resulting balance. The backend still enforces all three rules — the client-side check explains,
+  it never authorises.
 
 `PlayerResponse` gains `terminationFee: BigDecimal`, precomputed server-side exactly as `wageDemand`
 already is. No preview endpoint, no extra request when the dialog opens.
