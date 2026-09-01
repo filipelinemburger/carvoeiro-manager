@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.contract.ContractValuation;
 import br.com.carvoeiromanager.player.InjurySeverity;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
@@ -29,6 +30,25 @@ class SquadContractInfoIT {
     @Autowired SaveGameService saveGameService;
     @Autowired LineupService lineupService;
     @Autowired PlayerRepository playerRepository;
+    @Autowired ContractValuation contractValuation;
+
+    @Test
+    void everySquadPlayerCarriesHisTerminationFee() {
+        User user = User.create("termfee_" + UUID.randomUUID(), "hash");
+        userRepository.save(user);
+        SaveGameResponse save = saveGameService.createCareer(user.getId());
+
+        SquadResponse squad = lineupService.getSquad(save.id(), save.managedClubId(), user.getId());
+
+        assertThat(squad.players()).isNotEmpty();
+        assertThat(squad.players()).allSatisfy(p ->
+                assertThat(p.terminationFee()).isNotNull().isPositive());
+
+        PlayerResponse any = squad.players().get(0);
+        Player entity = playerRepository.findById(any.id()).orElseThrow();
+        assertThat(any.terminationFee()).isEqualByComparingTo(contractValuation.terminationFee(
+                entity.getOverall(), entity.getAge(), entity.getContractYears()));
+    }
 
     @Test
     void squadPlayersExposeContractYearsAndWageDemand() {

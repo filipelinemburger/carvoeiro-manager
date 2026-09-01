@@ -31,6 +31,7 @@ public record PlayerResponse(
         int contractYears,
         BigDecimal value,
         BigDecimal wageDemand,
+        BigDecimal terminationFee,
         int fitness,
         String injurySeverity,
         List<AttributeView> attributes,

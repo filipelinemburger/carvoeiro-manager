@@ -817,6 +817,7 @@ public class LineupService {
                 p.getContractYears(),
                 transferValuation.marketValue(p.getOverall(), p.getAge()),
                 contractValuation.wageDemand(p.getOverall(), p.getAge()),
+                contractValuation.terminationFee(p.getOverall(), p.getAge(), p.getContractYears()),
                 fitness,
                 p.getInjurySeverity().name(),
                 attributes,

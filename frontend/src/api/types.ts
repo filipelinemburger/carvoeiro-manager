@@ -151,6 +151,9 @@ export type PlayerResponse = {
   /** Market value (fee guidance) computed by the backend from overall + age. */
   value: number
   wageDemand: number
+  /** What terminating this player's contract would cost. Always sent by the API; optional here
+   * only to keep older test fixtures compiling. */
+  terminationFee?: number
   fitness: number
   injurySeverity: 'NONE' | 'KNOCK' | 'MINOR' | 'MAJOR'
   /** Full 28-attribute board, in canonical order (always sent by the API). */
