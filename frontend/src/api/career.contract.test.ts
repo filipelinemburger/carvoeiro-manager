@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as client from './client'
-import { getFreeAgents, signFreeAgent, renewContract, listPlayer, unlistPlayer } from './career'
+import { getFreeAgents, signFreeAgent, renewContract, terminateContract, listPlayer, unlistPlayer } from './career'
 
 describe('contract client', () => {
   beforeEach(() => vi.restoreAllMocks())
@@ -21,6 +21,12 @@ describe('contract client', () => {
     const spy = vi.spyOn(client, 'apiPost').mockResolvedValue({} as never)
     await renewContract('S1', 'P1', { wage: 200, contractYears: 2 }, 'tok')
     expect(spy).toHaveBeenCalledWith('/save-games/S1/players/P1/renew', { wage: 200, contractYears: 2 }, 'tok')
+  })
+
+  it('terminateContract posts to the terminate endpoint with no body', async () => {
+    const spy = vi.spyOn(client, 'apiPost').mockResolvedValue({} as never)
+    await terminateContract('S1', 'P1', 'tok')
+    expect(spy).toHaveBeenCalledWith('/save-games/S1/players/P1/terminate', {}, 'tok')
   })
 
   it('listPlayer puts to the listings endpoint', async () => {

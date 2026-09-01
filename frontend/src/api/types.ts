@@ -684,6 +684,14 @@ export type RenewContractRequest = { wage: number; contractYears: number }
 export type SignFreeAgentRequest = { wage: number; contractYears: number }
 export type PlayerContract = { playerId: string; name: string; wage: number; contractYears: number }
 
+/** What a termination cost and the balance it left behind. */
+export type TerminationResult = {
+  playerId: string
+  playerName: string
+  fee: number
+  newBalance: number
+}
+
 export type PreContractEligible = {
   playerId: string
   name: string

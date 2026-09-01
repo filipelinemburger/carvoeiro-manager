@@ -29,6 +29,7 @@ import type {
   RenewContractRequest,
   SignFreeAgentRequest,
   PlayerContract,
+  TerminationResult,
   PlayerResponse,
   SetTrainingRequest,
   StaffRole,
@@ -286,6 +287,14 @@ export function renewContract(
   token: string,
 ): Promise<PlayerContract> {
   return apiPost<PlayerContract>(`/save-games/${saveGameId}/players/${playerId}/renew`, req, token)
+}
+
+export function terminateContract(
+  saveGameId: string,
+  playerId: string,
+  token: string,
+): Promise<TerminationResult> {
+  return apiPost<TerminationResult>(`/save-games/${saveGameId}/players/${playerId}/terminate`, {}, token)
 }
 
 export function getStaffRoster(saveGameId: string, clubId: string, token: string): Promise<StaffRoster> {
