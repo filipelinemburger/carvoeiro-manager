@@ -8,17 +8,26 @@ import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.match.Lineup;
+import br.com.carvoeiromanager.match.LineupPlayer;
+import br.com.carvoeiromanager.match.LineupPlayerRepository;
+import br.com.carvoeiromanager.match.LineupRepository;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
 import br.com.carvoeiromanager.transfer.NegotiationDecision;
+import br.com.carvoeiromanager.transfer.TransferDirection;
+import br.com.carvoeiromanager.transfer.TransferOffer;
+import br.com.carvoeiromanager.transfer.TransferOfferRepository;
+import br.com.carvoeiromanager.transfer.TransferOfferStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -37,6 +46,9 @@ class LoanServiceOutIT {
     @Autowired ClubRepository clubRepository;
     @Autowired LoanService loanService;
     @Autowired LoanOfferRepository loanOfferRepository;
+    @Autowired TransferOfferRepository transferOfferRepository;
+    @Autowired LineupRepository lineupRepository;
+    @Autowired LineupPlayerRepository lineupPlayerRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -53,6 +65,14 @@ class LoanServiceOutIT {
         return playerRepository.findBySaveGameId(c.id()).stream()
                 .map(Player::getClubId)
                 .filter(id -> id != null && !id.equals(c.clubId()))
+                .min(Comparator.naturalOrder()).orElseThrow();
+    }
+
+    /** A club distinct from the managed club and from {@code excludeClubId} — for a third-party bid. */
+    private UUID aThirdClubId(Career c, UUID excludeClubId) {
+        return clubRepository.findBySaveGameId(c.id()).stream()
+                .map(Club::getId)
+                .filter(id -> !id.equals(c.clubId()) && !id.equals(excludeClubId))
                 .min(Comparator.naturalOrder()).orElseThrow();
     }
 
@@ -199,12 +219,32 @@ class LoanServiceOutIT {
         Player spare = aSparePlayer(c);
         Club borrower = aWillingBorrower(c, spare);
 
+        // A live bid on the spare player, still open when the loan is accepted.
+        UUID bidderClubId = aThirdClubId(c, borrower.getId());
+        TransferOffer bid = TransferOffer.create(c.id(), spare.getId(), bidderClubId, c.clubId(),
+                TransferDirection.INCOMING, BigDecimal.valueOf(1000), 0, null, null);
+        transferOfferRepository.save(bid);
+
+        // The spare player in the managed club's lineup, and set as its penalty taker.
+        Lineup lineup = Lineup.create(c.id(), c.clubId(), "4-4-2");
+        lineup.setPenaltyTakerId(spare.getId());
+        lineupRepository.save(lineup);
+        lineupPlayerRepository.save(LineupPlayer.create(lineup.getId(), spare.getId(), true));
+
         loanService.offerLoanOut(c.id(), c.userId(), spare.getId(), borrower.getId(), 100, true);
+
+        assertThat(loanOfferRepository.findBySaveGameIdAndPlayerIdAndStatusIn(c.id(), spare.getId(),
+                List.of(LoanOfferStatus.ACCEPTED))).hasSize(1);
 
         // The same obligations selling and terminating carry — a live bid must not outlive the
         // loan, because the sell guard would then pass trivially on a player who has left.
-        assertThat(loanOfferRepository.findBySaveGameIdAndPlayerIdAndStatusIn(c.id(), spare.getId(),
-                List.of(LoanOfferStatus.ACCEPTED))).hasSize(1);
+        assertThat(transferOfferRepository.findBySaveGameIdAndPlayerIdAndStatusIn(c.id(), spare.getId(),
+                List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED))).isEmpty();
+
+        assertThat(lineupPlayerRepository.findByLineupId(lineup.getId()))
+                .extracting(LineupPlayer::getPlayerId)
+                .doesNotContain(spare.getId());
+        assertThat(lineupRepository.findById(lineup.getId()).orElseThrow().getPenaltyTakerId()).isNull();
     }
 
     @Test
