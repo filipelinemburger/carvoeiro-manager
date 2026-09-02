@@ -1,7 +1,10 @@
 # Rescisão de Contrato — Manager-Initiated Contract Termination — Design Spec
 
 **Date:** 2026-09-01
-**Status:** Approved (design); ready for implementation plan.
+**Status:** Implemented and shipped (branch `f960b3a..afda449`).
+**Revised 2026-09-02**, after implementation, to describe the system that actually shipped. Three
+things the build found that the design had not: a live-match guard, outstanding transfer offers,
+and a season-archive crash. Each is marked *(found in build)* below.
 **Builds on:** the contract slice (`ContractService`, `ContractValuation`) and the selling path
 in `TransferService` / `TransferExecutor`.
 **Followed by:** player loans, which are a separate spec — they split "who owns a player" from
@@ -19,7 +22,7 @@ five-year contract carries no risk at signing time because it can never bite.
 Termination gives the manager that exit and, in doing so, makes contract length a real decision:
 the longer the deal, the more expensive it is to undo.
 
-## 2. Current state
+## 2. Current state *(as it was before this work — kept as the starting point the design argues from)*
 
 - **A contract is two columns on `players`**: `wage` and `contract_years` (`V7__contracts.sql`).
   There is no contract table. A player with `club_id = NULL` is a free agent.
@@ -71,10 +74,16 @@ refuse re-signing a player you released yourself, and cleared in `Player.resetSe
 is what makes the block last exactly one season rather than the whole career.
 
 The block is **per club, not global**: a player released by Chapecoense remains signable by the
-managed club. Only the releasing club is barred.
+managed club. Only the releasing club is barred. The refusal raises its own
+`ErrorCode.PLAYER_RECENTLY_RELEASED` with its own pt-BR message *(found in build)* — the first
+attempt reused `INVALID_TRANSFER`, which the frontend maps to a generic "Proposta inválida.", so
+the manager was told nothing. §9 rejects exactly that click-then-fail pattern for the terminate
+button; it must not reappear one page over.
 
 `FinanceTransactionType` gains `TERMINATION`. Without it the fee would land in `TRANSFER_OUT` and
-misreport the club's transfer activity.
+misreport the club's transfer activity. The enum value only pays off once the Finances page can
+render it: `TYPE_LABELS` gains `TERMINATION: 'Rescisão de contrato'` *(found in build)*, otherwise
+the row falls back to the raw enum string in a pt-BR-only screen.
 
 No contract table. Terminating is zeroing `wage` / `contract_years` and nulling `club_id` — the same
 shape the existing lapse-at-rollover path already produces.
@@ -109,8 +118,8 @@ excludes them: a prospect would otherwise be terminable for free.
 **Endpoint:** `POST /save-games/{saveGameId}/players/{playerId}/terminate`, no body — mirroring the
 `renew` mapping in `ContractController` (line 31).
 
-**Response:** `TerminationResponse(playerName, fee, newBalance)`, so the UI can report what was paid
-without a follow-up request.
+**Response:** `TerminationResponse(playerId, playerName, fee, newBalance)`, so the UI can report what
+was paid without a follow-up request.
 
 **Service:** `ContractService.terminateContract(saveGameId, userId, playerId)`, sibling to
 `renewContract`.
@@ -121,9 +130,17 @@ Cheapest and most explanatory first:
 
 1. Player belongs to the managed club and is not a youth prospect (`youth_prospect = false`) →
    `PLAYER_NOT_FOUND`
-2. Departure allowed: squad would not drop below `MIN_SQUAD_SIZE`, and the player is not the last
+2. No live match is in progress → `LIVE_MATCH_IN_PROGRESS` *(found in build)*
+3. Departure allowed: squad would not drop below `MIN_SQUAD_SIZE`, and the player is not the last
    goalkeeper → `SQUAD_TOO_SMALL`
-3. Club balance covers the fee → `INSUFFICIENT_FUNDS`
+4. Club balance covers the fee → `INSUFFICIENT_FUNDS`
+
+The live-match guard was missing from the original three. Selling already had it
+(`TransferService.requireSellAllowed`'s neighbour `requireNoLiveMatch`), for the reason it applies
+here identically: releasing a starter mid-match deletes his `lineup_players` row while `LiveMatch`
+still holds him in its serialised XI, and `MatchOutcomeApplier` would later apply the match's
+effects to a player who is by then a free agent. §7's "one concept" was the place this omission
+showed up — it had unified two of the three rules a departure implies, not all three.
 
 **No transfer-window check.** Termination is not a transfer, and mid-season — with a bloated squad —
 is exactly when it is useful. This is a decision, not an oversight; a test defends it.
@@ -136,27 +153,61 @@ is exactly when it is useful. This is a decision, not an oversight; a test defen
   pool and appears in `getFreeAgents`.
 - `releasedByClubId = managedClubId`.
 - Remove the player from the managed lineup and from any set-piece-taker column.
+- Reject every `PENDING` or `COUNTERED` transfer offer for him *(found in build)*. Without this a
+  live bid outlives the contract: `respondToIncoming` re-loads the player and its squad guard now
+  passes **trivially**, because he is no longer in the squad — so the club could be credited a
+  transfer fee and a `"Venda: <name>"` ledger row for a player it had already paid a buyout to
+  release. Rejecting rather than deleting matches the fiction: the bidder's interest dies with the
+  contract.
 - `applyMorale(-1)` on every remaining senior player at the club (`youth_prospect = false`; the
   released player himself is excluded). On a −5..+5 scale that is a perceptible
   blow, comparable to losing a match, without being catastrophic.
 
 ## 7. Refactor: one concept for leaving the managed squad
 
-Both halves of "a player leaves the managed squad" are currently private and duplicated in intent:
-`TransferService.requireSellAllowed` (the guard) and `TransferExecutor.cleanManagedLineup` (the
-cleanup). Termination needs both, verbatim.
+"A player leaves the managed squad" was three private rules living apart in the transfer package:
+`TransferService.requireSellAllowed` (the departure guard), `TransferService.requireNoLiveMatch`,
+and `TransferExecutor.cleanManagedLineup` (the cleanup). Termination needs all three, verbatim.
 
-Extract a `SquadDeparture` component exposing:
+`SquadDeparture` (in `br.com.carvoeiromanager.common`) now owns them, and one more the build added:
 
-- `requireDepartureAllowed(managedClubId, player)` — min squad size, last goalkeeper
+- `seniorSquad(clubId)` — the professional squad, the roster every departure rule counts against
+- `requireDepartureAllowed(seniorSquad, leaving)` — min squad size, last goalkeeper
+- `requireNoLiveMatch(saveGameId)` — *(found in build)*
 - `cleanManagedLineup(saveGameId, managedClubId, playerId)` — lineup row + set-piece takers
+- `rejectOpenOffersFor(saveGameId, playerId)` — *(found in build)*
+
+`requireDepartureAllowed` takes the squad list rather than the club id, so a caller that needs that
+list for something else — termination needs it for the morale hit — does not query it twice. The
+list must be `seniorSquad(managedClubId)` for the same club.
 
 `TransferService`, `TransferExecutor` and `ContractService` all depend on it. Selling and
-terminating then share one definition of the rule instead of two copies that can drift apart.
+terminating share one definition of every rule instead of copies that can drift apart.
 
-This is the only structural change; nothing else about the transfer path moves.
+**What this section originally got wrong.** It named two rules and called them "both halves". There
+were three, and the build found a fourth obligation (outstanding offers) that no existing path had
+ever needed, because before termination nothing removed a managed player from the squad while a
+live bid existed. A component that unifies *most* of what leaving implies is more dangerous than
+one that unifies none: the rules it omits look handled.
 
-## 8. Interface
+## 8. A released player and the season archive *(found in build)*
+
+`season_top_scorer.club_id` is `NOT NULL`, and `SeasonRolloverService` writes the scorer's
+**current** club. Rollover archives every competition in step 1 and only nulls out lapsed contracts
+in step 3 — so a contract *expiring* never presents a club-less scorer to the archive. Termination
+is the first path that can, and it did: releasing a top scorer and then rolling the season threw a
+constraint violation and the save could not advance.
+
+The archive therefore falls back to `released_by_club_id` when a scorer has no current club. That
+column exists to record who released him, so it names the club he actually scored those goals for —
+truer than any placeholder, and it needs no schema change. A club-less scorer with no release mark
+(not reachable today) is omitted rather than crashing, and omission does not consume a rank.
+
+The fallback lives in `SeasonRolloverService.archive`, deliberately **not** in `TopScorersService`:
+that service also feeds live in-season screens, where a released player must read as club-less
+rather than still under his former club's name.
+
+## 9. Interface
 
 The termination action lives in the **Contrato** tab of `PlayerDetails`, in the existing
 `contractAction` slot next to "Renovar" (`SquadPage.tsx:964`) — where the manager already is when
@@ -174,16 +225,27 @@ be undone.
   **balance does not** — `SquadPage` currently loads only `squad` and `lineup`, so it must also read
   the shared `['finances', saveGameId, clubId]` query that `FinancesPage` already populates and
   `TransferMarketPage` already invalidates. That same query is what lets the dialog state the
-  resulting balance. The backend still enforces all three rules — the client-side check explains,
-  it never authorises.
+  resulting balance. The backend still enforces every rule — the client-side check explains, it
+  never authorises.
+- **Confirm stays disabled until the balance is known** *(found in build)*. The finances query is
+  in flight on mount, and while it is pending — or if it errors — `balance` is `undefined`. The
+  first build rendered the fee and the warning but silently dropped the balance line and left the
+  button clickable, which is the confirmation contract this dialog exists to uphold. The balance
+  slot now always renders, showing a pending placeholder instead of vanishing.
 
 `PlayerResponse` gains `terminationFee: BigDecimal`, precomputed server-side exactly as `wageDemand`
 already is. No preview endpoint, no extra request when the dialog opens.
 
-On success, invalidate the squad, finances and free-agent queries: the player leaves the list, the
-balance drops, and he shows up on the free-agent market in the same navigation.
+On success, invalidate the squad, finances, free-agent, lineup and market queries: the player
+leaves the list, the balance drops, he shows up on the free-agent market, and — since `releaseFrom`
+calls `unlist()` — any transfer-market listing for him disappears with him.
 
-## 9. Testing
+A **success Snackbar** reports what the termination cost, using the response's `playerName`, `fee`
+and `newBalance` *(found in build)*. §6 justifies the response's existence as "so the UI can report
+what was paid"; the first build left it entirely unconsumed, so the only feedback for the one
+action that spends money irreversibly was the balance quietly changing on another page.
+
+## 10. Testing
 
 **`ContractValuationTest`** (extend) — the fee is a pure function, so it is pinned with direct
 assertions: years remaining × season payroll × 0.50, and the one-year floor. Changing the discount
