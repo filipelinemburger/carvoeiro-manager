@@ -242,8 +242,22 @@ class LoanRolloverIT {
 
         List<Player> after = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId());
         assertThat(after).hasSizeGreaterThan(SquadRules.MAX_SQUAD_SIZE);
-        assertThat(after.stream().filter(Player::isTransferListed)).hasSize(
-                after.size() - SquadRules.MAX_SQUAD_SIZE);
+        int overflow = after.size() - SquadRules.MAX_SQUAD_SIZE;
+
+        // The rule under test is "lowest overall first, ties broken by id" — not just "some N
+        // players get listed". Compute the expected set from the squad's actual overalls (the
+        // pre-existing career squad's overalls are unpinned) instead of hardcoding which three,
+        // so this fails if the comparator's direction or tie-break ever changes.
+        Set<UUID> expectedListed = after.stream()
+                .sorted(Comparator.comparingInt(Player::getOverall).thenComparing(Player::getId))
+                .map(Player::getId)
+                .limit(overflow)
+                .collect(Collectors.toSet());
+        Set<UUID> actualListed = after.stream()
+                .filter(Player::isTransferListed)
+                .map(Player::getId)
+                .collect(Collectors.toSet());
+        assertThat(actualListed).isEqualTo(expectedListed);
         assertThat(after.stream().filter(Player::isTransferListed))
                 .allMatch(p -> p.getListedReason() == ListedReason.SURPLUS);
         assertThat(r.surplusListings()).isNotEmpty();
