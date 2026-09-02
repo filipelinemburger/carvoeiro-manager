@@ -7,7 +7,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SquadRulesTest {
 
     @Test
-    void maxSquadSizeIsForty() {
-        assertThat(SquadRules.MAX_SQUAD_SIZE).isEqualTo(40);
+    void squadSizeLimitsAreTheOnesEveryDeparturePathCountsAgainst() {
+        assertThat(SquadRules.MAX_SQUAD_SIZE).isEqualTo(45);
+        assertThat(SquadRules.MIN_SQUAD_SIZE).isEqualTo(14);
     }
 }
