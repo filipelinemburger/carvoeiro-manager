@@ -426,16 +426,27 @@ public class SeasonRolloverService {
                     row.clubId(), row.clubName(), row.played(), row.won(), row.drawn(), row.lost(),
                     row.goalsFor(), row.goalsAgainst(), row.goalDifference(), row.points()));
         }
+        Map<UUID, Player> playersById = playerRepository
+                .findBySaveGameId(saveGameId).stream()
+                .collect(Collectors.toMap(Player::getId, Function.identity()));
+
         int rank = 1;
         for (TopScorerRow scorer : scorers) {
+            // TopScorersService reports the player's CURRENT club, and a manager-terminated
+            // contract leaves him club-less while the archive still has to run (the archive is
+            // step 1; contracts only lapse in step 3). season_top_scorer.club_id is NOT NULL, so
+            // a released top scorer used to abort the whole rollover — a save that cannot advance.
+            UUID scoringClubId = scoringClubIdOf(scorer, playersById);
+            if (scoringClubId == null) {
+                // Club-less with no release mark either: nothing honest to name, so omit the row
+                // rather than write a placeholder. Not reachable through gameplay today.
+                continue;
+            }
             seasonTopScorerRepository.save(SeasonTopScorer.create(season.getId(), rank++,
-                    scorer.playerId(), scorer.playerName(), scorer.clubId(), scorer.clubName(),
-                    scorer.goals()));
+                    scorer.playerId(), scorer.playerName(), scoringClubId,
+                    clubNameById.getOrDefault(scoringClubId, ""), scorer.goals()));
         }
 
-        Map<UUID, br.com.carvoeiromanager.player.Player> playersById = playerRepository
-                .findBySaveGameId(saveGameId).stream()
-                .collect(Collectors.toMap(br.com.carvoeiromanager.player.Player::getId, Function.identity()));
         for (Map.Entry<UUID, br.com.carvoeiromanager.stats.PlayerStatsService.CompetitionPlayerAggregate> entry
                 : playerStatsService.aggregateCompetition(saveGameId, competition.getId()).entrySet()) {
             br.com.carvoeiromanager.stats.PlayerStatsService.CompetitionPlayerAggregate agg = entry.getValue();
@@ -446,6 +457,24 @@ public class SeasonRolloverService {
                     agg.clubId(), clubName, agg.matchesPlayed(), agg.minutesPlayed(), agg.goals(),
                     agg.assists(), agg.fouls(), agg.yellowCards(), agg.redCards()));
         }
+    }
+
+    /**
+     * The club an archived top-scorer row should name: his current club, or — when he was released
+     * mid-season and is a free agent by the time the archive runs — the club that released him,
+     * which is the club he actually scored those goals for. Null when neither is known, which the
+     * caller treats as "omit the row".
+     *
+     * <p>Deliberately resolved here and not in {@link TopScorersService}: that service also feeds
+     * the live in-season screens, where a released player must show as a free agent rather than
+     * still wearing his ex-club's name.
+     */
+    private UUID scoringClubIdOf(TopScorerRow scorer, Map<UUID, Player> playersById) {
+        if (scorer.clubId() != null) {
+            return scorer.clubId();
+        }
+        Player player = playersById.get(scorer.playerId());
+        return player != null ? player.getReleasedByClubId() : null;
     }
 
     /**

@@ -18,6 +18,8 @@ import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.competition.TieResolver;
+import br.com.carvoeiromanager.competition.TopScorerRow;
+import br.com.carvoeiromanager.competition.TopScorersService;
 import br.com.carvoeiromanager.match.FixtureAppearance;
 import br.com.carvoeiromanager.match.FixtureAppearanceRepository;
 import br.com.carvoeiromanager.match.LineupService;
@@ -69,6 +71,7 @@ class SeasonRolloverServiceIT {
     @Autowired SeasonTopScorerRepository seasonTopScorerRepository;
     @Autowired FixtureAppearanceRepository fixtureAppearanceRepository;
     @Autowired SeasonPlayerStatsRepository seasonPlayerStatsRepository;
+    @Autowired TopScorersService topScorersService;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -348,5 +351,85 @@ class SeasonRolloverServiceIT {
         // Then no managed-club player was auto-assigned a training focus
         List<Player> managed = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId());
         assertThat(managed).allMatch(p -> p.getTrainingFocus() == null);
+    }
+
+    /**
+     * Picks the Catarinense's leading scorer who still has a club, so the release below is
+     * deterministic rather than depending on which player a probe happens to select.
+     */
+    private TopScorerRow leadingClubbedScorer(Career c, Competition competition) {
+        return topScorersService.getTopScorers(c.id(), competition.getId(), c.userId()).stream()
+                .filter(row -> row.clubId() != null)
+                .findFirst().orElseThrow();
+    }
+
+    private Competition catarinense(Career c) {
+        return competitionRepository.findBySaveGameId(c.id()).stream()
+                .filter(comp -> comp.getName().contains("Catarinense"))
+                .findFirst().orElseThrow();
+    }
+
+    private Season archivedCatarinense(Career c) {
+        return seasonRepository.findBySaveGameIdOrderBySeasonYearDesc(c.id()).stream()
+                .filter(s -> s.getCompetitionName().contains("Catarinense"))
+                .findFirst().orElseThrow();
+    }
+
+    @Test
+    void aTopScorerReleasedBeforeRolloverIsArchivedUnderTheClubThatReleasedHim() {
+        // Given a finished season whose leading Catarinense scorer is then released mid-table:
+        // he is club-less when the archive runs, which used to violate season_top_scorer's
+        // NOT NULL club_id and abort the whole rollover.
+        Career c = createCareer();
+        finishSeason(c);
+        Competition competition = catarinense(c);
+        TopScorerRow top = leadingClubbedScorer(c, competition);
+        Player scorer = playerRepository.findById(top.playerId()).orElseThrow();
+        UUID releasingClubId = scorer.getClubId();
+        String releasingClubName = clubRepository.findById(releasingClubId).orElseThrow().getName();
+        scorer.releaseFrom(releasingClubId);
+        playerRepository.save(scorer);
+        assertThat(playerRepository.findById(top.playerId()).orElseThrow().isFreeAgent()).isTrue();
+
+        // When rolling over
+        rolloverService.rollover(c.id(), c.userId());
+
+        // Then the rollover completed and history credits the goals to the club he scored them for
+        Season catSeason = archivedCatarinense(c);
+        SeasonTopScorer archived = seasonTopScorerRepository
+                .findBySeasonIdOrderByRank(catSeason.getId()).stream()
+                .filter(row -> row.getPlayerId().equals(top.playerId()))
+                .findFirst().orElseThrow();
+        assertThat(archived.getClubId()).isEqualTo(releasingClubId);
+        assertThat(archived.getClubName()).isEqualTo(releasingClubName);
+        assertThat(archived.getGoals()).isEqualTo(top.goals());
+        assertThat(archived.getPlayerName()).isEqualTo(top.playerName());
+    }
+
+    @Test
+    void aClublessScorerWithNoReleaseMarkIsOmittedFromTheArchiveInsteadOfBreakingTheRollover() {
+        // Given a finished season whose leading scorer is club-less with NO release mark — not
+        // reachable through gameplay today, but the archive must degrade instead of crashing.
+        Career c = createCareer();
+        finishSeason(c);
+        Competition competition = catarinense(c);
+        List<TopScorerRow> before = topScorersService.getTopScorers(c.id(), competition.getId(), c.userId());
+        TopScorerRow orphan = before.stream().filter(row -> row.clubId() != null).findFirst().orElseThrow();
+        Player scorer = playerRepository.findById(orphan.playerId()).orElseThrow();
+        scorer.setClubId(null);
+        playerRepository.save(scorer);
+        assertThat(playerRepository.findById(orphan.playerId()).orElseThrow().getReleasedByClubId()).isNull();
+
+        // When rolling over
+        rolloverService.rollover(c.id(), c.userId());
+
+        // Then the rollover completed, the unattributable row was dropped, and ranks stayed dense
+        Season catSeason = archivedCatarinense(c);
+        List<SeasonTopScorer> archived = seasonTopScorerRepository.findBySeasonIdOrderByRank(catSeason.getId());
+        assertThat(archived).extracting(SeasonTopScorer::getPlayerId).doesNotContain(orphan.playerId());
+        assertThat(archived).allMatch(row -> row.getClubId() != null);
+        assertThat(archived).extracting(SeasonTopScorer::getRank)
+                .containsExactlyElementsOf(java.util.stream.IntStream.rangeClosed(1, archived.size())
+                        .boxed().toList());
     }
 }
