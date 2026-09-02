@@ -84,6 +84,33 @@ public class LoanService {
                 new LoanTerms(ownerWageShare, mayFaceOwner), false);
     }
 
+    /** The manager borrows a player from the AI club that currently holds him. */
+    @Transactional
+    public LoanOfferResponse offerLoanIn(UUID saveGameId, UUID userId, UUID playerId,
+                                         int ownerWageShare, boolean mayFaceOwner) {
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        UUID managedClubId = save.getManagedClubId();
+
+        Player player = playerRepository.findById(playerId)
+                .filter(p -> p.getSaveGameId().equals(saveGameId))
+                .filter(p -> p.getClubId() != null)
+                .filter(p -> !managedClubId.equals(p.getClubId()))   // not already yours
+                .filter(p -> !p.isYouthProspect())
+                .filter(p -> !p.isOnLoan())
+                .orElseThrow(() -> new ApiException(ErrorCode.PLAYER_NOT_FOUND,
+                        "No such player at another club"));
+
+        requireLoanableContract(player);
+        squadDeparture.requireNoLiveMatch(saveGameId);
+        requireRoomFor(managedClubId);
+
+        Club owner = clubRepository.findById(player.getClubId()).orElseThrow();
+        Club borrower = clubRepository.findById(managedClubId).orElseThrow();
+
+        return negotiate(save, player, owner, borrower,
+                new LoanTerms(ownerWageShare, mayFaceOwner), true);
+    }
+
     /**
      * The shared core: decide, then either execute or record what the AI said. {@code aiIsOwner}
      * says which side the AI sits on, which is the only thing that differs between directions.
