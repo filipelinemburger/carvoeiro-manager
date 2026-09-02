@@ -12,6 +12,7 @@ const MESSAGES: Record<string, string> = {
   INVALID_CONTRACT: 'Termos de contrato inválidos.',
   TRANSFER_OFFER_NOT_FOUND: 'Proposta não encontrada.',
   PLAYER_REJECTS_TERMS: 'O jogador recusou os termos propostos.',
+  PLAYER_RECENTLY_RELEASED: 'Você rescindiu o contrato deste jogador — ele só pode voltar na próxima temporada.',
   PLAYER_NOT_PRE_CONTRACT_ELIGIBLE: 'Jogador não elegível para pré-contrato.',
   PRE_CONTRACT_ALREADY_EXISTS: 'Este jogador já tem um pré-contrato ativo.',
   PRE_CONTRACT_NOT_FOUND: 'Pré-contrato não encontrado.',

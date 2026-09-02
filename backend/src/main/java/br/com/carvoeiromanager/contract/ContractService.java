@@ -98,7 +98,7 @@ public class ContractService {
                 .orElseThrow(() -> new ApiException(ErrorCode.PLAYER_NOT_FOUND, "Free agent not found"));
 
         if (save.getManagedClubId().equals(player.getReleasedByClubId())) {
-            throw new ApiException(ErrorCode.INVALID_TRANSFER,
+            throw new ApiException(ErrorCode.PLAYER_RECENTLY_RELEASED,
                     "You released this player; he cannot return until next season");
         }
 

@@ -149,7 +149,8 @@ class ContractServiceSignIT {
         assertThatThrownBy(() -> contractService.signFreeAgent(c.id(), c.userId(), p.getId(), demand, 3))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getCode())
-                        .isEqualTo(ErrorCode.INVALID_TRANSFER));
+                        .as("the refusal names its own reason, so the UI can explain it")
+                        .isEqualTo(ErrorCode.PLAYER_RECENTLY_RELEASED));
 
         assertThat(playerRepository.findById(p.getId()).orElseThrow().isFreeAgent()).isTrue();
     }

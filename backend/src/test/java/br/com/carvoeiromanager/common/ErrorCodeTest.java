@@ -36,6 +36,7 @@ class ErrorCodeTest {
         assertThat(ErrorCode.NO_SUBS_REMAINING.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.PLAYER_NOT_FOUND.status()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(ErrorCode.PLAYER_NOT_PRE_CONTRACT_ELIGIBLE.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(ErrorCode.PLAYER_RECENTLY_RELEASED.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.PLAYER_REJECTS_TERMS.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.PRE_CONTRACT_ALREADY_EXISTS.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.PRE_CONTRACT_NOT_FOUND.status()).isEqualTo(HttpStatus.NOT_FOUND);
@@ -58,7 +59,7 @@ class ErrorCodeTest {
     }
 
     @Test
-    void hasExactlyFortySixConstants() {
-        assertThat(ErrorCode.values()).hasSize(46);
+    void hasExactlyFortySevenConstants() {
+        assertThat(ErrorCode.values()).hasSize(47);
     }
 }
