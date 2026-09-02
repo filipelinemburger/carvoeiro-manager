@@ -25,6 +25,8 @@ class ErrorCodeTest {
         assertThat(ErrorCode.INVALID_TRANSFER.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.LINEUP_REQUIRED.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.LIVE_MATCH_IN_PROGRESS.status()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(ErrorCode.LOAN_CONTRACT_TOO_SHORT.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(ErrorCode.LOAN_INVALID_TERMS.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.MALFORMED_REQUEST.status()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(ErrorCode.MANAGED_CLUB_NOT_PLAYING.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.MATCH_NOT_FINISHED.status()).isEqualTo(HttpStatus.CONFLICT);
@@ -34,6 +36,7 @@ class ErrorCodeTest {
         assertThat(ErrorCode.NO_LIVE_MATCH.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.NO_MATCH_TO_PLAY.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.NO_SUBS_REMAINING.status()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(ErrorCode.PLAYER_ALREADY_ON_LOAN.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.PLAYER_NOT_FOUND.status()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(ErrorCode.PLAYER_NOT_PRE_CONTRACT_ELIGIBLE.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.PLAYER_RECENTLY_RELEASED.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
@@ -59,7 +62,7 @@ class ErrorCodeTest {
     }
 
     @Test
-    void hasExactlyFortySevenConstants() {
-        assertThat(ErrorCode.values()).hasSize(47);
+    void hasExactlyFiftyConstants() {
+        assertThat(ErrorCode.values()).hasSize(50);
     }
 }
