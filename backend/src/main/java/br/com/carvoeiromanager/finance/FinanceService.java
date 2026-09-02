@@ -27,7 +27,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +53,8 @@ import java.util.stream.Collectors;
  */
 @Service
 public class FinanceService {
+
+    private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
 
     private final SaveGameService saveGameService;
     private final SaveGameRepository saveGameRepository;
@@ -352,13 +356,30 @@ public class FinanceService {
 
     // ---- Private helpers ----
 
+    /**
+     * Monthly wage bill per club. A loaned player is paid by BOTH clubs: {@code loanWageShare}
+     * percent by his owner, the rest by the club he plays for. The borrower's part is the
+     * remainder rather than its own percentage, so the halves always sum to the wage exactly —
+     * two independently rounded percentages would create or destroy money every month.
+     */
     private Map<UUID, BigDecimal> monthlyWageBills(UUID saveGameId) {
-        return playerRepository.findBySaveGameId(saveGameId).stream()
-                .filter(p -> p.getClubId() != null)
-                .collect(Collectors.groupingBy(Player::getClubId,
-                        Collectors.reducing(BigDecimal.ZERO,
-                                p -> financeCalculator.monthlyWage(p.getOverall(), p.getAge()),
-                                BigDecimal::add)));
+        Map<UUID, BigDecimal> bills = new HashMap<>();
+        for (Player player : playerRepository.findBySaveGameId(saveGameId)) {
+            if (player.getClubId() == null) {
+                continue;   // free agents are nobody's payroll
+            }
+            BigDecimal wage = financeCalculator.monthlyWage(player.getOverall(), player.getAge());
+            if (player.isOnLoan()) {
+                BigDecimal ownerPart = wage
+                        .multiply(BigDecimal.valueOf(player.getLoanWageShare()))
+                        .divide(ONE_HUNDRED, 2, RoundingMode.HALF_UP);
+                bills.merge(player.getOwnerClubId(), ownerPart, BigDecimal::add);
+                bills.merge(player.getClubId(), wage.subtract(ownerPart), BigDecimal::add);
+            } else {
+                bills.merge(player.getClubId(), wage, BigDecimal::add);
+            }
+        }
+        return bills;
     }
 
     private Map<UUID, BigDecimal> monthlyStaffWageBills(UUID saveGameId) {
