@@ -51,6 +51,13 @@ describe('TerminateDialog', () => {
     expect(screen.getByText('Saldo insuficiente para a multa.')).toBeInTheDocument()
   })
 
+  it('disables confirmation and shows a pending state while the balance is not yet known', () => {
+    render(<TerminateDialog player={PLAYER} balance={undefined} blockedReason={null}
+      pending={false} onConfirm={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getByRole('button', { name: /confirmar rescisão/i })).toBeDisabled()
+    expect(screen.getByTestId('termination-new-balance')).not.toHaveTextContent('R$')
+  })
+
   it('renders nothing when no player is selected', () => {
     const { container } = render(<TerminateDialog player={null} balance={20000000} blockedReason={null}
       pending={false} onConfirm={vi.fn()} onClose={vi.fn()} />)

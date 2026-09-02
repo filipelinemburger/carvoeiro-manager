@@ -33,14 +33,12 @@ export function TerminateDialog({ player, balance, blockedReason, pending, onCon
               {formatBRL(fee)}
             </Typography>
           </Typography>
-          {newBalance !== undefined && (
-            <Typography variant="body2">
-              Saldo após a rescisão:{' '}
-              <Typography component="span" data-testid="termination-new-balance" sx={{ fontWeight: 600 }}>
-                {formatBRL(newBalance)}
-              </Typography>
+          <Typography variant="body2">
+            Saldo após a rescisão:{' '}
+            <Typography component="span" data-testid="termination-new-balance" sx={{ fontWeight: 600 }}>
+              {newBalance === undefined ? 'Calculando…' : formatBRL(newBalance)}
             </Typography>
-          )}
+          </Typography>
           <Alert severity="warning">
             {player.name} vira agente livre e não poderá ser recontratado por este clube até a
             próxima temporada. O elenco perde moral.
@@ -51,7 +49,7 @@ export function TerminateDialog({ player, balance, blockedReason, pending, onCon
       <DialogActions>
         <Button onClick={onClose} color="inherit">Cancelar</Button>
         <Button onClick={onConfirm} color="error" variant="contained"
-          disabled={pending || blockedReason !== null}>
+          disabled={pending || balance === undefined || blockedReason !== null}>
           Confirmar rescisão
         </Button>
       </DialogActions>
