@@ -52,6 +52,25 @@ describe('FinancesPage', () => {
     expect(screen.getByText(/março de 2026/i)).toBeInTheDocument()
   })
 
+  it('labels the termination fee and the staff payroll in pt-BR', async () => {
+    // Both enum values reach the ledger but had no label, so the raw enum string leaked into a
+    // pt-BR-only UI.
+    vi.mocked(getFinances).mockResolvedValue({
+      balance: 12500000,
+      transactions: [
+        { seasonYear: 2026, round: 5, type: 'TERMINATION', amount: -2880000, description: 'Rescisão: Meio Um', txDate: '2026-04-10' },
+        { seasonYear: 2026, round: 0, type: 'STAFF_WAGES', amount: -420000, description: 'Salários da comissão técnica', txDate: '2026-04-01' },
+      ],
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/Saldo:/)).toBeInTheDocument())
+
+    expect(screen.getByText('Rescisão de contrato')).toBeInTheDocument()
+    expect(screen.getAllByText('Salários da comissão técnica').length).toBeGreaterThanOrEqual(1)
+    expect(screen.queryByText('TERMINATION')).not.toBeInTheDocument()
+    expect(screen.queryByText('STAFF_WAGES')).not.toBeInTheDocument()
+  })
+
   it('groups rows into separate months', async () => {
     vi.mocked(getFinances).mockResolvedValue({
       balance: 10000000,

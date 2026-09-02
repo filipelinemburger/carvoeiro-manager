@@ -20,6 +20,8 @@ const TYPE_LABELS: Record<string, string> = {
   PRIZE: 'Premiação',
   TRANSFER_IN: 'Venda de jogador',
   TRANSFER_OUT: 'Compra de jogador',
+  STAFF_WAGES: 'Salários da comissão técnica',
+  TERMINATION: 'Rescisão de contrato',
 }
 
 /** Returns a YYYY-MM key for grouping: uses txDate if available, falls back to seasonYear/round. */

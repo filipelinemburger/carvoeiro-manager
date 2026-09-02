@@ -608,7 +608,9 @@ export type YouthProspectResponse = {
 export type FinanceTransaction = {
   seasonYear: number
   round: number
-  type: 'GATE' | 'MATCH_COST' | 'WAGES' | 'SPONSOR' | 'UPKEEP' | 'PRIZE' | 'TRANSFER_IN' | 'TRANSFER_OUT'
+  type:
+    | 'GATE' | 'MATCH_COST' | 'WAGES' | 'SPONSOR' | 'UPKEEP' | 'PRIZE'
+    | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'STAFF_WAGES' | 'TERMINATION'
   amount: number
   description: string
   txDate?: string | null
