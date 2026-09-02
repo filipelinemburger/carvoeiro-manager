@@ -1,34 +1,47 @@
 package br.com.carvoeiromanager.common;
 
-import br.com.carvoeiromanager.match.Lineup;
 import br.com.carvoeiromanager.match.LineupPlayerRepository;
 import br.com.carvoeiromanager.match.LineupRepository;
+import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
+import br.com.carvoeiromanager.transfer.TransferOffer;
+import br.com.carvoeiromanager.transfer.TransferOfferRepository;
+import br.com.carvoeiromanager.transfer.TransferOfferStatus;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.UUID;
 
 /**
- * The two rules every way out of the managed squad shares — selling a player and terminating
- * his contract: what makes a departure legal, and what must be cleaned up once it happens.
+ * The rules every way out of the managed squad shares — selling a player and terminating his
+ * contract: when a departure is legal at all, and what must be cleaned up once it happens.
  * Kept in one place so the two paths cannot drift apart.
  */
 @Component
 public class SquadDeparture {
 
+    /** A negotiation still live enough to turn into a sale if it is left alone. */
+    private static final List<TransferOfferStatus> OPEN_STATUSES =
+            List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED);
+
     private final PlayerRepository playerRepository;
     private final LineupRepository lineupRepository;
     private final LineupPlayerRepository lineupPlayerRepository;
+    private final LiveMatchRepository liveMatchRepository;
+    private final TransferOfferRepository transferOfferRepository;
 
     public SquadDeparture(PlayerRepository playerRepository,
                           LineupRepository lineupRepository,
-                          LineupPlayerRepository lineupPlayerRepository) {
+                          LineupPlayerRepository lineupPlayerRepository,
+                          LiveMatchRepository liveMatchRepository,
+                          TransferOfferRepository transferOfferRepository) {
         this.playerRepository = playerRepository;
         this.lineupRepository = lineupRepository;
         this.lineupPlayerRepository = lineupPlayerRepository;
+        this.liveMatchRepository = liveMatchRepository;
+        this.transferOfferRepository = transferOfferRepository;
     }
 
     /** The professional squad: youth prospects never count toward the departure rules. */
@@ -51,6 +64,18 @@ public class SquadDeparture {
     }
 
     /**
+     * Refuses a departure while a match is being played: the live match holds its own serialised
+     * XI, so a player who left mid-match would still be on the pitch and would still collect the
+     * match's effects afterwards.
+     */
+    public void requireNoLiveMatch(UUID saveGameId) {
+        if (liveMatchRepository.findBySaveGameId(saveGameId).isPresent()) {
+            throw new ApiException(ErrorCode.LIVE_MATCH_IN_PROGRESS,
+                    "Finish the live match before completing transfers");
+        }
+    }
+
+    /**
      * Removes a departing player from the managed lineup: the lineup_players row and any
      * set-piece-taker column pointing at him (no-cascade FK safety).
      */
@@ -65,5 +90,21 @@ public class SquadDeparture {
                 lineupRepository.save(lineup);
             }
         });
+    }
+
+    /**
+     * Kills every negotiation still open on a departing player. Offers are otherwise purged only
+     * at season rollover, so a bid left PENDING could still be accepted afterwards and sell a
+     * player the club no longer owns. The bidder's interest dies with the contract, so the offers
+     * are rejected rather than withdrawn — withdrawal is the bidder's own act.
+     */
+    public void rejectOpenOffersFor(UUID saveGameId, UUID playerId) {
+        List<TransferOffer> open = transferOfferRepository
+                .findBySaveGameIdAndPlayerIdAndStatusIn(saveGameId, playerId, OPEN_STATUSES);
+        if (open.isEmpty()) {
+            return;
+        }
+        open.forEach(TransferOffer::markRejected);
+        transferOfferRepository.saveAll(open);
     }
 }

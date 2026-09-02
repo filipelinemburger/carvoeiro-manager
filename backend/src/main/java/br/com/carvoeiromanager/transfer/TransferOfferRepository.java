@@ -10,6 +10,9 @@ import java.util.UUID;
 public interface TransferOfferRepository extends JpaRepository<TransferOffer, UUID> {
     List<TransferOffer> findBySaveGameIdAndStatusIn(UUID saveGameId, Collection<TransferOfferStatus> statuses);
 
+    List<TransferOffer> findBySaveGameIdAndPlayerIdAndStatusIn(UUID saveGameId, UUID playerId,
+                                                               Collection<TransferOfferStatus> statuses);
+
     @Transactional
     void deleteBySaveGameId(UUID saveGameId);
 }

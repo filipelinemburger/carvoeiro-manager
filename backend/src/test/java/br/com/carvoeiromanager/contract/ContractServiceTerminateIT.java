@@ -21,7 +21,15 @@ import br.com.carvoeiromanager.match.LineupStarter;
 import br.com.carvoeiromanager.match.SetLineupRequest;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.RoleArchetype;
+import br.com.carvoeiromanager.match.LiveMatch;
+import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
+import br.com.carvoeiromanager.transfer.TransferDirection;
+import br.com.carvoeiromanager.transfer.TransferOffer;
+import br.com.carvoeiromanager.transfer.TransferOfferRepository;
+import br.com.carvoeiromanager.transfer.TransferOfferStatus;
+import br.com.carvoeiromanager.transfer.TransferService;
+import br.com.carvoeiromanager.transfer.TransferWindow;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -51,6 +59,10 @@ class ContractServiceTerminateIT {
     @Autowired ContractValuation contractValuation;
     @Autowired FinanceTransactionRepository financeTransactionRepository;
     @Autowired br.com.carvoeiromanager.match.LineupService lineupService;
+    @Autowired TransferWindow transferWindow;
+    @Autowired TransferService transferService;
+    @Autowired TransferOfferRepository transferOfferRepository;
+    @Autowired LiveMatchRepository liveMatchRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -138,6 +150,8 @@ class ContractServiceTerminateIT {
                 .map(Player::getId).toList();
         assertThat(othersAtZero).isNotEmpty();
 
+        int releasedMoraleBefore = p.getMorale();
+
         contractService.terminateContract(c.id(), c.userId(), p.getId());
 
         for (UUID id : othersAtZero) {
@@ -145,6 +159,9 @@ class ContractServiceTerminateIT {
                     .as("morale of squad member %s", id)
                     .isEqualTo(-1);
         }
+        assertThat(playerRepository.findById(p.getId()).orElseThrow().getMorale())
+                .as("the released player is no longer at the club, so the blow is not his to take")
+                .isEqualTo(releasedMoraleBefore);
     }
 
     @Test
@@ -290,9 +307,74 @@ class ContractServiceTerminateIT {
         SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();
         save.setCurrentDate(LocalDate.of(save.getSeasonYear(), 5, 1));
         saveGameRepository.save(save);
+        assertThat(transferWindow.isOpen(save.getCurrentDate()))
+                .as("the chosen date must actually sit outside a window, or this test proves nothing")
+                .isFalse();
 
         contractService.terminateContract(c.id(), c.userId(), p.getId());
 
         assertThat(playerRepository.findById(p.getId()).orElseThrow().isFreeAgent()).isTrue();
+    }
+
+    @Test
+    void aPlayerCannotBeReleasedDuringALiveMatch() {
+        // A live match holds its own serialised XI: releasing a starter mid-match would leave him
+        // on the pitch and still collecting the match's effects as a free agent. Selling already
+        // refuses for this reason; the two exits from the squad must agree.
+        Career c = createCareer();
+        makeRich(c);
+        Player p = anOutfielder(c);
+        LiveMatch liveMatch = LiveMatch.create(c.id(), UUID.randomUUID(), UUID.randomUUID(), 1,
+                LocalDate.of(2026, 3, 1), 42L, true, "[]", "[]", "[]", "[]", "[]");
+        liveMatchRepository.save(liveMatch);
+
+        try {
+            assertThatThrownBy(() -> contractService.terminateContract(c.id(), c.userId(), p.getId()))
+                    .isInstanceOf(ApiException.class)
+                    .satisfies(ex -> {
+                        ApiException api = (ApiException) ex;
+                        assertThat(api.getCode()).isEqualTo(ErrorCode.LIVE_MATCH_IN_PROGRESS);
+                        assertThat(api.getStatus().value()).isEqualTo(409);
+                    });
+
+            assertThat(playerRepository.findById(p.getId()).orElseThrow().isFreeAgent()).isFalse();
+        } finally {
+            // save_game_id is unique on live_match, so the row must not leak between tests.
+            liveMatchRepository.deleteBySaveGameId(c.id());
+        }
+    }
+
+    @Test
+    void aPendingBidForTheReleasedPlayerCannotStillBeTurnedIntoASale() {
+        // Offers are otherwise purged only at season rollover. Left PENDING, an AI club's bid
+        // would still resolve after the release: the club would be paid a transfer fee for a
+        // player it had just paid a buyout to let go, and the free agent would change hands.
+        Career c = createCareer();
+        makeRich(c);
+        Player p = anOutfielder(c);
+        UUID bidderId = clubRepository.findBySaveGameId(c.id()).stream()
+                .map(Club::getId).filter(id -> !id.equals(c.clubId())).findFirst().orElseThrow();
+        TransferOffer bid = transferOfferRepository.save(TransferOffer.create(c.id(), p.getId(),
+                bidderId, c.clubId(), TransferDirection.INCOMING, new BigDecimal("900000.00"),
+                0, null, null));
+
+        contractService.terminateContract(c.id(), c.userId(), p.getId());
+
+        assertThat(transferOfferRepository.findById(bid.getId()).orElseThrow().getStatus())
+                .isEqualTo(TransferOfferStatus.REJECTED);
+
+        assertThatThrownBy(() ->
+                transferService.respondToIncoming(c.id(), c.userId(), bid.getId(), "ACCEPT", null))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.INVALID_TRANSFER));
+
+        assertThat(playerRepository.findById(p.getId()).orElseThrow().isFreeAgent())
+                .as("the player stays a free agent; no club bought him")
+                .isTrue();
+        assertThat(financeTransactionRepository
+                .findBySaveGameIdAndClubIdOrderByRoundDescCreatedAtDesc(c.id(), c.clubId()))
+                .as("no sale was ever credited")
+                .noneMatch(t -> t.getType() == FinanceTransactionType.TRANSFER_OUT);
     }
 }

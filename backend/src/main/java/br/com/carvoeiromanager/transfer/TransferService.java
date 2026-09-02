@@ -11,7 +11,6 @@ import br.com.carvoeiromanager.common.PageResponse;
 import br.com.carvoeiromanager.common.SquadDeparture;
 import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.contract.ContractValuation;
-import br.com.carvoeiromanager.match.LiveMatchRepository;
 import br.com.carvoeiromanager.player.ListedReason;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
@@ -51,7 +50,6 @@ public class TransferService {
     private final TransferNegotiator transferNegotiator;
     private final TransferExecutor transferExecutor;
     private final ContractValuation contractValuation;
-    private final LiveMatchRepository liveMatchRepository;
     private final AiListingEngine aiListingEngine;
     private final AiTransferEngine aiTransferEngine;
     private final SellerContextFactory sellerContextFactory;
@@ -68,7 +66,6 @@ public class TransferService {
                            TransferNegotiator transferNegotiator,
                            TransferExecutor transferExecutor,
                            ContractValuation contractValuation,
-                           LiveMatchRepository liveMatchRepository,
                            AiListingEngine aiListingEngine,
                            AiTransferEngine aiTransferEngine,
                            SellerContextFactory sellerContextFactory,
@@ -84,7 +81,6 @@ public class TransferService {
         this.transferNegotiator = transferNegotiator;
         this.transferExecutor = transferExecutor;
         this.contractValuation = contractValuation;
-        this.liveMatchRepository = liveMatchRepository;
         this.aiListingEngine = aiListingEngine;
         this.aiTransferEngine = aiTransferEngine;
         this.sellerContextFactory = sellerContextFactory;
@@ -234,7 +230,7 @@ public class TransferService {
             throw invalid("This incoming offer cannot be answered");
         }
         requireWindowOpen(save);
-        requireNoLiveMatch(saveGameId);
+        squadDeparture.requireNoLiveMatch(saveGameId);
         Player player = playerRepository.findById(offer.getPlayerId()).orElseThrow(() -> invalid("Player no longer exists"));
         BigDecimal value = transferValuation.marketValue(player.getOverall(), player.getAge());
 
@@ -390,13 +386,6 @@ public class TransferService {
     void requireWindowOpen(SaveGame save) {
         if (!transferWindow.isOpen(save.getCurrentDate())) {
             throw new ApiException(ErrorCode.TRANSFER_WINDOW_CLOSED, "The transfer window is closed");
-        }
-    }
-
-    private void requireNoLiveMatch(UUID saveGameId) {
-        if (liveMatchRepository.findBySaveGameId(saveGameId).isPresent()) {
-            throw new ApiException(ErrorCode.LIVE_MATCH_IN_PROGRESS,
-                    "Finish the live match before completing transfers");
         }
     }
 

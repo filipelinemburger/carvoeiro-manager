@@ -126,6 +126,7 @@ public class ContractService {
                 .orElseThrow(() -> new ApiException(ErrorCode.PLAYER_NOT_FOUND,
                         "Player not found in your professional squad"));
 
+        squadDeparture.requireNoLiveMatch(saveGameId);
         List<Player> squad = squadDeparture.seniorSquad(managedClubId);
         squadDeparture.requireDepartureAllowed(squad, player);
 
@@ -153,6 +154,7 @@ public class ContractService {
         player.releaseFrom(managedClubId);
         playerRepository.save(player);
         squadDeparture.cleanManagedLineup(saveGameId, managedClubId, player.getId());
+        squadDeparture.rejectOpenOffersFor(saveGameId, player.getId());
 
         return new TerminationResponse(player.getId(), player.getName(), fee, club.getBalance());
     }
