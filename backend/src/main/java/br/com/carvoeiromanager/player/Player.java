@@ -135,6 +135,22 @@ public class Player {
     @Column(name = "released_by_club_id")
     private UUID releasedByClubId;
 
+    /**
+     * The club that owns this player while he is out on loan, or null when he plays for his
+     * owner. Non-null is the definition of "on loan": {@code clubId} always means the club he
+     * currently plays for, which is what the rest of the game asks.
+     */
+    @Column(name = "owner_club_id")
+    private UUID ownerClubId;
+
+    /** Percentage of this player's wage the OWNER pays while he is on loan; null when he is not. */
+    @Column(name = "loan_wage_share")
+    private Integer loanWageShare;
+
+    /** Whether the borrowing club may field him against his owner; null when he is not on loan. */
+    @Column(name = "loan_may_face_owner")
+    private Boolean loanMayFaceOwner;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "training_focus", length = 20)
     private Attribute trainingFocus;
@@ -420,6 +436,11 @@ public class Player {
     public ListedReason getListedReason() { return listedReason; }
     public UUID getReleasedByClubId() { return releasedByClubId; }
 
+    public UUID getOwnerClubId() { return ownerClubId; }
+    public Integer getLoanWageShare() { return loanWageShare; }
+    public Boolean getLoanMayFaceOwner() { return loanMayFaceOwner; }
+    public boolean isOnLoan() { return ownerClubId != null; }
+
     public Attribute getTrainingFocus() { return trainingFocus; }
     public TrainingIntensity getTrainingIntensity() { return trainingIntensity; }
 
@@ -458,5 +479,25 @@ public class Player {
         this.contractYears = 0;
         this.releasedByClubId = clubId;
         unlist();
+    }
+
+    /**
+     * Sends this player out on loan: his current club becomes his owner, and he starts playing
+     * for {@code borrowerClubId} under the agreed terms. The fee-free nature of a loan, the
+     * lineup cleanup and the outstanding-offer rejection are the service's business.
+     */
+    public void loanTo(UUID borrowerClubId, int wageShare, boolean mayFaceOwner) {
+        this.ownerClubId = this.clubId;
+        this.clubId = borrowerClubId;
+        this.loanWageShare = wageShare;
+        this.loanMayFaceOwner = mayFaceOwner;
+    }
+
+    /** Ends the loan: he goes home to his owner and carries none of its terms with him. */
+    public void returnFromLoan() {
+        this.clubId = this.ownerClubId;
+        this.ownerClubId = null;
+        this.loanWageShare = null;
+        this.loanMayFaceOwner = null;
     }
 }
