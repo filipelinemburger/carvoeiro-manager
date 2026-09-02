@@ -8,6 +8,7 @@ import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionPhase;
 import br.com.carvoeiromanager.competition.CompetitionPhaseRepository;
@@ -24,10 +25,12 @@ import br.com.carvoeiromanager.contract.PreContractAgreement;
 import br.com.carvoeiromanager.contract.PreContractAgreementRepository;
 import br.com.carvoeiromanager.contract.PreContractService;
 import br.com.carvoeiromanager.finance.FinanceTransactionRepository;
+import br.com.carvoeiromanager.loan.LoanOfferRepository;
 import br.com.carvoeiromanager.match.LineupPlayerRepository;
 import br.com.carvoeiromanager.transfer.TransferOfferRepository;
 import br.com.carvoeiromanager.match.LineupRepository;
 import br.com.carvoeiromanager.match.MatchEventRepository;
+import br.com.carvoeiromanager.player.ListedReason;
 import br.com.carvoeiromanager.player.NewgenGenerator;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerAgingService;
@@ -82,6 +85,7 @@ public class SeasonRolloverService {
     private final NewgenGenerator newgenGenerator;
     private final FinanceTransactionRepository financeTransactionRepository;
     private final TransferOfferRepository transferOfferRepository;
+    private final LoanOfferRepository loanOfferRepository;
     private final SeasonCalendarGenerator seasonCalendarGenerator;
     private final SeasonEventRepository seasonEventRepository;
     private final NewsItemRepository newsItemRepository;
@@ -120,6 +124,7 @@ public class SeasonRolloverService {
                                  NewgenGenerator newgenGenerator,
                                  FinanceTransactionRepository financeTransactionRepository,
                                  TransferOfferRepository transferOfferRepository,
+                                 LoanOfferRepository loanOfferRepository,
                                  SeasonCalendarGenerator seasonCalendarGenerator,
                                  SeasonEventRepository seasonEventRepository,
                                  NewsItemRepository newsItemRepository,
@@ -151,6 +156,7 @@ public class SeasonRolloverService {
         this.newgenGenerator = newgenGenerator;
         this.financeTransactionRepository = financeTransactionRepository;
         this.transferOfferRepository = transferOfferRepository;
+        this.loanOfferRepository = loanOfferRepository;
         this.seasonCalendarGenerator = seasonCalendarGenerator;
         this.seasonEventRepository = seasonEventRepository;
         this.newsItemRepository = newsItemRepository;
@@ -216,6 +222,8 @@ public class SeasonRolloverService {
         financeTransactionRepository.deleteBySaveGameId(saveGameId);
         // Purge season-scoped transfer offers (players/clubs change at rollover).
         transferOfferRepository.deleteBySaveGameId(saveGameId);
+        // Purge season-scoped loan offers alongside them, for the same reason.
+        loanOfferRepository.deleteBySaveGameId(saveGameId);
         // Purge stale season events so the new calendar can be regenerated cleanly.
         seasonEventRepository.deleteBySaveGameId(saveGameId);
         // Purge the finished season's news feed (a fresh season starts a fresh feed).
@@ -227,6 +235,23 @@ public class SeasonRolloverService {
             lineupRepository.delete(lineup);
         });
         lineupRepository.flush();
+
+        // Loans come home BEFORE contracts tick — the contract is with the owner — and AFTER the
+        // archive above, so a loaned player's goals stay credited to the club he played them for.
+        List<SquadChangeResponse> loanReturns = new ArrayList<>();
+        List<Player> returning = playerRepository.findBySaveGameId(saveGameId).stream()
+                .filter(Player::isOnLoan)
+                .toList();
+        for (Player player : returning) {
+            boolean toManaged = managedClubId.equals(player.getOwnerClubId());
+            player.returnFromLoan();
+            if (toManaged) {
+                loanReturns.add(new SquadChangeResponse(
+                        player.getName(), player.getPosition().name(), player.getAge()));
+            }
+        }
+        playerRepository.saveAll(returning);
+        playerRepository.flush();
 
         // 3. Age every player (id order, one seeded RNG); tick contracts; partition.
         List<Player> players = new ArrayList<>(playerRepository.findBySaveGameId(saveGameId));
@@ -334,6 +359,14 @@ public class SeasonRolloverService {
         playerRepository.flush();
         playerRepository.saveAll(toSave);
 
+        // A club can take several players back at once, and the squad cap is otherwise only
+        // checked one signing at a time — so settle any overflow by listing the weakest. This
+        // runs AFTER the loop above, not right after the loan returns: every carried-over player
+        // has resetSeasonState() called on him in that loop, which unconditionally clears
+        // transferListed/listedReason — listing the surplus any earlier would just get wiped out
+        // before rollover ever returns.
+        List<SquadChangeResponse> surplusListings = listSurplusAfterReturns(saveGameId, managedClubId);
+
         // Pre-contract agreements are season-scoped: executed or dead, all purged now.
         preContractAgreementRepository.deleteBySaveGameId(saveGameId);
 
@@ -368,7 +401,40 @@ public class SeasonRolloverService {
                 List.copyOf(retirements), List.copyOf(expiredContracts),
                 List.copyOf(youthIntake), List.copyOf(youthDepartures),
                 List.copyOf(preContractArrivals), List.copyOf(preContractDepartures),
+                List.copyOf(loanReturns), List.copyOf(surplusListings),
                 List.copyOf(watchlistEvents));
+    }
+
+    /**
+     * Any club over the squad ceiling after its loans return lists its weakest professionals as
+     * SURPLUS until it is back at the cap. Returns the managed club's listings for the summary.
+     */
+    private List<SquadChangeResponse> listSurplusAfterReturns(UUID saveGameId, UUID managedClubId) {
+        List<SquadChangeResponse> managedListings = new ArrayList<>();
+        Map<UUID, List<Player>> byClub = playerRepository.findBySaveGameId(saveGameId).stream()
+                .filter(p -> p.getClubId() != null && !p.isYouthProspect())
+                .collect(Collectors.groupingBy(Player::getClubId));
+
+        List<Player> toSave = new ArrayList<>();
+        for (Map.Entry<UUID, List<Player>> entry : byClub.entrySet()) {
+            int overflow = entry.getValue().size() - SquadRules.MAX_SQUAD_SIZE;
+            if (overflow <= 0) {
+                continue;
+            }
+            List<Player> weakestFirst = entry.getValue().stream()
+                    .sorted(Comparator.comparingInt(Player::getOverall).thenComparing(Player::getId))
+                    .toList();
+            for (Player player : weakestFirst.subList(0, overflow)) {
+                player.listForTransfer(ListedReason.SURPLUS);
+                toSave.add(player);
+                if (managedClubId.equals(entry.getKey())) {
+                    managedListings.add(new SquadChangeResponse(
+                            player.getName(), player.getPosition().name(), player.getAge()));
+                }
+            }
+        }
+        playerRepository.saveAll(toSave);
+        return managedListings;
     }
 
     /**

@@ -13,5 +13,7 @@ public record RolloverResponse(
         List<SquadChangeResponse> youthDepartures,
         List<SquadChangeResponse> preContractArrivals,
         List<SquadChangeResponse> preContractDepartures,
+        List<SquadChangeResponse> loanReturns,
+        List<SquadChangeResponse> surplusListings,
         List<PlayerAlertResponse> watchlistEvents
 ) {}
