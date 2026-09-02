@@ -4,6 +4,8 @@ import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.club.Club;
+import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
@@ -26,8 +28,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * his owner and the club he plays for, and that the split never creates or destroys money.
  *
  * <p>{@code monthlyWageBills} is private and stays that way: this test drives it only through
- * the public monthly-processing entry point ({@link FinanceService#processMonth}) and reads the
- * resulting WAGES ledger rows, which are written only for the managed club.
+ * the public monthly-processing entry point ({@link FinanceService#processMonth}). The owner's
+ * side is read off the WAGES ledger row, which is written only for the managed club. The
+ * borrower's side is observed through its raw {@link Club#getBalance()} instead (no ledger row
+ * exists for a non-managed club) — otherwise a silently-dropped borrower charge would be
+ * invisible to this test even though real money vanished every month.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -37,6 +42,7 @@ class LoanWageSplitIT {
     @Autowired UserRepository userRepository;
     @Autowired SaveGameService saveGameService;
     @Autowired PlayerRepository playerRepository;
+    @Autowired ClubRepository clubRepository;
     @Autowired FinanceService financeService;
     @Autowired FinanceCalculator financeCalculator;
     @Autowired FinanceTransactionRepository financeTransactionRepository;
@@ -74,6 +80,10 @@ class LoanWageSplitIT {
                 .getAmount().negate();
     }
 
+    private BigDecimal balanceOf(UUID clubId) {
+        return clubRepository.findById(clubId).orElseThrow().getBalance();
+    }
+
     @Test
     void aLoanedPlayersWageIsChargedToBothClubsAndSumsToHisFullWage() {
         Career c = createCareer();
@@ -89,16 +99,34 @@ class LoanWageSplitIT {
         // The invariant that matters: no money is created or destroyed by the split.
         assertThat(ownerPart.add(borrowerPart)).isEqualByComparingTo(fullWage);
 
-        // Charge a month with the player at home, then again with him out on loan, and compare
-        // the WAGES rows: the owner's bill must fall by exactly borrowerPart. Each call passes a
-        // later month so the guard against double-charging (lastFinanceMonth) lets the second
-        // charge through.
+        BigDecimal borrowerBalanceBeforeMonth1 = balanceOf(borrowerClubId);
+
+        // Charge a month with the player at home, then again with him out on loan. Each call
+        // passes a later month so the guard against double-charging (lastFinanceMonth) lets the
+        // second charge through.
         BigDecimal ownerBillAtHome = chargeAMonthAndReadWages(c, LocalDate.of(2026, 2, 1));
+        BigDecimal borrowerBalanceAfterMonth1 = balanceOf(borrowerClubId);
 
         p.loanTo(borrowerClubId, 40, true);
         playerRepository.save(p);
 
         BigDecimal ownerBillOnLoan = chargeAMonthAndReadWages(c, LocalDate.of(2026, 3, 1));
+        BigDecimal borrowerBalanceAfterMonth2 = balanceOf(borrowerClubId);
+
+        // --- Owner side: read straight off his WAGES ledger row (written only for the managed
+        // club). His bill must fall by exactly the borrower's share. ---
         assertThat(ownerBillAtHome.subtract(ownerBillOnLoan)).isEqualByComparingTo(borrowerPart);
+
+        // --- Borrower side: no ledger row is written for a non-managed club, so we read its raw
+        // balance instead. Its monthly net also includes sponsorship and upkeep, which are
+        // identical between the two months (same reputation, same stadium capacity, no other
+        // roster change happens between the two calls) -- so the CHANGE in the borrower's net
+        // from the control (no-loan) month to the loan month isolates exactly the new wage debit.
+        // This closes a blind spot the owner-side assertion alone cannot see: if the borrower-side
+        // charge were silently dropped, the owner's bill would still fall by the right amount but
+        // the borrower would never actually pay it -- that share of the wage would just vanish.
+        BigDecimal borrowerNetAtHome = borrowerBalanceAfterMonth1.subtract(borrowerBalanceBeforeMonth1);
+        BigDecimal borrowerNetOnLoan = borrowerBalanceAfterMonth2.subtract(borrowerBalanceAfterMonth1);
+        assertThat(borrowerNetAtHome.subtract(borrowerNetOnLoan)).isEqualByComparingTo(borrowerPart);
     }
 }
