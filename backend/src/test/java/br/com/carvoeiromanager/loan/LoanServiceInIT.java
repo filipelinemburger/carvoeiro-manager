@@ -35,7 +35,6 @@ class LoanServiceInIT {
     @Autowired PlayerRepository playerRepository;
     @Autowired ClubRepository clubRepository;
     @Autowired LoanService loanService;
-    @Autowired LoanOfferRepository loanOfferRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -78,6 +77,14 @@ class LoanServiceInIT {
         Club managed = clubRepository.findById(c.clubId()).orElseThrow();
         managed.setReputation(Math.max(1, target.getOverall() - 10));
         clubRepository.save(managed);
+    }
+
+    /** A club distinct from the managed club and from {@code excludeClubId} — a second AI club. */
+    private UUID aThirdClubId(Career c, UUID excludeClubId) {
+        return clubRepository.findBySaveGameId(c.id()).stream()
+                .map(Club::getId)
+                .filter(id -> !id.equals(c.clubId()) && !id.equals(excludeClubId))
+                .min(Comparator.naturalOrder()).orElseThrow();
     }
 
     @Test
@@ -169,5 +176,60 @@ class LoanServiceInIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getCode())
                         .isEqualTo(ErrorCode.PLAYER_NOT_FOUND));
+    }
+
+    @Test
+    void aYouthProspectCannotBeBorrowed() {
+        Career c = createCareer();
+        UUID ownerClubId = aRivalClubId(c);
+        Player prospect = Player.create(c.id(), ownerClubId, "Joia da Base", Position.ATT, 16,
+                "Brasil", 60, 60, 55, 40, 10, 60, 58);
+        prospect.markAsProspect(88);
+        prospect.setContractYears(3);
+        playerRepository.save(prospect);
+        makeManagedClubModest(c, prospect);   // otherwise borrowable — the youth flag is what refuses him
+
+        assertThatThrownBy(() -> loanService.offerLoanIn(c.id(), c.userId(), prospect.getId(), 0, true))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.PLAYER_NOT_FOUND));
+
+        Player reloaded = playerRepository.findById(prospect.getId()).orElseThrow();
+        assertThat(reloaded.getClubId()).isEqualTo(ownerClubId);
+        assertThat(reloaded.isOnLoan()).isFalse();
+    }
+
+    @Test
+    void aFreeAgentCannotBeBorrowed() {
+        Career c = createCareer();
+        Player free = playerRepository.findBySaveGameIdAndClubIdIsNull(c.id()).stream()
+                .min(Comparator.comparing(Player::getId)).orElseThrow();
+
+        assertThatThrownBy(() -> loanService.offerLoanIn(c.id(), c.userId(), free.getId(), 0, true))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.PLAYER_NOT_FOUND));
+
+        assertThat(playerRepository.findById(free.getId()).orElseThrow().getClubId()).isNull();
+    }
+
+    @Test
+    void aPlayerAlreadyOutOnLoanCannotBeBorrowedAgain() {
+        Career c = createCareer();
+        UUID ownerClubId = aRivalClubId(c);
+        Player target = aSparePlayerAt(ownerClubId);
+        makeManagedClubModest(c, target);   // otherwise borrowable — the loan flag is what refuses him
+        UUID thirdClubId = aThirdClubId(c, ownerClubId);
+        target.loanTo(thirdClubId, 0, false);
+        playerRepository.save(target);
+
+        assertThatThrownBy(() -> loanService.offerLoanIn(c.id(), c.userId(), target.getId(), 0, true))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.PLAYER_NOT_FOUND));
+
+        Player reloaded = playerRepository.findById(target.getId()).orElseThrow();
+        assertThat(reloaded.getClubId()).isEqualTo(thirdClubId);
+        assertThat(reloaded.getOwnerClubId()).isEqualTo(ownerClubId);
     }
 }
