@@ -149,6 +149,38 @@ public class LoanService {
         return toResponse(offer, player, null);
     }
 
+    /** Takes the AI's counter as offered. There is no counter-the-counter: accept or walk away. */
+    @Transactional
+    public LoanOfferResponse acceptCounter(UUID saveGameId, UUID userId, UUID offerId) {
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+
+        LoanOffer offer = loanOfferRepository.findById(offerId)
+                .filter(o -> o.getSaveGameId().equals(saveGameId))
+                .orElseThrow(() -> new ApiException(ErrorCode.TRANSFER_OFFER_NOT_FOUND,
+                        "Loan offer not found"));
+        if (offer.getStatus() != LoanOfferStatus.COUNTERED) {
+            throw new ApiException(ErrorCode.INVALID_TRANSFER, "No counter to accept on this offer");
+        }
+
+        Player player = playerRepository.findById(offer.getPlayerId())
+                .filter(p -> !p.isOnLoan())
+                // He must still be at the club the offer named: he may have been sold, released
+                // or lent elsewhere since the AI answered, and the offer's owner would then be
+                // stale — executing it would move a player out of a club that no longer holds him.
+                .filter(p -> offer.getOwnerClubId().equals(p.getClubId()))
+                .orElseThrow(() -> new ApiException(ErrorCode.PLAYER_NOT_FOUND,
+                        "That player is no longer available"));
+        requireLoanableContract(player);
+        squadDeparture.requireNoLiveMatch(saveGameId);
+        requireRoomFor(offer.getBorrowerClubId());
+
+        execute(save, player, offer.getBorrowerClubId(),
+                new LoanTerms(offer.getCounterOwnerWageShare(), offer.getCounterMayFaceOwner()));
+        offer.markAccepted();
+        loanOfferRepository.save(offer);
+        return toResponse(offer, player, null);
+    }
+
     /**
      * Moves the player and settles everything leaving the squad implies. The offer rejection is
      * not optional: a live bid that outlived the loan would meet a sell guard that now passes
