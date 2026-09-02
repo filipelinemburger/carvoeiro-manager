@@ -580,6 +580,25 @@ describe('SquadPage', () => {
       expect(mockTerminateContract).toHaveBeenCalledWith('sg-1', 'p-m1', expect.any(String)))
   })
 
+  it('reports what the termination cost once it succeeds', async () => {
+    mockTerminateContract.mockResolvedValue({
+      playerId: 'p-m1', playerName: 'Meio Um', fee: 5880000, newBalance: 14120000,
+    })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Meio Um'))
+    fireEvent.click(screen.getByText('Meio Um'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /^rescindir$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /confirmar rescisão/i }))
+
+    // Both dialogs close on success, so this toast is the only report of the fee and the balance.
+    const toast = await screen.findByText(/rescindido/i)
+    expect(toast).toHaveTextContent('Meio Um')
+    expect(toast).toHaveTextContent('5.880.000')
+    expect(toast).toHaveTextContent('14.120.000')
+  })
+
   it('blocks termination when the balance will not cover the fee', async () => {
     mockGetFinances.mockResolvedValue({ balance: 1000, transactions: [] })
     renderWithProviders()

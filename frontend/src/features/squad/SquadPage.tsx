@@ -13,7 +13,8 @@ import { getSquad, getLineup, setLineup, renewContract, listPlayer, unlistPlayer
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
-import type { PlayerResponse, RoleArchetype, RoleFocus, DetailedPosition, PlayerInstruction, LineupStarter, SquadResponse } from '../../api/types'
+import { formatBRL } from '../../lib/money'
+import type { PlayerResponse, RoleArchetype, RoleFocus, DetailedPosition, PlayerInstruction, LineupStarter, SquadResponse, TerminationResult } from '../../api/types'
 import { TacticsPanel } from './TacticsPanel'
 import { PlayerDetails } from './PlayerDetails'
 import { TerminateDialog } from './TerminateDialog'
@@ -90,6 +91,9 @@ const INSTRUCTION_LABEL: Record<PlayerInstruction, string> = {
 // Criciúma yellow — every starter's selection button.
 const CRICIUMA_YELLOW = '#f7d417'
 
+/** Mirrors SquadRules.MIN_SQUAD_SIZE on the backend; the server is still the authority. */
+const MIN_SQUAD_SIZE = 14
+
 function formLabel(form: number): string {
   if (form > 0) return `▲ +${form}`
   if (form < 0) return `▼ ${form}`
@@ -165,6 +169,8 @@ export function SquadPage() {
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [detailsPlayerId, setDetailsPlayerId] = useState<string | null>(null)
   const [terminatingId, setTerminatingId] = useState<string | null>(null)
+  /** What the last termination cost, held only long enough to report it in a toast. */
+  const [terminationOutcome, setTerminationOutcome] = useState<TerminationResult | null>(null)
   const [tab, setTab] = useState(0)
   const [trainingAssignments, setTrainingAssignments] = useState<TrainingAssignmentsState>({})
   // playerId -> formation slot index (0 = GK). Keys ⊆ selected; values unique. The pitch
@@ -351,13 +357,17 @@ export function SquadPage() {
 
   const terminateMut = useMutation({
     mutationFn: (playerId: string) => terminateContract(saveGameId, playerId, token ?? ''),
-    onSuccess: () => {
+    onSuccess: (data) => {
       setTerminatingId(null)
       setDetailsPlayerId(null)
+      // Both dialogs close on success, so the toast is the only place the cost is ever reported.
+      setTerminationOutcome(data)
       void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] })
       void queryClient.invalidateQueries({ queryKey: ['finances', saveGameId, clubId] })
       void queryClient.invalidateQueries({ queryKey: ['freeAgents', saveGameId] })
       void queryClient.invalidateQueries({ queryKey: ['lineup', saveGameId, clubId] })
+      // releaseFrom unlists the player, so a transfer-listed one leaves a stale market row.
+      void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
     },
   })
 
@@ -767,9 +777,6 @@ export function SquadPage() {
     )
   }
 
-  /** Mirrors SquadRules.MIN_SQUAD_SIZE on the backend; the server is still the authority. */
-  const MIN_SQUAD_SIZE = 14
-
   /** Why this player cannot be released right now, or null when he can be. Explains only —
    * the backend enforces all three rules regardless. */
   function terminationBlockedReason(player: PlayerResponse): string | null {
@@ -1086,6 +1093,26 @@ export function SquadPage() {
           sx={{ width: '100%' }}
         >
           {errorMessage(listMut.error ?? unlistMut.error, 'Erro ao atualizar a lista de transferências.')}
+        </Alert>
+      </Snackbar>
+
+      {/* What the release cost, reported once — the balance itself lives on another page. */}
+      <Snackbar
+        open={terminationOutcome !== null}
+        autoHideDuration={6000}
+        onClose={() => setTerminationOutcome(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setTerminationOutcome(null)}
+          sx={{ width: '100%' }}
+        >
+          {terminationOutcome
+            && `Contrato de ${terminationOutcome.playerName} rescindido por `
+              + `${formatBRL(terminationOutcome.fee)}. Novo saldo: `
+              + `${formatBRL(terminationOutcome.newBalance)}.`}
         </Alert>
       </Snackbar>
 
