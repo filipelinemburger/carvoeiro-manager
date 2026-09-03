@@ -723,7 +723,7 @@ export function SquadPage() {
   // A small badge naming who a currently-borrowed player is on loan from.
   function onLoanBadge(player: PlayerResponse) {
     if (!player.onLoanFromClubName) return null
-    return <Chip size="small" color="info" label={`Emprestado (${player.onLoanFromClubName})`} sx={{ ml: 0.75, height: 20 }} />
+    return <Chip size="small" color="info" label={`Emprestado de ${player.onLoanFromClubName}`} sx={{ ml: 0.75, height: 20 }} />
   }
 
   // The squad-selection button: a starter is Criciúma yellow with the label of the SLOT they

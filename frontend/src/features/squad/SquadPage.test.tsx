@@ -651,6 +651,28 @@ describe('SquadPage', () => {
     expect(screen.queryByRole('combobox', { name: /clube de destino/i })).not.toBeInTheDocument()
   })
 
+  it('disables the Emprestar action with a visible reason when the player is himself on loan from elsewhere', async () => {
+    // offerLoanOut filters out any player where isOnLoan() is true — a club can't re-lend a
+    // player it doesn't own outright. Same "explain before the click" principle as the
+    // contract-length guard above.
+    const borrowed = makeOutfield('p-borrowed-short', 'Emprestado Curto', 'DEF')
+    borrowed.onLoanFromClubName = 'Avaí FC'
+    mockGetSquad.mockResolvedValue({ ...squad, players: [...squad.players, borrowed] })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Emprestado Curto'))
+    fireEvent.click(screen.getByText('Emprestado Curto'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+
+    const loanBtn = within(dialog).getByRole('button', { name: /^emprestar$/i })
+    expect(loanBtn).toBeDisabled()
+    expect(within(dialog).getByText(/emprestado por outro clube/i)).toBeInTheDocument()
+
+    fireEvent.click(loanBtn)
+    expect(mockLoanOut).not.toHaveBeenCalled()
+    expect(screen.queryByRole('combobox', { name: /clube de destino/i })).not.toBeInTheDocument()
+  })
+
   it('proposes a loan for a player with a long enough contract, offering every club but the manager\'s own', async () => {
     mockLoanOut.mockResolvedValue({
       offerId: 'o1', playerId: 'p-m1', playerName: 'Meio Um', status: 'ACCEPTED',
@@ -706,7 +728,8 @@ describe('SquadPage', () => {
     mockGetSquad.mockResolvedValue({ ...squad, players: [...squad.players, borrowed] })
     renderWithProviders()
     await waitFor(() => screen.getByText('Emprestado Um'))
-    expect(screen.getByText(/avaí fc/i)).toBeInTheDocument()
+    // "de" (not "(...)") so the badge reads unambiguously as who lent HIM, not who he was lent to.
+    expect(screen.getByText('Emprestado de Avaí FC')).toBeInTheDocument()
   })
 
   it('shows a "Listado" badge for a listed player and lets the user unlist them', async () => {
