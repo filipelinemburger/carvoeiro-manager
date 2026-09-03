@@ -30,6 +30,7 @@ import type {
   SignFreeAgentRequest,
   PlayerContract,
   TerminationResult,
+  LoanOfferResult,
   PlayerResponse,
   SetTrainingRequest,
   StaffRole,
@@ -295,6 +296,30 @@ export function terminateContract(
   token: string,
 ): Promise<TerminationResult> {
   return apiPost<TerminationResult>(`/save-games/${saveGameId}/players/${playerId}/terminate`, {}, token)
+}
+
+export function loanOut(
+  saveGameId: string,
+  req: { playerId: string; borrowerClubId: string; ownerWageShare: number; mayFaceOwner: boolean },
+  token: string,
+): Promise<LoanOfferResult> {
+  return apiPost<LoanOfferResult>(`/save-games/${saveGameId}/loans/out`, req, token)
+}
+
+export function loanIn(
+  saveGameId: string,
+  req: { playerId: string; ownerWageShare: number; mayFaceOwner: boolean },
+  token: string,
+): Promise<LoanOfferResult> {
+  return apiPost<LoanOfferResult>(`/save-games/${saveGameId}/loans/in`, req, token)
+}
+
+export function acceptLoanCounter(
+  saveGameId: string,
+  offerId: string,
+  token: string,
+): Promise<LoanOfferResult> {
+  return apiPost<LoanOfferResult>(`/save-games/${saveGameId}/loans/${offerId}/accept-counter`, {}, token)
 }
 
 export function getStaffRoster(saveGameId: string, clubId: string, token: string): Promise<StaffRoster> {

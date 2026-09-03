@@ -851,6 +851,9 @@ public class LineupService {
                 transferValuation.marketValue(p.getOverall(), p.getAge()),
                 contractValuation.wageDemand(p.getOverall(), p.getAge()),
                 contractValuation.terminationFee(p.getOverall(), p.getAge(), p.getContractYears()),
+                p.isOnLoan()
+                        ? clubRepository.findById(p.getOwnerClubId()).map(Club::getName).orElse(null)
+                        : null,
                 fitness,
                 p.getInjurySeverity().name(),
                 attributes,

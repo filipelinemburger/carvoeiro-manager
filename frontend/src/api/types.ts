@@ -154,6 +154,9 @@ export type PlayerResponse = {
   /** What terminating this player's contract would cost. Always sent by the API; optional here
    * only to keep older test fixtures compiling. */
   terminationFee?: number
+  /** The club that owns him while he is on loan here; null when he plays for his owner.
+   * Always sent by the API; optional here only to keep older test fixtures compiling. */
+  onLoanFromClubName?: string | null
   fitness: number
   injurySeverity: 'NONE' | 'KNOCK' | 'MINOR' | 'MAJOR'
   /** Full 28-attribute board, in canonical order (always sent by the API). */
@@ -692,6 +695,20 @@ export type TerminationResult = {
   playerName: string
   fee: number
   newBalance: number
+}
+
+export type LoanRefusal = 'KEY_PLAYER' | 'BELOW_LEVEL' | 'TERMS_REJECTED'
+
+export type LoanOfferResult = {
+  offerId: string
+  playerId: string
+  playerName: string
+  status: 'PENDING' | 'COUNTERED' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN'
+  ownerWageShare: number
+  mayFaceOwner: boolean
+  counterOwnerWageShare: number | null
+  counterMayFaceOwner: boolean | null
+  refusal: LoanRefusal | null
 }
 
 export type PreContractEligible = {

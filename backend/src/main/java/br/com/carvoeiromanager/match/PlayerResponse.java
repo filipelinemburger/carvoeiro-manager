@@ -32,6 +32,7 @@ public record PlayerResponse(
         BigDecimal value,
         BigDecimal wageDemand,
         BigDecimal terminationFee,
+        String onLoanFromClubName,
         int fitness,
         String injurySeverity,
         List<AttributeView> attributes,
