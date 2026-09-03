@@ -117,7 +117,8 @@ public class TransferService {
                         clubNames.getOrDefault(p.getClubId(), ""),
                         transferValuation.marketValue(p.getOverall(), p.getAge()), p.getWage(),
                         contractValuation.wageDemand(p.getOverall(), p.getAge()),
-                        p.getListedReason() != null ? p.getListedReason().name() : null))
+                        p.getListedReason() != null ? p.getListedReason().name() : null,
+                        p.getContractYears(), p.isOnLoan()))
                 .filter(filter::matches)
                 .sorted(Comparator.comparing(MarketPlayerResponse::value).reversed()
                         .thenComparing(MarketPlayerResponse::playerId))
