@@ -131,12 +131,21 @@ class LoanServiceCounterIT {
     }
 
     /**
-     * The AI answered against the club that held him at the time. If he was lent, sold or
-     * released before the manager accepts, that club may no longer be his — accepting must not
-     * execute a loan that moves him out from under whoever holds him now.
+     * The AI answered against the club that held him at the time. If he leaves that club before the
+     * manager accepts, accepting must not execute a loan that moves him out from under whoever
+     * holds him now — {@code acceptCounter} re-checks the offer's owner against his current
+     * {@code club_id}.
+     *
+     * <p><b>The move used here is an outright sale, and that choice is the whole point.</b> Sending
+     * him out on a second loan instead would trip {@code acceptCounter}'s {@code isOnLoan} filter as
+     * well as its stale-owner filter, and a test that trips two guards at once pins neither: delete
+     * the ownership check and it would still pass. A sale leaves {@code isOnLoan()} false and moves
+     * only {@code club_id} — exactly what {@code TransferExecutor.execute} writes to the row — so
+     * the stale-owner check is the only thing standing between the accept and a player being lent
+     * out from under his new club.
      */
     @Test
-    void acceptingACounterAfterThePlayerHasMovedFailsAndMovesNobody() {
+    void acceptingACounterAfterThePlayerHasBeenSoldFailsAndMovesNobody() {
         Career c = createCareer();
         Player spare = aSparePlayer(c);
         Club borrower = clubRepository.findById(aRivalClubId(c)).orElseThrow();
@@ -147,10 +156,15 @@ class LoanServiceCounterIT {
                 c.id(), c.userId(), spare.getId(), borrower.getId(), 0, false);
         assertThat(countered.status()).isEqualTo(LoanOfferStatus.COUNTERED);
 
-        UUID thirdClubId = aThirdClubId(c, borrower.getId());
-        Player moved = playerRepository.findById(spare.getId()).orElseThrow();
-        moved.loanTo(thirdClubId, 50, false);
-        playerRepository.save(moved);
+        // Sold to a third club: club_id moves, ownership does not exist (he is nobody's loanee).
+        UUID buyerClubId = aThirdClubId(c, borrower.getId());
+        Player sold = playerRepository.findById(spare.getId()).orElseThrow();
+        sold.setClubId(buyerClubId);
+        playerRepository.save(sold);
+        assertThat(playerRepository.findById(spare.getId()).orElseThrow().isOnLoan())
+                .as("the sale must not make him a loanee — otherwise the isOnLoan filter, not the "
+                        + "stale-owner filter, is what refuses below")
+                .isFalse();
 
         assertThatThrownBy(() -> loanService.acceptCounter(c.id(), c.userId(), countered.offerId()))
                 .isInstanceOf(ApiException.class)
@@ -158,7 +172,8 @@ class LoanServiceCounterIT {
                         .isEqualTo(ErrorCode.PLAYER_NOT_FOUND));
 
         Player reloaded = playerRepository.findById(spare.getId()).orElseThrow();
-        assertThat(reloaded.getClubId()).isEqualTo(thirdClubId);
-        assertThat(reloaded.getOwnerClubId()).isEqualTo(c.clubId());
+        assertThat(reloaded.getClubId()).isEqualTo(buyerClubId);
+        assertThat(reloaded.isOnLoan()).isFalse();
+        assertThat(reloaded.getOwnerClubId()).isNull();
     }
 }

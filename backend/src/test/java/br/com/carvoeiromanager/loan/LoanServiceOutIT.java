@@ -8,6 +8,7 @@ import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.match.Lineup;
 import br.com.carvoeiromanager.match.LineupPlayer;
 import br.com.carvoeiromanager.match.LineupPlayerRepository;
@@ -16,7 +17,6 @@ import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.support.PostgresTestContainer;
-import br.com.carvoeiromanager.transfer.NegotiationDecision;
 import br.com.carvoeiromanager.transfer.TransferDirection;
 import br.com.carvoeiromanager.transfer.TransferOffer;
 import br.com.carvoeiromanager.transfer.TransferOfferRepository;
@@ -245,6 +245,78 @@ class LoanServiceOutIT {
                 .extracting(LineupPlayer::getPlayerId)
                 .doesNotContain(spare.getId());
         assertThat(lineupRepository.findById(lineup.getId()).orElseThrow().getPenaltyTakerId()).isNull();
+    }
+
+    /** Pads {@code clubId} up to the professional squad ceiling with throwaway players. */
+    private void fillSquadToTheCap(Career c, UUID clubId) {
+        int room = SquadRules.MAX_SQUAD_SIZE
+                - playerRepository.findByClubIdAndYouthProspectFalse(clubId).size();
+        List<Player> padding = new java.util.ArrayList<>();
+        for (int i = 0; i < room; i++) {
+            padding.add(Player.create(c.id(), clubId, "Pad-" + UUID.randomUUID(), Position.MID,
+                    25, "Brasil", 60, 60, 60, 60, 60, 60, 60));
+        }
+        playerRepository.saveAll(padding);
+        assertThat(playerRepository.findByClubIdAndYouthProspectFalse(clubId))
+                .hasSize(SquadRules.MAX_SQUAD_SIZE);
+    }
+
+    /**
+     * A loan needs two clubs. The borrower filter excludes the managed club itself, so "lend him to
+     * us" answers CLUB_NOT_FOUND rather than executing a loan from a club to itself — worth pinning
+     * because the filter is the ONLY thing standing between that request and a player whose owner
+     * and borrower are the same row, which no later code path is written to survive.
+     */
+    @Test
+    void namingYourOwnClubAsTheBorrowerIsRefused() {
+        Career c = createCareer();
+        Player spare = aSparePlayer(c);
+
+        assertThatThrownBy(() -> loanService.offerLoanOut(
+                c.id(), c.userId(), spare.getId(), c.clubId(), 100, true))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.CLUB_NOT_FOUND));
+
+        assertThat(playerRepository.findById(spare.getId()).orElseThrow().isOnLoan()).isFalse();
+    }
+
+    @Test
+    void aBorrowerClubThatDoesNotExistIsRefused() {
+        Career c = createCareer();
+        Player spare = aSparePlayer(c);
+
+        assertThatThrownBy(() -> loanService.offerLoanOut(
+                c.id(), c.userId(), spare.getId(), UUID.randomUUID(), 100, true))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.CLUB_NOT_FOUND));
+
+        assertThat(playerRepository.findById(spare.getId()).orElseThrow().isOnLoan()).isFalse();
+    }
+
+    /**
+     * Taking a player in fills a place, so a borrower already at the ceiling is refused exactly as
+     * a buyer would be — checked before the AI is ever asked, so a full club never gets as far as
+     * countering an offer it could not honour.
+     */
+    @Test
+    void aBorrowerAlreadyAtTheSquadCapIsRefused() {
+        Career c = createCareer();
+        Player spare = aSparePlayer(c);
+        Club borrower = aWillingBorrower(c, spare);
+        fillSquadToTheCap(c, borrower.getId());
+
+        assertThatThrownBy(() -> loanService.offerLoanOut(
+                c.id(), c.userId(), spare.getId(), borrower.getId(), 100, true))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.SQUAD_FULL));
+
+        assertThat(playerRepository.findById(spare.getId()).orElseThrow().isOnLoan()).isFalse();
+        assertThat(loanOfferRepository.findBySaveGameIdAndPlayerIdAndStatusIn(c.id(), spare.getId(),
+                List.of(LoanOfferStatus.PENDING, LoanOfferStatus.COUNTERED, LoanOfferStatus.ACCEPTED,
+                        LoanOfferStatus.REJECTED))).isEmpty();
     }
 
     @Test

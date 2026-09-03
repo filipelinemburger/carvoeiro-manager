@@ -8,6 +8,7 @@ import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
@@ -118,6 +119,39 @@ class LoanServiceInIT {
         assertThat(r.counterOwnerWageShare()).isLessThan(100);
         assertThat(r.counterMayFaceOwner()).isFalse();
         assertThat(playerRepository.findById(target.getId()).orElseThrow().isOnLoan()).isFalse();
+    }
+
+    /**
+     * Borrowing fills a place, so a manager already at the ceiling is refused exactly as a buyer
+     * would be — and refused BEFORE the AI is asked, so a full squad never gets as far as a counter
+     * it could not accept.
+     */
+    @Test
+    void borrowingIntoAFullSquadIsRefused() {
+        Career c = createCareer();
+        UUID ownerClubId = aRivalClubId(c);
+        Player target = aSparePlayerAt(ownerClubId);
+        makeManagedClubModest(c, target);
+
+        int room = SquadRules.MAX_SQUAD_SIZE
+                - playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).size();
+        List<Player> padding = new java.util.ArrayList<>();
+        for (int i = 0; i < room; i++) {
+            padding.add(Player.create(c.id(), c.clubId(), "Pad-" + UUID.randomUUID(), Position.MID,
+                    25, "Brasil", 60, 60, 60, 60, 60, 60, 60));
+        }
+        playerRepository.saveAll(padding);
+        assertThat(playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()))
+                .hasSize(SquadRules.MAX_SQUAD_SIZE);
+
+        assertThatThrownBy(() -> loanService.offerLoanIn(c.id(), c.userId(), target.getId(), 0, true))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.SQUAD_FULL));
+
+        Player reloaded = playerRepository.findById(target.getId()).orElseThrow();
+        assertThat(reloaded.isOnLoan()).isFalse();
+        assertThat(reloaded.getClubId()).isEqualTo(ownerClubId);
     }
 
     @Test

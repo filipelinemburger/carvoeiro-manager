@@ -21,8 +21,8 @@ public class LoanPlausibility {
     static final int LEVEL_TOLERANCE = 3;
 
     /**
-     * @param ownerContext      the owning club's view of the player, from {@code SellerContextFactory}
-     * @param playerOverall     the player's overall
+     * @param ownerContext       the owning club's view of the player, from {@code SellerContextFactory}
+     * @param playerOverall      the player's overall
      * @param borrowerReputation the borrowing club's reputation, which is its squad quality
      * @return the reason to refuse, or empty when the loan is worth negotiating
      */

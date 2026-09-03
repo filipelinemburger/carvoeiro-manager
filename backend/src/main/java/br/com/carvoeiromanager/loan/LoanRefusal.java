@@ -10,6 +10,12 @@ public enum LoanRefusal {
     KEY_PLAYER,
     /** He is beneath the borrowing club's level. */
     BELOW_LEVEL,
-    /** Plausible player, unacceptable terms. */
+    /**
+     * Plausible player, unacceptable terms. Unlike the two above, this one never comes out of
+     * {@link LoanPlausibility#check} — plausibility only ever answers about the PLAYER. It is
+     * produced by the negotiator instead, when the player passes both plausibility tests and the
+     * offer is then countered. A reader arriving here from {@code check()} should not go looking
+     * for the branch that returns it: there isn't one.
+     */
     TERMS_REJECTED
 }

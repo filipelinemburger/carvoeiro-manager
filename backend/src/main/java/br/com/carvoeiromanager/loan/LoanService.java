@@ -10,7 +10,6 @@ import br.com.carvoeiromanager.common.SquadDeparture;
 import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
-import br.com.carvoeiromanager.transfer.NegotiationDecision;
 import br.com.carvoeiromanager.transfer.SellerContext;
 import br.com.carvoeiromanager.transfer.SellerContextFactory;
 import org.springframework.stereotype.Service;
@@ -60,6 +59,9 @@ public class LoanService {
                                           boolean mayFaceOwner) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         UUID managedClubId = save.getManagedClubId();
+        // Before the lookup: a malformed body is a bad request, and diagnosing it after the player
+        // search would answer PLAYER_NOT_FOUND for an offer whose player was never the problem.
+        requireValidTerms(new LoanTerms(ownerWageShare, mayFaceOwner));
 
         Player player = playerRepository.findById(playerId)
                 .filter(p -> p.getSaveGameId().equals(saveGameId))
@@ -90,6 +92,7 @@ public class LoanService {
                                          int ownerWageShare, boolean mayFaceOwner) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         UUID managedClubId = save.getManagedClubId();
+        requireValidTerms(new LoanTerms(ownerWageShare, mayFaceOwner));   // see offerLoanOut
 
         Player player = playerRepository.findById(playerId)
                 .filter(p -> p.getSaveGameId().equals(saveGameId))
@@ -114,9 +117,12 @@ public class LoanService {
     /**
      * The shared core: decide, then either execute or record what the AI said. {@code aiIsOwner}
      * says which side the AI sits on, which is the only thing that differs between directions.
-     * The wage-share bound is enforced here rather than in each direction's entry point, so
-     * every caller — Task 7's {@code offerLoanIn} included — gets it for free and nothing can
-     * persist a share the finance split could not honour.
+     * <p>
+     * The wage-share bound is re-checked here even though both entry points already reject a
+     * malformed one: the guard is idempotent and pure, and keeping it here means no future caller
+     * of this shared core can persist a share the finance split could not honour. The entry points
+     * check it first only so that a malformed body is diagnosed as such rather than as a missing
+     * player.
      */
     LoanOfferResponse negotiate(SaveGame save, Player player, Club owner, Club borrower,
                                 LoanTerms offered, boolean aiIsOwner) {
@@ -137,16 +143,24 @@ public class LoanService {
 
         LoanNegotiationResult result = loanNegotiator.respond(
                 offered, player.getOverall(), borrower.getReputation(), aiIsOwner);
-        if (result.decision() == NegotiationDecision.COUNTER) {
-            offer.markCountered(result.counter().ownerWageShare(), result.counter().mayFaceOwner());
-            loanOfferRepository.save(offer);
-            return toResponse(offer, player, LoanRefusal.TERMS_REJECTED);
+        // Exhaustive on purpose. LoanNegotiator.respond only ever answers ACCEPT or COUNTER today,
+        // but "anything that is not a counter is an acceptance" would silently EXECUTE a loan the
+        // day it learns to say REJECT. A loan moving a player is not a safe default.
+        switch (result.decision()) {
+            case COUNTER -> {
+                offer.markCountered(result.counter().ownerWageShare(), result.counter().mayFaceOwner());
+                loanOfferRepository.save(offer);
+                return toResponse(offer, player, LoanRefusal.TERMS_REJECTED);
+            }
+            case ACCEPT -> {
+                execute(save, player, borrower.getId(), offered);
+                offer.markAccepted();
+                loanOfferRepository.save(offer);
+                return toResponse(offer, player, null);
+            }
+            default -> throw new ApiException(ErrorCode.INVALID_TRANSFER,
+                    "The loan negotiator returned an unhandled decision: " + result.decision());
         }
-
-        execute(save, player, borrower.getId(), offered);
-        offer.markAccepted();
-        loanOfferRepository.save(offer);
-        return toResponse(offer, player, null);
     }
 
     /** Takes the AI's counter as offered. There is no counter-the-counter: accept or walk away. */
