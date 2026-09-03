@@ -72,11 +72,21 @@ public class AdvancePreviewService {
         if (next != null && next.getType() == SeasonEventType.MATCH) {
             List<Fixture> fixtures = fixtureRepository.findBySaveGameIdAndCompetitionIdAndRound(
                     saveGameId, next.getCompetitionId(), next.getRound());
-            managedClubPlaysNext = fixtures.stream().anyMatch(f ->
-                    managedClubId.equals(f.getHomeClubId()) || managedClubId.equals(f.getAwayClubId()));
+            Fixture managedFixture = fixtures.stream()
+                    .filter(f -> managedClubId.equals(f.getHomeClubId())
+                            || managedClubId.equals(f.getAwayClubId()))
+                    .findFirst()
+                    .orElse(null);
+            managedClubPlaysNext = managedFixture != null;
             if (managedClubPlaysNext) {
-                ineligibleStarters = lineupService.savedIneligibleStarters(saveGameId, managedClubId).stream()
-                        .map(AdvancePreviewService::toIneligibleStarter)
+                // The opponent is what makes the loan fixture-release rule answerable: a borrowed
+                // starter is barred only against the club that owns him.
+                UUID opponentClubId = managedClubId.equals(managedFixture.getHomeClubId())
+                        ? managedFixture.getAwayClubId()
+                        : managedFixture.getHomeClubId();
+                ineligibleStarters = lineupService
+                        .savedIneligibleStarters(saveGameId, managedClubId, opponentClubId).stream()
+                        .map(p -> toIneligibleStarter(p, lineupService.isLoanBarred(p, opponentClubId)))
                         .toList();
                 lowFitnessStarters = lineupService.lowFitnessStarters(saveGameId, managedClubId, currentDate, 50).stream()
                         .map(r -> new LowFitnessStarterResponse(r.playerId(), r.playerName(), r.fitness()))
@@ -106,8 +116,19 @@ public class AdvancePreviewService {
                 lowFitnessStarters);
     }
 
-    private static IneligibleStarterResponse toIneligibleStarter(Player p) {
-        String reason = p.getSuspensionRemaining() > 0 ? "SUSPENDED" : "INJURED";
+    /**
+     * {@code loanBarred} is decided by the caller, which holds the opponent: a player can be
+     * perfectly fit and unsuspended and still unable to play this particular fixture.
+     */
+    private static IneligibleStarterResponse toIneligibleStarter(Player p, boolean loanBarred) {
+        String reason;
+        if (p.getSuspensionRemaining() > 0) {
+            reason = "SUSPENDED";
+        } else if (loanBarred) {
+            reason = "LOAN_BARRED";
+        } else {
+            reason = "INJURED";
+        }
         return new IneligibleStarterResponse(p.getId().toString(), p.getName(), reason);
     }
 

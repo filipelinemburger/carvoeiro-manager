@@ -12,6 +12,8 @@ import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionClub;
 import br.com.carvoeiromanager.competition.CompetitionClubRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
+import br.com.carvoeiromanager.competition.Fixture;
+import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.match.LineupResponse;
 import br.com.carvoeiromanager.match.LineupService;
 import br.com.carvoeiromanager.match.LineupStarter;
@@ -63,6 +65,7 @@ class AdvancePreviewIT {
     @Autowired ClubRepository clubRepository;
     @Autowired CompetitionRepository competitionRepository;
     @Autowired CompetitionClubRepository competitionClubRepository;
+    @Autowired FixtureRepository fixtureRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -141,6 +144,55 @@ class AdvancePreviewIT {
                 .anyMatch(s -> s.playerId().equals(injuredId.toString()) && s.reason().equals("INJURED"));
         assertThat(p.ineligibleStarters())
                 .anyMatch(s -> s.playerId().equals(suspendedId.toString()) && s.reason().equals("SUSPENDED"));
+    }
+
+    /** The club the managed side plays in the next scheduled round. */
+    private UUID nextOpponentOf(Career c) {
+        SeasonEvent next = seasonEventRepository.findNextManagedEvent(c.id(), c.clubId());
+        Fixture fixture = fixtureRepository
+                .findBySaveGameIdAndCompetitionIdAndRound(c.id(), next.getCompetitionId(), next.getRound())
+                .stream()
+                .filter(f -> c.clubId().equals(f.getHomeClubId()) || c.clubId().equals(f.getAwayClubId()))
+                .findFirst().orElseThrow();
+        return c.clubId().equals(fixture.getHomeClubId()) ? fixture.getAwayClubId() : fixture.getHomeClubId();
+    }
+
+    /**
+     * A borrowed starter barred from THIS fixture is dropped by {@code startingXi} exactly as a
+     * suspended one is, so leaving him out of the warning meant the manager lost a starter with no
+     * explanation anywhere. Unlike suspension and injury, this is not a property of the player: he
+     * is perfectly fit and available, and only this particular opponent — the club that owns him —
+     * makes him unselectable, which is why the reason is its own value rather than folded into
+     * INJURED.
+     */
+    @Test
+    void aLoanBarredStarterIsReportedWithItsOwnReason() {
+        // Given a career whose next event is a managed-club match, with a full eligible XI saved
+        Career c = createCareer();
+        setBestEligibleLineup(c);
+        advanceUntilManagedClubPlaysNext(c);
+        setBestEligibleLineup(c);
+
+        // When one saved starter turns out to be on loan FROM the club they are about to play,
+        // with no fixture release negotiated. Routing him through his owner first is what makes
+        // loanTo() record the right owner; nothing else about him changes.
+        UUID opponentClubId = nextOpponentOf(c);
+        LineupResponse saved = lineupService.getLineup(c.id(), c.clubId(), c.userId()).orElseThrow();
+        UUID barredId = saved.starters().get(0).playerId();
+        Player barred = playerRepository.findById(barredId).orElseThrow();
+        barred.setClubId(opponentClubId);
+        barred.loanTo(c.clubId(), 50, false);
+        playerRepository.save(barred);
+        assertThat(playerRepository.findById(barredId).orElseThrow().isEligible())
+                .as("he must be fit and unsuspended, or the reason below would not be the loan")
+                .isTrue();
+
+        // Then the preview names him, and says why
+        AdvancePreviewResponse p = advancePreviewService.preview(c.id(), c.userId());
+        assertThat(p.managedClubPlaysNext()).isTrue();
+        assertThat(p.ineligibleStarters())
+                .anyMatch(st -> st.playerId().equals(barredId.toString())
+                        && st.reason().equals("LOAN_BARRED"));
     }
 
     @Test

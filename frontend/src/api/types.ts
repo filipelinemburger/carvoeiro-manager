@@ -531,7 +531,8 @@ export type LowFitnessStarter = {
 export type IneligibleStarter = {
   playerId: string
   playerName: string
-  reason: 'SUSPENDED' | 'INJURED'
+  // LOAN_BARRED: on loan and not released to face this fixture's opponent, who owns him.
+  reason: 'SUSPENDED' | 'INJURED' | 'LOAN_BARRED'
 }
 
 export type AdvancePreviewResponse = {
