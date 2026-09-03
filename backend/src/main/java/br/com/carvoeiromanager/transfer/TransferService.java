@@ -312,8 +312,11 @@ public class TransferService {
                 .map(TransferOffer::getPlayerId)
                 .collect(Collectors.toSet());
 
-        // Listed players come first: they're more likely to draw a (better) bid.
+        // Listed players come first: they're more likely to draw a (better) bid. Borrowed players
+        // are excluded outright — the managed club cannot sell one, so a bid for him could only
+        // ever be refused, and offering it would be an invitation to a deal that does not exist.
         List<Player> managedPlayers = playerRepository.findByClubIdAndYouthProspectFalse(managedClubId).stream()
+                .filter(p -> !p.isOnLoan())
                 .sorted(Comparator.comparing((Player p) -> !p.isTransferListed())
                         .thenComparing(Player::getId))
                 .toList();
@@ -369,6 +372,9 @@ public class TransferService {
         if (player.isYouthProspect()) {
             throw invalid("Youth prospects cannot be listed for transfer");
         }
+        // He plays here, but club_id does not say he is ours — a borrowed player must not be put
+        // on the market by the club that only borrowed him.
+        squadDeparture.requireNotOnLoan(player);
         return player;
     }
 

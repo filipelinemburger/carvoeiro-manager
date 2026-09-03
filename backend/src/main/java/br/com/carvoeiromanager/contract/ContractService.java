@@ -126,6 +126,9 @@ public class ContractService {
                 .orElseThrow(() -> new ApiException(ErrorCode.PLAYER_NOT_FOUND,
                         "Player not found in your professional squad"));
 
+        // He plays here, but he may not be ours: releaseFrom() would null his club_id and zero his
+        // terms while leaving owner_club_id set, which is both a free agent and a loanee at once.
+        squadDeparture.requireNotOnLoan(player);
         squadDeparture.requireNoLiveMatch(saveGameId);
         List<Player> squad = squadDeparture.seniorSquad(managedClubId);
         squadDeparture.requireDepartureAllowed(squad, player);
@@ -219,11 +222,17 @@ public class ContractService {
         }
     }
 
+    /**
+     * The player must both play here and belong here: a borrowed player's contract is with his
+     * owner, so the borrowing club has nothing to renew.
+     */
     Player requireManagedPlayer(UUID saveGameId, UUID managedClubId, UUID playerId) {
-        return playerRepository.findById(playerId)
+        Player player = playerRepository.findById(playerId)
                 .filter(p -> p.getSaveGameId().equals(saveGameId))
                 .filter(p -> managedClubId.equals(p.getClubId()))
                 .orElseThrow(() -> new ApiException(ErrorCode.PLAYER_NOT_FOUND, "Player not found at your club"));
+        squadDeparture.requireNotOnLoan(player);
+        return player;
     }
 
     PlayerContractResponse toResponse(Player p) {

@@ -15,9 +15,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * The rules every way out of the managed squad shares — selling a player and terminating his
- * contract: when a departure is legal at all, and what must be cleaned up once it happens.
- * Kept in one place so the two paths cannot drift apart.
+ * The rules every way out of the managed squad shares — selling a player, terminating his contract
+ * and lending him out: when a departure is legal at all, and what must be cleaned up once it
+ * happens. Kept in one place so the paths cannot drift apart.
  */
 @Component
 public class SquadDeparture {
@@ -50,10 +50,31 @@ public class SquadDeparture {
     }
 
     /**
+     * Refuses to dispose of a player the club does not own. {@code club_id} means <em>where he
+     * plays</em>, so a borrowed player sits in the squad indistinguishably from an owned one and
+     * passes every "is he mine?" lookup that reads {@code club_id} alone — {@code owner_club_id}
+     * is the only thing that says who he belongs to.
+     *
+     * <p>Without this, the club that merely borrowed him could terminate his contract (leaving the
+     * row simultaneously a free agent and on loan — the invariant the loans spec calls load-bearing)
+     * or sell him to a third club (leaving a stale owner still paying his wage share forever).
+     * Neither is recoverable, and both are reachable in normal play.
+     */
+    public void requireNotOnLoan(Player player) {
+        if (player.isOnLoan()) {
+            throw new ApiException(ErrorCode.PLAYER_ALREADY_ON_LOAN,
+                    "This player is on loan from another club; you cannot dispose of him");
+        }
+    }
+
+    /**
      * Refuses a departure that would leave the club unable to field a team: below the squad
-     * floor, or without a goalkeeper.
+     * floor, or without a goalkeeper. Also refuses a departure the club has no right to make at
+     * all — see {@link #requireNotOnLoan} — so every exit inherits the ownership check rather
+     * than each one remembering it.
      */
     public void requireDepartureAllowed(List<Player> seniorSquad, Player leaving) {
+        requireNotOnLoan(leaving);
         if (seniorSquad.size() <= SquadRules.MIN_SQUAD_SIZE) {
             throw new ApiException(ErrorCode.SQUAD_TOO_SMALL, "Squad would be too small");
         }
