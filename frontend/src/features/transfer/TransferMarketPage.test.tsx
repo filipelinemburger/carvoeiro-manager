@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { TransferMarketPage } from './TransferMarketPage'
 import { AuthProvider } from '../../auth/AuthContext'
 import { ApiError } from '../../api/client'
-import type { ClubSummary, MarketPlayer, PageResponse, TransferOffer } from '../../api/types'
+import type { ClubSummary, LoanOfferResult, MarketPlayer, PageResponse, TransferOffer } from '../../api/types'
 
 vi.mock('../../api/career', () => ({
   getSaveGame: vi.fn(),
@@ -19,9 +19,14 @@ vi.mock('../../api/career', () => ({
   getSquad: vi.fn(),
   getFreeAgents: vi.fn(),
   signFreeAgent: vi.fn(),
+  loanIn: vi.fn(),
+  acceptLoanCounter: vi.fn(),
 }))
 
-import { getSaveGame, getMarket, getClubs, getOffers, makeOffer, respondToOffer, withdrawOffer, getFreeAgents, getSquad } from '../../api/career'
+import {
+  getSaveGame, getMarket, getClubs, getOffers, makeOffer, respondToOffer, withdrawOffer,
+  getFreeAgents, getSquad, loanIn,
+} from '../../api/career'
 
 const SAVE_OPEN = {
   id: 'sg-1', seasonYear: 2026, competitionId: 'c-1', competitionName: 'Catarinense',
@@ -270,6 +275,64 @@ describe('TransferMarketPage', () => {
     await waitFor(() =>
       expect(getMarket).toHaveBeenCalledWith('sg-1', expect.anything(), 2, 20, 'test-token'),
     )
+  })
+
+  it('opens the loan dialog from a market row and submits a borrow proposal', async () => {
+    const ACCEPTED: LoanOfferResult = {
+      offerId: 'lo1', playerId: 'p1', playerName: 'Alvo Um', status: 'ACCEPTED',
+      ownerWageShare: 70, mayFaceOwner: true, counterOwnerWageShare: null, counterMayFaceOwner: null,
+      refusal: null,
+    }
+    vi.mocked(loanIn).mockResolvedValue(ACCEPTED)
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+    render(
+      <MemoryRouter initialEntries={['/transfers?saveGameId=sg-1&clubId=club-1']}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <TransferMarketPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    openMarketTab()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /pedir emprestado/i }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/parcela salarial/i), { target: { value: '70' } })
+    fireEvent.click(within(dialog).getByRole('switch', { name: /pode enfrentar o clube dono/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /pedir empréstimo/i }))
+
+    await waitFor(() => expect(loanIn).toHaveBeenCalledWith(
+      'sg-1', { playerId: 'p1', ownerWageShare: 70, mayFaceOwner: true }, 'test-token',
+    ))
+    expect(await within(dialog).findByText(/empréstimo aprovado/i)).toBeInTheDocument()
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['squad', 'sg-1', 'club-1'] }))
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['market', 'sg-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['finances', 'sg-1', 'club-1'] })
+  })
+
+  it('shows a KEY_PLAYER refusal in the loan dialog with no path to improve the offer', async () => {
+    const REJECTED: LoanOfferResult = {
+      offerId: 'lo1', playerId: 'p1', playerName: 'Alvo Um', status: 'REJECTED',
+      ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: null, counterMayFaceOwner: null,
+      refusal: 'KEY_PLAYER',
+    }
+    vi.mocked(loanIn).mockResolvedValue(REJECTED)
+
+    renderPage()
+    openMarketTab()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /pedir emprestado/i }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /pedir empréstimo/i }))
+
+    expect(await within(dialog).findByText('O clube não abre mão dele: é peça-chave do elenco.')).toBeInTheDocument()
+    // A KEY_PLAYER refusal is final — no submit control, no wage-share field left to retry with.
+    expect(within(dialog).queryByRole('button', { name: /pedir empréstimo/i })).not.toBeInTheDocument()
+    expect(within(dialog).queryByLabelText(/parcela salarial/i)).not.toBeInTheDocument()
   })
 
   it('optimistically removes a withdrawn offer before the request resolves', async () => {

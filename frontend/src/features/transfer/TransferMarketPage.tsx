@@ -7,7 +7,7 @@ import {
 } from '@mui/material'
 import {
   getSaveGame, getMarket, getClubs, getOffers, getSquad, getPlayer,
-  makeOffer, acceptCounter, withdrawOffer, respondToOffer,
+  makeOffer, acceptCounter, withdrawOffer, respondToOffer, loanIn, acceptLoanCounter,
 } from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
@@ -19,9 +19,10 @@ import { PlayerDetails } from '../squad/PlayerDetails'
 import { WatchStar } from '../players/WatchStar'
 import { MoneyField } from '../../components/MoneyField'
 import { MakeOfferDialog, type OfferTarget } from './MakeOfferDialog'
+import { LoanInDialog } from './LoanInDialog'
 import { LISTED_REASON_LABEL } from '../squad/listedReason'
 import { CARBON } from '../../muiTheme'
-import type { MarketFilters, MarketPlayer, PlayerResponse, TransferOffer } from '../../api/types'
+import type { LoanOfferResult, MarketFilters, MarketPlayer, PlayerResponse, TransferOffer } from '../../api/types'
 import { formatBRL, parseMoneyInput } from '../../lib/money'
 import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
@@ -276,6 +277,12 @@ export function TransferMarketPage() {
   const [offerTarget, setOfferTarget] = useState<OfferTarget | null>(null)
   // The incoming offer whose inline counter-proposal form is open (one at a time).
   const [counteringId, setCounteringId] = useState<string | null>(null)
+  // The market player a loan-in proposal is being drafted for (opens LoanInDialog) — a bid's
+  // alternative on the same row, so this lives beside offerTarget rather than on its own page.
+  const [loaningPlayer, setLoaningPlayer] = useState<MarketPlayer | null>(null)
+  /** The outcome of the open loan negotiation (accepted / countered / rejected); null before a
+   * proposal is sent, and reset whenever the dialog opens for a (possibly different) player. */
+  const [loanResult, setLoanResult] = useState<LoanOfferResult | null>(null)
 
   // Market filter bar: draft form values vs. the applied filters actually sent to the API —
   // "Filtrar" copies the draft over and resets to page 1.
@@ -413,6 +420,31 @@ export function TransferMarketPage() {
     },
   })
 
+  // Invalidations shared by both loan-in mutations below: a borrowed player joins the squad
+  // (finances change with the new wage share, the market listing for him can disappear).
+  function invalidateAfterLoanIn() {
+    void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, managedClubId] })
+    void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
+    void queryClient.invalidateQueries({ queryKey: ['finances', saveGameId, managedClubId] })
+  }
+
+  const loanInMut = useMutation({
+    mutationFn: (v: { playerId: string; ownerWageShare: number; mayFaceOwner: boolean }) =>
+      loanIn(saveGameId, v, token ?? ''),
+    onSuccess: (data) => {
+      setLoanResult(data)
+      invalidateAfterLoanIn()
+    },
+  })
+
+  const acceptLoanCounterMut = useMutation({
+    mutationFn: (offerId: string) => acceptLoanCounter(saveGameId, offerId, token ?? ''),
+    onSuccess: (data) => {
+      setLoanResult(data)
+      invalidateAfterLoanIn()
+    },
+  })
+
   // Date-based window status from the backend (the single source of truth).
   const windowOpen = save.data?.transferWindowOpen ?? true
   const currentDate = save.data?.currentDate ? new Date(save.data.currentDate) : null
@@ -448,6 +480,11 @@ export function TransferMarketPage() {
         </Alert>
       )}
       {offerMut.isError && <Alert severity="error" sx={{ mb: 2 }}>{errorMessage(offerMut.error, 'Erro ao enviar proposta.')}</Alert>}
+      {(loanInMut.isError || acceptLoanCounterMut.isError) && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {errorMessage(loanInMut.error ?? acceptLoanCounterMut.error, 'Erro ao negociar o empréstimo.')}
+        </Alert>
+      )}
 
       {isMobile ? (
         <FormControl size="small" fullWidth sx={{ mb: 2 }}>
@@ -722,17 +759,27 @@ export function TransferMarketPage() {
                         <Stat label="Valor" value={formatBRL(p.value)} />
                         <Stat label="Salário pedido" value={formatBRL(p.wageDemand)} />
                       </Stack>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        disabled={!windowOpen}
-                        sx={{ flexShrink: 0 }}
-                        onClick={() => setOfferTarget({
-                          playerId: p.playerId, name: p.name, value: p.value, wageDemand: p.wageDemand,
-                        })}
-                      >
-                        Fazer proposta
-                      </Button>
+                      <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          disabled={!windowOpen}
+                          onClick={() => setOfferTarget({
+                            playerId: p.playerId, name: p.name, value: p.value, wageDemand: p.wageDemand,
+                          })}
+                        >
+                          Fazer proposta
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          color="secondary"
+                          size="small"
+                          disabled={!windowOpen}
+                          onClick={() => { setLoaningPlayer(p); setLoanResult(null) }}
+                        >
+                          Pedir emprestado
+                        </Button>
+                      </Stack>
                     </Stack>
                   </CardContent>
                 </Card>
@@ -782,6 +829,15 @@ export function TransferMarketPage() {
         busy={offerMut.isPending}
         onClose={() => setOfferTarget(null)}
         onSubmit={v => offerMut.mutate(v)}
+      />
+
+      <LoanInDialog
+        player={loaningPlayer}
+        pending={loanInMut.isPending || acceptLoanCounterMut.isPending}
+        result={loanResult}
+        onSubmit={v => { if (loaningPlayer) loanInMut.mutate({ playerId: loaningPlayer.playerId, ...v }) }}
+        onAcceptCounter={() => { if (loanResult) acceptLoanCounterMut.mutate(loanResult.offerId) }}
+        onClose={() => { setLoaningPlayer(null); setLoanResult(null) }}
       />
     </Box>
   )
