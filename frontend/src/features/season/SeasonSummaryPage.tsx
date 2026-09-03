@@ -185,6 +185,21 @@ export function SeasonSummaryPage() {
               </List>
             </Box>
           )}
+          {((result.loanReturns ?? []).length > 0) && (
+            <SquadChangeList title="Retornos de empréstimo" changes={result.loanReturns} />
+          )}
+          {((result.surplusListings ?? []).length > 0) && (
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>Excedentes listados para transferência</Typography>
+              <List dense disablePadding>
+                {result.surplusListings.map((c, i) => (
+                  <ListItem key={i} disableGutters sx={{ py: 0.25 }}>
+                    <Typography variant="body2">{c.playerName} ({c.position}, {c.age})</Typography>
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
           {((result.preContractArrivals ?? []).length > 0) && (
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>Chegadas por pré-contrato</Typography>

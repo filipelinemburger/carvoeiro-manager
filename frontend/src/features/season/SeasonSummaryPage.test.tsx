@@ -57,6 +57,8 @@ describe('SeasonSummaryPage', () => {
       youthDepartures: [],
       preContractArrivals: [],
       preContractDepartures: [],
+      loanReturns: [],
+      surplusListings: [],
       watchlistEvents: [],
     })
 
@@ -81,6 +83,8 @@ describe('SeasonSummaryPage', () => {
       youthDepartures: [],
       preContractArrivals: [],
       preContractDepartures: [],
+      loanReturns: [],
+      surplusListings: [],
       watchlistEvents: [],
     })
 
@@ -92,10 +96,35 @@ describe('SeasonSummaryPage', () => {
     expect(screen.getByText(/Zé Tigre/)).toBeInTheDocument()
   })
 
+  it('shows loan returns and surplus listings beside retirements and expired contracts', async () => {
+    vi.mocked(rolloverSeason).mockResolvedValue({
+      seasonYear: 2027,
+      currentRound: 0,
+      retirements: [],
+      expiredContracts: [],
+      youthIntake: [],
+      youthDepartures: [],
+      preContractArrivals: [],
+      preContractDepartures: [],
+      loanReturns: [{ playerName: 'Emprestado Retornou', position: 'MID', age: 23 }],
+      surplusListings: [{ playerName: 'Excedente do Elenco', position: 'DEF', age: 27 }],
+      watchlistEvents: [],
+    })
+
+    renderPage()
+    await waitFor(() => screen.getByRole('button', { name: /próxima temporada/i }))
+    fireEvent.click(screen.getByRole('button', { name: /próxima temporada/i }))
+
+    expect(await screen.findByText(/Retornos de empréstimo/i)).toBeInTheDocument()
+    expect(screen.getByText(/Emprestado Retornou/)).toBeInTheDocument()
+    expect(screen.getByText(/Excedentes listados para transferência/i)).toBeInTheDocument()
+    expect(screen.getByText(/Excedente do Elenco/)).toBeInTheDocument()
+  })
+
   it('invalidates squad, youth, free agents, season history, clubs, and watchlist after rolling over', async () => {
     vi.mocked(rolloverSeason).mockResolvedValue({
       seasonYear: 2027, currentRound: 0, retirements: [], expiredContracts: [], youthIntake: [], youthDepartures: [],
-      preContractArrivals: [], preContractDepartures: [], watchlistEvents: [],
+      preContractArrivals: [], preContractDepartures: [], loanReturns: [], surplusListings: [], watchlistEvents: [],
     })
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')

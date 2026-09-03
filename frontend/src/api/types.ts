@@ -560,6 +560,11 @@ export type RolloverResponse = {
   youthDepartures: SquadChange[]
   preContractArrivals: SquadChange[]
   preContractDepartures: SquadChange[]
+  /** Loanees returned to the managed club at rollover (owner reclaims them before the contract tick). */
+  loanReturns: SquadChange[]
+  /** Managed-club seniors listed as ListedReason.SURPLUS because the loan returns pushed the
+   * squad past MAX_SQUAD_SIZE; empty when no overflow happened. */
+  surplusListings: SquadChange[]
   watchlistEvents: PlayerAlert[]
 }
 
