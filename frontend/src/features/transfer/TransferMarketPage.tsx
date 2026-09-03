@@ -20,6 +20,7 @@ import { WatchStar } from '../players/WatchStar'
 import { MoneyField } from '../../components/MoneyField'
 import { MakeOfferDialog, type OfferTarget } from './MakeOfferDialog'
 import { LoanInDialog } from './LoanInDialog'
+import { MIN_CONTRACT_YEARS_TO_LOAN } from '../loan/loanMessages'
 import { LISTED_REASON_LABEL } from '../squad/listedReason'
 import { CARBON } from '../../muiTheme'
 import type { LoanOfferResult, MarketFilters, MarketPlayer, PlayerResponse, TransferOffer } from '../../api/types'
@@ -115,6 +116,21 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
 function parsedOr(stored: string | undefined, fallback: number): number {
   const n = parseMoneyInput(stored ?? '')
   return Number.isNaN(n) ? Math.round(fallback) : n
+}
+
+/** Why this market player cannot be borrowed right now, or null when he can be. Mirrors
+ * SquadPage's `loanBlockedReason`: the contract-length guard mirrors
+ * LoanService.requireLoanableContract, and the already-on-loan guard mirrors the `!isOnLoan()`
+ * filter the backend applies before it will even look the player up — a player already out on
+ * loan isn't the current club's to re-lend. Explains only — the backend still enforces both. */
+function loanInBlockedReason(player: MarketPlayer): string | null {
+  if (player.onLoan) {
+    return 'Jogador já está emprestado a outro clube.'
+  }
+  if (player.contractYears < MIN_CONTRACT_YEARS_TO_LOAN) {
+    return `Contrato com menos de ${MIN_CONTRACT_YEARS_TO_LOAN} anos não pode ser emprestado.`
+  }
+  return null
 }
 
 /**
@@ -771,15 +787,22 @@ export function TransferMarketPage() {
                         >
                           Fazer proposta
                         </Button>
-                        <Button
-                          variant="outlined"
-                          color="secondary"
-                          size="small"
-                          disabled={!windowOpen}
-                          onClick={() => { setLoaningPlayer(p); setLoanResult(null) }}
-                        >
-                          Pedir emprestado
-                        </Button>
+                        <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
+                          <Button
+                            variant="outlined"
+                            color="secondary"
+                            size="small"
+                            disabled={!windowOpen || loanInBlockedReason(p) !== null}
+                            onClick={() => { setLoaningPlayer(p); setLoanResult(null) }}
+                          >
+                            Pedir emprestado
+                          </Button>
+                          {loanInBlockedReason(p) && (
+                            <Typography variant="caption" color="error" sx={{ textAlign: 'right' }}>
+                              {loanInBlockedReason(p)}
+                            </Typography>
+                          )}
+                        </Stack>
                       </Stack>
                     </Stack>
                   </CardContent>

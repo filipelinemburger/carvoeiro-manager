@@ -27,6 +27,7 @@ import { MoodChip } from './MoodChip'
 import { teamMorale } from './morale'
 import { SEVERITY_LABEL } from './injurySeverity'
 import { SlotPickerDialog } from './SlotPickerDialog'
+import { MIN_CONTRACT_YEARS_TO_LOAN } from '../loan/loanMessages'
 import { RoleContextMenu, type RoleMenuAnchor } from './RoleContextMenu'
 import type { TrainingAssignmentsState } from './training/bulkTraining'
 import { TrainingTab } from './training/TrainingTab'
@@ -97,9 +98,6 @@ const CRICIUMA_YELLOW = '#f7d417'
 
 /** Mirrors SquadRules.MIN_SQUAD_SIZE on the backend; the server is still the authority. */
 const MIN_SQUAD_SIZE = 14
-
-/** Mirrors LoanService.MIN_CONTRACT_YEARS_TO_LOAN: a loan must end before the contract does. */
-const MIN_CONTRACT_YEARS_TO_LOAN = 2
 
 function formLabel(form: number): string {
   if (form > 0) return `▲ +${form}`

@@ -1,5 +1,10 @@
 import type { LoanRefusal } from '../../api/types'
 
+/** Mirrors LoanService.MIN_CONTRACT_YEARS_TO_LOAN: a loan must end before the contract does, so a
+ * player needs at least this many years left to be loaned in either direction. Shared by the
+ * lend-out gate (SquadPage) and the borrow gate (TransferMarketPage) so the two can't drift. */
+export const MIN_CONTRACT_YEARS_TO_LOAN = 2
+
 /**
  * pt-BR text for a rejected loan offer. The three refusals carry the whole realism rule to the
  * manager, and the distinction between them is load-bearing: KEY_PLAYER and BELOW_LEVEL end the

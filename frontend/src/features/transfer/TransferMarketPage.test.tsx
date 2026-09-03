@@ -278,6 +278,32 @@ describe('TransferMarketPage', () => {
     )
   })
 
+  it('disables "Pedir emprestado" with a visible reason when the contract is too short to loan', async () => {
+    // The backend rejects a loan with LOAN_CONTRACT_TOO_SHORT below 2 years left — the button
+    // must say so before the click, not after a failed round-trip.
+    vi.mocked(getMarket).mockResolvedValue(marketPage([{ ...ALVO_UM, contractYears: 1 }]))
+    renderPage()
+    openMarketTab()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+
+    const loanBtn = screen.getByRole('button', { name: /pedir emprestado/i })
+    expect(loanBtn).toBeDisabled()
+    expect(screen.getByText(/menos de 2 anos/i)).toBeInTheDocument()
+    fireEvent.click(loanBtn)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('disables "Pedir emprestado" with a visible reason when the player is already on loan elsewhere', async () => {
+    vi.mocked(getMarket).mockResolvedValue(marketPage([{ ...ALVO_UM, onLoan: true }]))
+    renderPage()
+    openMarketTab()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+
+    const loanBtn = screen.getByRole('button', { name: /pedir emprestado/i })
+    expect(loanBtn).toBeDisabled()
+    expect(screen.getByText(/já está emprestado/i)).toBeInTheDocument()
+  })
+
   it('opens the loan dialog from a market row and submits a borrow proposal', async () => {
     const ACCEPTED: LoanOfferResult = {
       offerId: 'lo1', playerId: 'p1', playerName: 'Alvo Um', status: 'ACCEPTED',
