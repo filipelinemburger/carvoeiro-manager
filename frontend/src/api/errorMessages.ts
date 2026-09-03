@@ -18,6 +18,8 @@ const MESSAGES: Record<string, string> = {
   PRE_CONTRACT_NOT_FOUND: 'Pré-contrato não encontrado.',
   PRE_CONTRACT_WINDOW_CLOSED: 'Janela de pré-contratos fechada.',
   RENEWAL_BLOCKED_BY_PRE_CONTRACT: 'Não é possível renovar — o jogador já tem um pré-contrato com outro clube.',
+  LOAN_CONTRACT_TOO_SHORT: 'O contrato precisa de pelo menos 2 anos restantes para permitir um empréstimo.',
+  LOAN_INVALID_TERMS: 'Termos de empréstimo inválidos.',
 }
 
 /** The specific pt-BR reason for a known ApiError code, else the caller's fallback. */

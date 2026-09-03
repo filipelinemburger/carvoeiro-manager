@@ -9,15 +9,19 @@ import {
 import HealingIcon from '@mui/icons-material/Healing'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
-import { getSquad, getLineup, setLineup, renewContract, listPlayer, unlistPlayer, getFinances, terminateContract } from '../../api/career'
+import {
+  getSquad, getLineup, setLineup, renewContract, listPlayer, unlistPlayer, getFinances, terminateContract,
+  getClubs, loanOut, acceptLoanCounter,
+} from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { formatBRL } from '../../lib/money'
-import type { PlayerResponse, RoleArchetype, RoleFocus, DetailedPosition, PlayerInstruction, LineupStarter, SquadResponse, TerminationResult } from '../../api/types'
+import type { PlayerResponse, RoleArchetype, RoleFocus, DetailedPosition, PlayerInstruction, LineupStarter, SquadResponse, TerminationResult, LoanOfferResult } from '../../api/types'
 import { TacticsPanel } from './TacticsPanel'
 import { PlayerDetails } from './PlayerDetails'
 import { TerminateDialog } from './TerminateDialog'
+import { LoanOutDialog } from './LoanOutDialog'
 import { FitnessBar } from './FitnessBar'
 import { MoodChip } from './MoodChip'
 import { teamMorale } from './morale'
@@ -93,6 +97,9 @@ const CRICIUMA_YELLOW = '#f7d417'
 
 /** Mirrors SquadRules.MIN_SQUAD_SIZE on the backend; the server is still the authority. */
 const MIN_SQUAD_SIZE = 14
+
+/** Mirrors LoanService.MIN_CONTRACT_YEARS_TO_LOAN: a loan must end before the contract does. */
+const MIN_CONTRACT_YEARS_TO_LOAN = 2
 
 function formLabel(form: number): string {
   if (form > 0) return `▲ +${form}`
@@ -171,6 +178,10 @@ export function SquadPage() {
   const [terminatingId, setTerminatingId] = useState<string | null>(null)
   /** What the last termination cost, held only long enough to report it in a toast. */
   const [terminationOutcome, setTerminationOutcome] = useState<TerminationResult | null>(null)
+  const [loaningId, setLoaningId] = useState<string | null>(null)
+  /** The outcome of the open loan negotiation (accepted / countered / rejected); null before a
+   * proposal is sent, and reset whenever the dialog opens for a (possibly different) player. */
+  const [loanResult, setLoanResult] = useState<LoanOfferResult | null>(null)
   const [tab, setTab] = useState(0)
   const [trainingAssignments, setTrainingAssignments] = useState<TrainingAssignmentsState>({})
   // playerId -> formation slot index (0 = GK). Keys ⊆ selected; values unique. The pitch
@@ -195,6 +206,14 @@ export function SquadPage() {
     queryKey: ['finances', saveGameId, clubId],
     queryFn: () => getFinances(saveGameId, clubId, token ?? ''),
     enabled: Boolean(saveGameId && clubId && token),
+    staleTime: Infinity,
+  })
+
+  // Same key ClubsPage/TransferMarketPage already use — powers the loan-out club picker.
+  const clubsQuery = useQuery({
+    queryKey: ['clubs', saveGameId],
+    queryFn: () => getClubs(saveGameId, token ?? ''),
+    enabled: Boolean(saveGameId && token),
     staleTime: Infinity,
   })
 
@@ -368,6 +387,34 @@ export function SquadPage() {
       void queryClient.invalidateQueries({ queryKey: ['lineup', saveGameId, clubId] })
       // releaseFrom unlists the player, so a transfer-listed one leaves a stale market row.
       void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
+    },
+  })
+
+  // Invalidations shared by both loan mutations below: a squad member can move (loanOut/
+  // acceptLoanCounter both end in `execute`), which changes the wage bill (finances), frees a
+  // squad slot at the owner (market listings can now differ) and clears the departed player's
+  // saved lineup slot.
+  function invalidateAfterLoanMove() {
+    void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] })
+    void queryClient.invalidateQueries({ queryKey: ['finances', saveGameId, clubId] })
+    void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
+    void queryClient.invalidateQueries({ queryKey: ['lineup', saveGameId, clubId] })
+  }
+
+  const loanOutMut = useMutation({
+    mutationFn: (v: { playerId: string; borrowerClubId: string; ownerWageShare: number; mayFaceOwner: boolean }) =>
+      loanOut(saveGameId, v, token ?? ''),
+    onSuccess: (data) => {
+      setLoanResult(data)
+      invalidateAfterLoanMove()
+    },
+  })
+
+  const acceptLoanCounterMut = useMutation({
+    mutationFn: (offerId: string) => acceptLoanCounter(saveGameId, offerId, token ?? ''),
+    onSuccess: (data) => {
+      setLoanResult(data)
+      invalidateAfterLoanMove()
     },
   })
 
@@ -673,6 +720,12 @@ export function SquadPage() {
     return <Chip size="small" color="warning" label="Listado" sx={{ ml: 0.75, height: 20 }} />
   }
 
+  // A small badge naming who a currently-borrowed player is on loan from.
+  function onLoanBadge(player: PlayerResponse) {
+    if (!player.onLoanFromClubName) return null
+    return <Chip size="small" color="info" label={`Emprestado (${player.onLoanFromClubName})`} sx={{ ml: 0.75, height: 20 }} />
+  }
+
   // The squad-selection button: a starter is Criciúma yellow with the label of the SLOT they
   // occupy; a substitute is grey ("Sub N"); an unpicked player is white with a "+".
   // The slot label — not the player's own position — is what makes an improvised starter
@@ -803,6 +856,33 @@ export function SquadPage() {
     )
   }
 
+  /** Why this player cannot be loaned out right now, or null when he can be. The contract-length
+   * guard mirrors LoanService.requireLoanableContract; the borrowed-player guard mirrors the
+   * `!isOnLoan()` filter `offerLoanOut` applies before it will even look the player up — a club
+   * only lends what it owns outright. Explains only — the backend still enforces both. */
+  function loanBlockedReason(player: PlayerResponse): string | null {
+    if (player.onLoanFromClubName) {
+      return 'Jogador emprestado por outro clube — não pode ser emprestado.'
+    }
+    if (player.contractYears < MIN_CONTRACT_YEARS_TO_LOAN) {
+      return `Contrato com menos de ${MIN_CONTRACT_YEARS_TO_LOAN} anos não pode ser emprestado.`
+    }
+    return null
+  }
+
+  function loanButton(player: PlayerResponse) {
+    const reason = loanBlockedReason(player)
+    return (
+      <Stack spacing={0.25} sx={{ alignItems: 'flex-start' }}>
+        <Button size="small" color="secondary" variant="outlined" disabled={reason !== null}
+          onClick={() => { setLoaningId(player.id); setLoanResult(null) }}>
+          Emprestar
+        </Button>
+        {reason && <Typography variant="caption" color="error">{reason}</Typography>}
+      </Stack>
+    )
+  }
+
   function listingButton(player: PlayerResponse) {
     const busy = listMut.isPending || unlistMut.isPending
     return player.transferListed ? (
@@ -885,6 +965,7 @@ export function SquadPage() {
                     playerNameButton={playerNameButton}
                     availabilityBadge={availabilityBadge}
                     listedBadge={listedBadge}
+                    onLoanBadge={onLoanBadge}
                   />
                 ))}
               </Stack>
@@ -917,6 +998,7 @@ export function SquadPage() {
                           {playerNameButton(player)}
                           {availabilityBadge(player)}
                           {listedBadge(player)}
+                          {onLoanBadge(player)}
                         </TableCell>
                         <TableCell align="center">{squadPositionLabel(player)}</TableCell>
                         <TableCell align="center">
@@ -1021,9 +1103,10 @@ export function SquadPage() {
           ? instructionSelect(detailsPlayer)
           : undefined}
         contractAction={detailsPlayer ? (
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
             {renewButton(detailsPlayer)}
             {terminateButton(detailsPlayer)}
+            {loanButton(detailsPlayer)}
           </Stack>
         ) : undefined}
         listingAction={detailsPlayer ? listingButton(detailsPlayer) : undefined}
@@ -1039,6 +1122,16 @@ export function SquadPage() {
         pending={terminateMut.isPending}
         onConfirm={() => { if (terminatingId) terminateMut.mutate(terminatingId) }}
         onClose={() => setTerminatingId(null)}
+      />
+
+      <LoanOutDialog
+        player={players.find(p => p.id === loaningId) ?? null}
+        clubs={(clubsQuery.data ?? []).filter(c => c.id !== clubId)}
+        pending={loanOutMut.isPending || acceptLoanCounterMut.isPending}
+        result={loanResult}
+        onSubmit={v => { if (loaningId) loanOutMut.mutate({ playerId: loaningId, ...v }) }}
+        onAcceptCounter={() => { if (loanResult) acceptLoanCounterMut.mutate(loanResult.offerId) }}
+        onClose={() => { setLoaningId(null); setLoanResult(null) }}
       />
 
       {/* Opened by tapping a pitch slot in the Táticas tab (spec §5.1/§5.2). */}
@@ -1132,6 +1225,25 @@ export function SquadPage() {
           {errorMessage(terminateMut.error, 'Erro ao rescindir o contrato.')}
         </Alert>
       </Snackbar>
+
+      {/* Loan negotiation failure (e.g. a guard the client missed), shown the same way as the
+          other action-failure toasts above. A REJECTED/COUNTERED outcome is not an error — that
+          renders inside LoanOutDialog itself — this is only for a failed round-trip. */}
+      <Snackbar
+        open={loanOutMut.isError || acceptLoanCounterMut.isError}
+        autoHideDuration={4000}
+        onClose={() => { loanOutMut.reset(); acceptLoanCounterMut.reset() }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="error"
+          variant="filled"
+          onClose={() => { loanOutMut.reset(); acceptLoanCounterMut.reset() }}
+          sx={{ width: '100%' }}
+        >
+          {errorMessage(loanOutMut.error ?? acceptLoanCounterMut.error, 'Erro ao negociar o empréstimo.')}
+        </Alert>
+      </Snackbar>
     </Box>
   )
 }
@@ -1144,12 +1256,13 @@ export function SquadPage() {
  * stable across `SquadPage` re-renders; the per-player render helpers it needs are passed in as
  * props since they close over `SquadPage`'s local state.
  */
-function MobileSquadRow({ player, statusButton, playerNameButton, availabilityBadge, listedBadge }: {
+function MobileSquadRow({ player, statusButton, playerNameButton, availabilityBadge, listedBadge, onLoanBadge }: {
   player: PlayerResponse
   statusButton: (player: PlayerResponse) => ReactNode
   playerNameButton: (player: PlayerResponse) => ReactNode
   availabilityBadge: (player: PlayerResponse) => ReactNode
   listedBadge: (player: PlayerResponse) => ReactNode
+  onLoanBadge: (player: PlayerResponse) => ReactNode
 }) {
   const [open, setOpen] = useState(false)
   return (
@@ -1179,6 +1292,7 @@ function MobileSquadRow({ player, statusButton, playerNameButton, availabilityBa
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 1, flexWrap: 'wrap' }}>
             {availabilityBadge(player)}
             {listedBadge(player)}
+            {onLoanBadge(player)}
             <Chip size="small" label={squadPositionLabel(player)} />
             <Chip size="small" label={`OVR ${player.overall}`} sx={ovrBadgeSx(player.overall)} />
             <Box sx={{ width: 84 }}><FitnessBar fitness={player.fitness} /></Box>

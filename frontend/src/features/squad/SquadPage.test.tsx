@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { SquadPage } from './SquadPage'
 import { AuthProvider } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
-import type { PlayerResponse, SquadResponse } from '../../api/types'
+import type { PlayerResponse, SquadResponse, ClubSummary } from '../../api/types'
 
 vi.mock('../../api/career', () => ({
   getSquad: vi.fn(),
@@ -19,11 +19,17 @@ vi.mock('../../api/career', () => ({
   unlistPlayer: vi.fn(),
   getFinances: vi.fn(),
   terminateContract: vi.fn(),
+  getClubs: vi.fn(),
+  loanOut: vi.fn(),
+  acceptLoanCounter: vi.fn(),
 }))
 
 vi.mock('../../lib/useIsMobile', () => ({ useIsMobile: vi.fn(() => false) }))
 
-import { getSquad, getLineup, setLineup, getTactics, renewContract, listPlayer, unlistPlayer, getFinances, terminateContract } from '../../api/career'
+import {
+  getSquad, getLineup, setLineup, getTactics, renewContract, listPlayer, unlistPlayer, getFinances,
+  terminateContract, getClubs, loanOut, acceptLoanCounter,
+} from '../../api/career'
 
 const mockGetSquad = vi.mocked(getSquad)
 const mockGetLineup = vi.mocked(getLineup)
@@ -33,6 +39,9 @@ const mockListPlayer = vi.mocked(listPlayer)
 const mockUnlistPlayer = vi.mocked(unlistPlayer)
 const mockGetFinances = vi.mocked(getFinances)
 const mockTerminateContract = vi.mocked(terminateContract)
+const mockGetClubs = vi.mocked(getClubs)
+const mockLoanOut = vi.mocked(loanOut)
+const mockAcceptLoanCounter = vi.mocked(acceptLoanCounter)
 
 // `as const` narrows injurySeverity to the literal 'NONE' so it satisfies
 // PlayerResponse's union type (not widened to string) when spread into fixtures.
@@ -127,6 +136,13 @@ const squad: SquadResponse = {
   secondaryColor: '#111111',
 }
 
+// The managed club itself ('club-1', matching renderWithProviders' default clubId) must never be
+// offered as a loan destination — only other clubs make sense as a borrower.
+const CLUBS: ClubSummary[] = [
+  { id: 'club-1', name: 'Criciúma EC', commonName: 'Criciúma', shortName: 'CRI', primaryColor: '#f7d417', secondaryColor: '#111111', reputation: 74, squadSize: 22 },
+  { id: 'club-avi', name: 'Avaí FC', commonName: 'Avaí', shortName: 'AVA', primaryColor: '#0000aa', secondaryColor: '#ffffff', reputation: 80, squadSize: 25 },
+]
+
 function makeQueryClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } })
 }
@@ -175,6 +191,7 @@ describe('SquadPage', () => {
       penaltyTakerId: null, freekickTakerId: null, cornerTakerId: null,
     })
     mockGetFinances.mockResolvedValue({ balance: 20000000, transactions: [] })
+    mockGetClubs.mockResolvedValue(CLUBS)
     localStorage.setItem('carvoeiro_manager_token', 'test-token')
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
   })
@@ -611,6 +628,85 @@ describe('SquadPage', () => {
     expect(screen.getByRole('button', { name: /confirmar rescisão/i })).toBeDisabled()
     expect(screen.getByText(/saldo insuficiente/i)).toBeInTheDocument()
     expect(mockTerminateContract).not.toHaveBeenCalled()
+  })
+
+  it('disables the Emprestar action with a visible reason when the contract is too short to loan out', async () => {
+    // The backend rejects a loan with LOAN_CONTRACT_TOO_SHORT below 2 years left — the button
+    // must say so before the click, not after a failed round-trip.
+    const shortContract = makeOutfield('p-short', 'Contrato Curto', 'DEF')
+    shortContract.contractYears = 1
+    mockGetSquad.mockResolvedValue({ ...squad, players: [...squad.players, shortContract] })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Contrato Curto'))
+    fireEvent.click(screen.getByText('Contrato Curto'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+
+    const loanBtn = within(dialog).getByRole('button', { name: /^emprestar$/i })
+    expect(loanBtn).toBeDisabled()
+    expect(within(dialog).getByText(/menos de 2 anos/i)).toBeInTheDocument()
+
+    fireEvent.click(loanBtn)
+    expect(mockLoanOut).not.toHaveBeenCalled()
+    expect(screen.queryByRole('combobox', { name: /clube de destino/i })).not.toBeInTheDocument()
+  })
+
+  it('proposes a loan for a player with a long enough contract, offering every club but the manager\'s own', async () => {
+    mockLoanOut.mockResolvedValue({
+      offerId: 'o1', playerId: 'p-m1', playerName: 'Meio Um', status: 'ACCEPTED',
+      ownerWageShare: 60, mayFaceOwner: true, counterOwnerWageShare: null, counterMayFaceOwner: null, refusal: null,
+    })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Meio Um'))
+    fireEvent.click(screen.getByText('Meio Um'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /^emprestar$/i }))
+
+    const clubPicker = await screen.findByRole('combobox', { name: /clube de destino/i })
+    expect(within(clubPicker).getAllByRole('option').map(o => o.textContent))
+      .toEqual(expect.arrayContaining(['Avaí FC']))
+    expect(within(clubPicker).queryByText('Criciúma EC')).not.toBeInTheDocument()
+
+    fireEvent.change(clubPicker, { target: { value: 'club-avi' } })
+    fireEvent.change(screen.getByLabelText(/parcela salarial/i), { target: { value: '60' } })
+    fireEvent.click(screen.getByRole('switch', { name: /pode enfrentar meu clube/i }))
+    fireEvent.click(screen.getByRole('button', { name: /propor empréstimo/i }))
+
+    await waitFor(() => expect(mockLoanOut).toHaveBeenCalledWith('sg-1',
+      { playerId: 'p-m1', borrowerClubId: 'club-avi', ownerWageShare: 60, mayFaceOwner: true }, 'test-token'))
+    expect(await screen.findByText(/empréstimo aprovado/i)).toBeInTheDocument()
+  })
+
+  it('shows the AI\'s counter terms and accepts them through acceptLoanCounter', async () => {
+    mockLoanOut.mockResolvedValue({
+      offerId: 'o2', playerId: 'p-m1', playerName: 'Meio Um', status: 'COUNTERED',
+      ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 75, counterMayFaceOwner: true, refusal: 'TERMS_REJECTED',
+    })
+    mockAcceptLoanCounter.mockResolvedValue({
+      offerId: 'o2', playerId: 'p-m1', playerName: 'Meio Um', status: 'ACCEPTED',
+      ownerWageShare: 75, mayFaceOwner: true, counterOwnerWageShare: null, counterMayFaceOwner: null, refusal: null,
+    })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Meio Um'))
+    fireEvent.click(screen.getByText('Meio Um'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /^emprestar$/i }))
+    fireEvent.change(await screen.findByRole('combobox', { name: /clube de destino/i }), { target: { value: 'club-avi' } })
+    fireEvent.click(screen.getByRole('button', { name: /propor empréstimo/i }))
+
+    fireEvent.click(await screen.findByRole('button', { name: /aceitar contraproposta/i }))
+    await waitFor(() => expect(mockAcceptLoanCounter).toHaveBeenCalledWith('sg-1', 'o2', 'test-token'))
+  })
+
+  it('marks a borrowed player in the squad list with who he is on loan from', async () => {
+    const borrowed = makeOutfield('p-borrowed', 'Emprestado Um', 'MID')
+    borrowed.onLoanFromClubName = 'Avaí FC'
+    mockGetSquad.mockResolvedValue({ ...squad, players: [...squad.players, borrowed] })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Emprestado Um'))
+    expect(screen.getByText(/avaí fc/i)).toBeInTheDocument()
   })
 
   it('shows a "Listado" badge for a listed player and lets the user unlist them', async () => {
@@ -1177,6 +1273,7 @@ describe('SquadPage — slot picker and Função/Foco selects', () => {
       penaltyTakerId: null, freekickTakerId: null, cornerTakerId: null,
     })
     mockGetFinances.mockResolvedValue({ balance: 20000000, transactions: [] })
+    mockGetClubs.mockResolvedValue(CLUBS)
     localStorage.setItem('carvoeiro_manager_token', 'test-token')
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
   })
