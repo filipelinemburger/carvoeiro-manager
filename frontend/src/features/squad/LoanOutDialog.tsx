@@ -81,7 +81,11 @@ export function LoanOutDialog({ player, clubs, pending, result, onSubmit, onAcce
         )}
 
         {result?.status === 'REJECTED' && (
-          <Alert severity="error" sx={{ mt: 1 }}>{refusalMessage(result.refusal!)}</Alert>
+          <Alert severity="error" sx={{ mt: 1 }}>
+            {/* The backend invariant is refusal != null exactly when status is REJECTED, but the
+                type doesn't say so — fall back rather than trust it blindly. */}
+            {result.refusal ? refusalMessage(result.refusal) : 'Empréstimo recusado.'}
+          </Alert>
         )}
 
         {result?.status === 'COUNTERED' && (
@@ -89,7 +93,7 @@ export function LoanOutDialog({ player, clubs, pending, result, onSubmit, onAcce
             <Alert severity="info">{player.name} — o clube de destino propôs uma contraproposta:</Alert>
             <Typography variant="body2">
               Parcela salarial:{' '}
-              <Typography component="span" sx={{ fontWeight: 600 }}>{result.counterOwnerWageShare}%</Typography>
+              <Typography component="span" sx={{ fontWeight: 600 }}>{result.counterOwnerWageShare ?? '—'}%</Typography>
             </Typography>
             <Typography variant="body2">
               Pode enfrentar seu clube:{' '}

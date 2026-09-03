@@ -85,6 +85,23 @@ describe('LoanOutDialog', () => {
     expect(onAcceptCounter).toHaveBeenCalledTimes(1)
   })
 
+  it('falls back to a generic refusal message and a "—" wage share when the backend sends null fields', () => {
+    // The backend invariant (refusal set exactly when REJECTED, counterOwnerWageShare set exactly
+    // when COUNTERED) holds today, but the types allow null — this must degrade gracefully
+    // instead of rendering a blank Alert or the literal string "null%".
+    const REJECTED_NO_REASON: LoanOfferResult = { ...REJECTED_KEY_PLAYER, refusal: null }
+    const { unmount } = render(<LoanOutDialog player={PLAYER} clubs={CLUBS} pending={false} result={REJECTED_NO_REASON}
+      onSubmit={vi.fn()} onAcceptCounter={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getByText('Empréstimo recusado.')).toBeInTheDocument()
+    unmount()
+
+    const COUNTERED_NO_SHARE: LoanOfferResult = { ...COUNTERED, counterOwnerWageShare: null }
+    render(<LoanOutDialog player={PLAYER} clubs={CLUBS} pending={false} result={COUNTERED_NO_SHARE}
+      onSubmit={vi.fn()} onAcceptCounter={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getByText('—%')).toBeInTheDocument()
+    expect(screen.queryByText(/null/)).not.toBeInTheDocument()
+  })
+
   it('renders nothing when no player is selected', () => {
     const { container } = render(<LoanOutDialog player={null} clubs={CLUBS} pending={false} result={null}
       onSubmit={vi.fn()} onAcceptCounter={vi.fn()} onClose={vi.fn()} />)

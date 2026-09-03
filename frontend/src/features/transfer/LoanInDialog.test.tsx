@@ -58,6 +58,8 @@ describe('LoanInDialog', () => {
     expect(screen.queryByRole('button', { name: /pedir empréstimo/i })).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/parcela salarial/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('switch')).not.toBeInTheDocument()
+    // Not negotiable — the alert reads as final (error), not "try again" (warning).
+    expect(screen.getByRole('alert')).toHaveClass('MuiAlert-colorError')
   })
 
   it('shows the TERMS_REJECTED refusal message and still offers no way to improve the terms in this dialog', () => {
@@ -66,6 +68,9 @@ describe('LoanInDialog', () => {
 
     expect(screen.getByText('Não gostaram dos termos — tente melhorar a proposta.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /pedir empréstimo/i })).not.toBeInTheDocument()
+    // isNegotiable(TERMS_REJECTED) is true — the alert's severity is the only signal that a
+    // better offer could still work, so pin it explicitly.
+    expect(screen.getByRole('alert')).toHaveClass('MuiAlert-colorWarning')
   })
 
   it('shows the owner\'s counter terms and wires "Aceitar contraproposta" to onAcceptCounter', () => {
@@ -78,6 +83,24 @@ describe('LoanInDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /aceitar contraproposta/i }))
     expect(onAcceptCounter).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to a generic refusal message and a "—" wage share when the backend sends null fields', () => {
+    // The backend invariant (refusal set exactly when REJECTED, counterOwnerWageShare set exactly
+    // when COUNTERED) holds today, but the types allow null — this must degrade gracefully
+    // instead of rendering a blank Alert or the literal string "null%".
+    const REJECTED_NO_REASON: LoanOfferResult = { ...REJECTED_KEY_PLAYER, refusal: null }
+    const { unmount } = render(<LoanInDialog player={PLAYER} pending={false} result={REJECTED_NO_REASON}
+      onSubmit={vi.fn()} onAcceptCounter={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getByText('Empréstimo recusado.')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveClass('MuiAlert-colorError')
+    unmount()
+
+    const COUNTERED_NO_SHARE: LoanOfferResult = { ...COUNTERED, counterOwnerWageShare: null }
+    render(<LoanInDialog player={PLAYER} pending={false} result={COUNTERED_NO_SHARE}
+      onSubmit={vi.fn()} onAcceptCounter={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getByText('—%')).toBeInTheDocument()
+    expect(screen.queryByText(/null/)).not.toBeInTheDocument()
   })
 
   it('renders nothing when no player is selected', () => {

@@ -69,8 +69,10 @@ export function LoanInDialog({ player, pending, result, onSubmit, onAcceptCounte
         )}
 
         {result?.status === 'REJECTED' && (
-          <Alert severity={isNegotiable(result.refusal!) ? 'warning' : 'error'} sx={{ mt: 1 }}>
-            {refusalMessage(result.refusal!)}
+          <Alert severity={result.refusal && isNegotiable(result.refusal) ? 'warning' : 'error'} sx={{ mt: 1 }}>
+            {/* The backend invariant is refusal != null exactly when status is REJECTED, but the
+                type doesn't say so — fall back rather than trust it blindly. */}
+            {result.refusal ? refusalMessage(result.refusal) : 'Empréstimo recusado.'}
           </Alert>
         )}
 
@@ -79,7 +81,7 @@ export function LoanInDialog({ player, pending, result, onSubmit, onAcceptCounte
             <Alert severity="info">{player.name} — o clube dono propôs uma contraproposta:</Alert>
             <Typography variant="body2">
               Parcela salarial:{' '}
-              <Typography component="span" sx={{ fontWeight: 600 }}>{result.counterOwnerWageShare}%</Typography>
+              <Typography component="span" sx={{ fontWeight: 600 }}>{result.counterOwnerWageShare ?? '—'}%</Typography>
             </Typography>
             <Typography variant="body2">
               Pode enfrentar o clube dono:{' '}
