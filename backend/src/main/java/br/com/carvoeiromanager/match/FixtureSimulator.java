@@ -245,8 +245,8 @@ public class FixtureSimulator {
         final UUID awayClubId = fixture.getAwayClubId();
         final LocalDate matchDate = fixture.getMatchDate();
 
-        List<Player> homeXi = resolveXi(saveGameId, homeClubId, managedClubId, matchDate);
-        List<Player> awayXi = resolveXi(saveGameId, awayClubId, managedClubId, matchDate);
+        List<Player> homeXi = resolveXi(saveGameId, homeClubId, awayClubId, managedClubId, matchDate);
+        List<Player> awayXi = resolveXi(saveGameId, awayClubId, homeClubId, managedClubId, matchDate);
 
         TacticalProfile homeProfile = tacticsService.profileFor(saveGameId, homeClubId, homeXi);
         TacticalProfile awayProfile = tacticsService.profileFor(saveGameId, awayClubId, awayXi);
@@ -403,8 +403,8 @@ public class FixtureSimulator {
             // resolveXi is deterministic (see LineupService.bestXi's id tie-break) given
             // UNCHANGED player state, so this fresh resolution matches the one implicitly used
             // to build the stored match.
-            homeXi = resolveXi(saveGameId, homeClubId, managedClubId, matchDate);
-            awayXi = resolveXi(saveGameId, awayClubId, managedClubId, matchDate);
+            homeXi = resolveXi(saveGameId, homeClubId, awayClubId, managedClubId, matchDate);
+            awayXi = resolveXi(saveGameId, awayClubId, homeClubId, managedClubId, matchDate);
             match = precomputedFixture.match();
         } else {
             // Legacy path: nothing was precomputed for this fixture (the common case for every
@@ -805,11 +805,12 @@ public class FixtureSimulator {
         }
     }
 
-    private List<Player> resolveXi(UUID saveGameId, UUID clubId, UUID managedClubId, LocalDate matchDate) {
+    private List<Player> resolveXi(UUID saveGameId, UUID clubId, UUID opponentClubId,
+                                   UUID managedClubId, LocalDate matchDate) {
         if (clubId.equals(managedClubId)) {
-            return lineupService.startingXi(saveGameId, clubId);
+            return lineupService.startingXi(saveGameId, clubId, opponentClubId);
         }
-        return lineupService.bestXi(clubId, matchDate);
+        return lineupService.bestXi(clubId, matchDate, opponentClubId);
     }
 
     /**

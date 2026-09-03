@@ -144,10 +144,10 @@ public class LiveMatchService {
         UUID awayClubId = fixture.getAwayClubId();
         LocalDate matchDate = fixture.getMatchDate();
 
-        List<Player> homeXi = managedIsHome ? lineupService.startingXi(saveGameId, homeClubId)
-                : lineupService.bestXi(homeClubId, matchDate);
-        List<Player> awayXi = managedIsHome ? lineupService.bestXi(awayClubId, matchDate)
-                : lineupService.startingXi(saveGameId, awayClubId);
+        List<Player> homeXi = managedIsHome ? lineupService.startingXi(saveGameId, homeClubId, awayClubId)
+                : lineupService.bestXi(homeClubId, matchDate, awayClubId);
+        List<Player> awayXi = managedIsHome ? lineupService.bestXi(awayClubId, matchDate, homeClubId)
+                : lineupService.startingXi(saveGameId, awayClubId, homeClubId);
         List<Player> homeBench = managedIsHome ? lineupService.benchPlayers(saveGameId, homeClubId)
                 : lineupService.bestBench(homeClubId, homeXi);
         List<Player> awayBench = managedIsHome ? lineupService.bestBench(awayClubId, awayXi)

@@ -6,6 +6,7 @@ import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.contract.ContractValuation;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.loan.LoanEligibility;
 import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.DetailedPosition;
@@ -47,6 +48,7 @@ public class LineupService {
     private final ContractValuation contractValuation;
     private final TransferValuation transferValuation;
     private final FitnessCalculator fitnessCalculator;
+    private final LoanEligibility loanEligibility;
 
     public LineupService(SaveGameService saveGameService,
                          PlayerRepository playerRepository,
@@ -55,7 +57,8 @@ public class LineupService {
                          LineupPlayerRepository lineupPlayerRepository,
                          ContractValuation contractValuation,
                          TransferValuation transferValuation,
-                         FitnessCalculator fitnessCalculator) {
+                         FitnessCalculator fitnessCalculator,
+                         LoanEligibility loanEligibility) {
         this.saveGameService = saveGameService;
         this.playerRepository = playerRepository;
         this.clubRepository = clubRepository;
@@ -64,6 +67,7 @@ public class LineupService {
         this.contractValuation = contractValuation;
         this.transferValuation = transferValuation;
         this.fitnessCalculator = fitnessCalculator;
+        this.loanEligibility = loanEligibility;
     }
 
     /**
@@ -257,9 +261,20 @@ public class LineupService {
 
     /**
      * Returns the persisted starting XI for the given (saveGameId, clubId) if one exists,
-     * otherwise falls back to bestXi(clubId).
+     * otherwise falls back to bestXi(clubId). Delegates to the opponent-aware overload with a
+     * null opponent, which imposes no loan restriction.
      */
     public List<Player> startingXi(UUID saveGameId, UUID clubId) {
+        return startingXi(saveGameId, clubId, null);
+    }
+
+    /**
+     * Same as {@link #startingXi(UUID, UUID)}, but also excludes a saved starter who is on loan
+     * and barred from facing {@code opponentClubId} (see {@link LoanEligibility}) — such a player
+     * behaves exactly like a suspended one, falling through to {@link #bestXi} when he leaves the
+     * saved XI short.
+     */
+    public List<Player> startingXi(UUID saveGameId, UUID clubId, UUID opponentClubId) {
         return lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
                 .map(lineup -> {
                     List<UUID> playerIds = lineupPlayerRepository.findByLineupId(lineup.getId()).stream()
@@ -271,12 +286,14 @@ public class LineupService {
                                     .orElseThrow(() -> new ApiException(
                                             ErrorCode.PLAYER_NOT_FOUND, "Player " + playerId + " not found")))
                             .filter(Player::isEligible)
+                            .filter(p -> loanEligibility.mayFace(p, opponentClubId))
                             .collect(java.util.stream.Collectors.toList());
-                    // If suspensions/injuries left the saved XI short, fall back to bestXi so the
-                    // engine always receives a full 11 (TeamStrengthCalculator divides by xi.size()).
-                    return eligibleXi.size() == 11 ? eligibleXi : bestXi(clubId);
+                    // If suspensions/injuries/loan restrictions left the saved XI short, fall back to
+                    // bestXi so the engine always receives a full 11 (TeamStrengthCalculator divides
+                    // by xi.size()).
+                    return eligibleXi.size() == 11 ? eligibleXi : bestXi(clubId, null, opponentClubId);
                 })
-                .orElseGet(() -> bestXi(clubId));
+                .orElseGet(() -> bestXi(clubId, null, opponentClubId));
     }
 
     /**
@@ -355,10 +372,26 @@ public class LineupService {
      * generalist grabbing its only candidate. The result is a pure function of the squad +
      * formation, so the two calls made per fixture (parallel pre-sim at kickoff, attribution at
      * finish) always return the identical XI.
+     * <p>
+     * Delegates to {@link #bestXi(UUID, LocalDate, UUID)} with a null opponent, which imposes no
+     * loan restriction.
      */
     public List<Player> bestXi(UUID clubId, LocalDate onDate) {
+        return bestXi(clubId, onDate, null);
+    }
+
+    /**
+     * Same as {@link #bestXi(UUID, LocalDate)}, but also excludes a player who is on loan and
+     * barred from facing {@code opponentClubId} (see {@link LoanEligibility}) — such a player is
+     * treated exactly like a suspended one, eligible for the ineligible-fallback top-up below when
+     * the club has fewer than 10 eligible outfielders.
+     */
+    public List<Player> bestXi(UUID clubId, LocalDate onDate, UUID opponentClubId) {
         List<Player> allPlayers = playerRepository.findByClubIdAndYouthProspectFalse(clubId);
-        List<Player> eligible = allPlayers.stream().filter(Player::isEligible).toList();
+        List<Player> eligible = allPlayers.stream()
+                .filter(Player::isEligible)
+                .filter(p -> loanEligibility.mayFace(p, opponentClubId))
+                .toList();
 
         // Ascending comparator: .max(byRating) yields the highest-rated player.
         // Secondary tie-break on id (a deterministic total order) so that rating ties resolve

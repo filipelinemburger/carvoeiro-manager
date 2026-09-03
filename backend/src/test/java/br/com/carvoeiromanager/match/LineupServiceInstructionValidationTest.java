@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class LineupServiceInstructionValidationTest {
 
     private final LineupService service =
-            new LineupService(null, null, null, null, null, null, null, null);
+            new LineupService(null, null, null, null, null, null, null, null, null);
 
     private static Player player(Position pos) {
         return Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", pos, 25, "BRA",
