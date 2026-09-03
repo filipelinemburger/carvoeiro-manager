@@ -75,9 +75,14 @@ public class AiListingEngine {
 
         int alreadyListed = (int) squad.stream().filter(Player::isTransferListed).count();
 
-        // Candidates: never already listed, never a GK when the club has <= 2 GKs, never the
-        // club's best player unless the club is DESPERATE.
+        // Candidates: never a player the club only borrowed, never already listed, never a GK when
+        // the club has <= 2 GKs, never the club's best player unless the club is DESPERATE.
+        //
+        // The loan exclusion is a plain predicate rather than SquadDeparture's throwing guard
+        // because this engine SELECTS candidates — there is no user action here to reject, and a
+        // borrowed player simply is not one of the club's to sell.
         List<Player> eligible = squad.stream()
+                .filter(p -> !p.isOnLoan())
                 .filter(p -> !p.isTransferListed())
                 .filter(p -> !(p.getPosition() == Position.GK && gkCount <= MIN_GK_COVER))
                 .filter(p -> desperate || best == null || !p.getId().equals(best.getId()))

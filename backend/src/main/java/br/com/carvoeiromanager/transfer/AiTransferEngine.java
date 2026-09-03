@@ -102,9 +102,18 @@ public class AiTransferEngine {
                 .collect(Collectors.toSet());
 
         Map<UUID, BigDecimal> valueByPlayer = new HashMap<>();
+        // A borrowed player is not his club's to trade, so he never enters the pool. This is a
+        // predicate rather than SquadDeparture's throwing guard for the same reason as in
+        // AiListingEngine: the engine is choosing who is available, not refusing a user action.
+        //
+        // It is load-bearing independently of AiListingEngine's matching filter, because a player
+        // listed BEFORE going out on loan stays listed — neither Player.loanTo nor
+        // LoanService.execute clears the flag — so a listed player can arrive at a borrower already
+        // carrying it, with no listing pass involved.
         List<Player> pool = aiClubs.stream()
                 .flatMap(club -> squadByClub.get(club.getId()).stream())
                 .filter(Player::isTransferListed)
+                .filter(p -> !p.isOnLoan())
                 .filter(p -> !lockedPlayerIds.contains(p.getId()))
                 .peek(p -> valueByPlayer.put(p.getId(), transferValuation.marketValue(p.getOverall(), p.getAge())))
                 .sorted(Comparator.comparing((Player p) -> valueByPlayer.get(p.getId())).reversed()

@@ -20,6 +20,10 @@ import java.util.UUID;
  * moves the player to the buyer, debits the buyer / credits the seller, records the
  * managed-club ledger row, and on a managed sale removes the player from the managed lineup
  * (lineup_players row + any set-piece-taker column — no-cascade FK safety).
+ *
+ * <p>Every transfer path in the game reaches the core overload below, which makes it the one place
+ * that can state a rule about transfers and have it hold everywhere — see the ownership check
+ * there.
  */
 @Component
 public class TransferExecutor {
@@ -60,6 +64,15 @@ public class TransferExecutor {
         final UUID managedClubId = saveGame.getManagedClubId();
 
         Player player = playerRepository.findById(playerId).orElseThrow();
+        // The chokepoint. Every transfer in the game — manager buying, manager selling, AI trading
+        // with AI — funnels through this method, so refusing a loaned player HERE makes it
+        // structurally impossible to move one, rather than merely absent from the call sites that
+        // exist today. Each of those call sites still refuses him earlier and more usefully (at the
+        // point of intent, or by never offering him as a candidate); this is the backstop that a
+        // future fifth caller cannot forget. Nothing legitimate reaches it: a loan runs to the
+        // rollover, there is no option to buy and no early recall, so there is no transfer of a
+        // player on loan that the design permits.
+        squadDeparture.requireNotOnLoan(player);
         Club buyer = clubRepository.findById(buyerId).orElseThrow();
         Club seller = clubRepository.findById(sellerId).orElseThrow();
 

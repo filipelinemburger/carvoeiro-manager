@@ -164,6 +164,13 @@ public class TransferService {
         if (player.getClubId().equals(managedClubId)) {
             throw invalid("Cannot buy a player you already own");
         }
+        // The club named on the offer as the seller is whoever holds him, and for a borrowed player
+        // that is not his owner: the club that would be paid never owned him, the club that does is
+        // never consulted, and TransferExecutor would set club_id to the buyer while leaving
+        // owner_club_id pointing at the owner — the same corrupted row the disposal guards prevent
+        // from the selling side. Refused before any funds or squad-room check, so nothing is
+        // charged and no offer row is written.
+        squadDeparture.requireNotOnLoan(player);
         requireValidTerms(wage, contractYears);
         requireFunds(managedClubId, amount);
         requireSquadRoom(managedClubId);
@@ -199,6 +206,11 @@ public class TransferService {
         requireSquadRoom(save.getManagedClubId());
         Player player = playerRepository.findById(offer.getPlayerId())
                 .orElseThrow(() -> invalid("Player no longer exists"));
+        // He was buyable when the offer was made; he may not be now. A loan agreed between the
+        // counter and the accept — the manager borrowing this very player is the obvious route —
+        // would otherwise have the club pay a fee to a seller for a player it is already holding
+        // on loan, and keep the loan besides.
+        squadDeparture.requireNotOnLoan(player);
         completeBuy(save, offer, player, fee);
         transferOfferRepository.save(offer);
         return toResponse(offer);
