@@ -217,7 +217,9 @@ export function Layout({ children }: LayoutProps) {
   const advanceBlockReason = blockNoLineup
     ? 'Escale seu time antes do primeiro jogo.'
     : blockIneligible
-      ? 'Há titular(es) suspenso(s) ou lesionado(s) na escalação. Ajuste o time antes de avançar.'
+      // Covers all three IneligibleStarter reasons (SUSPENDED, INJURED, LOAN_BARRED) without
+      // switching on which one — this banner only ever needs to say "fix your lineup".
+      ? 'Há titular(es) indisponível(is) (suspenso, lesionado ou impedido por empréstimo) na escalação. Ajuste o time antes de avançar.'
       : blockWindow
         ? 'A janela de transferências vai fechar e há proposta(s) pendente(s). Resolva-as antes de avançar.'
         : null

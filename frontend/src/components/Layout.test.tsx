@@ -276,6 +276,23 @@ describe('Layout shell', () => {
     expect(screen.getByRole('link', { name: /ajustar escalação/i })).toBeInTheDocument()
   })
 
+  it('disables Avançar and warns when a saved starter is barred from facing his loan owner', async () => {
+    // LOAN_BARRED is neither SUSPENDED nor INJURED — the block banner must still read as
+    // "your lineup has a problem" without literally saying "suspenso" or "lesionado" about him.
+    ;(getAdvancePreview as Mock).mockResolvedValue({
+      ...PREVIEW_OK,
+      managedClubPlaysNext: true,
+      ineligibleStarters: [{ playerId: 'p9', playerName: 'Emprestado Barrado', reason: 'LOAN_BARRED' }],
+    } satisfies AdvancePreviewResponse)
+    seedAuth('U1', 'sg-1')
+    renderLayout('/dashboard')
+
+    const avancarBtn = await screen.findByRole('button', { name: 'Ir para o jogo' })
+    await waitFor(() => expect(avancarBtn).toBeDisabled())
+    expect(screen.getByRole('status')).toHaveTextContent(/empréstimo/i)
+    expect(screen.getByRole('link', { name: /ajustar escalação/i })).toBeInTheDocument()
+  })
+
   it('disables Avançar and warns when the window is closing with pending transfers', async () => {
     ;(getAdvancePreview as Mock).mockResolvedValue({
       ...PREVIEW_OK,
