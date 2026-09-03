@@ -47,6 +47,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Import(PostgresTestContainer.class)
 class LoanRolloverIT {
 
+    /**
+     * Size of the identical-overall group planted at the bottom of the managed squad, and how many
+     * of it starts out on loan. The group is larger than the resulting overflow on purpose — see
+     * {@link #returnsThatOverflowTheSquadListTheWeakestPlayersAsSurplus}.
+     */
+    private static final int TIED_GROUP_SIZE = 8;
+    private static final int LOANED_OUT = 3;
+
     @Autowired UserRepository userRepository;
     @Autowired SaveGameService saveGameService;
     @Autowired SaveGameRepository saveGameRepository;
@@ -98,6 +106,18 @@ class LoanRolloverIT {
         return c;
     }
 
+    /**
+     * Any club that is not the managed one, picked by lowest id. {@code findBySaveGameId} has no
+     * ORDER BY, so {@code findFirst} over it would let the row order decide which club borrows —
+     * a fixture that changes under the test without the test changing.
+     */
+    private UUID aBorrowerClubId(Career c) {
+        return playerRepository.findBySaveGameId(c.id()).stream()
+                .map(Player::getClubId)
+                .filter(id -> id != null && !id.equals(c.clubId()))
+                .min(Comparator.naturalOrder()).orElseThrow();
+    }
+
     /** A fresh filler professional, contracted for 5 years and young enough to never retire. */
     private Player filler(UUID saveGameId, UUID clubId, Position position, int overall) {
         Player p = Player.create(saveGameId, clubId, "Filler-" + UUID.randomUUID(), position,
@@ -112,10 +132,7 @@ class LoanRolloverIT {
         List<Player> squad = playerRepository.findByClubId(c.clubId());
         squad.forEach(p -> p.setContractYears(5));       // keep everyone off the lapse path
         Player lent = probePlayer(c.id(), squad);
-        UUID borrower = playerRepository.findBySaveGameId(c.id()).stream()
-                .map(Player::getClubId)
-                .filter(id -> id != null && !id.equals(c.clubId()))
-                .findFirst().orElseThrow();
+        UUID borrower = aBorrowerClubId(c);
         playerRepository.saveAll(squad);
         lent.loanTo(borrower, 40, true);
         playerRepository.save(lent);
@@ -140,21 +157,28 @@ class LoanRolloverIT {
     }
 
     /**
-     * The ordering guard: the archive (step 1) runs BEFORE the loan return (start of step 3), so
-     * a scorer who is still on loan when rollover is invoked is archived under the club whose
-     * shirt he was wearing — the borrower — not under the owner he is about to go home to.
+     * The ordering guard: the archive (step 1) runs BEFORE the loan return (start of step 3), so a
+     * scorer who is still out on loan when rollover is invoked is archived under his <b>borrower</b>
+     * — the club he is registered at as the season closes — and not under the owner he is about to
+     * go home to. Getting this backwards is how the termination slice broke the archive.
      *
-     * <p>Read {@link SeasonRolloverServiceIT#leadingClubbedScorer} for the shape of this
+     * <p><b>The loan here is applied after the season has already been played, and that is a proxy,
+     * not the real case.</b> A genuine loan runs the whole season, so the borrower would be the club
+     * he actually scored the goals for and "archived under the borrower" and "archived under the
+     * club he played for" would be the same statement. This fixture cannot play a season-long loan
+     * — the seeded career is simulated to its end first — so it stands the player in the same
+     * end-state (owner set, playing for the borrower, rollover not yet run) and asserts the archive
+     * reads that end-state. What is under test is purely the <em>ordering</em> of archive vs.
+     * return; the assertion below is deliberately written against the borrower, which under a real
+     * season-long loan is the club whose shirt he wore.
+     *
+     * <p>Read {@link SeasonRolloverServiceIT#leadingClubbedScorer} for the shape of the
      * arrangement: pick the competition's leading scorer who still has a club, exactly as that
      * suite does for its own release-ordering test
-     * ({@code aTopScorerReleasedBeforeRolloverIsArchivedUnderTheClubThatReleasedHim}). Here, the
-     * scorer's real club becomes his owner and a second club becomes his borrower via
-     * {@link Player#loanTo}, called after the season already finished — so his archived goals
-     * must still name the club he played them for, not the one he is only nominally attached to
-     * moving into next season.
+     * ({@code aTopScorerReleasedBeforeRolloverIsArchivedUnderTheClubThatReleasedHim}).
      */
     @Test
-    void aLoanedTopScorerIsArchivedUnderTheClubHePlayedFor() {
+    void aScorerStillOutOnLoanIsArchivedUnderHisBorrowerNotHisOwner() {
         Career c = playToSeasonEnd();
         Competition competition = competitionRepository.findBySaveGameId(c.id()).stream()
                 .filter(comp -> comp.getName().contains("Catarinense"))
@@ -166,7 +190,7 @@ class LoanRolloverIT {
         UUID scoringClubId = scorer.getClubId();
         Club borrowerClub = clubRepository.findBySaveGameId(c.id()).stream()
                 .filter(cl -> !cl.getId().equals(scoringClubId))
-                .findFirst().orElseThrow();
+                .min(Comparator.comparing(Club::getId)).orElseThrow();
         scorer.setContractYears(5); // keep him off the lapse path; irrelevant to the archive itself
         scorer.loanTo(borrowerClub.getId(), 40, true);
         playerRepository.save(scorer);
@@ -188,6 +212,22 @@ class LoanRolloverIT {
     }
 
     /**
+     * A filler pinned at the attribute floor and parked in the 30-32 age band, where
+     * {@code PlayerAgingService.delta} draws from {@code -2..0} and can never be positive. Every
+     * attribute is already 1, so every draw clamps back to 1, and rollover recomputes his overall
+     * from those attributes — which means a whole group built this way leaves the rollover sharing
+     * one identical, minimal overall. That is what makes a genuine <em>tie</em> at the bottom of the
+     * squad arrangeable at all: the ordinary {@code filler} below passes an overall that rollover
+     * simply discards and recomputes from its (randomly drifting) attributes.
+     */
+    private Player tiedFloorFiller(UUID saveGameId, UUID clubId) {
+        Player p = Player.create(saveGameId, clubId, "Tied-" + UUID.randomUUID(), Position.MID,
+                30, "Brasil", 1, 1, 1, 1, 1, 1, 1);
+        p.setContractYears(5);
+        return p;
+    }
+
+    /**
      * Squad-cap overflow after several loans return at once: the cap is otherwise only checked
      * one signing at a time (see {@code AiTransferEngineIT}'s buy-side scenarios, whose squads
      * never exceed {@link SquadRules#MAX_SQUAD_SIZE} because each purchase is gated individually),
@@ -199,8 +239,15 @@ class LoanRolloverIT {
      * <p>The managed squad is padded to exactly the cap with players already at home, then three
      * more managed-owned players are created directly into the on-loan state (owner = managed
      * club, current club = the borrower) so they never counted toward that at-home total. Only
-     * the loan-return pass at rollover brings them home, pushing the squad to cap + 3 — the
+     * the loan-return pass at rollover brings them home, pushing the squad past the cap — the
      * overflow the surplus-listing helper must resolve.
+     *
+     * <p><b>The bottom of the squad is a tie that straddles the cut line, and that is the point.</b>
+     * The listing rule is "lowest overall first, ties broken by id"; a tied group selected
+     * <em>whole</em> would exercise only the first half of it. So the group of
+     * {@value #TIED_GROUP_SIZE} identical {@link #tiedFloorFiller}s here is deliberately larger
+     * than the overflow, which forces the helper to cut through the middle of it — and the
+     * assertions below pin exactly which members fall on which side of that cut.
      */
     @Test
     void returnsThatOverflowTheSquadListTheWeakestPlayersAsSurplus() {
@@ -211,28 +258,36 @@ class LoanRolloverIT {
             p.setAge(25); // neutralize retirement so only the arrangement moves squad size
         });
         playerRepository.saveAll(squad);
-        UUID borrower = playerRepository.findBySaveGameId(c.id()).stream()
-                .map(Player::getClubId)
-                .filter(id -> id != null && !id.equals(c.clubId()))
-                .findFirst().orElseThrow();
+        UUID borrower = aBorrowerClubId(c);
 
-        // Pad the managed squad to exactly the cap with home-based fillers.
-        int padCount = SquadRules.MAX_SQUAD_SIZE - squad.size();
+        // Pad the managed squad to exactly the cap: ordinary fillers plus the at-home part of the
+        // tied group (LOANED_OUT of the group is away, and comes back at the rollover).
+        int atHomeTied = TIED_GROUP_SIZE - LOANED_OUT;
+        int padCount = SquadRules.MAX_SQUAD_SIZE - squad.size() - atHomeTied;
+        assertThat(padCount).as("the seeded squad must leave room for the tied group").isNotNegative();
         List<Player> padding = new ArrayList<>();
         for (int i = 0; i < padCount; i++) {
             padding.add(filler(c.id(), c.clubId(), Position.MID, 60));
+        }
+        List<UUID> tiedIds = new ArrayList<>();
+        for (int i = 0; i < atHomeTied; i++) {
+            Player p = tiedFloorFiller(c.id(), c.clubId());
+            padding.add(p);
+            tiedIds.add(p.getId());
         }
         playerRepository.saveAll(padding);
         assertThat(playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()))
                 .hasSize(SquadRules.MAX_SQUAD_SIZE);
 
-        // Three MORE managed-owned players, created directly into the on-loan state: the three
-        // returns push the squad from the cap to cap + 3, and that overflow must be listed.
+        // LOANED_OUT MORE managed-owned players, created directly into the on-loan state and tied
+        // with the rest of the group: their returns push the squad past the cap, and that overflow
+        // must be listed.
         List<Player> loanedOut = new ArrayList<>();
-        for (int i = 0; i < 3; i++) {
-            Player p = filler(c.id(), c.clubId(), Position.MID, 55);
+        for (int i = 0; i < LOANED_OUT; i++) {
+            Player p = tiedFloorFiller(c.id(), c.clubId());
             p.loanTo(borrower, 40, true);
             loanedOut.add(p);
+            tiedIds.add(p.getId());
         }
         playerRepository.saveAll(loanedOut);
         assertThat(playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()))
@@ -261,5 +316,29 @@ class LoanRolloverIT {
         assertThat(after.stream().filter(Player::isTransferListed))
                 .allMatch(p -> p.getListedReason() == ListedReason.SURPLUS);
         assertThat(r.surplusListings()).isNotEmpty();
+
+        // And now the tie-break itself, which the assertions above cannot see because they replay
+        // the same comparator. The group must genuinely be tied, must genuinely be the weakest in
+        // the squad, and must genuinely be cut through the middle — otherwise the id tie-break is
+        // decorative and this test would pass with it deleted.
+        List<Player> tied = after.stream()
+                .filter(p -> tiedIds.contains(p.getId()))
+                .sorted(Comparator.comparing(Player::getId))
+                .toList();
+        assertThat(tied).hasSize(TIED_GROUP_SIZE);
+        assertThat(tied).extracting(Player::getOverall).containsOnly(tied.get(0).getOverall());
+        int weakestOutsideGroup = after.stream()
+                .filter(p -> !tiedIds.contains(p.getId()))
+                .mapToInt(Player::getOverall).min().orElseThrow();
+        assertThat(tied.get(0).getOverall())
+                .as("the tied group must be the bottom of the squad, so the cut falls inside it")
+                .isLessThan(weakestOutsideGroup);
+        assertThat(overflow)
+                .as("the cut must fall strictly inside the tied group, not take it whole")
+                .isBetween(1, TIED_GROUP_SIZE - 1);
+
+        // Lowest ids lose the tie-break and are listed; the rest of the tied group survives.
+        assertThat(tied.subList(0, overflow)).allMatch(Player::isTransferListed);
+        assertThat(tied.subList(overflow, tied.size())).noneMatch(Player::isTransferListed);
     }
 }

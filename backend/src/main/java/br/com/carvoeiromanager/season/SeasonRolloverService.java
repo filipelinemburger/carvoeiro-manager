@@ -246,8 +246,13 @@ public class SeasonRolloverService {
             boolean toManaged = managedClubId.equals(player.getOwnerClubId());
             player.returnFromLoan();
             if (toManaged) {
+                // +1: the aging pass below has not run yet, but retirements and expiredContracts in
+                // this same response are built after it. Reporting the stored age here would show a
+                // returning 27-year-old as 27 in one list and 28 in another, in one payload. Every
+                // non-youth player takes exactly one year in that pass, and a loanee is never a
+                // youth prospect, so the increment is exact rather than an estimate.
                 loanReturns.add(new SquadChangeResponse(
-                        player.getName(), player.getPosition().name(), player.getAge()));
+                        player.getName(), player.getPosition().name(), player.getAge() + 1));
             }
         }
         playerRepository.saveAll(returning);

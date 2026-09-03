@@ -93,8 +93,13 @@ class LoanFixtureEligibilityIT {
         return new Scenario(save, saveGameId, managedClubId, competition.getId(), borrowerClubId, lentPlayer);
     }
 
+    /**
+     * The match is dated from the save's own clock, never {@code LocalDate.now()} — a fixture dated
+     * off the wall clock makes the fitness-adjusted rating that {@code bestXi} ranks by depend on
+     * the day the suite runs, which is exactly the determinism the plan forbids.
+     */
     private List<FixtureAppearance> simulateManagedVsBorrower(Scenario s) {
-        LocalDate matchDate = LocalDate.now();
+        LocalDate matchDate = s.save().getCurrentDate();
         Fixture fixture = Fixture.create(s.saveGameId(), s.competitionId(), 901,
                 s.managedClubId(), s.borrowerClubId(), matchDate);
         fixtureSimulator.simulateRound(s.save(), s.competitionId(), List.of(fixture));
@@ -107,6 +112,14 @@ class LoanFixtureEligibilityIT {
 
         List<FixtureAppearance> appearances = simulateManagedVsBorrower(s);
 
+        // A noneMatch over an empty list passes for the wrong reason. The fixture was really played
+        // and really attributed, so both XIs are on record: 22 appearance rows, none of them his.
+        assertThat(appearances)
+                .as("the fixture must actually have been simulated and attributed, or the "
+                        + "absence asserted below would be vacuous")
+                .isNotEmpty()
+                .extracting(FixtureAppearance::getClubId)
+                .contains(s.managedClubId(), s.borrowerClubId());
         assertThat(appearances)
                 .as("the loaned player must not appear in either XI when facing his owner without a negotiated release")
                 .noneMatch(a -> a.getPlayerId().equals(s.lentPlayer().getId()));

@@ -805,6 +805,18 @@ public class FixtureSimulator {
         }
     }
 
+    /**
+     * Resolves one side's XI: the managed club's from its saved lineup, an AI club's from
+     * {@code bestXi}. Both are opponent-aware, because the loan fixture-release rule depends on who
+     * is being faced.
+     *
+     * <p>Four same-typed UUIDs run together here and a transposition would compile in silence, so
+     * the order is: <b>save, the club whose XI this is, that club's opponent, the managed club</b>.
+     * The middle pair is the one that matters — swapping {@code clubId} and {@code opponentClubId}
+     * would pick the wrong club's team AND ask the loan rule about the wrong opponent. Left as
+     * parameters rather than folded into a value type because the pair is not passed anywhere else
+     * and both call sites sit two lines apart, mirrored, where a swap reads as an obvious asymmetry.
+     */
     private List<Player> resolveXi(UUID saveGameId, UUID clubId, UUID opponentClubId,
                                    UUID managedClubId, LocalDate matchDate) {
         if (clubId.equals(managedClubId)) {
