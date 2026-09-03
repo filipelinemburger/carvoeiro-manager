@@ -644,6 +644,12 @@ export type MarketPlayer = {
   /** Always sent by the API (the market only ever returns listed players); optional here only
    * to keep older test fixtures compiling. */
   listedReason?: ListedReason | null
+  /** Years left on his current contract — a loan needs at least LoanService.MIN_CONTRACT_YEARS_TO_LOAN
+   * (2), so the client can disable "Pedir emprestado" before the click rather than after a 422. */
+  contractYears: number
+  /** Whether he is already out on loan somewhere else — a club can't re-lend what it doesn't
+   * own outright. */
+  onLoan: boolean
 }
 
 /** Optional narrowing criteria for the market list — every field absent means "no constraint". */

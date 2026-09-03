@@ -6,7 +6,7 @@ import type { LoanOfferResult, MarketPlayer } from '../../api/types'
 const PLAYER: MarketPlayer = {
   playerId: 'p1', name: 'Jogador Teste', position: 'MID', age: 25, overall: 70,
   clubId: 'club-9', clubName: 'Rival FC', value: 3000000, wage: 50000, wageDemand: 60000,
-  listedReason: 'FINANCIAL',
+  listedReason: 'FINANCIAL', contractYears: 3, onLoan: false,
 }
 
 const REJECTED_KEY_PLAYER: LoanOfferResult = {

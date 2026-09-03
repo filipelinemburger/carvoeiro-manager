@@ -433,7 +433,8 @@ export function TransferMarketPage() {
       loanIn(saveGameId, v, token ?? ''),
     onSuccess: (data) => {
       setLoanResult(data)
-      invalidateAfterLoanIn()
+      // A REJECTED result means nothing moved server-side — nothing went stale.
+      if (data.status !== 'REJECTED') invalidateAfterLoanIn()
     },
   })
 
@@ -441,7 +442,7 @@ export function TransferMarketPage() {
     mutationFn: (offerId: string) => acceptLoanCounter(saveGameId, offerId, token ?? ''),
     onSuccess: (data) => {
       setLoanResult(data)
-      invalidateAfterLoanIn()
+      if (data.status !== 'REJECTED') invalidateAfterLoanIn()
     },
   })
 

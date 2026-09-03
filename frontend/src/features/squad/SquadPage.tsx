@@ -406,7 +406,8 @@ export function SquadPage() {
       loanOut(saveGameId, v, token ?? ''),
     onSuccess: (data) => {
       setLoanResult(data)
-      invalidateAfterLoanMove()
+      // A REJECTED result means nothing moved server-side — nothing went stale.
+      if (data.status !== 'REJECTED') invalidateAfterLoanMove()
     },
   })
 
@@ -414,7 +415,7 @@ export function SquadPage() {
     mutationFn: (offerId: string) => acceptLoanCounter(saveGameId, offerId, token ?? ''),
     onSuccess: (data) => {
       setLoanResult(data)
-      invalidateAfterLoanMove()
+      if (data.status !== 'REJECTED') invalidateAfterLoanMove()
     },
   })
 

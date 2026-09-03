@@ -48,11 +48,12 @@ function marketPage(content: MarketPlayer[], overrides: Partial<PageResponse<Mar
 const ALVO_UM: MarketPlayer = {
   playerId: 'p1', name: 'Alvo Um', position: 'ATT', age: 24, overall: 80,
   clubId: 'club-9', clubName: 'Rival FC', value: 3000000, wage: 50000, wageDemand: 60000,
-  listedReason: 'FINANCIAL',
+  listedReason: 'FINANCIAL', contractYears: 3, onLoan: false,
 }
 
-function renderPage() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+// Accepts an optional client so a test that needs to spy on it (e.g. invalidateQueries) can
+// build one itself and pass it in — the one-and-only way this file renders the page.
+function renderPage(qc: QueryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
     <MemoryRouter initialEntries={['/transfers?saveGameId=sg-1&clubId=club-1']}>
       <AuthProvider>
@@ -286,15 +287,7 @@ describe('TransferMarketPage', () => {
     vi.mocked(loanIn).mockResolvedValue(ACCEPTED)
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
-    render(
-      <MemoryRouter initialEntries={['/transfers?saveGameId=sg-1&clubId=club-1']}>
-        <AuthProvider>
-          <QueryClientProvider client={qc}>
-            <TransferMarketPage />
-          </QueryClientProvider>
-        </AuthProvider>
-      </MemoryRouter>,
-    )
+    renderPage(qc)
     openMarketTab()
     await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
 
@@ -333,6 +326,30 @@ describe('TransferMarketPage', () => {
     // A KEY_PLAYER refusal is final — no submit control, no wage-share field left to retry with.
     expect(within(dialog).queryByRole('button', { name: /pedir empréstimo/i })).not.toBeInTheDocument()
     expect(within(dialog).queryByLabelText(/parcela salarial/i)).not.toBeInTheDocument()
+  })
+
+  it('does not invalidate squad/market/finances when the loan-in proposal is rejected — nothing moved', async () => {
+    const REJECTED: LoanOfferResult = {
+      offerId: 'lo1', playerId: 'p1', playerName: 'Alvo Um', status: 'REJECTED',
+      ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: null, counterMayFaceOwner: null,
+      refusal: 'BELOW_LEVEL',
+    }
+    vi.mocked(loanIn).mockResolvedValue(REJECTED)
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+
+    renderPage(qc)
+    openMarketTab()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /pedir emprestado/i }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /pedir empréstimo/i }))
+
+    expect(await within(dialog).findByText(/não está no nível/i)).toBeInTheDocument()
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['squad', 'sg-1', 'club-1'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['market', 'sg-1'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['finances', 'sg-1', 'club-1'] })
   })
 
   it('optimistically removes a withdrawn offer before the request resolves', async () => {
@@ -415,15 +432,7 @@ describe('TransferMarketPage', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
 
-    render(
-      <MemoryRouter initialEntries={['/transfers?saveGameId=sg-1&clubId=club-1']}>
-        <AuthProvider>
-          <QueryClientProvider client={qc}>
-            <TransferMarketPage />
-          </QueryClientProvider>
-        </AuthProvider>
-      </MemoryRouter>,
-    )
+    renderPage(qc)
     expect(await screen.findByText('Meu Jogador')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Aceitar' }))
@@ -452,15 +461,7 @@ describe('TransferMarketPage', () => {
     })
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
-    render(
-      <MemoryRouter initialEntries={['/transfers?saveGameId=sg-1&clubId=club-1']}>
-        <AuthProvider>
-          <QueryClientProvider client={qc}>
-            <TransferMarketPage />
-          </QueryClientProvider>
-        </AuthProvider>
-      </MemoryRouter>,
-    )
+    renderPage(qc)
     expect(await screen.findByText('Meu Jogador')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Aceitar' }))
@@ -497,15 +498,7 @@ describe('TransferMarketPage', () => {
     })
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
-    render(
-      <MemoryRouter initialEntries={['/transfers?saveGameId=sg-1&clubId=club-1']}>
-        <AuthProvider>
-          <QueryClientProvider client={qc}>
-            <TransferMarketPage />
-          </QueryClientProvider>
-        </AuthProvider>
-      </MemoryRouter>,
-    )
+    renderPage(qc)
     openMarketTab()
     await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
     expect(getOffers).toHaveBeenCalledTimes(1)
@@ -524,15 +517,7 @@ describe('TransferMarketPage', () => {
 
   it('does not refetch the market, offers, or save game on a second mount when the query client is reused', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    const renderOnce = () => render(
-      <MemoryRouter initialEntries={['/transfers?saveGameId=sg-1&clubId=club-1']}>
-        <AuthProvider>
-          <QueryClientProvider client={qc}>
-            <TransferMarketPage />
-          </QueryClientProvider>
-        </AuthProvider>
-      </MemoryRouter>,
-    )
+    const renderOnce = () => renderPage(qc)
     const { unmount } = renderOnce()
     await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
     expect(getMarket).toHaveBeenCalledTimes(1)

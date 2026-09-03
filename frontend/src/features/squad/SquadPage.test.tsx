@@ -147,8 +147,9 @@ function makeQueryClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } })
 }
 
-function renderWithProviders(saveGameId = 'sg-1', clubId = 'club-1') {
-  const qc = makeQueryClient()
+// `qc` is optional so a test that needs to spy on the client (e.g. invalidateQueries) can build
+// its own and pass it in — otherwise a fresh one is created per render as before.
+function renderWithProviders(saveGameId = 'sg-1', clubId = 'club-1', qc: QueryClient = makeQueryClient()) {
   return render(
     <MemoryRouter initialEntries={[`/squad?saveGameId=${saveGameId}&clubId=${clubId}`]}>
       <AuthProvider>
@@ -698,6 +699,30 @@ describe('SquadPage', () => {
     await waitFor(() => expect(mockLoanOut).toHaveBeenCalledWith('sg-1',
       { playerId: 'p-m1', borrowerClubId: 'club-avi', ownerWageShare: 60, mayFaceOwner: true }, 'test-token'))
     expect(await screen.findByText(/empréstimo aprovado/i)).toBeInTheDocument()
+  })
+
+  it('does not invalidate squad/finances/market/lineup when the loan-out proposal is rejected — nothing moved', async () => {
+    mockLoanOut.mockResolvedValue({
+      offerId: 'o1', playerId: 'p-m1', playerName: 'Meio Um', status: 'REJECTED',
+      ownerWageShare: 60, mayFaceOwner: true, counterOwnerWageShare: null, counterMayFaceOwner: null,
+      refusal: 'KEY_PLAYER',
+    })
+    const qc = makeQueryClient()
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+    renderWithProviders('sg-1', 'club-1', qc)
+    await waitFor(() => screen.getByText('Meio Um'))
+    fireEvent.click(screen.getByText('Meio Um'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /^emprestar$/i }))
+    fireEvent.change(await screen.findByRole('combobox', { name: /clube de destino/i }), { target: { value: 'club-avi' } })
+    fireEvent.click(screen.getByRole('button', { name: /propor empréstimo/i }))
+
+    expect(await screen.findByText('O clube não abre mão dele: é peça-chave do elenco.')).toBeInTheDocument()
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['squad', 'sg-1', 'club-1'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['finances', 'sg-1', 'club-1'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['market', 'sg-1'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['lineup', 'sg-1', 'club-1'] })
   })
 
   it('shows the AI\'s counter terms and accepts them through acceptLoanCounter', async () => {
