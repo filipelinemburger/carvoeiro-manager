@@ -10,6 +10,7 @@ import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.finance.AttendanceCalculator;
+import br.com.carvoeiromanager.loan.LoanEligibility;
 import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Formation;
 import br.com.carvoeiromanager.player.GameStyle;
@@ -79,6 +80,7 @@ public class LiveMatchService {
     private final AttendanceCalculator attendanceCalculator;
     private final WeatherService weatherService;
     private final MatchContextResolver matchContextResolver;
+    private final LoanEligibility loanEligibility;
 
     public LiveMatchService(SaveGameService saveGameService, LineupService lineupService,
                             TacticsService tacticsService, FitnessCalculator fitnessCalculator,
@@ -91,7 +93,8 @@ public class LiveMatchService {
                             FixtureAppearanceRepository fixtureAppearanceRepository,
                             MatchOutcomeApplier matchOutcomeApplier, SeasonAdvanceService seasonAdvanceService,
                             ObjectMapper objectMapper, AttendanceCalculator attendanceCalculator,
-                            WeatherService weatherService, MatchContextResolver matchContextResolver) {
+                            WeatherService weatherService, MatchContextResolver matchContextResolver,
+                            LoanEligibility loanEligibility) {
         this.saveGameService = saveGameService;
         this.lineupService = lineupService;
         this.tacticsService = tacticsService;
@@ -113,6 +116,7 @@ public class LiveMatchService {
         this.attendanceCalculator = attendanceCalculator;
         this.weatherService = weatherService;
         this.matchContextResolver = matchContextResolver;
+        this.loanEligibility = loanEligibility;
     }
 
     @Transactional
@@ -148,10 +152,14 @@ public class LiveMatchService {
                 : lineupService.bestXi(homeClubId, matchDate, awayClubId);
         List<Player> awayXi = managedIsHome ? lineupService.bestXi(awayClubId, matchDate, homeClubId)
                 : lineupService.startingXi(saveGameId, awayClubId, homeClubId);
-        List<Player> homeBench = managedIsHome ? lineupService.benchPlayers(saveGameId, homeClubId)
-                : lineupService.bestBench(homeClubId, homeXi);
-        List<Player> awayBench = managedIsHome ? lineupService.bestBench(awayClubId, awayXi)
-                : lineupService.benchPlayers(saveGameId, awayClubId);
+        // Both benches are opponent-aware for the same reason both XIs are: a bench player comes
+        // on, and the AI substitutes from its bench with no eligibility re-check.
+        List<Player> homeBench = managedIsHome
+                ? lineupService.benchPlayers(saveGameId, homeClubId, awayClubId)
+                : lineupService.bestBench(homeClubId, homeXi, awayClubId);
+        List<Player> awayBench = managedIsHome
+                ? lineupService.bestBench(awayClubId, awayXi, homeClubId)
+                : lineupService.benchPlayers(saveGameId, awayClubId, homeClubId);
 
         long seed = saveGameId.getMostSignificantBits()
                 ^ fixture.getId().getMostSignificantBits()
@@ -217,14 +225,24 @@ public class LiveMatchService {
         // any failure rejects the batch atomically (zero subs applied).
         List<UUID> onPitch = new ArrayList<>(managed.onPitch());
         Set<UUID> usedIn = new LinkedHashSet<>(managed.usedIn());
-        Set<UUID> benchIds = managedBench.stream().map(Player::getId).collect(Collectors.toSet());
+        Map<UUID, Player> benchById = managedBench.stream()
+                .collect(Collectors.toMap(Player::getId, p -> p, (a, b) -> a));
+        UUID opponentClubId = opponentOf(lm);
         for (SubstituteRequest sub : req.subs()) {
             if (!onPitch.contains(sub.outPlayerId())) {
                 throw new ApiException(ErrorCode.INVALID_SUBSTITUTION, "The outgoing player is not on the pitch");
             }
-            if (!benchIds.contains(sub.inPlayerId()) || usedIn.contains(sub.inPlayerId())) {
+            if (!benchById.containsKey(sub.inPlayerId()) || usedIn.contains(sub.inPlayerId())) {
                 throw new ApiException(ErrorCode.INVALID_SUBSTITUTION,
                         "The incoming player is not an available bench player");
+            }
+            // The bench stored at kickoff is already loan-filtered, so this normally cannot fire.
+            // It stands because the bench is persisted JSON that outlives the selection that built
+            // it, and because a substitution is the one way a player reaches the pitch without
+            // passing through the XI selection that enforces the rule.
+            if (!loanEligibility.mayFace(benchById.get(sub.inPlayerId()), opponentClubId)) {
+                throw new ApiException(ErrorCode.INVALID_SUBSTITUTION,
+                        "This player is on loan and was not released to face the club that owns him");
             }
             onPitch.remove(sub.outPlayerId());
             onPitch.add(sub.inPlayerId());
@@ -542,6 +560,16 @@ public class LiveMatchService {
             }
         }
         return out;
+    }
+
+    /**
+     * The club the managed side is playing in this live match — the opponent the loan
+     * fixture-release rule is asked about. Read from the fixture rather than from the stored XIs,
+     * the same source {@code configFor} uses for the weather.
+     */
+    private UUID opponentOf(LiveMatch lm) {
+        Fixture fixture = fixtureRepository.findById(lm.getFixtureId()).orElseThrow();
+        return lm.isManagedIsHome() ? fixture.getAwayClubId() : fixture.getHomeClubId();
     }
 
     LiveMatch requireLive(UUID saveGameId) {

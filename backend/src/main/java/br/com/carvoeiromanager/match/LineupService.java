@@ -300,25 +300,64 @@ public class LineupService {
      * Returns the players in the saved starting XI for (saveGameId, clubId) who are currently
      * ineligible (suspended or injured). Empty when there is no saved lineup or all starters are
      * eligible. Used by the advance preview to warn the manager before a match they would play
-     * with an ineligible starter still selected.
+     * with an ineligible starter still selected. Delegates to
+     * {@link #savedIneligibleStarters(UUID, UUID, UUID)} with a null opponent, which imposes no
+     * loan restriction.
      */
     public List<Player> savedIneligibleStarters(UUID saveGameId, UUID clubId) {
+        return savedIneligibleStarters(saveGameId, clubId, null);
+    }
+
+    /**
+     * Same as {@link #savedIneligibleStarters(UUID, UUID)}, but also reports a saved starter who is
+     * on loan and barred from facing {@code opponentClubId} (see {@link LoanEligibility}).
+     * {@link #startingXi(UUID, UUID, UUID)} silently drops such a starter and falls back to
+     * {@link #bestXi}, so without him here the manager is warned about his suspended and injured
+     * starters but loses a barred one with no explanation at all.
+     */
+    public List<Player> savedIneligibleStarters(UUID saveGameId, UUID clubId, UUID opponentClubId) {
         return lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
                 .map(lineup -> lineupPlayerRepository.findByLineupId(lineup.getId()).stream()
                         .filter(LineupPlayer::isStarting)
                         .map(lp -> playerRepository.findById(lp.getPlayerId()).orElse(null))
-                        .filter(p -> p != null && !p.isEligible())
+                        .filter(p -> p != null
+                                && (!p.isEligible() || !loanEligibility.mayFace(p, opponentClubId)))
                         .toList())
                 .orElseGet(List::of);
     }
 
-    /** The saved bench (starting=false) for a club, resolved to Players; empty when none saved. */
+    /**
+     * Whether {@code player} is barred from this fixture only by the loan rule — used by callers
+     * that must tell the manager <em>why</em> a starter cannot play. Exposed here so the loan rule
+     * has one home and callers do not each reach for {@link LoanEligibility} themselves.
+     */
+    public boolean isLoanBarred(Player player, UUID opponentClubId) {
+        return player.isEligible() && !loanEligibility.mayFace(player, opponentClubId);
+    }
+
+    /**
+     * The saved bench (starting=false) for a club, resolved to Players; empty when none saved.
+     * Delegates to {@link #benchPlayers(UUID, UUID, UUID)} with a null opponent, which imposes no
+     * loan restriction.
+     */
     public List<Player> benchPlayers(UUID saveGameId, UUID clubId) {
+        return benchPlayers(saveGameId, clubId, null);
+    }
+
+    /**
+     * Same as {@link #benchPlayers(UUID, UUID)}, but also drops a saved substitute who is on loan
+     * and barred from facing {@code opponentClubId} (see {@link LoanEligibility}). A bench is a
+     * list of players who may come on, so the fixture-release rule binds here exactly as it binds
+     * the XI — otherwise a player barred from starting against his owner could simply be brought
+     * on against him instead.
+     */
+    public List<Player> benchPlayers(UUID saveGameId, UUID clubId, UUID opponentClubId) {
         return lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
                 .map(lineup -> lineupPlayerRepository.findByLineupId(lineup.getId()).stream()
                         .filter(lp -> !lp.isStarting())
                         .map(lp -> playerRepository.findById(lp.getPlayerId()).orElse(null))
                         .filter(p -> p != null && p.isEligible())
+                        .filter(p -> loanEligibility.mayFace(p, opponentClubId))
                         .toList())
                 .orElseGet(List::of);
     }
@@ -505,11 +544,26 @@ public class LineupService {
      * players by overall, up to {@value #BENCH_SIZE} total. Players already in the XI are
      * excluded. Unlike {@link #bestXi}, there is no ineligible fallback — a short (even empty)
      * bench is fine.
+     * <p>
+     * Delegates to {@link #bestBench(UUID, List, UUID)} with a null opponent, which imposes no
+     * loan restriction.
      */
     public List<Player> bestBench(UUID clubId, List<Player> xi) {
+        return bestBench(clubId, xi, null);
+    }
+
+    /**
+     * Same as {@link #bestBench(UUID, List)}, but also excludes a player who is on loan and barred
+     * from facing {@code opponentClubId} (see {@link LoanEligibility}) — mirroring
+     * {@link #bestXi(UUID, LocalDate, UUID)}. This is the AI's bench, and the AI substitutes from
+     * it without re-checking eligibility, so a player kept out of the AI's XI by the loan rule
+     * would otherwise be brought on against his owner mid-match.
+     */
+    public List<Player> bestBench(UUID clubId, List<Player> xi, UUID opponentClubId) {
         Set<UUID> xiIds = xi.stream().map(Player::getId).collect(Collectors.toSet());
         List<Player> candidates = playerRepository.findByClubIdAndYouthProspectFalse(clubId).stream()
                 .filter(Player::isEligible)
+                .filter(p -> loanEligibility.mayFace(p, opponentClubId))
                 .filter(p -> !xiIds.contains(p.getId()))
                 .toList();
 
