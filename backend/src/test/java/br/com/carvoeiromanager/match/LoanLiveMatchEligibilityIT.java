@@ -162,22 +162,24 @@ class LoanLiveMatchEligibilityIT {
 
     /**
      * Borrows a player from the club the managed side is about to play, and puts him on the saved
-     * bench. His overall is dropped so the automatic XI never claims him — the whole point is to
-     * have him sitting on the bench, available to a hand-picked substitution.
+     * bench — the whole point is to have him sitting there, available to a hand-picked
+     * substitution.
      */
     private Player borrowFromTheOpponentOntoTheBench(Career c, boolean mayFaceOwner) {
         Player borrowed = playerRepository.findByClubIdAndYouthProspectFalse(c.opponentClubId()).stream()
                 .filter(p -> p.getPosition() != Position.GK)
                 .min(Comparator.comparing(Player::getId)).orElseThrow();
+        // The XI is settled BEFORE he arrives, so he cannot be in it whatever his position or his
+        // rating. Merely dropping his overall does not keep him out: fillOutfieldSlots is
+        // natural-first, and a natural for a slot the managed squad cannot fill naturally starts
+        // however badly he is rated — which squad generation turns into a per-career coin flip.
+        List<Player> xi = lineupService.bestXi(c.managedClubId());
+        assertThat(xi).as("a real XI, or the bench built from it proves nothing").hasSize(11);
+
         borrowed.setOverall(30);
         borrowed.setContractYears(3);
         borrowed.loanTo(c.managedClubId(), 50, mayFaceOwner);
         playerRepository.save(borrowed);
-
-        List<Player> xi = lineupService.bestXi(c.managedClubId());
-        assertThat(xi).extracting(Player::getId)
-                .as("he must sit on the bench, not walk into the XI, or the substitution is moot")
-                .doesNotContain(borrowed.getId());
         List<LineupStarter> starters = xi.stream()
                 .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .toList();
