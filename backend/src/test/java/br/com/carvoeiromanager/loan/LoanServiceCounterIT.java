@@ -2,6 +2,8 @@ package br.com.carvoeiromanager.loan;
 
 import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
+import br.com.carvoeiromanager.career.SaveGame;
+import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
@@ -19,6 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -33,6 +36,7 @@ class LoanServiceCounterIT {
 
     @Autowired UserRepository userRepository;
     @Autowired SaveGameService saveGameService;
+    @Autowired SaveGameRepository saveGameRepository;
     @Autowired PlayerRepository playerRepository;
     @Autowired ClubRepository clubRepository;
     @Autowired LoanService loanService;
@@ -271,5 +275,38 @@ class LoanServiceCounterIT {
         assertThat(reloaded.getClubId()).isEqualTo(buyerClubId);
         assertThat(reloaded.isOnLoan()).isFalse();
         assertThat(reloaded.getOwnerClubId()).isNull();
+    }
+
+    /**
+     * {@code acceptCounter} re-checks the window the same way it re-checks the departure guard —
+     * an offer that outlived the window must not execute just because it was made while the
+     * window was still open. Mirrors {@code TransferServiceBuyingIT}'s own outside-window fixture
+     * (May 1: past pre-season, before mid-season).
+     */
+    @Test
+    void acceptingACounterAfterTheWindowClosedIsRefused() {
+        Career c = createCareer();
+        Player spare = aSparePlayer(c);
+        Club borrower = clubRepository.findById(aRivalClubId(c)).orElseThrow();
+        borrower.setReputation(spare.getOverall() + LoanPlausibility.LEVEL_TOLERANCE);
+        clubRepository.save(borrower);
+
+        LoanOfferResponse countered = loanService.offerLoanOut(
+                c.id(), c.userId(), spare.getId(), borrower.getId(), 0, false);
+        assertThat(countered.status()).isEqualTo(LoanOfferStatus.COUNTERED);
+
+        // The window shuts after the AI answered but before the manager accepts.
+        SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();
+        save.setCurrentDate(LocalDate.of(c.save().seasonYear(), 5, 1));
+        saveGameRepository.save(save);
+
+        assertThatThrownBy(() -> loanService.acceptCounter(c.id(), c.userId(), countered.offerId()))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.TRANSFER_WINDOW_CLOSED));
+
+        Player reloaded = playerRepository.findById(spare.getId()).orElseThrow();
+        assertThat(reloaded.isOnLoan()).isFalse();
+        assertThat(reloaded.getClubId()).isEqualTo(c.clubId());
     }
 }

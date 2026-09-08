@@ -2,6 +2,8 @@ package br.com.carvoeiromanager.loan;
 
 import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
+import br.com.carvoeiromanager.career.SaveGame;
+import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
@@ -28,6 +30,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -42,6 +45,7 @@ class LoanServiceOutIT {
 
     @Autowired UserRepository userRepository;
     @Autowired SaveGameService saveGameService;
+    @Autowired SaveGameRepository saveGameRepository;
     @Autowired PlayerRepository playerRepository;
     @Autowired ClubRepository clubRepository;
     @Autowired LoanService loanService;
@@ -408,6 +412,34 @@ class LoanServiceOutIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getCode())
                         .isEqualTo(ErrorCode.LOAN_INVALID_TERMS));
+
+        assertThat(playerRepository.findById(spare.getId()).orElseThrow().isOnLoan()).isFalse();
+        assertThat(loanOfferRepository.findBySaveGameIdAndPlayerIdAndStatusIn(c.id(), spare.getId(),
+                List.of(LoanOfferStatus.PENDING, LoanOfferStatus.COUNTERED, LoanOfferStatus.ACCEPTED,
+                        LoanOfferStatus.REJECTED))).isEmpty();
+    }
+
+    /**
+     * A loan is a squad movement like any transfer: {@code offerLoanOut} must refuse it the same
+     * way {@code TransferService.makeOffer} refuses a buy outside the window (mirrored here with
+     * {@code TransferServiceBuyingIT}'s own May 1 outside-window fixture — past pre-season, before
+     * mid-season). Without this, lending out was the one squad departure the backend never gated
+     * on the window at all.
+     */
+    @Test
+    void offeringALoanOutOutsideTheWindowIsRefused() {
+        Career c = createCareer();
+        Player spare = aSparePlayer(c);
+        Club borrower = aWillingBorrower(c, spare);
+        SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();
+        save.setCurrentDate(LocalDate.of(c.save().seasonYear(), 5, 1));
+        saveGameRepository.save(save);
+
+        assertThatThrownBy(() -> loanService.offerLoanOut(
+                c.id(), c.userId(), spare.getId(), borrower.getId(), 100, true))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.TRANSFER_WINDOW_CLOSED));
 
         assertThat(playerRepository.findById(spare.getId()).orElseThrow().isOnLoan()).isFalse();
         assertThat(loanOfferRepository.findBySaveGameIdAndPlayerIdAndStatusIn(c.id(), spare.getId(),

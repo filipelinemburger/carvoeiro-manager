@@ -11,7 +11,7 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import {
   getSquad, getLineup, setLineup, renewContract, listPlayer, unlistPlayer, getFinances, terminateContract,
-  getClubs, loanOut, acceptLoanCounter,
+  getClubs, loanOut, acceptLoanCounter, getSaveGame,
 } from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
@@ -214,6 +214,17 @@ export function SquadPage() {
     enabled: Boolean(saveGameId && token),
     staleTime: Infinity,
   })
+
+  // Same key/staleTime TransferMarketPage already uses for the window gate — LoanService now
+  // enforces the window server-side for both loan directions, so "Emprestar" must be disabled
+  // here the same way "Pedir emprestado" already is disabled there.
+  const saveGameQuery = useQuery({
+    queryKey: ['saveGame', saveGameId],
+    queryFn: () => getSaveGame(saveGameId, token ?? ''),
+    enabled: Boolean(saveGameId && token),
+    staleTime: 30_000,
+  })
+  const windowOpen = saveGameQuery.data?.transferWindowOpen ?? true
 
   const players = data?.players ?? []
   const slots = pitchSlots(formation)
@@ -855,11 +866,16 @@ export function SquadPage() {
     )
   }
 
-  /** Why this player cannot be loaned out right now, or null when he can be. The contract-length
-   * guard mirrors LoanService.requireLoanableContract; the borrowed-player guard mirrors the
-   * `!isOnLoan()` filter `offerLoanOut` applies before it will even look the player up — a club
-   * only lends what it owns outright. Explains only — the backend still enforces both. */
+  /** Why this player cannot be loaned out right now, or null when he can be. The window guard
+   * mirrors LoanService.requireWindowOpen (a loan is a squad movement like any transfer); the
+   * contract-length guard mirrors LoanService.requireLoanableContract; the borrowed-player guard
+   * mirrors the `!isOnLoan()` filter `offerLoanOut` applies before it will even look the player
+   * up — a club only lends what it owns outright. Explains only — the backend still enforces all
+   * three. */
   function loanBlockedReason(player: PlayerResponse): string | null {
+    if (!windowOpen) {
+      return 'Janela de transferências fechada.'
+    }
     if (player.onLoanFromClubName) {
       return 'Jogador emprestado por outro clube — não pode ser emprestado.'
     }

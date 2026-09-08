@@ -22,13 +22,14 @@ vi.mock('../../api/career', () => ({
   getClubs: vi.fn(),
   loanOut: vi.fn(),
   acceptLoanCounter: vi.fn(),
+  getSaveGame: vi.fn(),
 }))
 
 vi.mock('../../lib/useIsMobile', () => ({ useIsMobile: vi.fn(() => false) }))
 
 import {
   getSquad, getLineup, setLineup, getTactics, renewContract, listPlayer, unlistPlayer, getFinances,
-  terminateContract, getClubs, loanOut, acceptLoanCounter,
+  terminateContract, getClubs, loanOut, acceptLoanCounter, getSaveGame,
 } from '../../api/career'
 
 const mockGetSquad = vi.mocked(getSquad)
@@ -42,6 +43,7 @@ const mockTerminateContract = vi.mocked(terminateContract)
 const mockGetClubs = vi.mocked(getClubs)
 const mockLoanOut = vi.mocked(loanOut)
 const mockAcceptLoanCounter = vi.mocked(acceptLoanCounter)
+const mockGetSaveGame = vi.mocked(getSaveGame)
 
 // `as const` narrows injurySeverity to the literal 'NONE' so it satisfies
 // PlayerResponse's union type (not widened to string) when spread into fixtures.
@@ -138,6 +140,12 @@ const squad: SquadResponse = {
 
 // The managed club itself ('club-1', matching renderWithProviders' default clubId) must never be
 // offered as a loan destination — only other clubs make sense as a borrower.
+const SAVE_OPEN = {
+  id: 'sg-1', seasonYear: 2026, competitionId: 'c-1', competitionName: 'Catarinense',
+  managedClubId: 'club-1', managedClubName: 'Criciúma', currentRound: 0, totalRounds: 18,
+  transferWindowOpen: true,
+}
+
 const CLUBS: ClubSummary[] = [
   { id: 'club-1', name: 'Criciúma EC', commonName: 'Criciúma', shortName: 'CRI', primaryColor: '#f7d417', secondaryColor: '#111111', reputation: 74, squadSize: 22 },
   { id: 'club-avi', name: 'Avaí FC', commonName: 'Avaí', shortName: 'AVA', primaryColor: '#0000aa', secondaryColor: '#ffffff', reputation: 80, squadSize: 25 },
@@ -193,6 +201,7 @@ describe('SquadPage', () => {
     })
     mockGetFinances.mockResolvedValue({ balance: 20000000, transactions: [] })
     mockGetClubs.mockResolvedValue(CLUBS)
+    mockGetSaveGame.mockResolvedValue(SAVE_OPEN)
     localStorage.setItem('carvoeiro_manager_token', 'test-token')
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
   })
@@ -668,6 +677,26 @@ describe('SquadPage', () => {
     const loanBtn = within(dialog).getByRole('button', { name: /^emprestar$/i })
     expect(loanBtn).toBeDisabled()
     expect(within(dialog).getByText(/emprestado por outro clube/i)).toBeInTheDocument()
+
+    fireEvent.click(loanBtn)
+    expect(mockLoanOut).not.toHaveBeenCalled()
+    expect(screen.queryByRole('combobox', { name: /clube de destino/i })).not.toBeInTheDocument()
+  })
+
+  it('disables the Emprestar action with a visible reason when the transfer window is closed', async () => {
+    // LoanService.requireWindowOpen now gates offerLoanOut server-side, mirroring TransferService.
+    // "Pedir emprestado" on TransferMarketPage was already gated this way; "Emprestar" here must
+    // match, or a closed-window loan-out would only fail after the round-trip.
+    mockGetSaveGame.mockResolvedValue({ ...SAVE_OPEN, transferWindowOpen: false })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Meio Um'))
+    fireEvent.click(screen.getByText('Meio Um'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+
+    const loanBtn = await within(dialog).findByRole('button', { name: /^emprestar$/i })
+    expect(loanBtn).toBeDisabled()
+    expect(within(dialog).getByText(/janela de transferências fechada/i)).toBeInTheDocument()
 
     fireEvent.click(loanBtn)
     expect(mockLoanOut).not.toHaveBeenCalled()
@@ -1322,6 +1351,7 @@ describe('SquadPage — slot picker and Função/Foco selects', () => {
     })
     mockGetFinances.mockResolvedValue({ balance: 20000000, transactions: [] })
     mockGetClubs.mockResolvedValue(CLUBS)
+    mockGetSaveGame.mockResolvedValue(SAVE_OPEN)
     localStorage.setItem('carvoeiro_manager_token', 'test-token')
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
   })

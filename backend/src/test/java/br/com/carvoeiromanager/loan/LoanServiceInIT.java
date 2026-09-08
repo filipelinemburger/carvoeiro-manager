@@ -2,6 +2,8 @@ package br.com.carvoeiromanager.loan;
 
 import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
+import br.com.carvoeiromanager.career.SaveGame;
+import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
@@ -19,6 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -33,6 +36,7 @@ class LoanServiceInIT {
 
     @Autowired UserRepository userRepository;
     @Autowired SaveGameService saveGameService;
+    @Autowired SaveGameRepository saveGameRepository;
     @Autowired PlayerRepository playerRepository;
     @Autowired ClubRepository clubRepository;
     @Autowired LoanService loanService;
@@ -322,5 +326,32 @@ class LoanServiceInIT {
         Player reloaded = playerRepository.findById(target.getId()).orElseThrow();
         assertThat(reloaded.getClubId()).isEqualTo(thirdClubId);
         assertThat(reloaded.getOwnerClubId()).isEqualTo(ownerClubId);
+    }
+
+    /**
+     * The client already disabled "Pedir emprestado" when the window is shut, but that alone is
+     * not a rule — a direct call to {@code offerLoanIn} bypassed it entirely. Mirrors
+     * {@code offeringALoanOutOutsideTheWindowIsRefused} in {@code LoanServiceOutIT} and
+     * {@code TransferServiceBuyingIT}'s own outside-window fixture (May 1: past pre-season,
+     * before mid-season).
+     */
+    @Test
+    void offeringALoanInOutsideTheWindowIsRefused() {
+        Career c = createCareer();
+        UUID ownerClubId = aRivalClubId(c);
+        Player target = aSparePlayerAt(ownerClubId);
+        makeManagedClubModest(c, target);
+        SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();
+        save.setCurrentDate(LocalDate.of(c.save().seasonYear(), 5, 1));
+        saveGameRepository.save(save);
+
+        assertThatThrownBy(() -> loanService.offerLoanIn(c.id(), c.userId(), target.getId(), 0, true))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.TRANSFER_WINDOW_CLOSED));
+
+        Player reloaded = playerRepository.findById(target.getId()).orElseThrow();
+        assertThat(reloaded.isOnLoan()).isFalse();
+        assertThat(reloaded.getClubId()).isEqualTo(ownerClubId);
     }
 }

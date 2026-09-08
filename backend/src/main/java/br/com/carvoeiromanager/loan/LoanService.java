@@ -12,6 +12,7 @@ import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.transfer.SellerContext;
 import br.com.carvoeiromanager.transfer.SellerContextFactory;
+import br.com.carvoeiromanager.transfer.TransferWindow;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,11 +38,13 @@ public class LoanService {
     private final LoanNegotiator loanNegotiator;
     private final SellerContextFactory sellerContextFactory;
     private final SquadDeparture squadDeparture;
+    private final TransferWindow transferWindow;
 
     public LoanService(SaveGameService saveGameService, PlayerRepository playerRepository,
                        ClubRepository clubRepository, LoanOfferRepository loanOfferRepository,
                        LoanPlausibility loanPlausibility, LoanNegotiator loanNegotiator,
-                       SellerContextFactory sellerContextFactory, SquadDeparture squadDeparture) {
+                       SellerContextFactory sellerContextFactory, SquadDeparture squadDeparture,
+                       TransferWindow transferWindow) {
         this.saveGameService = saveGameService;
         this.playerRepository = playerRepository;
         this.clubRepository = clubRepository;
@@ -50,6 +53,7 @@ public class LoanService {
         this.loanNegotiator = loanNegotiator;
         this.sellerContextFactory = sellerContextFactory;
         this.squadDeparture = squadDeparture;
+        this.transferWindow = transferWindow;
     }
 
     /** The manager lends one of his own players to an AI club. */
@@ -59,6 +63,7 @@ public class LoanService {
                                           boolean mayFaceOwner) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         UUID managedClubId = save.getManagedClubId();
+        requireWindowOpen(save);
         // Before the lookup: a malformed body is a bad request, and diagnosing it after the player
         // search would answer PLAYER_NOT_FOUND for an offer whose player was never the problem.
         requireValidTerms(new LoanTerms(ownerWageShare, mayFaceOwner));
@@ -92,6 +97,7 @@ public class LoanService {
                                          int ownerWageShare, boolean mayFaceOwner) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         UUID managedClubId = save.getManagedClubId();
+        requireWindowOpen(save);
         requireValidTerms(new LoanTerms(ownerWageShare, mayFaceOwner));   // see offerLoanOut
 
         Player player = playerRepository.findById(playerId)
@@ -179,6 +185,7 @@ public class LoanService {
         if (offer.getStatus() != LoanOfferStatus.COUNTERED) {
             throw new ApiException(ErrorCode.INVALID_TRANSFER, "No counter to accept on this offer");
         }
+        requireWindowOpen(save);
 
         Player player = playerRepository.findById(offer.getPlayerId())
                 .filter(p -> !p.isOnLoan())
@@ -215,6 +222,18 @@ public class LoanService {
         playerRepository.save(player);
         squadDeparture.cleanManagedLineup(save.getId(), formerClubId, player.getId());
         squadDeparture.rejectOpenOffersFor(save.getId(), player.getId());
+    }
+
+    /**
+     * A loan is a squad movement like any transfer: the backend already enforces the window for
+     * transfers ({@code TransferService.requireWindowOpen}) and contracts
+     * ({@code ContractService.requireWindowOpen}), so a loan closing that gate only in the client
+     * would not be a rule at all — a direct API call would bypass it.
+     */
+    void requireWindowOpen(SaveGame save) {
+        if (!transferWindow.isOpen(save.getCurrentDate())) {
+            throw new ApiException(ErrorCode.TRANSFER_WINDOW_CLOSED, "The transfer window is closed");
+        }
     }
 
     void requireLoanableContract(Player player) {
