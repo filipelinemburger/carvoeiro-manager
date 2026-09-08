@@ -45,6 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -238,7 +239,12 @@ public class SeasonRolloverService {
 
         // Loans come home BEFORE contracts tick — the contract is with the owner — and AFTER the
         // archive above, so a loaned player's goals stay credited to the club he played them for.
-        List<SquadChangeResponse> loanReturns = new ArrayList<>();
+        //
+        // Keyed by player id (not a plain List) so the aging pass below can, by identity rather
+        // than by name, drop a player who returns here and then retires in the same rollover —
+        // see the removal at the retirement branch for why that reconciliation happens there
+        // instead of reordering this pass after aging.
+        Map<UUID, SquadChangeResponse> loanReturnsByPlayerId = new LinkedHashMap<>();
         List<Player> returning = playerRepository.findBySaveGameId(saveGameId).stream()
                 .filter(Player::isOnLoan)
                 .toList();
@@ -251,7 +257,7 @@ public class SeasonRolloverService {
                 // returning 27-year-old as 27 in one list and 28 in another, in one payload. Every
                 // non-youth player takes exactly one year in that pass, and a loanee is never a
                 // youth prospect, so the increment is exact rather than an estimate.
-                loanReturns.add(new SquadChangeResponse(
+                loanReturnsByPlayerId.put(player.getId(), new SquadChangeResponse(
                         player.getName(), player.getPosition().name(), player.getAge() + 1));
             }
         }
@@ -310,6 +316,12 @@ public class SeasonRolloverService {
                 if (managed) {
                     retirements.add(new SquadChangeResponse(
                             player.getName(), player.getPosition().name(), player.getAge()));
+                    // A loanee who came home earlier in this same rollover (see
+                    // loanReturnsByPlayerId above) and is now old enough to retire would
+                    // otherwise be reported under both headings. Retirement is the more
+                    // informative outcome for the manager reading the summary once a year, so
+                    // it wins: drop the now-stale loan-return entry rather than double-list him.
+                    loanReturnsByPlayerId.remove(player.getId());
                 }
                 if (!managed) {
                     // AI clubs keep newgen-on-retirement; the managed club fills gaps from its academy.
@@ -406,7 +418,7 @@ public class SeasonRolloverService {
                 List.copyOf(retirements), List.copyOf(expiredContracts),
                 List.copyOf(youthIntake), List.copyOf(youthDepartures),
                 List.copyOf(preContractArrivals), List.copyOf(preContractDepartures),
-                List.copyOf(loanReturns), List.copyOf(surplusListings),
+                List.copyOf(loanReturnsByPlayerId.values()), List.copyOf(surplusListings),
                 List.copyOf(watchlistEvents));
     }
 

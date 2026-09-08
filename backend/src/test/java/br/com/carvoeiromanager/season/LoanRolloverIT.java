@@ -157,6 +157,38 @@ class LoanRolloverIT {
     }
 
     /**
+     * The double-report guard (Finding: Minor 5). {@code loanReturnsByPlayerId} in
+     * {@code SeasonRolloverService} records this player's return BEFORE the aging pass runs, and
+     * the aging pass can then decide the very same player is old enough to retire — without the
+     * reconciliation at the retirement branch, he would appear under both headings in one summary.
+     * Age 37 going into the tick becomes 38 after it, where {@code retirementProbability} is 1.0
+     * (certain), so this is deterministic regardless of the rollover's seeded RNG.
+     */
+    @Test
+    void aLoanedPlayerOldEnoughToRetireOnReturnAppearsExactlyOnceInTheSummary() {
+        Career c = playToSeasonEnd();
+        List<Player> squad = playerRepository.findByClubId(c.clubId());
+        squad.forEach(p -> p.setContractYears(5));        // keep everyone else off the lapse path
+        Player lent = squad.stream()
+                .filter(p -> !p.isYouthProspect())
+                .min(Comparator.comparing(Player::getId))
+                .orElseThrow();
+        lent.setAge(37);                                   // 38 after the aging tick: certain retirement
+        UUID borrower = aBorrowerClubId(c);
+        playerRepository.saveAll(squad);
+        lent.loanTo(borrower, 40, true);
+        playerRepository.save(lent);
+
+        RolloverResponse r = rolloverService.rollover(c.id(), c.userId());
+
+        assertThat(playerRepository.findById(lent.getId())).isEmpty(); // retired players are deleted
+        assertThat(r.retirements()).extracting(SquadChangeResponse::playerName)
+                .contains(lent.getName());
+        assertThat(r.loanReturns()).extracting(SquadChangeResponse::playerName)
+                .doesNotContain(lent.getName());
+    }
+
+    /**
      * The ordering guard: the archive (step 1) runs BEFORE the loan return (start of step 3), so a
      * scorer who is still out on loan when rollover is invoked is archived under his <b>borrower</b>
      * — the club he is registered at as the season closes — and not under the owner he is about to
