@@ -716,6 +716,11 @@ export type LoanOfferResult = {
   playerId: string
   playerName: string
   status: 'PENDING' | 'COUNTERED' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN'
+  // Which side of the loan the manager's own club sits on. Every wage-share number below is
+  // always "the owner's share" regardless of direction, so the same percentage means opposite
+  // things depending on this flag — true: it's coming out of the manager's own budget (a
+  // loan-out); false: it's the AI owner's money (a loan-in).
+  managedClubIsOwner: boolean
   ownerWageShare: number
   mayFaceOwner: boolean
   counterOwnerWageShare: number | null

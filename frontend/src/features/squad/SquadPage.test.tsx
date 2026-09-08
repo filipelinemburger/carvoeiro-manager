@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { SquadPage } from './SquadPage'
 import { AuthProvider } from '../../auth/AuthContext'
+import { ApiError } from '../../api/client'
 import { useIsMobile } from '../../lib/useIsMobile'
 import type { PlayerResponse, SquadResponse, ClubSummary, LoanOfferResult } from '../../api/types'
 
@@ -711,6 +712,7 @@ describe('SquadPage', () => {
   it('proposes a loan for a player with a long enough contract, offering every club but the manager\'s own', async () => {
     mockLoanOut.mockResolvedValue({
       offerId: 'o1', playerId: 'p-m1', playerName: 'Meio Um', status: 'ACCEPTED',
+      managedClubIsOwner: true,
       ownerWageShare: 60, mayFaceOwner: true, counterOwnerWageShare: null, counterMayFaceOwner: null, refusal: null,
     })
     renderWithProviders()
@@ -738,6 +740,7 @@ describe('SquadPage', () => {
   it('does not invalidate squad/finances/market/lineup when the loan-out proposal is rejected — nothing moved', async () => {
     mockLoanOut.mockResolvedValue({
       offerId: 'o1', playerId: 'p-m1', playerName: 'Meio Um', status: 'REJECTED',
+      managedClubIsOwner: true,
       ownerWageShare: 60, mayFaceOwner: true, counterOwnerWageShare: null, counterMayFaceOwner: null,
       refusal: 'KEY_PLAYER',
     })
@@ -762,10 +765,12 @@ describe('SquadPage', () => {
   it('shows the AI\'s counter terms, accepts them through acceptLoanCounter, and refreshes the pending-loan listing both times', async () => {
     mockLoanOut.mockResolvedValue({
       offerId: 'o2', playerId: 'p-m1', playerName: 'Meio Um', status: 'COUNTERED',
+      managedClubIsOwner: true,
       ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 75, counterMayFaceOwner: true, refusal: 'TERMS_REJECTED',
     })
     mockAcceptLoanCounter.mockResolvedValue({
       offerId: 'o2', playerId: 'p-m1', playerName: 'Meio Um', status: 'ACCEPTED',
+      managedClubIsOwner: true,
       ownerWageShare: 75, mayFaceOwner: true, counterOwnerWageShare: null, counterMayFaceOwner: null, refusal: null,
     })
     const qc = makeQueryClient()
@@ -794,6 +799,7 @@ describe('SquadPage', () => {
   it('surfaces a countered loan offer from GET /loans — reachable with no dialog ever opened this session — and accepts it from there', async () => {
     const COUNTERED: LoanOfferResult = {
       offerId: 'o-open', playerId: 'p-m1', playerName: 'Meio Um', status: 'COUNTERED',
+      managedClubIsOwner: true,
       ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 75, counterMayFaceOwner: true,
       refusal: 'TERMS_REJECTED',
     }
@@ -812,6 +818,7 @@ describe('SquadPage', () => {
     mockGetSaveGame.mockResolvedValue({ ...SAVE_OPEN, transferWindowOpen: false })
     const COUNTERED: LoanOfferResult = {
       offerId: 'o-open', playerId: 'p-m1', playerName: 'Meio Um', status: 'COUNTERED',
+      managedClubIsOwner: true,
       ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 75, counterMayFaceOwner: true,
       refusal: 'TERMS_REJECTED',
     }
@@ -824,6 +831,32 @@ describe('SquadPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Desistir' }))
     await waitFor(() => expect(mockWithdrawLoanOffer).toHaveBeenCalledWith('sg-1', 'o-open', 'test-token'))
+  })
+
+  it('when accepting a counter is refused because the squad shrank since the offer, surfaces the error and keeps the offer in the panel', async () => {
+    // acceptLoanCounter re-runs the departure guard against the CURRENT squad — a sale/release/
+    // second loan after the counter but before the accept can make it fail with SQUAD_TOO_SMALL
+    // even though the counter itself was fine. The offer is honest (still open, still COUNTERED)
+    // and must stay reachable — the manager might fix the squad and try again, or withdraw.
+    const COUNTERED: LoanOfferResult = {
+      offerId: 'o-open', playerId: 'p-m1', playerName: 'Meio Um', status: 'COUNTERED',
+      managedClubIsOwner: true,
+      ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 75, counterMayFaceOwner: true,
+      refusal: 'TERMS_REJECTED',
+    }
+    mockGetLoanOffers.mockResolvedValue([COUNTERED])
+    mockAcceptLoanCounter.mockRejectedValue(new ApiError('Squad too small', 'SQUAD_TOO_SMALL', 422))
+    renderWithProviders()
+
+    expect(await screen.findByText(/empréstimos com contraproposta pendente/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aceitar' }))
+
+    expect(await screen.findByText('O elenco ficaria pequeno demais.')).toBeInTheDocument()
+    // Still there: a failed accept never invalidates ['loanOffers', saveGameId], so the panel
+    // keeps showing exactly the offer GET /loans returned — nothing silently dropped it.
+    expect(screen.getByText(/empréstimos com contraproposta pendente/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Aceitar' })).toBeInTheDocument()
   })
 
   it('marks a borrowed player in the squad list with who he is on loan from', async () => {

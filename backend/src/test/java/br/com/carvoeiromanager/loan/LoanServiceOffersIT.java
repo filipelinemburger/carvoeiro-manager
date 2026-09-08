@@ -100,6 +100,8 @@ class LoanServiceOffersIT {
         LoanOfferResponse countered = loanService.offerLoanOut(
                 c.id(), c.userId(), spare.getId(), borrower.getId(), 0, false);
         assertThat(countered.status()).isEqualTo(LoanOfferStatus.COUNTERED);
+        // offerLoanOut: the managed club is lending the player away, so it is the owner.
+        assertThat(countered.managedClubIsOwner()).isTrue();
 
         // "The dialog closes": nothing but the save and offer id survives — refetch it exactly as
         // a fresh page load would, rather than reusing the response `offerLoanOut` returned above.
@@ -109,6 +111,7 @@ class LoanServiceOffersIT {
         assertThat(listed.offerId()).isEqualTo(countered.offerId());
         assertThat(listed.status()).isEqualTo(LoanOfferStatus.COUNTERED);
         assertThat(listed.playerId()).isEqualTo(spare.getId());
+        assertThat(listed.managedClubIsOwner()).isTrue();
         assertThat(listed.counterOwnerWageShare()).isEqualTo(countered.counterOwnerWageShare());
         assertThat(listed.counterMayFaceOwner()).isEqualTo(countered.counterMayFaceOwner());
         // TERMS_REJECTED is the only refusal a COUNTERED offer can ever carry.
@@ -117,6 +120,7 @@ class LoanServiceOffersIT {
         LoanOfferResponse accepted = loanService.acceptCounter(c.id(), c.userId(), listed.offerId());
 
         assertThat(accepted.status()).isEqualTo(LoanOfferStatus.ACCEPTED);
+        assertThat(accepted.managedClubIsOwner()).isTrue();
         assertThat(playerRepository.findById(spare.getId()).orElseThrow().isOnLoan()).isTrue();
         // Accepted (or rejected) offers are no longer "open" — the listing empties out.
         assertThat(loanService.getOffers(c.id(), c.userId())).isEmpty();
@@ -134,6 +138,7 @@ class LoanServiceOffersIT {
 
         LoanOfferResponse withdrawn = loanService.withdrawOffer(c.id(), c.userId(), countered.offerId());
         assertThat(withdrawn.status()).isEqualTo(LoanOfferStatus.WITHDRAWN);
+        assertThat(withdrawn.managedClubIsOwner()).isTrue();
 
         // Withdrawn is not "open" either — it drops out of the listing the same way ACCEPTED does.
         assertThat(loanService.getOffers(c.id(), c.userId())).isEmpty();
@@ -176,5 +181,30 @@ class LoanServiceOffersIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getCode())
                         .isEqualTo(ErrorCode.TRANSFER_OFFER_NOT_FOUND));
+    }
+
+    /**
+     * The listing is save-scoped, not user-scoped — every other test in this class creates a
+     * fresh user per career, so a finder that accidentally keyed off the owning user (or leaked
+     * across saves some other way) would still pass the whole suite. Two careers under the SAME
+     * user closes that gap: only a save-id match, not a user match, may return an offer.
+     */
+    @Test
+    void getOffersDoesNotLeakAnotherSavesOfferEvenForTheSameUser() {
+        User user = User.create("loanoffers_" + UUID.randomUUID(), "hash");
+        userRepository.save(user);
+        Career a = new Career(user.getId(), saveGameService.createCareer(user.getId()));
+        Career b = new Career(user.getId(), saveGameService.createCareer(user.getId()));
+
+        Player spareA = aSparePlayer(a);
+        Club borrowerA = aBorrowerThatWillCounter(a, spareA);
+        LoanOfferResponse counteredA = loanService.offerLoanOut(
+                a.id(), a.userId(), spareA.getId(), borrowerA.getId(), 0, false);
+        assertThat(counteredA.status()).isEqualTo(LoanOfferStatus.COUNTERED);
+
+        assertThat(loanService.getOffers(b.id(), b.userId())).isEmpty();
+        assertThat(loanService.getOffers(a.id(), a.userId()))
+                .extracting(LoanOfferResponse::offerId)
+                .containsExactly(counteredA.offerId());
     }
 }

@@ -335,6 +335,7 @@ describe('TransferMarketPage', () => {
   it('opens the loan dialog from a market row and submits a borrow proposal', async () => {
     const ACCEPTED: LoanOfferResult = {
       offerId: 'lo1', playerId: 'p1', playerName: 'Alvo Um', status: 'ACCEPTED',
+      managedClubIsOwner: false,
       ownerWageShare: 70, mayFaceOwner: true, counterOwnerWageShare: null, counterMayFaceOwner: null,
       refusal: null,
     }
@@ -363,6 +364,7 @@ describe('TransferMarketPage', () => {
   it('refreshes the pending-loan listing as soon as a loan-in proposal comes back countered — not after its own staleTime', async () => {
     const COUNTERED: LoanOfferResult = {
       offerId: 'lo1', playerId: 'p1', playerName: 'Alvo Um', status: 'COUNTERED',
+      managedClubIsOwner: false,
       ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 80, counterMayFaceOwner: false,
       refusal: 'TERMS_REJECTED',
     }
@@ -384,6 +386,7 @@ describe('TransferMarketPage', () => {
   it('shows a KEY_PLAYER refusal in the loan dialog with no path to improve the offer', async () => {
     const REJECTED: LoanOfferResult = {
       offerId: 'lo1', playerId: 'p1', playerName: 'Alvo Um', status: 'REJECTED',
+      managedClubIsOwner: false,
       ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: null, counterMayFaceOwner: null,
       refusal: 'KEY_PLAYER',
     }
@@ -406,6 +409,7 @@ describe('TransferMarketPage', () => {
   it('does not invalidate squad/market/finances when the loan-in proposal is rejected — nothing moved', async () => {
     const REJECTED: LoanOfferResult = {
       offerId: 'lo1', playerId: 'p1', playerName: 'Alvo Um', status: 'REJECTED',
+      managedClubIsOwner: false,
       ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: null, counterMayFaceOwner: null,
       refusal: 'BELOW_LEVEL',
     }
@@ -433,6 +437,7 @@ describe('TransferMarketPage', () => {
     // and the market list card.
     const COUNTERED: LoanOfferResult = {
       offerId: 'lo-open', playerId: 'p-loan', playerName: 'Emprestado Um', status: 'COUNTERED',
+      managedClubIsOwner: false,
       ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 65, counterMayFaceOwner: true,
       refusal: 'TERMS_REJECTED',
     }
@@ -452,10 +457,39 @@ describe('TransferMarketPage', () => {
     await waitFor(() => expect(acceptLoanCounter).toHaveBeenCalledWith('sg-1', 'lo-open', 'test-token'))
   })
 
+  it('accepting a counter from the Transfer Market invalidates the managed club\'s lineup query', async () => {
+    // Regression: this is exactly the flow the task exists to enable — propose "Emprestar" on
+    // SquadPage (a loan-OUT), get COUNTERED, close the dialog, navigate here, accept the counter
+    // from the pending-offers panel. The server drops the loaned player from the saved lineup
+    // (SquadDeparture.cleanManagedLineup), but the client's ['lineup', saveGameId, managedClubId]
+    // query has staleTime: Infinity and is warm from the SquadPage visit — nothing refetches it
+    // unless accepting a counter here invalidates the same key SquadPage's own loan mutations do.
+    const COUNTERED: LoanOfferResult = {
+      offerId: 'lo-open', playerId: 'p-loan', playerName: 'Emprestado Um', status: 'COUNTERED',
+      managedClubIsOwner: true,
+      ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 65, counterMayFaceOwner: true,
+      refusal: 'TERMS_REJECTED',
+    }
+    vi.mocked(getLoanOffers).mockResolvedValue([COUNTERED])
+    const ACCEPTED: LoanOfferResult = { ...COUNTERED, status: 'ACCEPTED' }
+    vi.mocked(acceptLoanCounter).mockResolvedValue(ACCEPTED)
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+
+    renderPage(qc)
+    expect(await screen.findByText('Emprestado Um')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aceitar' }))
+
+    await waitFor(() => expect(acceptLoanCounter).toHaveBeenCalledWith('sg-1', 'lo-open', 'test-token'))
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['lineup', 'sg-1', 'club-1'] }))
+  })
+
   it('disables Aceitar on the pending-loan panel and explains why when the window is closed, but still allows Desistir', async () => {
     vi.mocked(getSaveGame).mockResolvedValue({ ...SAVE_OPEN, transferWindowOpen: false })
     const COUNTERED: LoanOfferResult = {
       offerId: 'lo-open', playerId: 'p-loan', playerName: 'Emprestado Um', status: 'COUNTERED',
+      managedClubIsOwner: false,
       ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 65, counterMayFaceOwner: true,
       refusal: 'TERMS_REJECTED',
     }

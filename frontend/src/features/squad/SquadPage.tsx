@@ -23,6 +23,7 @@ import { PlayerDetails } from './PlayerDetails'
 import { TerminateDialog } from './TerminateDialog'
 import { LoanOutDialog } from './LoanOutDialog'
 import { PendingLoanOffers } from '../loan/PendingLoanOffers'
+import { invalidateAfterLoanMove } from '../loan/loanInvalidation'
 import { FitnessBar } from './FitnessBar'
 import { MoodChip } from './MoodChip'
 import { teamMorale } from './morale'
@@ -409,28 +410,16 @@ export function SquadPage() {
     },
   })
 
-  // Invalidations shared by both loan mutations below: a squad member can move (loanOut/
-  // acceptLoanCounter both end in `execute`), which changes the wage bill (finances), frees a
-  // squad slot at the owner (market listings can now differ) and clears the departed player's
-  // saved lineup slot.
-  function invalidateAfterLoanMove() {
-    void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] })
-    void queryClient.invalidateQueries({ queryKey: ['finances', saveGameId, clubId] })
-    void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
-    void queryClient.invalidateQueries({ queryKey: ['lineup', saveGameId, clubId] })
-  }
-
   const loanOutMut = useMutation({
     mutationFn: (v: { playerId: string; borrowerClubId: string; ownerWageShare: number; mayFaceOwner: boolean }) =>
       loanOut(saveGameId, v, token ?? ''),
     onSuccess: (data) => {
       setLoanResult(data)
-      // A REJECTED result means nothing moved server-side — nothing went stale.
-      if (data.status !== 'REJECTED') invalidateAfterLoanMove()
+      // A REJECTED result means nothing moved server-side — nothing went stale, including the
+      // open-offers listing (a REJECTED offer is never one `getOffers` lists).
       // A COUNTERED result is a new open offer PendingLoanOffers must pick up even if this dialog
-      // is later closed without acting on it; REJECTED/ACCEPTED never leave one open, so this is
-      // a harmless no-op refetch for those.
-      void queryClient.invalidateQueries({ queryKey: ['loanOffers', saveGameId] })
+      // is later closed without acting on it — invalidateAfterLoanMove refreshes that listing too.
+      if (data.status !== 'REJECTED') invalidateAfterLoanMove(queryClient, saveGameId, clubId)
     },
   })
 
@@ -438,8 +427,7 @@ export function SquadPage() {
     mutationFn: (offerId: string) => acceptLoanCounter(saveGameId, offerId, token ?? ''),
     onSuccess: (data) => {
       setLoanResult(data)
-      if (data.status !== 'REJECTED') invalidateAfterLoanMove()
-      void queryClient.invalidateQueries({ queryKey: ['loanOffers', saveGameId] })
+      if (data.status !== 'REJECTED') invalidateAfterLoanMove(queryClient, saveGameId, clubId)
     },
   })
 

@@ -5,12 +5,16 @@ import type { LoanOfferResult } from '../../api/types'
 
 const COUNTERED: LoanOfferResult = {
   offerId: 'o1', playerId: 'p1', playerName: 'Jogador Teste', status: 'COUNTERED',
+  managedClubIsOwner: true,
   ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 70, counterMayFaceOwner: true,
   refusal: 'TERMS_REJECTED',
 }
 
+// A loan-in row: the managed club is the borrower, not the owner — opposite direction from
+// COUNTERED above, so the wording (who the wage share is paid by, who it may face) must flip too.
 const COUNTERED_2: LoanOfferResult = {
   ...COUNTERED, offerId: 'o2', playerId: 'p2', playerName: 'Outro Jogador',
+  managedClubIsOwner: false,
   counterOwnerWageShare: 40, counterMayFaceOwner: false,
 }
 
@@ -27,13 +31,19 @@ describe('PendingLoanOffers', () => {
       <PendingLoanOffers offers={[COUNTERED, COUNTERED_2]} windowOpen busy={false}
         onAccept={vi.fn()} onWithdraw={vi.fn()} />,
     )
+    // managedClubIsOwner: true — a loan-out. The wage share is the manager's own money, and
+    // "enfrentar" is about facing his own club.
     const row1 = within(screen.getByText('Jogador Teste').closest('li')!)
     expect(row1.getByText(/70% de salário/)).toBeInTheDocument()
-    expect(row1.getByText(/^Contraproposta:.*pode enfrentar o dono$/)).toBeInTheDocument()
+    expect(row1.getByText(/pago por seu clube/)).toBeInTheDocument()
+    expect(row1.getByText(/^Contraproposta:.*pode enfrentar seu clube$/)).toBeInTheDocument()
 
+    // managedClubIsOwner: false — a loan-in. Same percentage, opposite meaning: it's the AI
+    // owner's money, and "enfrentar" is about facing the owner's club, not the manager's own.
     const row2 = within(screen.getByText('Outro Jogador').closest('li')!)
     expect(row2.getByText(/40% de salário/)).toBeInTheDocument()
-    expect(row2.getByText(/^Contraproposta:.*não pode enfrentar o dono$/)).toBeInTheDocument()
+    expect(row2.getByText(/pago pelo clube dono/)).toBeInTheDocument()
+    expect(row2.getByText(/^Contraproposta:.*não pode enfrentar o clube dono$/)).toBeInTheDocument()
   })
 
   it('wires Aceitar and Desistir to their callbacks with the right offer id', () => {

@@ -14,6 +14,7 @@ const CLUBS: ClubSummary[] = [
 
 const REJECTED_KEY_PLAYER: LoanOfferResult = {
   offerId: 'o1', playerId: 'p1', playerName: 'Jogador Teste', status: 'REJECTED',
+  managedClubIsOwner: true,
   ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: null, counterMayFaceOwner: null,
   refusal: 'KEY_PLAYER',
 }
@@ -24,6 +25,7 @@ const REJECTED_TERMS: LoanOfferResult = {
 
 const COUNTERED: LoanOfferResult = {
   offerId: 'o1', playerId: 'p1', playerName: 'Jogador Teste', status: 'COUNTERED',
+  managedClubIsOwner: true,
   ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 70, counterMayFaceOwner: true,
   refusal: 'TERMS_REJECTED',
 }

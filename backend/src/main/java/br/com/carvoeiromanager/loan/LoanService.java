@@ -149,7 +149,7 @@ public class LoanService {
         if (refusal.isPresent()) {
             offer.markRejected();
             loanOfferRepository.save(offer);
-            return toResponse(offer, player, refusal.get());
+            return toResponse(offer, player, refusal.get(), save.getManagedClubId());
         }
 
         LoanNegotiationResult result = loanNegotiator.respond(
@@ -161,13 +161,13 @@ public class LoanService {
             case COUNTER -> {
                 offer.markCountered(result.counter().ownerWageShare(), result.counter().mayFaceOwner());
                 loanOfferRepository.save(offer);
-                return toResponse(offer, player, LoanRefusal.TERMS_REJECTED);
+                return toResponse(offer, player, LoanRefusal.TERMS_REJECTED, save.getManagedClubId());
             }
             case ACCEPT -> {
                 execute(save, player, borrower.getId(), offered);
                 offer.markAccepted();
                 loanOfferRepository.save(offer);
-                return toResponse(offer, player, null);
+                return toResponse(offer, player, null, save.getManagedClubId());
             }
             default -> throw new ApiException(ErrorCode.INVALID_TRANSFER,
                     "The loan negotiator returned an unhandled decision: " + result.decision());
@@ -209,14 +209,18 @@ public class LoanService {
                 new LoanTerms(offer.getCounterOwnerWageShare(), offer.getCounterMayFaceOwner()));
         offer.markAccepted();
         loanOfferRepository.save(offer);
-        return toResponse(offer, player, null);
+        return toResponse(offer, player, null, save.getManagedClubId());
     }
 
     /**
-     * The manager's own open loan negotiations — PENDING and COUNTERED, the same pair
-     * {@code TransferService.getOffers} lists. Exists so a COUNTERED offer survives the dialog
+     * The manager's own open loan negotiations. Exists so a COUNTERED offer survives the dialog
      * that produced it being closed (or the page being refreshed): the offer row, and therefore
      * {@code offerId}, was always there — only the client's copy of it was thrown away.
+     * <p>
+     * Listed by COUNTERED status alone, not PENDING too: every {@link #negotiate} branch
+     * transitions the offer's status (REJECTED/COUNTERED/ACCEPTED) before it is ever saved, so a
+     * row is never persisted PENDING — including it in the filter would be dead defensiveness
+     * that a client can't safely render anyway (a PENDING row carries no counter terms).
      * <p>
      * Unlike transfers, every {@code LoanOffer} row already belongs to the manager: {@link #negotiate}
      * is only ever reached from {@link #offerLoanOut} or {@link #offerLoanIn}, both of which the
@@ -225,10 +229,10 @@ public class LoanService {
      * direction/ownership filter is needed on top of the status one.
      */
     public List<LoanOfferResponse> getOffers(UUID saveGameId, UUID userId) {
-        saveGameService.requireOwned(saveGameId, userId);
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         return loanOfferRepository.findBySaveGameIdAndStatusIn(saveGameId,
-                        List.of(LoanOfferStatus.PENDING, LoanOfferStatus.COUNTERED)).stream()
-                .map(this::toResponse)
+                        List.of(LoanOfferStatus.COUNTERED)).stream()
+                .map(offer -> toResponse(offer, save.getManagedClubId()))
                 .toList();
     }
 
@@ -239,7 +243,7 @@ public class LoanService {
      */
     @Transactional
     public LoanOfferResponse withdrawOffer(UUID saveGameId, UUID userId, UUID offerId) {
-        saveGameService.requireOwned(saveGameId, userId);
+        SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         LoanOffer offer = loanOfferRepository.findById(offerId)
                 .filter(o -> o.getSaveGameId().equals(saveGameId))
                 .orElseThrow(() -> new ApiException(ErrorCode.TRANSFER_OFFER_NOT_FOUND,
@@ -249,7 +253,7 @@ public class LoanService {
         }
         offer.markWithdrawn();
         loanOfferRepository.save(offer);
-        return toResponse(offer);
+        return toResponse(offer, save.getManagedClubId());
     }
 
     /**
@@ -310,9 +314,10 @@ public class LoanService {
         }
     }
 
-    LoanOfferResponse toResponse(LoanOffer offer, Player player, LoanRefusal refusal) {
+    LoanOfferResponse toResponse(LoanOffer offer, Player player, LoanRefusal refusal, UUID managedClubId) {
         return new LoanOfferResponse(offer.getId(), player.getId(), player.getName(),
-                offer.getStatus(), offer.getOwnerWageShare(), offer.isMayFaceOwner(),
+                offer.getStatus(), offer.getOwnerClubId().equals(managedClubId),
+                offer.getOwnerWageShare(), offer.isMayFaceOwner(),
                 offer.getCounterOwnerWageShare(), offer.getCounterMayFaceOwner(), refusal);
     }
 
@@ -322,14 +327,13 @@ public class LoanService {
      * refusal shown mirrors {@link #negotiate}'s own COUNTER branch: TERMS_REJECTED exactly when
      * the status is COUNTERED, null otherwise. A REJECTED row's original KEY_PLAYER/BELOW_LEVEL
      * reason is never persisted on the entity, so it could not be recovered here either way — but
-     * {@link #getOffers} never lists a REJECTED offer, only PENDING/COUNTERED ones, so the gap
-     * never surfaces.
+     * {@link #getOffers} only ever lists COUNTERED offers, so the gap never surfaces.
      */
-    LoanOfferResponse toResponse(LoanOffer offer) {
+    LoanOfferResponse toResponse(LoanOffer offer, UUID managedClubId) {
         String playerName = playerRepository.findById(offer.getPlayerId()).map(Player::getName).orElse("");
         LoanRefusal refusal = offer.getStatus() == LoanOfferStatus.COUNTERED ? LoanRefusal.TERMS_REJECTED : null;
         return new LoanOfferResponse(offer.getId(), offer.getPlayerId(), playerName, offer.getStatus(),
-                offer.getOwnerWageShare(), offer.isMayFaceOwner(), offer.getCounterOwnerWageShare(),
-                offer.getCounterMayFaceOwner(), refusal);
+                offer.getOwnerClubId().equals(managedClubId), offer.getOwnerWageShare(), offer.isMayFaceOwner(),
+                offer.getCounterOwnerWageShare(), offer.getCounterMayFaceOwner(), refusal);
     }
 }

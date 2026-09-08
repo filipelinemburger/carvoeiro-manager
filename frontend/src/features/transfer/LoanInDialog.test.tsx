@@ -11,6 +11,7 @@ const PLAYER: MarketPlayer = {
 
 const REJECTED_KEY_PLAYER: LoanOfferResult = {
   offerId: 'o1', playerId: 'p1', playerName: 'Jogador Teste', status: 'REJECTED',
+  managedClubIsOwner: false,
   ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: null, counterMayFaceOwner: null,
   refusal: 'KEY_PLAYER',
 }
@@ -21,6 +22,7 @@ const REJECTED_TERMS: LoanOfferResult = {
 
 const COUNTERED: LoanOfferResult = {
   offerId: 'o1', playerId: 'p1', playerName: 'Jogador Teste', status: 'COUNTERED',
+  managedClubIsOwner: false,
   ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 30, counterMayFaceOwner: false,
   refusal: 'TERMS_REJECTED',
 }

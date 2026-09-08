@@ -44,7 +44,7 @@ public class LoanController {
         return ResponseEntity.ok(loanService.acceptCounter(saveGameId, userId, offerId));
     }
 
-    /** The save's open loan offers (PENDING/COUNTERED) — reachable after the dialog that started
+    /** The save's open loan offers (COUNTERED) — reachable after the dialog that started
      * one has closed, so a countered offer's {@code offerId} is never lost. */
     @GetMapping
     public ResponseEntity<List<LoanOfferResponse>> offers(

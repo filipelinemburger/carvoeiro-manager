@@ -22,6 +22,7 @@ import { MoneyField } from '../../components/MoneyField'
 import { MakeOfferDialog, type OfferTarget } from './MakeOfferDialog'
 import { LoanInDialog } from './LoanInDialog'
 import { PendingLoanOffers } from '../loan/PendingLoanOffers'
+import { invalidateAfterLoanMove } from '../loan/loanInvalidation'
 import { MIN_CONTRACT_YEARS_TO_LOAN } from '../loan/loanMessages'
 import { LISTED_REASON_LABEL } from '../squad/listedReason'
 import { CARBON } from '../../muiTheme'
@@ -447,25 +448,16 @@ export function TransferMarketPage() {
     },
   })
 
-  // Invalidations shared by both loan-in mutations below: a borrowed player joins the squad
-  // (finances change with the new wage share, the market listing for him can disappear).
-  function invalidateAfterLoanIn() {
-    void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, managedClubId] })
-    void queryClient.invalidateQueries({ queryKey: ['market', saveGameId] })
-    void queryClient.invalidateQueries({ queryKey: ['finances', saveGameId, managedClubId] })
-  }
-
   const loanInMut = useMutation({
     mutationFn: (v: { playerId: string; ownerWageShare: number; mayFaceOwner: boolean }) =>
       loanIn(saveGameId, v, token ?? ''),
     onSuccess: (data) => {
       setLoanResult(data)
-      // A REJECTED result means nothing moved server-side — nothing went stale.
-      if (data.status !== 'REJECTED') invalidateAfterLoanIn()
+      // A REJECTED result means nothing moved server-side — nothing went stale, including the
+      // open-offers listing (a REJECTED offer is never one `getOffers` lists).
       // A COUNTERED result is a new open offer PendingLoanOffers must pick up even if this dialog
-      // is later closed without acting on it; REJECTED/ACCEPTED never leave one open, so this is
-      // a harmless no-op refetch for those.
-      void queryClient.invalidateQueries({ queryKey: ['loanOffers', saveGameId] })
+      // is later closed without acting on it — invalidateAfterLoanMove refreshes that listing too.
+      if (data.status !== 'REJECTED') invalidateAfterLoanMove(queryClient, saveGameId, managedClubId)
     },
   })
 
@@ -473,8 +465,12 @@ export function TransferMarketPage() {
     mutationFn: (offerId: string) => acceptLoanCounter(saveGameId, offerId, token ?? ''),
     onSuccess: (data) => {
       setLoanResult(data)
-      if (data.status !== 'REJECTED') invalidateAfterLoanIn()
-      void queryClient.invalidateQueries({ queryKey: ['loanOffers', saveGameId] })
+      // Shared with SquadPage's own loan mutations — see loanInvalidation.ts. Load-bearing here
+      // specifically: accepting a counter from this page can be completing a loan-*out* proposed
+      // on SquadPage (the whole point of PendingLoanOffers surviving navigation), which drops a
+      // player from the managed club's saved lineup server-side and must invalidate that cache
+      // too, not just squad/finances/market.
+      if (data.status !== 'REJECTED') invalidateAfterLoanMove(queryClient, saveGameId, managedClubId)
     },
   })
 

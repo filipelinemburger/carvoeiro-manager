@@ -103,6 +103,8 @@ class LoanServiceInIT {
         LoanOfferResponse r = loanService.offerLoanIn(c.id(), c.userId(), target.getId(), 0, true);
 
         assertThat(r.status()).isEqualTo(LoanOfferStatus.ACCEPTED);
+        // offerLoanIn: the managed club is borrowing, so the AI club is the owner, not it.
+        assertThat(r.managedClubIsOwner()).isFalse();
         Player reloaded = playerRepository.findById(target.getId()).orElseThrow();
         assertThat(reloaded.getClubId()).isEqualTo(c.clubId());
         assertThat(reloaded.getOwnerClubId()).isEqualTo(ownerClubId);

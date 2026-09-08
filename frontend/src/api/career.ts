@@ -322,7 +322,7 @@ export function acceptLoanCounter(
   return apiPost<LoanOfferResult>(`/save-games/${saveGameId}/loans/${offerId}/accept-counter`, {}, token)
 }
 
-/** The save's open loan offers (PENDING/COUNTERED) — how a countered offer is found again once
+/** The save's open loan offers (COUNTERED) — how a countered offer is found again once
  * the dialog that started it has closed. */
 export function getLoanOffers(saveGameId: string, token: string): Promise<LoanOfferResult[]> {
   return apiGet<LoanOfferResult[]>(`/save-games/${saveGameId}/loans`, token)
