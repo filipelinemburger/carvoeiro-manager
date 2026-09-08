@@ -191,9 +191,14 @@ button is disabled for an on-loan player and the error message renders.
 
 **Finding: Minor 3.** `SquadPage.tsx` and `TransferMarketPage.tsx` both drop
 `loanResult` on close, and there is no endpoint to list or withdraw loan offers —
-`LoanController` has three POSTs and nothing else. `LoanOffer.markWithdrawn()`
-and `LoanOfferRepository.findBySaveGameIdAndPlayerIdAndStatusIn` are both dead
-code, waiting for exactly this. A refresh loses the `offerId` permanently.
+`LoanController` has three POSTs and nothing else. `LoanOffer.markWithdrawn()` is
+dead code waiting for exactly this. A refresh loses the `offerId` permanently.
+
+`LoanOfferRepository.findBySaveGameIdAndPlayerIdAndStatusIn` is also dead, but do
+not assume it is the finder you need: it keys on `playerId`, and a save-wide
+listing keys on `saveGameId`. Decide deliberately — reuse it, add the finder the
+listing actually wants, or delete it — and say which in your report. Do not leave
+two dead finders behind.
 Recoverable today only because `LoanNegotiator` is RNG-free, so re-offering the
 identical terms is certain to be accepted — if the manager memorised them.
 
