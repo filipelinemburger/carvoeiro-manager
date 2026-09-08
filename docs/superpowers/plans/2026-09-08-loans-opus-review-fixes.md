@@ -249,3 +249,51 @@ After the last task: one clean full backend suite (`rm -rf build/test-results/te
 first, `echo "GRADLE_EXIT=$?"` into the log, trust only XML newer than the run's
 start), plus `npx vitest run` and `npx tsc -b` on the frontend. Then a scoped
 re-review of the whole wave's diff.
+
+---
+
+## Task 9 — a short XI must cost strength, not gain it
+
+**Found by Task 1's review, not by the opus review.** `TeamStrengthCalculator`
+computes `attack = attackSum / xi.size()` and
+`outfieldDefense = outfieldDefenseSum / outfieldCount` — pure averages, with no
+squad-size term anywhere downstream (formation, mentality and style multipliers
+are all size-independent). So a club that loses a **below-average** player and
+fields ten comes out with *higher* attack and outfield defense than it had with
+eleven. Ten men are stronger than eleven.
+
+This is **pre-existing** — `LiveMatchEngine`'s own comment reads
+`red-card = fewer players` and recomputes strength through the same averages, so
+a red card can currently strengthen the team that received it. It is in this wave
+because Task 1's loan-bar fix turns it from a rare accident into a routine,
+rule-driven event on both the AI and managed sides.
+
+**Do:** make a short XI cost strength proportionally to the missing players. A
+side of ten must never out-rate the same side of eleven that includes its worst
+player.
+
+**Scope discipline.** This touches match balance for *every* cause of a short XI,
+red cards included — which is the point; a red card strengthening your team is a
+bug by any reading. Do not attempt a wider rebalance: no change to the formation,
+mentality or style multipliers, and no change to what counts as a red card. If
+you find the fix cannot be confined this way, stop and report rather than
+widening it.
+
+**Test:** the same XI minus its weakest outfielder rates strictly lower, not
+higher. Cover the red-card path too, since it shares the calculation.
+
+---
+
+## Task 10 — the opponent scouting panel must respect the loan bar
+
+**Found by Task 1's review.** `MatchPreviewService` (~`:158`) builds the
+opponent's "best players" panel from `findByClubIdAndYouthProspectFalse(opponentId)`
+with no `mayFace` filter, and there is no other filter in that path. Lend a star
+to the club you play next and the pre-match preview headlines **your own player**
+as their danger man, for a fixture he is barred from.
+
+**Do:** apply the same loan bar the XI selection uses. The panel previews a
+specific fixture, so the opponent is already in hand.
+
+**Test:** a lent player barred from the fixture does not appear in the preview of
+the opponent's best players; one whose loan negotiated the release still does.
