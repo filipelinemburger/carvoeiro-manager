@@ -8,6 +8,7 @@ import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.common.SquadRules;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
@@ -128,6 +129,101 @@ class LoanServiceCounterIT {
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getCode())
                         .isEqualTo(ErrorCode.INVALID_TRANSFER));
+    }
+
+    /**
+     * {@code acceptCounter} re-runs {@code requireDepartureAllowed} against the offer's owner club
+     * right before executing — not just at offer time — because the squad can shrink in between.
+     * Here the managed club sits exactly on the floor by the time the AI's counter is accepted, and
+     * accepting must refuse rather than push it below.
+     */
+    @Test
+    void acceptingACounterAfterTheSquadDroppedToTheFloorFailsAndMovesNobody() {
+        Career c = createCareer();
+        Player spare = aSparePlayer(c);
+        Club borrower = clubRepository.findById(aRivalClubId(c)).orElseThrow();
+        borrower.setReputation(spare.getOverall() + LoanPlausibility.LEVEL_TOLERANCE);
+        clubRepository.save(borrower);
+
+        LoanOfferResponse countered = loanService.offerLoanOut(
+                c.id(), c.userId(), spare.getId(), borrower.getId(), 0, false);
+        assertThat(countered.status()).isEqualTo(LoanOfferStatus.COUNTERED);
+
+        // The squad drops to the floor after the AI answered but before the manager accepts.
+        List<Player> others = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).stream()
+                .filter(p -> !p.getId().equals(spare.getId()))
+                .toList();
+        List<Player> drop = others.subList(SquadRules.MIN_SQUAD_SIZE - 1, others.size());
+        playerRepository.deleteAll(drop);
+        assertThat(playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()))
+                .hasSize(SquadRules.MIN_SQUAD_SIZE);
+
+        assertThatThrownBy(() -> loanService.acceptCounter(c.id(), c.userId(), countered.offerId()))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.SQUAD_TOO_SMALL));
+
+        Player reloaded = playerRepository.findById(spare.getId()).orElseThrow();
+        assertThat(reloaded.isOnLoan()).isFalse();
+        assertThat(reloaded.getClubId()).isEqualTo(c.clubId());
+    }
+
+    /**
+     * The last-goalkeeper half of the same re-check, and the exact scenario the review flagged:
+     * offer the backup keeper, let the AI counter, lose the first-choice keeper in between (a
+     * termination, a sale — anything), then accept. Without the re-check the club would be left
+     * with zero goalkeepers; with it, accepting is refused instead.
+     */
+    @Test
+    void acceptingACounterAfterTheOnlyOtherGoalkeeperLeftFailsAndMovesNobody() {
+        Career c = createCareer();
+        List<Player> squad = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).stream()
+                .sorted(Comparator.comparingInt(Player::getOverall).reversed()
+                        .thenComparing(Player::getId))
+                .toList();
+        Player backupGk = squad.stream().skip(11)
+                .filter(p -> p.getPosition() == Position.GK)
+                .filter(p -> squad.stream().anyMatch(o -> !o.getId().equals(p.getId())
+                        && o.getPosition() == Position.GK
+                        && o.getOverall() >= p.getOverall() - 3))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "the seed has no spare goalkeeper with cover — the fixture assumption "
+                                + "behind this test has changed"));
+        Player coveringGk = squad.stream()
+                .filter(p -> p.getPosition() == Position.GK && !p.getId().equals(backupGk.getId())
+                        && p.getOverall() >= backupGk.getOverall() - 3)
+                .findFirst().orElseThrow();
+
+        // Trim every other goalkeeper away so the squad holds exactly these two.
+        List<Player> extraGks = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).stream()
+                .filter(p -> p.getPosition() == Position.GK)
+                .filter(p -> !p.getId().equals(backupGk.getId()) && !p.getId().equals(coveringGk.getId()))
+                .toList();
+        playerRepository.deleteAll(extraGks);
+
+        backupGk.setContractYears(3);
+        playerRepository.save(backupGk);
+
+        Club borrower = clubRepository.findById(aRivalClubId(c)).orElseThrow();
+        borrower.setReputation(backupGk.getOverall() + LoanPlausibility.LEVEL_TOLERANCE);
+        clubRepository.save(borrower);
+
+        LoanOfferResponse countered = loanService.offerLoanOut(
+                c.id(), c.userId(), backupGk.getId(), borrower.getId(), 0, false);
+        assertThat(countered.status()).isEqualTo(LoanOfferStatus.COUNTERED);
+
+        // The covering keeper leaves the squad between the counter and the accept.
+        playerRepository.delete(coveringGk);
+
+        assertThatThrownBy(() -> loanService.acceptCounter(c.id(), c.userId(), countered.offerId()))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.SQUAD_TOO_SMALL));
+
+        Player reloaded = playerRepository.findById(backupGk.getId()).orElseThrow();
+        assertThat(reloaded.isOnLoan()).isFalse();
+        assertThat(reloaded.getClubId()).isEqualTo(c.clubId());
     }
 
     /**

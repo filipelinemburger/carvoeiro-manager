@@ -154,6 +154,63 @@ class LoanServiceInIT {
         assertThat(reloaded.getClubId()).isEqualTo(ownerClubId);
     }
 
+    /**
+     * Spec §8's "cannot lend itself below a fieldable squad" is not restricted to the managed
+     * side — {@code offerLoanIn} must check the owning AI club's floor too, not just make room on
+     * the borrowing side. Trimmed to exactly the floor so the departure guard (not something else)
+     * is what refuses it.
+     */
+    @Test
+    void borrowingFromAnOwnerAtTheSquadFloorIsRefused() {
+        Career c = createCareer();
+        UUID ownerClubId = aRivalClubId(c);
+        List<Player> seniors = playerRepository.findByClubIdAndYouthProspectFalse(ownerClubId);
+        List<Player> drop = seniors.subList(SquadRules.MIN_SQUAD_SIZE, seniors.size());
+        playerRepository.deleteAll(drop);
+        List<Player> kept = playerRepository.findByClubIdAndYouthProspectFalse(ownerClubId);
+        assertThat(kept).hasSize(SquadRules.MIN_SQUAD_SIZE);
+
+        Player target = kept.stream().filter(p -> p.getPosition() != Position.GK).findFirst().orElseThrow();
+        target.setContractYears(3);
+        playerRepository.save(target);
+        makeManagedClubModest(c, target);
+
+        assertThatThrownBy(() -> loanService.offerLoanIn(c.id(), c.userId(), target.getId(), 0, true))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.SQUAD_TOO_SMALL));
+
+        Player reloaded = playerRepository.findById(target.getId()).orElseThrow();
+        assertThat(reloaded.isOnLoan()).isFalse();
+        assertThat(reloaded.getClubId()).isEqualTo(ownerClubId);
+    }
+
+    /** Same guard, the last-goalkeeper half: the owner cannot be talked out of its only keeper. */
+    @Test
+    void borrowingAnOwnersLastGoalkeeperIsRefused() {
+        Career c = createCareer();
+        UUID ownerClubId = aRivalClubId(c);
+        List<Player> gks = playerRepository.findByClubIdAndYouthProspectFalse(ownerClubId).stream()
+                .filter(p -> p.getPosition() == Position.GK).toList();
+        if (gks.size() > 1) {
+            playerRepository.deleteAll(gks.subList(1, gks.size()));
+        }
+        Player lastGk = playerRepository.findByClubIdAndYouthProspectFalse(ownerClubId).stream()
+                .filter(p -> p.getPosition() == Position.GK).findFirst().orElseThrow();
+        lastGk.setContractYears(3);
+        playerRepository.save(lastGk);
+        makeManagedClubModest(c, lastGk);
+
+        assertThatThrownBy(() -> loanService.offerLoanIn(c.id(), c.userId(), lastGk.getId(), 0, true))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.SQUAD_TOO_SMALL));
+
+        Player reloaded = playerRepository.findById(lastGk.getId()).orElseThrow();
+        assertThat(reloaded.isOnLoan()).isFalse();
+        assertThat(reloaded.getClubId()).isEqualTo(ownerClubId);
+    }
+
     @Test
     void aClubWillNotLendItsKeyPlayerToYou() {
         Career c = createCareer();

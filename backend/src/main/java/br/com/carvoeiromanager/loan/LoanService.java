@@ -105,6 +105,10 @@ public class LoanService {
 
         requireLoanableContract(player);
         squadDeparture.requireNoLiveMatch(saveGameId);
+        // The owner is not necessarily the managed club — Spec §8 does not restrict "cannot lend
+        // itself below a fieldable squad" to the managed side, and an AI owner is otherwise never
+        // checked against its own floor before it lends a player away.
+        squadDeparture.requireDepartureAllowed(squadDeparture.seniorSquad(player.getClubId()), player);
         requireRoomFor(managedClubId);
 
         Club owner = clubRepository.findById(player.getClubId()).orElseThrow();
@@ -186,6 +190,11 @@ public class LoanService {
                         "That player is no longer available"));
         requireLoanableContract(player);
         squadDeparture.requireNoLiveMatch(saveGameId);
+        // Re-run the same departure guard offerLoanOut checks at offer time: the squad the offer
+        // was built against may have shrunk (another sale, release or loan) by the time the AI's
+        // counter is accepted, same as TransferService.respondToIncoming re-runs requireSellAllowed
+        // on every accept branch rather than trusting the state at offer time.
+        squadDeparture.requireDepartureAllowed(squadDeparture.seniorSquad(offer.getOwnerClubId()), player);
         requireRoomFor(offer.getBorrowerClubId());
 
         execute(save, player, offer.getBorrowerClubId(),

@@ -319,6 +319,66 @@ class LoanServiceOutIT {
                         LoanOfferStatus.REJECTED))).isEmpty();
     }
 
+    /**
+     * {@code offerLoanOut} calls {@code squadDeparture.requireDepartureAllowed} before any
+     * negotiation starts — this pins the squad-floor half of that guard. Trimmed to exactly the
+     * floor so the departure itself (not some other check) is what refuses it.
+     */
+    @Test
+    void lendingAPlayerWhenTheSquadIsAtTheFloorIsRefused() {
+        Career c = createCareer();
+        List<Player> seniors = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId());
+        List<Player> drop = seniors.subList(SquadRules.MIN_SQUAD_SIZE, seniors.size());
+        playerRepository.deleteAll(drop);
+        List<Player> kept = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId());
+        assertThat(kept).hasSize(SquadRules.MIN_SQUAD_SIZE);
+
+        Player target = kept.stream().filter(p -> p.getPosition() != Position.GK).findFirst().orElseThrow();
+        target.setContractYears(3);
+        playerRepository.save(target);
+        Club borrower = aWillingBorrower(c, target);
+
+        assertThatThrownBy(() -> loanService.offerLoanOut(
+                c.id(), c.userId(), target.getId(), borrower.getId(), 100, true))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.SQUAD_TOO_SMALL));
+
+        Player reloaded = playerRepository.findById(target.getId()).orElseThrow();
+        assertThat(reloaded.isOnLoan()).isFalse();
+        assertThat(reloaded.getClubId()).isEqualTo(c.clubId());
+    }
+
+    /**
+     * The other half of {@code requireDepartureAllowed}: the last-goalkeeper rule. Pinned the same
+     * way {@code TransferServiceSellingIT.cannotSellTheLastGoalkeeper} pins it for a sale — reduce
+     * senior goalkeepers to exactly one, then try to lend that one out.
+     */
+    @Test
+    void lendingTheLastGoalkeeperIsRefused() {
+        Career c = createCareer();
+        List<Player> gks = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).stream()
+                .filter(p -> p.getPosition() == Position.GK).toList();
+        if (gks.size() > 1) {
+            playerRepository.deleteAll(gks.subList(1, gks.size()));
+        }
+        Player lastGk = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).stream()
+                .filter(p -> p.getPosition() == Position.GK).findFirst().orElseThrow();
+        lastGk.setContractYears(3);
+        playerRepository.save(lastGk);
+        Club borrower = aWillingBorrower(c, lastGk);
+
+        assertThatThrownBy(() -> loanService.offerLoanOut(
+                c.id(), c.userId(), lastGk.getId(), borrower.getId(), 100, true))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getCode())
+                        .isEqualTo(ErrorCode.SQUAD_TOO_SMALL));
+
+        Player reloaded = playerRepository.findById(lastGk.getId()).orElseThrow();
+        assertThat(reloaded.isOnLoan()).isFalse();
+        assertThat(reloaded.getClubId()).isEqualTo(c.clubId());
+    }
+
     @Test
     void aWageShareAboveOneHundredIsRejectedBeforeAnythingIsMutated() {
         Career c = createCareer();
