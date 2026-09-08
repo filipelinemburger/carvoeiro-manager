@@ -49,13 +49,16 @@ public class ClubFinancialHealthEvaluator {
     }
 
     /**
-     * Reads the whole save's squad (not just this club's) because a loan's owner carries part of
-     * a wage for a player who does not appear in {@code findByClubId(club)} at all — he plays for
-     * his borrower. Going through {@link WageBillCalculator} on the full squad is what keeps this
-     * number identical to what {@code FinanceService} actually charges.
+     * Reads this club's own squad plus whatever it has out on loan — not the whole save's squad —
+     * because a loan's owner carries part of a wage for a player who does not appear in
+     * {@code findByClubId(club)} at all: he plays for his borrower and is found only by
+     * {@code ownerClubId}. Going through {@link WageBillCalculator} on that union is what keeps
+     * this number identical to what {@code FinanceService} actually charges, without scanning
+     * every other club's roster to get there.
      */
     private BigDecimal monthlyWageBill(Club club) {
-        return wageBillCalculator.monthlyWageBills(playerRepository.findBySaveGameId(club.getSaveGameId()))
+        return wageBillCalculator
+                .monthlyWageBills(playerRepository.findByClubIdOrOwnerClubId(club.getId(), club.getId()))
                 .getOrDefault(club.getId(), BigDecimal.ZERO);
     }
 }

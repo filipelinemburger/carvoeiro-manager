@@ -20,7 +20,7 @@ import static br.com.carvoeiromanager.transfer.ClubFinancialHealthEvaluator.Fina
 import static br.com.carvoeiromanager.transfer.ClubFinancialHealthEvaluator.FinancialHealth.HEALTHY;
 import static br.com.carvoeiromanager.transfer.ClubFinancialHealthEvaluator.FinancialHealth.TIGHT;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -53,7 +53,8 @@ class ClubFinancialHealthEvaluatorTest {
     void balanceBelowOneMonthlyWageBillIsDesperate() {
         UUID saveGameId = UUID.randomUUID();
         Club club = clubWithBalance(saveGameId, new BigDecimal("287999.99")); // just under 1x bill (288000)
-        when(playerRepository.findBySaveGameId(any())).thenReturn(List.of(onePlayer(saveGameId, club.getId())));
+        when(playerRepository.findByClubIdOrOwnerClubId(eq(club.getId()), eq(club.getId())))
+                .thenReturn(List.of(onePlayer(saveGameId, club.getId())));
 
         assertThat(evaluator.evaluate(club)).isEqualTo(DESPERATE);
     }
@@ -62,7 +63,8 @@ class ClubFinancialHealthEvaluatorTest {
     void balanceAtExactlyOneMonthlyWageBillIsNotDesperate() {
         UUID saveGameId = UUID.randomUUID();
         Club club = clubWithBalance(saveGameId, new BigDecimal("288000.00")); // exactly 1x bill
-        when(playerRepository.findBySaveGameId(any())).thenReturn(List.of(onePlayer(saveGameId, club.getId())));
+        when(playerRepository.findByClubIdOrOwnerClubId(eq(club.getId()), eq(club.getId())))
+                .thenReturn(List.of(onePlayer(saveGameId, club.getId())));
 
         assertThat(evaluator.evaluate(club)).isNotEqualTo(DESPERATE);
         assertThat(evaluator.evaluate(club)).isEqualTo(TIGHT);
@@ -72,7 +74,8 @@ class ClubFinancialHealthEvaluatorTest {
     void balanceBelowThreeMonthlyWageBillsIsTight() {
         UUID saveGameId = UUID.randomUUID();
         Club club = clubWithBalance(saveGameId, new BigDecimal("863999.99")); // just under 3x bill (864000)
-        when(playerRepository.findBySaveGameId(any())).thenReturn(List.of(onePlayer(saveGameId, club.getId())));
+        when(playerRepository.findByClubIdOrOwnerClubId(eq(club.getId()), eq(club.getId())))
+                .thenReturn(List.of(onePlayer(saveGameId, club.getId())));
 
         assertThat(evaluator.evaluate(club)).isEqualTo(TIGHT);
     }
@@ -81,7 +84,8 @@ class ClubFinancialHealthEvaluatorTest {
     void balanceAtExactlyThreeMonthlyWageBillsIsHealthy() {
         UUID saveGameId = UUID.randomUUID();
         Club club = clubWithBalance(saveGameId, new BigDecimal("864000.00")); // exactly 3x bill
-        when(playerRepository.findBySaveGameId(any())).thenReturn(List.of(onePlayer(saveGameId, club.getId())));
+        when(playerRepository.findByClubIdOrOwnerClubId(eq(club.getId()), eq(club.getId())))
+                .thenReturn(List.of(onePlayer(saveGameId, club.getId())));
 
         assertThat(evaluator.evaluate(club)).isEqualTo(HEALTHY);
     }
@@ -90,7 +94,8 @@ class ClubFinancialHealthEvaluatorTest {
     void balanceWellAboveThreeMonthlyWageBillsIsHealthy() {
         UUID saveGameId = UUID.randomUUID();
         Club club = clubWithBalance(saveGameId, new BigDecimal("10000000.00"));
-        when(playerRepository.findBySaveGameId(any())).thenReturn(List.of(onePlayer(saveGameId, club.getId())));
+        when(playerRepository.findByClubIdOrOwnerClubId(eq(club.getId()), eq(club.getId())))
+                .thenReturn(List.of(onePlayer(saveGameId, club.getId())));
 
         assertThat(evaluator.evaluate(club)).isEqualTo(HEALTHY);
     }
@@ -98,7 +103,7 @@ class ClubFinancialHealthEvaluatorTest {
     @Test
     void anEmptySquadIsAlwaysHealthyRegardlessOfBalance() {
         Club club = clubWithBalance(UUID.randomUUID(), BigDecimal.ZERO);
-        when(playerRepository.findBySaveGameId(any())).thenReturn(List.of());
+        when(playerRepository.findByClubIdOrOwnerClubId(eq(club.getId()), eq(club.getId()))).thenReturn(List.of());
 
         assertThat(evaluator.evaluate(club)).isEqualTo(HEALTHY);
     }
@@ -117,7 +122,8 @@ class ClubFinancialHealthEvaluatorTest {
         Club borrower = clubWithBalance(saveGameId, new BigDecimal("250000.00"));
         Player player = onePlayer(saveGameId, owner.getId());
         player.loanTo(borrower.getId(), 40, true); // ownerPart 115200, borrowerPart 172800 of a 288000 wage
-        when(playerRepository.findBySaveGameId(any())).thenReturn(List.of(player));
+        when(playerRepository.findByClubIdOrOwnerClubId(eq(borrower.getId()), eq(borrower.getId())))
+                .thenReturn(List.of(player));
 
         // Full wage (288000) would put a 250000 balance below the DESPERATE line; the borrower's
         // actual share (172800) puts it well clear of DESPERATE, into TIGHT (172800 <= 250000 < 518400).
@@ -132,7 +138,8 @@ class ClubFinancialHealthEvaluatorTest {
         Player player = onePlayer(saveGameId, owner.getId());
         player.loanTo(borrower.getId(), 40, true); // ownerPart 115200 of a 288000 wage
 
-        when(playerRepository.findBySaveGameId(any())).thenReturn(List.of(player));
+        when(playerRepository.findByClubIdOrOwnerClubId(eq(owner.getId()), eq(owner.getId())))
+                .thenReturn(List.of(player));
 
         // Ignoring the owner's share entirely (as findByClubId did) would report a zero bill and
         // classify HEALTHY no matter the balance; the owner's actual share (115200) puts a
