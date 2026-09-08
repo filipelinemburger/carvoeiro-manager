@@ -1,18 +1,17 @@
 package br.com.carvoeiromanager.transfer;
 
 import br.com.carvoeiromanager.club.Club;
-import br.com.carvoeiromanager.finance.FinanceCalculator;
-import br.com.carvoeiromanager.player.Player;
+import br.com.carvoeiromanager.finance.WageBillCalculator;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.util.UUID;
 
 /**
- * Classifies a club's financial standing against its own monthly wage bill, using the same
- * {@link FinanceCalculator#monthlyWage} formula {@code FinanceService} charges every club each
- * in-game month. Feeds the AI listing engine's FINANCIAL trigger.
+ * Classifies a club's financial standing against its own monthly wage bill, read through
+ * {@link WageBillCalculator} — the same helper {@code FinanceService} charges every club each
+ * in-game month, split between a loan's owner and borrower. Feeds the AI listing engine's
+ * FINANCIAL trigger.
  */
 @Component
 public class ClubFinancialHealthEvaluator {
@@ -22,11 +21,11 @@ public class ClubFinancialHealthEvaluator {
     public enum FinancialHealth { HEALTHY, TIGHT, DESPERATE }
 
     private final PlayerRepository playerRepository;
-    private final FinanceCalculator financeCalculator;
+    private final WageBillCalculator wageBillCalculator;
 
-    public ClubFinancialHealthEvaluator(PlayerRepository playerRepository, FinanceCalculator financeCalculator) {
+    public ClubFinancialHealthEvaluator(PlayerRepository playerRepository, WageBillCalculator wageBillCalculator) {
         this.playerRepository = playerRepository;
-        this.financeCalculator = financeCalculator;
+        this.wageBillCalculator = wageBillCalculator;
     }
 
     /**
@@ -35,7 +34,7 @@ public class ClubFinancialHealthEvaluator {
      * be desperate about.
      */
     public FinancialHealth evaluate(Club club) {
-        BigDecimal monthlyWageBill = monthlyWageBill(club.getId());
+        BigDecimal monthlyWageBill = monthlyWageBill(club);
         if (monthlyWageBill.signum() == 0) {
             return FinancialHealth.HEALTHY;
         }
@@ -49,11 +48,14 @@ public class ClubFinancialHealthEvaluator {
         return FinancialHealth.HEALTHY;
     }
 
-    private BigDecimal monthlyWageBill(UUID clubId) {
-        BigDecimal total = BigDecimal.ZERO;
-        for (Player p : playerRepository.findByClubId(clubId)) {
-            total = total.add(financeCalculator.monthlyWage(p.getOverall(), p.getAge()));
-        }
-        return total;
+    /**
+     * Reads the whole save's squad (not just this club's) because a loan's owner carries part of
+     * a wage for a player who does not appear in {@code findByClubId(club)} at all — he plays for
+     * his borrower. Going through {@link WageBillCalculator} on the full squad is what keeps this
+     * number identical to what {@code FinanceService} actually charges.
+     */
+    private BigDecimal monthlyWageBill(Club club) {
+        return wageBillCalculator.monthlyWageBills(playerRepository.findBySaveGameId(club.getSaveGameId()))
+                .getOrDefault(club.getId(), BigDecimal.ZERO);
     }
 }
