@@ -215,10 +215,16 @@ public class LoanService {
      * Moves the player and settles everything leaving the squad implies. The offer rejection is
      * not optional: a live bid that outlived the loan would meet a sell guard that now passes
      * trivially, because the player is no longer in the squad it counts.
+     * <p>
+     * The transfer listing is pulled the same way: a lent player is not the owner's to sell while
+     * lent — {@link SquadDeparture#requireNotOnLoan} already refuses any offer against him — so a
+     * listing that outlived the loan would only show him on the market, under the borrower's club
+     * name, with no way to ever complete.
      */
     void execute(SaveGame save, Player player, UUID borrowerClubId, LoanTerms terms) {
         UUID formerClubId = player.getClubId();
         player.loanTo(borrowerClubId, terms.ownerWageShare(), terms.mayFaceOwner());
+        player.unlist();
         playerRepository.save(player);
         squadDeparture.cleanManagedLineup(save.getId(), formerClubId, player.getId());
         squadDeparture.rejectOpenOffersFor(save.getId(), player.getId());

@@ -19,6 +19,7 @@ describe('errorMessage', () => {
       ['PRE_CONTRACT_NOT_FOUND', 'Pré-contrato não encontrado.'],
       ['PRE_CONTRACT_WINDOW_CLOSED', 'Janela de pré-contratos fechada.'],
       ['RENEWAL_BLOCKED_BY_PRE_CONTRACT', 'Não é possível renovar — o jogador já tem um pré-contrato com outro clube.'],
+      ['PLAYER_ALREADY_ON_LOAN', 'Jogador já está emprestado a outro clube.'],
     ]
     for (const [code, text] of cases) {
       expect(errorMessage(new ApiError('x', code, 422), 'fallback')).toBe(text)

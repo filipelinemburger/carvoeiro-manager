@@ -120,6 +120,31 @@ describe('TransferMarketPage', () => {
     expect(screen.queryByText('Erro ao enviar proposta.')).not.toBeInTheDocument()
   })
 
+  it('shows the pt-BR reason when an offer is rejected because the player is on loan', async () => {
+    vi.mocked(makeOffer).mockRejectedValue(new ApiError('Player on loan', 'PLAYER_ALREADY_ON_LOAN', 422))
+
+    renderPage()
+    openMarketTab()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /fazer proposta/i }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/Valor para Alvo Um/i), { target: { value: '2400000' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: /fazer proposta/i }))
+
+    expect(await screen.findByText('Jogador já está emprestado a outro clube.')).toBeInTheDocument()
+  })
+
+  it('disables "Fazer proposta" for a player who is already on loan elsewhere', async () => {
+    vi.mocked(getMarket).mockResolvedValue(marketPage([{ ...ALVO_UM, onLoan: true }]))
+
+    renderPage()
+    openMarketTab()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+
+    expect(screen.getByRole('button', { name: /fazer proposta/i })).toBeDisabled()
+  })
+
   it('shows the pt-BR listing reason chip on a market card', async () => {
     renderPage()
     openMarketTab()

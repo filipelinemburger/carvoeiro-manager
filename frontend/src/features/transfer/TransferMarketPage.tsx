@@ -780,7 +780,7 @@ export function TransferMarketPage() {
                         <Button
                           variant="outlined"
                           size="small"
-                          disabled={!windowOpen}
+                          disabled={!windowOpen || p.onLoan}
                           onClick={() => setOfferTarget({
                             playerId: p.playerId, name: p.name, value: p.value, wageDemand: p.wageDemand,
                           })}

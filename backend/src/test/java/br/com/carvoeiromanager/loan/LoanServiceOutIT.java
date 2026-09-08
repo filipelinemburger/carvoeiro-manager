@@ -15,6 +15,7 @@ import br.com.carvoeiromanager.match.Lineup;
 import br.com.carvoeiromanager.match.LineupPlayer;
 import br.com.carvoeiromanager.match.LineupPlayerRepository;
 import br.com.carvoeiromanager.match.LineupRepository;
+import br.com.carvoeiromanager.player.ListedReason;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
@@ -132,6 +133,27 @@ class LoanServiceOutIT {
         assertThat(reloaded.getClubId()).isEqualTo(borrower.getId());
         assertThat(reloaded.getLoanWageShare()).isEqualTo(100);
         assertThat(reloaded.getLoanMayFaceOwner()).isTrue();
+    }
+
+    /**
+     * A listed player who is then lent is not the owner's to sell while lent — the listing must
+     * not outlive the loan, or {@code TransferService.unpagedMarket} would keep showing him under
+     * the borrower's club name, with "Fazer proposta" always failing PLAYER_ALREADY_ON_LOAN.
+     */
+    @Test
+    void lendingAListedPlayerClearsTheListing() {
+        Career c = createCareer();
+        Player spare = aSparePlayer(c);
+        spare.listForTransfer(ListedReason.OWNER);
+        playerRepository.save(spare);
+        Club borrower = aWillingBorrower(c, spare);
+
+        loanService.offerLoanOut(c.id(), c.userId(), spare.getId(), borrower.getId(), 100, true);
+
+        Player reloaded = playerRepository.findById(spare.getId()).orElseThrow();
+        assertThat(reloaded.isOnLoan()).isTrue();
+        assertThat(reloaded.isTransferListed()).isFalse();
+        assertThat(reloaded.getListedReason()).isNull();
     }
 
     @Test
