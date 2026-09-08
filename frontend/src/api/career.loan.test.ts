@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as client from './client'
-import { loanOut, loanIn, acceptLoanCounter } from './career'
+import { loanOut, loanIn, acceptLoanCounter, getLoanOffers, withdrawLoanOffer } from './career'
 
 describe('loan client', () => {
   beforeEach(() => vi.restoreAllMocks())
@@ -23,5 +23,17 @@ describe('loan client', () => {
     const spy = vi.spyOn(client, 'apiPost').mockResolvedValue({} as never)
     await acceptLoanCounter('S1', 'OFFER1', 'tok')
     expect(spy).toHaveBeenCalledWith('/save-games/S1/loans/OFFER1/accept-counter', {}, 'tok')
+  })
+
+  it('getLoanOffers gets the save\'s loan listing', async () => {
+    const spy = vi.spyOn(client, 'apiGet').mockResolvedValue([] as never)
+    await getLoanOffers('S1', 'tok')
+    expect(spy).toHaveBeenCalledWith('/save-games/S1/loans', 'tok')
+  })
+
+  it('withdrawLoanOffer posts to the withdraw endpoint with no body', async () => {
+    const spy = vi.spyOn(client, 'apiPost').mockResolvedValue({} as never)
+    await withdrawLoanOffer('S1', 'OFFER1', 'tok')
+    expect(spy).toHaveBeenCalledWith('/save-games/S1/loans/OFFER1/withdraw', {}, 'tok')
   })
 })

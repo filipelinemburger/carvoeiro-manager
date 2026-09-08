@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { SquadPage } from './SquadPage'
 import { AuthProvider } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
-import type { PlayerResponse, SquadResponse, ClubSummary } from '../../api/types'
+import type { PlayerResponse, SquadResponse, ClubSummary, LoanOfferResult } from '../../api/types'
 
 vi.mock('../../api/career', () => ({
   getSquad: vi.fn(),
@@ -23,13 +23,15 @@ vi.mock('../../api/career', () => ({
   loanOut: vi.fn(),
   acceptLoanCounter: vi.fn(),
   getSaveGame: vi.fn(),
+  getLoanOffers: vi.fn(),
+  withdrawLoanOffer: vi.fn(),
 }))
 
 vi.mock('../../lib/useIsMobile', () => ({ useIsMobile: vi.fn(() => false) }))
 
 import {
   getSquad, getLineup, setLineup, getTactics, renewContract, listPlayer, unlistPlayer, getFinances,
-  terminateContract, getClubs, loanOut, acceptLoanCounter, getSaveGame,
+  terminateContract, getClubs, loanOut, acceptLoanCounter, getSaveGame, getLoanOffers, withdrawLoanOffer,
 } from '../../api/career'
 
 const mockGetSquad = vi.mocked(getSquad)
@@ -44,6 +46,8 @@ const mockGetClubs = vi.mocked(getClubs)
 const mockLoanOut = vi.mocked(loanOut)
 const mockAcceptLoanCounter = vi.mocked(acceptLoanCounter)
 const mockGetSaveGame = vi.mocked(getSaveGame)
+const mockGetLoanOffers = vi.mocked(getLoanOffers)
+const mockWithdrawLoanOffer = vi.mocked(withdrawLoanOffer)
 
 // `as const` narrows injurySeverity to the literal 'NONE' so it satisfies
 // PlayerResponse's union type (not widened to string) when spread into fixtures.
@@ -202,6 +206,7 @@ describe('SquadPage', () => {
     mockGetFinances.mockResolvedValue({ balance: 20000000, transactions: [] })
     mockGetClubs.mockResolvedValue(CLUBS)
     mockGetSaveGame.mockResolvedValue(SAVE_OPEN)
+    mockGetLoanOffers.mockResolvedValue([])
     localStorage.setItem('carvoeiro_manager_token', 'test-token')
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
   })
@@ -754,7 +759,7 @@ describe('SquadPage', () => {
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['lineup', 'sg-1', 'club-1'] })
   })
 
-  it('shows the AI\'s counter terms and accepts them through acceptLoanCounter', async () => {
+  it('shows the AI\'s counter terms, accepts them through acceptLoanCounter, and refreshes the pending-loan listing both times', async () => {
     mockLoanOut.mockResolvedValue({
       offerId: 'o2', playerId: 'p-m1', playerName: 'Meio Um', status: 'COUNTERED',
       ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 75, counterMayFaceOwner: true, refusal: 'TERMS_REJECTED',
@@ -763,7 +768,9 @@ describe('SquadPage', () => {
       offerId: 'o2', playerId: 'p-m1', playerName: 'Meio Um', status: 'ACCEPTED',
       ownerWageShare: 75, mayFaceOwner: true, counterOwnerWageShare: null, counterMayFaceOwner: null, refusal: null,
     })
-    renderWithProviders()
+    const qc = makeQueryClient()
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+    renderWithProviders('sg-1', 'club-1', qc)
     await waitFor(() => screen.getByText('Meio Um'))
     fireEvent.click(screen.getByText('Meio Um'))
     const dialog = await screen.findByRole('dialog')
@@ -772,8 +779,51 @@ describe('SquadPage', () => {
     fireEvent.change(await screen.findByRole('combobox', { name: /clube de destino/i }), { target: { value: 'club-avi' } })
     fireEvent.click(screen.getByRole('button', { name: /propor empréstimo/i }))
 
+    // The COUNTERED result just produced is a new open offer — PendingLoanOffers must pick it up
+    // immediately (not after its own 30s staleTime lapses) even though this dialog is what
+    // produced it, not the panel.
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['loanOffers', 'sg-1'] }))
+    invalidateSpy.mockClear()
+
     fireEvent.click(await screen.findByRole('button', { name: /aceitar contraproposta/i }))
     await waitFor(() => expect(mockAcceptLoanCounter).toHaveBeenCalledWith('sg-1', 'o2', 'test-token'))
+    // Accepting removes it from the open listing the same way — refreshed here too.
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['loanOffers', 'sg-1'] }))
+  })
+
+  it('surfaces a countered loan offer from GET /loans — reachable with no dialog ever opened this session — and accepts it from there', async () => {
+    const COUNTERED: LoanOfferResult = {
+      offerId: 'o-open', playerId: 'p-m1', playerName: 'Meio Um', status: 'COUNTERED',
+      ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 75, counterMayFaceOwner: true,
+      refusal: 'TERMS_REJECTED',
+    }
+    mockGetLoanOffers.mockResolvedValue([COUNTERED])
+    mockAcceptLoanCounter.mockResolvedValue({ ...COUNTERED, status: 'ACCEPTED' })
+    renderWithProviders()
+
+    expect(await screen.findByText(/empréstimos com contraproposta pendente/i)).toBeInTheDocument()
+    expect(screen.getByText(/75% de salário/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aceitar' }))
+    await waitFor(() => expect(mockAcceptLoanCounter).toHaveBeenCalledWith('sg-1', 'o-open', 'test-token'))
+  })
+
+  it('disables Aceitar on the pending-loan panel when the window is closed, but Desistir still withdraws it', async () => {
+    mockGetSaveGame.mockResolvedValue({ ...SAVE_OPEN, transferWindowOpen: false })
+    const COUNTERED: LoanOfferResult = {
+      offerId: 'o-open', playerId: 'p-m1', playerName: 'Meio Um', status: 'COUNTERED',
+      ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 75, counterMayFaceOwner: true,
+      refusal: 'TERMS_REJECTED',
+    }
+    mockGetLoanOffers.mockResolvedValue([COUNTERED])
+    mockWithdrawLoanOffer.mockResolvedValue({ ...COUNTERED, status: 'WITHDRAWN' })
+    renderWithProviders()
+
+    expect(await screen.findByText(/empréstimos com contraproposta pendente/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Aceitar' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Desistir' }))
+    await waitFor(() => expect(mockWithdrawLoanOffer).toHaveBeenCalledWith('sg-1', 'o-open', 'test-token'))
   })
 
   it('marks a borrowed player in the squad list with who he is on loan from', async () => {
@@ -1352,6 +1402,7 @@ describe('SquadPage — slot picker and Função/Foco selects', () => {
     mockGetFinances.mockResolvedValue({ balance: 20000000, transactions: [] })
     mockGetClubs.mockResolvedValue(CLUBS)
     mockGetSaveGame.mockResolvedValue(SAVE_OPEN)
+    mockGetLoanOffers.mockResolvedValue([])
     localStorage.setItem('carvoeiro_manager_token', 'test-token')
     localStorage.setItem('carvoeiro_manager_user', JSON.stringify({ username: 'u', userId: 'u1' }))
   })

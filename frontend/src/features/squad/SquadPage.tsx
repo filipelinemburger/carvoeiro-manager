@@ -11,7 +11,7 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import {
   getSquad, getLineup, setLineup, renewContract, listPlayer, unlistPlayer, getFinances, terminateContract,
-  getClubs, loanOut, acceptLoanCounter, getSaveGame,
+  getClubs, loanOut, acceptLoanCounter, getSaveGame, getLoanOffers, withdrawLoanOffer,
 } from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
@@ -22,6 +22,7 @@ import { TacticsPanel } from './TacticsPanel'
 import { PlayerDetails } from './PlayerDetails'
 import { TerminateDialog } from './TerminateDialog'
 import { LoanOutDialog } from './LoanOutDialog'
+import { PendingLoanOffers } from '../loan/PendingLoanOffers'
 import { FitnessBar } from './FitnessBar'
 import { MoodChip } from './MoodChip'
 import { teamMorale } from './morale'
@@ -226,6 +227,15 @@ export function SquadPage() {
   })
   const windowOpen = saveGameQuery.data?.transferWindowOpen ?? true
 
+  // Same key TransferMarketPage uses — a countered loan offer (either direction) survives this
+  // dialog closing, so it's reachable from whichever page the manager opens next.
+  const loanOffersQuery = useQuery({
+    queryKey: ['loanOffers', saveGameId],
+    queryFn: () => getLoanOffers(saveGameId, token ?? ''),
+    enabled: Boolean(saveGameId && token),
+    staleTime: 30_000,
+  })
+
   const players = data?.players ?? []
   const slots = pitchSlots(formation)
 
@@ -417,6 +427,10 @@ export function SquadPage() {
       setLoanResult(data)
       // A REJECTED result means nothing moved server-side — nothing went stale.
       if (data.status !== 'REJECTED') invalidateAfterLoanMove()
+      // A COUNTERED result is a new open offer PendingLoanOffers must pick up even if this dialog
+      // is later closed without acting on it; REJECTED/ACCEPTED never leave one open, so this is
+      // a harmless no-op refetch for those.
+      void queryClient.invalidateQueries({ queryKey: ['loanOffers', saveGameId] })
     },
   })
 
@@ -425,6 +439,17 @@ export function SquadPage() {
     onSuccess: (data) => {
       setLoanResult(data)
       if (data.status !== 'REJECTED') invalidateAfterLoanMove()
+      void queryClient.invalidateQueries({ queryKey: ['loanOffers', saveGameId] })
+    },
+  })
+
+  // Withdraws a still-open (COUNTERED) loan offer straight from the PendingLoanOffers panel —
+  // decoupled from `loaningId`/`loanResult`, which the dialog those came from may have already
+  // discarded on close.
+  const withdrawLoanOfferMut = useMutation({
+    mutationFn: (offerId: string) => withdrawLoanOffer(saveGameId, offerId, token ?? ''),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['loanOffers', saveGameId] })
     },
   })
 
@@ -941,6 +966,13 @@ export function SquadPage() {
 
   return (
     <Box>
+      <PendingLoanOffers
+        offers={loanOffersQuery.data ?? []}
+        windowOpen={windowOpen}
+        busy={acceptLoanCounterMut.isPending || withdrawLoanOfferMut.isPending}
+        onAccept={id => acceptLoanCounterMut.mutate(id)}
+        onWithdraw={id => withdrawLoanOfferMut.mutate(id)}
+      />
       <Tabs value={tab} onChange={(_, v: number) => setTab(v)} sx={{ mb: 2 }}
             aria-label="Seções do elenco">
         <Tab label="Plantel" id="squad-tab-0" aria-controls="squad-tabpanel-0" />
@@ -1245,18 +1277,19 @@ export function SquadPage() {
           other action-failure toasts above. A REJECTED/COUNTERED outcome is not an error — that
           renders inside LoanOutDialog itself — this is only for a failed round-trip. */}
       <Snackbar
-        open={loanOutMut.isError || acceptLoanCounterMut.isError}
+        open={loanOutMut.isError || acceptLoanCounterMut.isError || withdrawLoanOfferMut.isError}
         autoHideDuration={4000}
-        onClose={() => { loanOutMut.reset(); acceptLoanCounterMut.reset() }}
+        onClose={() => { loanOutMut.reset(); acceptLoanCounterMut.reset(); withdrawLoanOfferMut.reset() }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert
           severity="error"
           variant="filled"
-          onClose={() => { loanOutMut.reset(); acceptLoanCounterMut.reset() }}
+          onClose={() => { loanOutMut.reset(); acceptLoanCounterMut.reset(); withdrawLoanOfferMut.reset() }}
           sx={{ width: '100%' }}
         >
-          {errorMessage(loanOutMut.error ?? acceptLoanCounterMut.error, 'Erro ao negociar o empréstimo.')}
+          {errorMessage(loanOutMut.error ?? acceptLoanCounterMut.error ?? withdrawLoanOfferMut.error,
+            'Erro ao negociar o empréstimo.')}
         </Alert>
       </Snackbar>
     </Box>

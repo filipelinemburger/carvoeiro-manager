@@ -79,14 +79,13 @@ class LoanOfferEntityIT {
     }
 
     @Test
-    void openOffersForAPlayerAreFoundByStatus() {
+    void openOffersForASaveAreFoundByStatus() {
         Career c = createCareer();
         LoanOffer offer = aPendingOffer(c);
         loanOfferRepository.save(offer);
 
-        List<LoanOffer> open = loanOfferRepository.findBySaveGameIdAndPlayerIdAndStatusIn(
-                c.id(), offer.getPlayerId(),
-                List.of(LoanOfferStatus.PENDING, LoanOfferStatus.COUNTERED));
+        List<LoanOffer> open = loanOfferRepository.findBySaveGameIdAndStatusIn(
+                c.id(), List.of(LoanOfferStatus.PENDING, LoanOfferStatus.COUNTERED));
 
         assertThat(open).extracting(LoanOffer::getId).containsExactly(offer.getId());
     }

@@ -16,6 +16,7 @@ import br.com.carvoeiromanager.transfer.TransferWindow;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -212,6 +213,46 @@ public class LoanService {
     }
 
     /**
+     * The manager's own open loan negotiations — PENDING and COUNTERED, the same pair
+     * {@code TransferService.getOffers} lists. Exists so a COUNTERED offer survives the dialog
+     * that produced it being closed (or the page being refreshed): the offer row, and therefore
+     * {@code offerId}, was always there — only the client's copy of it was thrown away.
+     * <p>
+     * Unlike transfers, every {@code LoanOffer} row already belongs to the manager: {@link #negotiate}
+     * is only ever reached from {@link #offerLoanOut} or {@link #offerLoanIn}, both of which the
+     * manager himself calls, and there is no AI-initiated loan bid the way
+     * {@code TransferService.generateIncomingOffers} unsolicited-bids the managed club. So no
+     * direction/ownership filter is needed on top of the status one.
+     */
+    public List<LoanOfferResponse> getOffers(UUID saveGameId, UUID userId) {
+        saveGameService.requireOwned(saveGameId, userId);
+        return loanOfferRepository.findBySaveGameIdAndStatusIn(saveGameId,
+                        List.of(LoanOfferStatus.PENDING, LoanOfferStatus.COUNTERED)).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    /**
+     * Drops a still-open loan offer without accepting it — the counter-side twin of
+     * {@code TransferService.withdrawOffer}. Reachable for the same reason {@link #getOffers} is:
+     * a COUNTERED offer that outlived its dialog is not stuck, either accepted or abandoned.
+     */
+    @Transactional
+    public LoanOfferResponse withdrawOffer(UUID saveGameId, UUID userId, UUID offerId) {
+        saveGameService.requireOwned(saveGameId, userId);
+        LoanOffer offer = loanOfferRepository.findById(offerId)
+                .filter(o -> o.getSaveGameId().equals(saveGameId))
+                .orElseThrow(() -> new ApiException(ErrorCode.TRANSFER_OFFER_NOT_FOUND,
+                        "Loan offer not found"));
+        if (offer.getStatus() != LoanOfferStatus.PENDING && offer.getStatus() != LoanOfferStatus.COUNTERED) {
+            throw new ApiException(ErrorCode.INVALID_TRANSFER, "This loan offer cannot be withdrawn");
+        }
+        offer.markWithdrawn();
+        loanOfferRepository.save(offer);
+        return toResponse(offer);
+    }
+
+    /**
      * Moves the player and settles everything leaving the squad implies. The offer rejection is
      * not optional: a live bid that outlived the loan would meet a sell guard that now passes
      * trivially, because the player is no longer in the squad it counts.
@@ -273,5 +314,22 @@ public class LoanService {
         return new LoanOfferResponse(offer.getId(), player.getId(), player.getName(),
                 offer.getStatus(), offer.getOwnerWageShare(), offer.isMayFaceOwner(),
                 offer.getCounterOwnerWageShare(), offer.getCounterMayFaceOwner(), refusal);
+    }
+
+    /**
+     * For an offer being looked up rather than freshly negotiated (listing, withdraw) — the player
+     * isn't already in hand the way it is in {@link #negotiate} and {@link #acceptCounter}. The
+     * refusal shown mirrors {@link #negotiate}'s own COUNTER branch: TERMS_REJECTED exactly when
+     * the status is COUNTERED, null otherwise. A REJECTED row's original KEY_PLAYER/BELOW_LEVEL
+     * reason is never persisted on the entity, so it could not be recovered here either way — but
+     * {@link #getOffers} never lists a REJECTED offer, only PENDING/COUNTERED ones, so the gap
+     * never surfaces.
+     */
+    LoanOfferResponse toResponse(LoanOffer offer) {
+        String playerName = playerRepository.findById(offer.getPlayerId()).map(Player::getName).orElse("");
+        LoanRefusal refusal = offer.getStatus() == LoanOfferStatus.COUNTERED ? LoanRefusal.TERMS_REJECTED : null;
+        return new LoanOfferResponse(offer.getId(), offer.getPlayerId(), playerName, offer.getStatus(),
+                offer.getOwnerWageShare(), offer.isMayFaceOwner(), offer.getCounterOwnerWageShare(),
+                offer.getCounterMayFaceOwner(), refusal);
     }
 }

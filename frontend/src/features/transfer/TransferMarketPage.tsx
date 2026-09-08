@@ -8,6 +8,7 @@ import {
 import {
   getSaveGame, getMarket, getClubs, getOffers, getSquad, getPlayer,
   makeOffer, acceptCounter, withdrawOffer, respondToOffer, loanIn, acceptLoanCounter,
+  getLoanOffers, withdrawLoanOffer,
 } from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
@@ -20,6 +21,7 @@ import { WatchStar } from '../players/WatchStar'
 import { MoneyField } from '../../components/MoneyField'
 import { MakeOfferDialog, type OfferTarget } from './MakeOfferDialog'
 import { LoanInDialog } from './LoanInDialog'
+import { PendingLoanOffers } from '../loan/PendingLoanOffers'
 import { MIN_CONTRACT_YEARS_TO_LOAN } from '../loan/loanMessages'
 import { LISTED_REASON_LABEL } from '../squad/listedReason'
 import { CARBON } from '../../muiTheme'
@@ -329,6 +331,15 @@ export function TransferMarketPage() {
     staleTime: Infinity,
   })
 
+  // Same key SquadPage uses — a countered loan offer (either direction) survives this dialog
+  // closing, so it's reachable from whichever page the manager opens next.
+  const loanOffersQuery = useQuery({
+    queryKey: ['loanOffers', saveGameId],
+    queryFn: () => getLoanOffers(saveGameId, token ?? ''),
+    enabled,
+    staleTime: 30_000,
+  })
+
   // My squad — used to open full player details for a player another club is bidding on.
   const managedClubId = save.data?.managedClubId ?? ''
   const squad = useQuery({
@@ -451,6 +462,10 @@ export function TransferMarketPage() {
       setLoanResult(data)
       // A REJECTED result means nothing moved server-side — nothing went stale.
       if (data.status !== 'REJECTED') invalidateAfterLoanIn()
+      // A COUNTERED result is a new open offer PendingLoanOffers must pick up even if this dialog
+      // is later closed without acting on it; REJECTED/ACCEPTED never leave one open, so this is
+      // a harmless no-op refetch for those.
+      void queryClient.invalidateQueries({ queryKey: ['loanOffers', saveGameId] })
     },
   })
 
@@ -459,6 +474,17 @@ export function TransferMarketPage() {
     onSuccess: (data) => {
       setLoanResult(data)
       if (data.status !== 'REJECTED') invalidateAfterLoanIn()
+      void queryClient.invalidateQueries({ queryKey: ['loanOffers', saveGameId] })
+    },
+  })
+
+  // Withdraws a still-open (COUNTERED) loan offer straight from the PendingLoanOffers panel —
+  // decoupled from `loaningPlayer`/`loanResult`, which the dialog those came from may have
+  // already discarded on close.
+  const withdrawLoanOfferMut = useMutation({
+    mutationFn: (offerId: string) => withdrawLoanOffer(saveGameId, offerId, token ?? ''),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['loanOffers', saveGameId] })
     },
   })
 
@@ -497,11 +523,20 @@ export function TransferMarketPage() {
         </Alert>
       )}
       {offerMut.isError && <Alert severity="error" sx={{ mb: 2 }}>{errorMessage(offerMut.error, 'Erro ao enviar proposta.')}</Alert>}
-      {(loanInMut.isError || acceptLoanCounterMut.isError) && (
+      {(loanInMut.isError || acceptLoanCounterMut.isError || withdrawLoanOfferMut.isError) && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {errorMessage(loanInMut.error ?? acceptLoanCounterMut.error, 'Erro ao negociar o empréstimo.')}
+          {errorMessage(loanInMut.error ?? acceptLoanCounterMut.error ?? withdrawLoanOfferMut.error,
+            'Erro ao negociar o empréstimo.')}
         </Alert>
       )}
+
+      <PendingLoanOffers
+        offers={loanOffersQuery.data ?? []}
+        windowOpen={windowOpen}
+        busy={acceptLoanCounterMut.isPending || withdrawLoanOfferMut.isPending}
+        onAccept={id => acceptLoanCounterMut.mutate(id)}
+        onWithdraw={id => withdrawLoanOfferMut.mutate(id)}
+      />
 
       {isMobile ? (
         <FormControl size="small" fullWidth sx={{ mb: 2 }}>

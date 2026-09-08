@@ -21,11 +21,13 @@ vi.mock('../../api/career', () => ({
   signFreeAgent: vi.fn(),
   loanIn: vi.fn(),
   acceptLoanCounter: vi.fn(),
+  getLoanOffers: vi.fn(),
+  withdrawLoanOffer: vi.fn(),
 }))
 
 import {
   getSaveGame, getMarket, getClubs, getOffers, makeOffer, respondToOffer, withdrawOffer,
-  getFreeAgents, getSquad, loanIn,
+  getFreeAgents, getSquad, loanIn, acceptLoanCounter, getLoanOffers, withdrawLoanOffer,
 } from '../../api/career'
 
 const SAVE_OPEN = {
@@ -76,6 +78,7 @@ describe('TransferMarketPage', () => {
     vi.mocked(getMarket).mockResolvedValue(marketPage([ALVO_UM]))
     vi.mocked(getFreeAgents).mockResolvedValue([])
     vi.mocked(getSquad).mockResolvedValue({ players: [] } as never)
+    vi.mocked(getLoanOffers).mockResolvedValue([])
   })
 
   /** The market list lives on the "Jogadores disponíveis" tab. */
@@ -357,6 +360,27 @@ describe('TransferMarketPage', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['finances', 'sg-1', 'club-1'] })
   })
 
+  it('refreshes the pending-loan listing as soon as a loan-in proposal comes back countered — not after its own staleTime', async () => {
+    const COUNTERED: LoanOfferResult = {
+      offerId: 'lo1', playerId: 'p1', playerName: 'Alvo Um', status: 'COUNTERED',
+      ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 80, counterMayFaceOwner: false,
+      refusal: 'TERMS_REJECTED',
+    }
+    vi.mocked(loanIn).mockResolvedValue(COUNTERED)
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+    renderPage(qc)
+    openMarketTab()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /pedir emprestado/i }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /pedir empréstimo/i }))
+
+    await waitFor(() => expect(loanIn).toHaveBeenCalled())
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['loanOffers', 'sg-1'] }))
+  })
+
   it('shows a KEY_PLAYER refusal in the loan dialog with no path to improve the offer', async () => {
     const REJECTED: LoanOfferResult = {
       offerId: 'lo1', playerId: 'p1', playerName: 'Alvo Um', status: 'REJECTED',
@@ -401,6 +425,52 @@ describe('TransferMarketPage', () => {
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['squad', 'sg-1', 'club-1'] })
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['market', 'sg-1'] })
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['finances', 'sg-1', 'club-1'] })
+  })
+
+  it('surfaces a countered loan offer fetched from GET /loans — not the just-closed dialog\'s own state — and accepts it from there', async () => {
+    // A different player from ALVO_UM (the market fixture): the "sem propostas" redirect lands
+    // on the market tab too, so a shared name would make "Alvo Um" ambiguous between the panel
+    // and the market list card.
+    const COUNTERED: LoanOfferResult = {
+      offerId: 'lo-open', playerId: 'p-loan', playerName: 'Emprestado Um', status: 'COUNTERED',
+      ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 65, counterMayFaceOwner: true,
+      refusal: 'TERMS_REJECTED',
+    }
+    vi.mocked(getLoanOffers).mockResolvedValue([COUNTERED])
+    const ACCEPTED: LoanOfferResult = { ...COUNTERED, status: 'ACCEPTED' }
+    vi.mocked(acceptLoanCounter).mockResolvedValue(ACCEPTED)
+
+    renderPage()
+
+    // Reachable with no dialog ever having been opened this session — the panel is fed entirely
+    // from the GET /loans listing, exactly what a page refresh after closing the dialog leaves.
+    expect(await screen.findByText('Emprestado Um')).toBeInTheDocument()
+    expect(screen.getByText(/65% de salário/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aceitar' }))
+
+    await waitFor(() => expect(acceptLoanCounter).toHaveBeenCalledWith('sg-1', 'lo-open', 'test-token'))
+  })
+
+  it('disables Aceitar on the pending-loan panel and explains why when the window is closed, but still allows Desistir', async () => {
+    vi.mocked(getSaveGame).mockResolvedValue({ ...SAVE_OPEN, transferWindowOpen: false })
+    const COUNTERED: LoanOfferResult = {
+      offerId: 'lo-open', playerId: 'p-loan', playerName: 'Emprestado Um', status: 'COUNTERED',
+      ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 65, counterMayFaceOwner: true,
+      refusal: 'TERMS_REJECTED',
+    }
+    vi.mocked(getLoanOffers).mockResolvedValue([COUNTERED])
+    vi.mocked(withdrawLoanOffer).mockResolvedValue({ ...COUNTERED, status: 'WITHDRAWN' })
+
+    renderPage()
+    expect(await screen.findByText('Emprestado Um')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Aceitar' })).toBeDisabled()
+    // Both the top-level window banner and the panel's own explanation contain this phrase —
+    // assert the panel's more specific wording so a duplicate-text failure can't hide a bug.
+    expect(screen.getByText(/não é possível aceitar agora/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Desistir' }))
+    await waitFor(() => expect(withdrawLoanOffer).toHaveBeenCalledWith('sg-1', 'lo-open', 'test-token'))
   })
 
   it('optimistically removes a withdrawn offer before the request resolves', async () => {

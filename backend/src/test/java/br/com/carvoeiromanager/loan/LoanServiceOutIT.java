@@ -259,7 +259,7 @@ class LoanServiceOutIT {
 
         loanService.offerLoanOut(c.id(), c.userId(), spare.getId(), borrower.getId(), 100, true);
 
-        assertThat(loanOfferRepository.findBySaveGameIdAndPlayerIdAndStatusIn(c.id(), spare.getId(),
+        assertThat(loanOfferRepository.findBySaveGameIdAndStatusIn(c.id(),
                 List.of(LoanOfferStatus.ACCEPTED))).hasSize(1);
 
         // The same obligations selling and terminating carry — a live bid must not outlive the
@@ -340,7 +340,7 @@ class LoanServiceOutIT {
                         .isEqualTo(ErrorCode.SQUAD_FULL));
 
         assertThat(playerRepository.findById(spare.getId()).orElseThrow().isOnLoan()).isFalse();
-        assertThat(loanOfferRepository.findBySaveGameIdAndPlayerIdAndStatusIn(c.id(), spare.getId(),
+        assertThat(loanOfferRepository.findBySaveGameIdAndStatusIn(c.id(),
                 List.of(LoanOfferStatus.PENDING, LoanOfferStatus.COUNTERED, LoanOfferStatus.ACCEPTED,
                         LoanOfferStatus.REJECTED))).isEmpty();
     }
@@ -418,7 +418,7 @@ class LoanServiceOutIT {
                         .isEqualTo(ErrorCode.LOAN_INVALID_TERMS));
 
         assertThat(playerRepository.findById(spare.getId()).orElseThrow().isOnLoan()).isFalse();
-        assertThat(loanOfferRepository.findBySaveGameIdAndPlayerIdAndStatusIn(c.id(), spare.getId(),
+        assertThat(loanOfferRepository.findBySaveGameIdAndStatusIn(c.id(),
                 List.of(LoanOfferStatus.PENDING, LoanOfferStatus.COUNTERED, LoanOfferStatus.ACCEPTED,
                         LoanOfferStatus.REJECTED))).isEmpty();
     }
@@ -436,7 +436,7 @@ class LoanServiceOutIT {
                         .isEqualTo(ErrorCode.LOAN_INVALID_TERMS));
 
         assertThat(playerRepository.findById(spare.getId()).orElseThrow().isOnLoan()).isFalse();
-        assertThat(loanOfferRepository.findBySaveGameIdAndPlayerIdAndStatusIn(c.id(), spare.getId(),
+        assertThat(loanOfferRepository.findBySaveGameIdAndStatusIn(c.id(),
                 List.of(LoanOfferStatus.PENDING, LoanOfferStatus.COUNTERED, LoanOfferStatus.ACCEPTED,
                         LoanOfferStatus.REJECTED))).isEmpty();
     }
@@ -464,7 +464,7 @@ class LoanServiceOutIT {
                         .isEqualTo(ErrorCode.TRANSFER_WINDOW_CLOSED));
 
         assertThat(playerRepository.findById(spare.getId()).orElseThrow().isOnLoan()).isFalse();
-        assertThat(loanOfferRepository.findBySaveGameIdAndPlayerIdAndStatusIn(c.id(), spare.getId(),
+        assertThat(loanOfferRepository.findBySaveGameIdAndStatusIn(c.id(),
                 List.of(LoanOfferStatus.PENDING, LoanOfferStatus.COUNTERED, LoanOfferStatus.ACCEPTED,
                         LoanOfferStatus.REJECTED))).isEmpty();
     }

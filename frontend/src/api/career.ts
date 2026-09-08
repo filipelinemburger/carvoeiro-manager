@@ -322,6 +322,20 @@ export function acceptLoanCounter(
   return apiPost<LoanOfferResult>(`/save-games/${saveGameId}/loans/${offerId}/accept-counter`, {}, token)
 }
 
+/** The save's open loan offers (PENDING/COUNTERED) — how a countered offer is found again once
+ * the dialog that started it has closed. */
+export function getLoanOffers(saveGameId: string, token: string): Promise<LoanOfferResult[]> {
+  return apiGet<LoanOfferResult[]>(`/save-games/${saveGameId}/loans`, token)
+}
+
+export function withdrawLoanOffer(
+  saveGameId: string,
+  offerId: string,
+  token: string,
+): Promise<LoanOfferResult> {
+  return apiPost<LoanOfferResult>(`/save-games/${saveGameId}/loans/${offerId}/withdraw`, {}, token)
+}
+
 export function getStaffRoster(saveGameId: string, clubId: string, token: string): Promise<StaffRoster> {
   return apiGet<StaffRoster>(`/save-games/${saveGameId}/clubs/${clubId}/staff`, token)
 }
