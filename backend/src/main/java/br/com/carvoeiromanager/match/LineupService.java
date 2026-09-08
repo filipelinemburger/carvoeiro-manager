@@ -271,8 +271,10 @@ public class LineupService {
     /**
      * Same as {@link #startingXi(UUID, UUID)}, but also excludes a saved starter who is on loan
      * and barred from facing {@code opponentClubId} (see {@link LoanEligibility}) — such a player
-     * behaves exactly like a suspended one, falling through to {@link #bestXi} when he leaves the
-     * saved XI short.
+     * behaves like a suspended one only in that his absence can leave the saved XI short and fall
+     * through to {@link #bestXi}. Once there, the loan bar is stricter than suspension again (see
+     * that method's javadoc): the fallback XI it returns can itself be short of eleven when the
+     * loan bar, not a lack of squad depth, is what is missing a slot.
      */
     public List<Player> startingXi(UUID saveGameId, UUID clubId, UUID opponentClubId) {
         return lineupRepository.findBySaveGameIdAndClubId(saveGameId, clubId)
@@ -289,8 +291,10 @@ public class LineupService {
                             .filter(p -> loanEligibility.mayFace(p, opponentClubId))
                             .collect(java.util.stream.Collectors.toList());
                     // If suspensions/injuries/loan restrictions left the saved XI short, fall back to
-                    // bestXi so the engine always receives a full 11 (TeamStrengthCalculator divides
-                    // by xi.size()).
+                    // bestXi to fill it back out as far as the squad and the loan bar allow. That is
+                    // not necessarily a full 11 any more: bestXi(..., opponentClubId) can itself return
+                    // a short XI when the loan bar is why a slot can't be filled (see its javadoc) —
+                    // TeamStrengthCalculator tolerates dividing by a smaller xi.size().
                     return eligibleXi.size() == 11 ? eligibleXi : bestXi(clubId, null, opponentClubId);
                 })
                 .orElseGet(() -> bestXi(clubId, null, opponentClubId));

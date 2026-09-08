@@ -9,6 +9,7 @@ import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
+import br.com.carvoeiromanager.player.Attribute;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
@@ -24,7 +25,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -163,7 +163,7 @@ class LoanFixtureEligibilityIT {
         Scenario s = lendManagedPlayer("loanfx_gkinj", false, p -> p.getPosition() == Position.GK);
         List<Player> ownKeepers = borrowerOwnPlayers(s).stream()
                 .filter(p -> p.getPosition() == Position.GK)
-                .collect(Collectors.toList());
+                .toList();
         assertThat(ownKeepers).as("the borrower must own keepers of its own for this scenario").isNotEmpty();
         ownKeepers.forEach(p -> p.addInjury(3));
         playerRepository.saveAll(ownKeepers);
@@ -182,6 +182,11 @@ class LoanFixtureEligibilityIT {
         assertThat(borrowerXi)
                 .as("an injured keeper of the borrower's own takes the goal instead")
                 .containsAnyElementsOf(ownKeepers.stream().map(Player::getId).toList());
+        assertThat(borrowerXi)
+                .as("only the keeper situation was manipulated here — the outfield pool is untouched, "
+                        + "so the borrower still fields a full eleven; this pins that the GK fix does not "
+                        + "leak into the outfield selection")
+                .hasSize(11);
     }
 
     /**
@@ -189,18 +194,47 @@ class LoanFixtureEligibilityIT {
      * eligible alternative AND no ineligible one. {@code improvisedKeeper} must put an outfielder in
      * goal rather than reach for the barred keeper — and must not throw {@code NO_GK_FOUND}, which
      * would brick the save exactly as it did before that method existed.
+     *
+     * <p>This exercises {@code improvisedKeeper}'s <b>tier 1</b> only
+     * ({@code eligible.stream().max(byKeeping)}): the borrower's outfield squad is untouched and
+     * fully eligible, so tier 1 always has a candidate and tier 2
+     * ({@code selectable.stream().max(byKeeping)}) is never consulted here. Tier 2 is covered
+     * separately by {@link #aBarredLoanedKeeperIsImprovisedFromAnIneligiblePlayerWhenNoEligiblePlayerRemains()}.
+     * The assertion below identifies the improvised keeper by his goalkeeping stat rather than by
+     * "no GK among the XI's natural positions" — with the loanee the only GK on the books, that
+     * weaker check would pass for the same reason {@code doesNotContain(lentPlayer)} does, and would
+     * not independently witness that tier 1 picked the *best* candidate.
      */
     @Test
     void aBarredLoanedKeeperIsImprovisedAroundWhenTheBorrowerHasNoKeeperOfHisOwn() {
         Scenario s = lendManagedPlayer("loanfx_gkonly", false, p -> p.getPosition() == Position.GK);
         List<Player> ownKeepers = borrowerOwnPlayers(s).stream()
                 .filter(p -> p.getPosition() == Position.GK)
-                .collect(Collectors.toList());
+                .toList();
         assertThat(ownKeepers).isNotEmpty();
         // Contracts lapsed at rollover: they are free agents, so the borrowed keeper is the only
         // goalkeeper left on the club's books — and he may not face the club that owns him.
         ownKeepers.forEach(p -> p.setClubId(null));
         playerRepository.saveAll(ownKeepers);
+
+        List<Player> eligibleOutfielders = borrowerOwnPlayers(s).stream()
+                .filter(Player::isEligible)
+                .toList();
+        assertThat(eligibleOutfielders)
+                .as("the borrower needs eligible outfielders for tier 1 to have a candidate at all")
+                .isNotEmpty();
+        // Deterministically make one specific eligible outfielder the unambiguous best goalkeeping
+        // candidate — the same way the lent player's overall is boosted to 99 elsewhere in this file.
+        // Relying on the squad's randomly generated goalkeeping stats to already be unique at the top
+        // would make this assertion flaky.
+        Player expectedKeeper = eligibleOutfielders.stream().min(Comparator.comparing(Player::getId)).orElseThrow();
+        expectedKeeper.setAttribute(Attribute.REFLEXOS, 99);
+        playerRepository.save(expectedKeeper);
+        assertThat(eligibleOutfielders.stream()
+                .filter(p -> !p.getId().equals(expectedKeeper.getId()))
+                .mapToInt(Player::getGoalkeeping).max().orElse(-1))
+                .as("the boosted candidate must be the unambiguous best or the assertion below is ambiguous")
+                .isLessThan(99);
 
         List<FixtureAppearance> appearances = simulateManagedVsBorrower(s);
 
@@ -214,9 +248,61 @@ class LoanFixtureEligibilityIT {
         assertThat(borrowerXi)
                 .as("improvising in goal must not mean reaching for the one keeper the loan bars")
                 .doesNotContain(s.lentPlayer().getId());
-        assertThat(positionsOf(borrowerXi))
-                .as("the borrower improvises an outfielder in goal instead")
-                .doesNotContain(Position.GK);
+        assertThat(borrowerXi)
+                .as("tier 1 picks the eligible outfielder with the best goalkeeping stat, not merely a "
+                        + "non-GK one")
+                .contains(expectedKeeper.getId());
+    }
+
+    /**
+     * The genuinely uncovered branch from the round-1 review: {@code improvisedKeeper}'s
+     * <b>tier 2</b> ({@code selectable.stream().max(byKeeping)}). It is reached only when
+     * {@code eligible} is completely empty AND {@code selectable} is not — the borrower has no
+     * keeper of its own (as above) <em>and</em> every remaining outfielder is injured, so nobody at
+     * the club is eligible for anything, yet an ineligible outfielder is still on the books and not
+     * barred from this fixture.
+     *
+     * <p>The barred loanee's own goalkeeping is deliberately boosted to the maximum (99), on top of
+     * his already-boosted overall, so that tier 3 ({@code allPlayers.stream().max(byKeeping)}) —
+     * which does <b>not</b> exclude him — would pick him if it were reached in tier 2's place.
+     * Without that, tier 2 and tier 3 could simply agree on the same winner and this test would not
+     * discriminate between them: deleting
+     * {@code .or(() -> selectable.stream().max(byKeeping))} needs to change the outcome, not merely
+     * remove a redundant path. With it deleted, this is the one test that fails.
+     */
+    @Test
+    void aBarredLoanedKeeperIsImprovisedFromAnIneligiblePlayerWhenNoEligiblePlayerRemains() {
+        Scenario s = lendManagedPlayer("loanfx_gk2", false, p -> p.getPosition() == Position.GK);
+        s.lentPlayer().setAttribute(Attribute.REFLEXOS, 99);
+        playerRepository.save(s.lentPlayer());
+
+        List<Player> ownPlayers = borrowerOwnPlayers(s);
+        List<Player> ownKeepers = ownPlayers.stream().filter(p -> p.getPosition() == Position.GK).toList();
+        List<Player> outfielders = ownPlayers.stream().filter(p -> p.getPosition() != Position.GK).toList();
+        assertThat(ownKeepers).as("the borrower must own keepers of its own for this scenario").isNotEmpty();
+        assertThat(outfielders).as("the borrower must have outfielders to injure for this scenario").isNotEmpty();
+        // No other keeper on the books at all, same as the no-keeper scenario above...
+        ownKeepers.forEach(p -> p.setClubId(null));
+        // ...and every remaining player is ineligible, so `eligible` is empty everywhere and tier 1
+        // (eligible.stream().max(byKeeping)) cannot supply a candidate — only tier 2 (or, if it were
+        // missing, tier 3) can.
+        outfielders.forEach(p -> p.addInjury(3));
+        playerRepository.saveAll(ownKeepers);
+        playerRepository.saveAll(outfielders);
+
+        List<FixtureAppearance> appearances = simulateManagedVsBorrower(s);
+
+        assertThat(appearances)
+                .as("the fixture must still play to completion, not fail with NO_GK_FOUND")
+                .isNotEmpty()
+                .extracting(FixtureAppearance::getClubId)
+                .contains(s.managedClubId(), s.borrowerClubId());
+        List<UUID> borrowerXi = xiOf(appearances, s.borrowerClubId());
+        assertThat(borrowerXi)
+                .as("tier 2 must not reach past the loan bar for the barred keeper, even though he now "
+                        + "has the best goalkeeping stat at the whole club and tier 3 (allPlayers) would "
+                        + "pick him if it were consulted in tier 2's place")
+                .doesNotContain(s.lentPlayer().getId());
     }
 
     /**
@@ -232,12 +318,12 @@ class LoanFixtureEligibilityIT {
         List<Player> outfielders = borrowerOwnPlayers(s).stream()
                 .filter(p -> p.getPosition() != Position.GK)
                 .sorted(Comparator.comparing(Player::getId))
-                .collect(Collectors.toList());
+                .toList();
         List<Player> kept = outfielders.stream().filter(Player::isEligible).limit(5).toList();
         assertThat(kept).as("the borrower needs at least five eligible outfielders to keep").hasSize(5);
         List<Player> released = outfielders.stream()
                 .filter(p -> kept.stream().noneMatch(k -> k.getId().equals(p.getId())))
-                .collect(Collectors.toList());
+                .toList();
         released.forEach(p -> p.setClubId(null));
         playerRepository.saveAll(released);
 
@@ -264,7 +350,7 @@ class LoanFixtureEligibilityIT {
     private List<Player> borrowerOwnPlayers(Scenario s) {
         return playerRepository.findByClubIdAndYouthProspectFalse(s.borrowerClubId()).stream()
                 .filter(p -> !p.getId().equals(s.lentPlayer().getId()))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /** The XI one club actually fielded, read back from the attributed appearances. */
@@ -275,9 +361,4 @@ class LoanFixtureEligibilityIT {
                 .toList();
     }
 
-    private List<Position> positionsOf(List<UUID> playerIds) {
-        return playerIds.stream()
-                .map(id -> playerRepository.findById(id).orElseThrow().getPosition())
-                .toList();
-    }
 }
