@@ -23,6 +23,8 @@ import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -69,6 +71,16 @@ class LoanFixtureEligibilityIT {
      * position whenever loan eligibility does not bar him.
      */
     private Scenario lendManagedPlayer(String userPrefix, boolean mayFaceOwner) {
+        return lendManagedPlayer(userPrefix, mayFaceOwner, p -> p.getPosition() != Position.GK);
+    }
+
+    /**
+     * As above, but lends the strongest managed player matching {@code lendable} — used to lend a
+     * goalkeeper, which is the reachable shape of the fallback bug: the borrowing club loses its
+     * own keeper to injury and the barred one is the only other keeper on its books.
+     */
+    private Scenario lendManagedPlayer(String userPrefix, boolean mayFaceOwner,
+                                       Predicate<Player> lendable) {
         User user = User.create(userPrefix + "_" + UUID.randomUUID(), "hash");
         userRepository.save(user);
         SaveGameResponse response = saveGameService.createCareer(user.getId());
@@ -83,7 +95,7 @@ class LoanFixtureEligibilityIT {
                 .distinct().sorted().findFirst().orElseThrow();
 
         Player lentPlayer = playerRepository.findByClubIdAndYouthProspectFalse(managedClubId).stream()
-                .filter(p -> p.getPosition() != Position.GK)
+                .filter(lendable)
                 .max(Comparator.comparingInt(Player::getOverall))
                 .orElseThrow();
         lentPlayer.setOverall(99);
@@ -135,5 +147,137 @@ class LoanFixtureEligibilityIT {
                 .as("the loan's negotiated release lets the AI-controlled borrower field him against his owner")
                 .anyMatch(a -> a.getPlayerId().equals(s.lentPlayer().getId())
                         && a.getClubId().equals(s.borrowerClubId()));
+    }
+
+    // --- The bar must also bind bestXi's three fallbacks, not just its `eligible` filter ---
+
+    /**
+     * The reachable one. The borrower's own keepers are injured, so no keeper of his is eligible and
+     * {@code bestXi} reaches its ineligible-GK fallback. That fallback used to read the club's whole
+     * squad, which put the borrowed 99-rated keeper — barred from this very fixture — straight into
+     * goal against the club that owns him. He must not play; an injured keeper of the borrower's own
+     * goes in ahead of him, and the fixture is still simulated to completion.
+     */
+    @Test
+    void aBarredLoanedKeeperDoesNotTakeTheGoalWhenTheBorrowersOwnKeepersAreInjured() {
+        Scenario s = lendManagedPlayer("loanfx_gkinj", false, p -> p.getPosition() == Position.GK);
+        List<Player> ownKeepers = borrowerOwnPlayers(s).stream()
+                .filter(p -> p.getPosition() == Position.GK)
+                .collect(Collectors.toList());
+        assertThat(ownKeepers).as("the borrower must own keepers of its own for this scenario").isNotEmpty();
+        ownKeepers.forEach(p -> p.addInjury(3));
+        playerRepository.saveAll(ownKeepers);
+
+        List<FixtureAppearance> appearances = simulateManagedVsBorrower(s);
+
+        assertThat(appearances)
+                .as("the fixture must actually have been simulated rather than thrown out of")
+                .isNotEmpty()
+                .extracting(FixtureAppearance::getClubId)
+                .contains(s.managedClubId(), s.borrowerClubId());
+        List<UUID> borrowerXi = xiOf(appearances, s.borrowerClubId());
+        assertThat(borrowerXi)
+                .as("the ineligible-GK fallback must not reach past the loan bar for the borrowed keeper")
+                .doesNotContain(s.lentPlayer().getId());
+        assertThat(borrowerXi)
+                .as("an injured keeper of the borrower's own takes the goal instead")
+                .containsAnyElementsOf(ownKeepers.stream().map(Player::getId).toList());
+    }
+
+    /**
+     * The harder half of the same case: the borrower has no other keeper at all, so there is no
+     * eligible alternative AND no ineligible one. {@code improvisedKeeper} must put an outfielder in
+     * goal rather than reach for the barred keeper — and must not throw {@code NO_GK_FOUND}, which
+     * would brick the save exactly as it did before that method existed.
+     */
+    @Test
+    void aBarredLoanedKeeperIsImprovisedAroundWhenTheBorrowerHasNoKeeperOfHisOwn() {
+        Scenario s = lendManagedPlayer("loanfx_gkonly", false, p -> p.getPosition() == Position.GK);
+        List<Player> ownKeepers = borrowerOwnPlayers(s).stream()
+                .filter(p -> p.getPosition() == Position.GK)
+                .collect(Collectors.toList());
+        assertThat(ownKeepers).isNotEmpty();
+        // Contracts lapsed at rollover: they are free agents, so the borrowed keeper is the only
+        // goalkeeper left on the club's books — and he may not face the club that owns him.
+        ownKeepers.forEach(p -> p.setClubId(null));
+        playerRepository.saveAll(ownKeepers);
+
+        List<FixtureAppearance> appearances = simulateManagedVsBorrower(s);
+
+        assertThat(appearances)
+                .as("the fixture must still play to completion, not fail with NO_GK_FOUND")
+                .isNotEmpty()
+                .extracting(FixtureAppearance::getClubId)
+                .contains(s.managedClubId(), s.borrowerClubId());
+        List<UUID> borrowerXi = xiOf(appearances, s.borrowerClubId());
+        assertThat(borrowerXi).isNotEmpty();
+        assertThat(borrowerXi)
+                .as("improvising in goal must not mean reaching for the one keeper the loan bars")
+                .doesNotContain(s.lentPlayer().getId());
+        assertThat(positionsOf(borrowerXi))
+                .as("the borrower improvises an outfielder in goal instead")
+                .doesNotContain(Position.GK);
+    }
+
+    /**
+     * The outfield top-up. The borrower is cut to five eligible outfielders and has no ineligible
+     * ones to top up from, so the only candidate left for the remaining five slots is the barred
+     * loanee. The bar wins: the borrower fields a SHORT XI (keeper + five) and the match is still
+     * played. Fielding eleven is a convenience; the fixture-release rule is a rule of the
+     * competition.
+     */
+    @Test
+    void aBarredLoanedOutfielderLeavesTheBorrowerShortRatherThanFacingHisOwner() {
+        Scenario s = lendManagedPlayer("loanfx_short", false);
+        List<Player> outfielders = borrowerOwnPlayers(s).stream()
+                .filter(p -> p.getPosition() != Position.GK)
+                .sorted(Comparator.comparing(Player::getId))
+                .collect(Collectors.toList());
+        List<Player> kept = outfielders.stream().filter(Player::isEligible).limit(5).toList();
+        assertThat(kept).as("the borrower needs at least five eligible outfielders to keep").hasSize(5);
+        List<Player> released = outfielders.stream()
+                .filter(p -> kept.stream().noneMatch(k -> k.getId().equals(p.getId())))
+                .collect(Collectors.toList());
+        released.forEach(p -> p.setClubId(null));
+        playerRepository.saveAll(released);
+
+        List<FixtureAppearance> appearances = simulateManagedVsBorrower(s);
+
+        assertThat(appearances)
+                .as("the fixture must still play to completion with a short XI")
+                .isNotEmpty()
+                .extracting(FixtureAppearance::getClubId)
+                .contains(s.managedClubId(), s.borrowerClubId());
+        List<UUID> borrowerXi = xiOf(appearances, s.borrowerClubId());
+        assertThat(borrowerXi)
+                .as("the ineligible top-up must not reach past the loan bar")
+                .doesNotContain(s.lentPlayer().getId());
+        assertThat(borrowerXi)
+                .as("one keeper plus the five eligible outfielders — short, and that is correct")
+                .hasSize(6);
+        assertThat(xiOf(appearances, s.managedClubId()))
+                .as("the owner is unaffected and fields a full eleven")
+                .hasSize(11);
+    }
+
+    /** Everyone at the borrowing club except the player lent to them. */
+    private List<Player> borrowerOwnPlayers(Scenario s) {
+        return playerRepository.findByClubIdAndYouthProspectFalse(s.borrowerClubId()).stream()
+                .filter(p -> !p.getId().equals(s.lentPlayer().getId()))
+                .collect(Collectors.toList());
+    }
+
+    /** The XI one club actually fielded, read back from the attributed appearances. */
+    private List<UUID> xiOf(List<FixtureAppearance> appearances, UUID clubId) {
+        return appearances.stream()
+                .filter(a -> a.getClubId().equals(clubId))
+                .map(FixtureAppearance::getPlayerId)
+                .toList();
+    }
+
+    private List<Position> positionsOf(List<UUID> playerIds) {
+        return playerIds.stream()
+                .map(id -> playerRepository.findById(id).orElseThrow().getPosition())
+                .toList();
     }
 }

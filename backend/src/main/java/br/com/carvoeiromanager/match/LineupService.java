@@ -396,11 +396,11 @@ public class LineupService {
      * {@code onDate} is supplied, or by raw overall when {@code onDate} is null.
      * <p>
      * Eligible players (not suspended, not injured) are preferred. If there are fewer than 11
-     * eligible players, ineligible players are used as fallback (ordered by rating) to ensure
-     * the match engine always has a full XI. A missing GK is similarly filled from ineligible GKs,
-     * and a club with no keeper on its books at all improvises an outfielder in goal (see
-     * {@link #improvisedKeeper}) rather than failing — this method must never leave a fixture
-     * unplayable.
+     * eligible players, ineligible players are used as fallback (ordered by rating) so the match
+     * engine gets as close to a full XI as the squad allows. A missing GK is similarly filled from
+     * ineligible GKs, and a club with no keeper on its books at all improvises an outfielder in
+     * goal (see {@link #improvisedKeeper}) rather than failing — this method must never leave a
+     * fixture unplayable.
      *
      * <p>Outfield selection is <b>slot-aware</b>: the club's default formation
      * (see {@link FormationSlots}) supplies 10 ordered outfield slots and each is filled greedily,
@@ -421,15 +421,28 @@ public class LineupService {
 
     /**
      * Same as {@link #bestXi(UUID, LocalDate)}, but also excludes a player who is on loan and
-     * barred from facing {@code opponentClubId} (see {@link LoanEligibility}) — such a player is
-     * treated exactly like a suspended one, eligible for the ineligible-fallback top-up below when
-     * the club has fewer than 10 eligible outfielders.
+     * barred from facing {@code opponentClubId} (see {@link LoanEligibility}).
+     *
+     * <p>Unlike suspension and injury, the loan bar binds the fallbacks too: a barred player is
+     * <b>not</b> available for the ineligible top-up, nor for the ineligible-GK fallback. Injury
+     * and suspension are accidents of a season and degrade gracefully into a full XI; the
+     * fixture-release rule is a rule of the competition, and it outranks the convenience of always
+     * fielding eleven. A club whose only cover at a position is barred therefore fields a SHORT XI
+     * — the engine tolerates that ({@code TeamStrengthCalculator} averages over {@code xi.size()}
+     * and contributes no keeper defense when there is no keeper; {@code FixtureSimulator} handles a
+     * degenerate XI explicitly). The single exception is {@link #improvisedKeeper}'s last resort,
+     * where the only alternative is throwing — see there.
      */
     public List<Player> bestXi(UUID clubId, LocalDate onDate, UUID opponentClubId) {
         List<Player> allPlayers = playerRepository.findByClubIdAndYouthProspectFalse(clubId);
-        List<Player> eligible = allPlayers.stream()
-                .filter(Player::isEligible)
+        // Everyone the fixture-release rule allows on the pitch at all, eligible or not. Every
+        // fallback below draws from THIS list rather than allPlayers, so a barred player can never
+        // slip in through a fallback the way a suspended or injured one deliberately can.
+        List<Player> selectable = allPlayers.stream()
                 .filter(p -> loanEligibility.mayFace(p, opponentClubId))
+                .toList();
+        List<Player> eligible = selectable.stream()
+                .filter(Player::isEligible)
                 .toList();
 
         // Ascending comparator: .max(byRating) yields the highest-rated player.
@@ -442,25 +455,29 @@ public class LineupService {
                 Comparator.comparingDouble((Player p) -> rating(p, onDate))
                         .thenComparing(Player::getId);
 
-        // Try to find an eligible GK; fall back to any GK if none are eligible; improvise an
-        // outfielder in goal if the club has no keeper at all.
+        // Try to find an eligible GK; fall back to any GK the loan bar still allows if none are
+        // eligible; improvise an outfielder in goal if the club has no usable keeper at all.
+        // A barred keeper is NOT the fallback: an injured or suspended keeper of the club's own
+        // goes in ahead of him, and failing that an outfielder is improvised.
         Player bestGk = eligible.stream()
                 .filter(p -> p.getPosition() == Position.GK)
                 .max(byRating)
-                .or(() -> allPlayers.stream()
+                .or(() -> selectable.stream()
                         .filter(p -> p.getPosition() == Position.GK)
                         .max(byRating))
-                .orElseGet(() -> improvisedKeeper(clubId, eligible, allPlayers, byRating));
+                .orElseGet(() -> improvisedKeeper(clubId, eligible, selectable, allPlayers, byRating));
 
         // Candidate pool for the 10 outfield slots: prefer eligible, top up from ineligible if the
-        // club has fewer than 10 eligible outfielders (graceful fallback, same as before).
+        // club has fewer than 10 eligible outfielders (graceful fallback). The top-up draws from
+        // `selectable`, so it degrades through injured and suspended players but never through a
+        // barred one — if that leaves the pool short, the XI is short and the engine copes.
         List<Player> pool = eligible.stream()
                 .filter(p -> p.getPosition() != Position.GK && !p.getId().equals(bestGk.getId()))
                 .collect(Collectors.toCollection(ArrayList::new));
         if (pool.size() < 10) {
             Set<UUID> usedIds = pool.stream().map(Player::getId).collect(Collectors.toCollection(java.util.HashSet::new));
             usedIds.add(bestGk.getId());
-            List<Player> ineligibleOutfield = allPlayers.stream()
+            List<Player> ineligibleOutfield = selectable.stream()
                     .filter(p -> !usedIds.contains(p.getId()) && p.getPosition() != Position.GK)
                     .sorted(byRating.reversed())
                     .toList();
@@ -479,8 +496,10 @@ public class LineupService {
     /**
      * The outfielder who goes in goal when a club has no goalkeeper on its books at all — best
      * goalkeeping attribute, ties by rating then id (the same deterministic total order the rest of
-     * {@link #bestXi} uses, so repeated calls for one fixture agree). Eligible players first, any
-     * player as a last resort.
+     * {@link #bestXi} uses, so repeated calls for one fixture agree). Eligible players first, then
+     * anyone the loan bar allows, and only then — when literally every man at the club is barred
+     * from facing this opponent — a barred player, because the sole remaining alternative is
+     * {@code NO_GK_FOUND}.
      *
      * <p>Why this exists: rollover releases EVERY final-year player, managed and AI alike, and no AI
      * renewal pass covers the managed club — so a manager who forgets to renew can start a season
@@ -490,11 +509,18 @@ public class LineupService {
      * keeper defense. The AI/default path now matches that instead of being stricter than the
      * manager path.
      */
-    private Player improvisedKeeper(UUID clubId, List<Player> eligible, List<Player> allPlayers,
-                                    Comparator<Player> byRating) {
+    private Player improvisedKeeper(UUID clubId, List<Player> eligible, List<Player> selectable,
+                                    List<Player> allPlayers, Comparator<Player> byRating) {
         Comparator<Player> byKeeping =
                 Comparator.comparingInt(Player::getGoalkeeping).thenComparing(byRating);
         return eligible.stream().max(byKeeping)
+                .or(() -> selectable.stream().max(byKeeping))
+                // The one place the loan bar yields, and only because the alternative is the
+                // NO_GK_FOUND below — which bricks the save. Reached only when the club's entire
+                // non-youth squad is on loan from this very opponent with no release negotiated;
+                // by construction `selectable` is empty there, so nothing legal was passed over.
+                // Keeping this tier is what holds NO_GK_FOUND exactly as unreachable as it was:
+                // it still fires only for a club with no players at all.
                 .or(() -> allPlayers.stream().max(byKeeping))
                 .orElseThrow(() -> new ApiException(ErrorCode.NO_GK_FOUND,
                         "O clube " + clubId + " não tem nenhum jogador para atuar no gol"));
