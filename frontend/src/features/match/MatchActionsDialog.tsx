@@ -1,26 +1,22 @@
 import { useState } from 'react'
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button,
-  Typography, Box, Avatar, Stack, IconButton, Divider, Paper,
+  Typography, Box, Avatar, Stack, IconButton, Divider, Paper, Chip,
   Tabs, Tab, FormControl, NativeSelect,
 } from '@mui/material'
 import PersonIcon from '@mui/icons-material/Person'
 import CloseIcon from '@mui/icons-material/Close'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import AddIcon from '@mui/icons-material/Add'
-import type { LivePlayer, LiveTactics, LiveTacticsRequest, Mentality, GameStyle, AttackZone, Pressing, Marking } from '../../api/types'
-import { FitnessBar } from '../squad/FitnessBar'
+import type { LiveEvent, LivePlayer, LiveTactics, LiveTacticsRequest, Mentality, GameStyle, AttackZone, Pressing, Marking } from '../../api/types'
+import { FitnessBar, fitnessSeverity } from '../squad/FitnessBar'
 import { FORMATION_CODES } from '../pitch/pitchSlots'
 import { MENTALITY_LABEL, GAME_STYLE_LABEL, ATTACK_ZONE_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
+import { bookingOf, minutesPlayed, rankByFit, isSuggestedFor, type Booking } from './livePlayerContext'
 
 // ---------------------------------------------------------------------------
 // Shared constants
 // ---------------------------------------------------------------------------
-
-const POSITION_ORDER: Record<string, number> = { GK: 0, DEF: 1, MID: 2, ATT: 3 }
-function byPosition(a: LivePlayer, b: LivePlayer): number {
-  return (POSITION_ORDER[a.position] ?? 9) - (POSITION_ORDER[b.position] ?? 9) || b.overall - a.overall
-}
 
 const MENTALITIES = (Object.keys(MENTALITY_LABEL) as Mentality[])
   .map(v => ({ value: v, label: MENTALITY_LABEL[v] }))
@@ -53,12 +49,18 @@ function PlayerCard({
   onClick,
   disabled,
   compact,
+  booking,
+  minutes,
+  suggested,
 }: {
   player: LivePlayer
   selected?: boolean
   onClick?: () => void
   disabled?: boolean
   compact?: boolean
+  booking?: Booking
+  minutes?: number
+  suggested?: boolean
 }) {
   return (
     <Paper
@@ -84,10 +86,23 @@ function PlayerCard({
         <PersonIcon fontSize={compact ? 'small' : 'medium'} />
       </Avatar>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography variant={compact ? 'caption' : 'body2'} sx={{ fontWeight: 600, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {player.name}{player.hobbled ? ' 🚑' : ''}
-        </Typography>
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>{player.position}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Typography variant={compact ? 'caption' : 'body2'} sx={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {player.name}{player.hobbled ? ' 🚑' : ''}
+          </Typography>
+          {suggested && <Chip label="sugerido" size="small" variant="outlined" />}
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>{player.position}</Typography>
+          {minutes !== undefined && (
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{minutes}'</Typography>
+          )}
+          {booking === 'YELLOW' && <span title="Cartão amarelo">🟨</span>}
+          {booking === 'RED' && <span title="Cartão vermelho">🟥</span>}
+        </Box>
+        {fitnessSeverity(player.fitness) === 'error' && (
+          <Typography variant="caption" sx={{ color: 'error.main', display: 'block' }}>Exausto</Typography>
+        )}
         <FitnessBar fitness={player.fitness} />
       </Box>
     </Paper>
@@ -146,46 +161,117 @@ function SelectField({ label, value, onChange, options }: {
 interface SubTabProps {
   onPitch: LivePlayer[]
   bench: LivePlayer[]
+  events: LiveEvent[]
+  minute: number
   subsRemaining: number
   queue: SubPair[]
   pendingOut: LivePlayer | null
+  pendingIn: LivePlayer | null
   onSelectOut: (player: LivePlayer) => void
   onSelectIn: (player: LivePlayer) => void
   onRemoveQueued: (index: number) => void
-  onCancelPendingOut: () => void
+  onCancelPending: () => void
 }
 
 function SubTabContent({
   onPitch,
   bench,
+  events,
+  minute,
   subsRemaining,
   queue,
   pendingOut,
+  pendingIn,
   onSelectOut,
   onSelectIn,
   onRemoveQueued,
-  onCancelPendingOut,
+  onCancelPending,
 }: SubTabProps) {
   const remainingSlots = subsRemaining - queue.length
 
   const usedOutIds = new Set(queue.map(p => p.out.playerId))
   const usedInIds = new Set(queue.map(p => p.in.playerId))
 
-  const outgoingOptions = onPitch
-    .filter(p => !usedOutIds.has(p.playerId))
-    .sort(byPosition)
+  const outgoingOptions = onPitch.filter(p => !usedOutIds.has(p.playerId))
+  const incomingOptions = bench.filter(b => !b.used && b.eligible && !usedInIds.has(b.playerId))
 
-  const incomingOptions = bench
-    .filter(b => !b.used && b.eligible && !usedInIds.has(b.playerId))
-    .sort(byPosition)
+  // Natural-first ordering: the outgoing list is ranked against the pending IN (so once a
+  // bench player is chosen first, the "who comes off" list favours players in their position)
+  // and the incoming list against the pending OUT — the symmetric, existing relationship.
+  const outgoingRanked = rankByFit(outgoingOptions, pendingIn)
+  const incomingRanked = rankByFit(incomingOptions, pendingOut)
 
   const emptySlotCount = Math.min(
-    Math.max(0, remainingSlots - (pendingOut ? 1 : 0)),
+    Math.max(0, remainingSlots - (pendingOut || pendingIn ? 1 : 0)),
     2,
+  )
+
+  const remainingSlotsLabel = remainingSlots === 1
+    ? 'Você ainda pode fazer 1 substituição.'
+    : `Você ainda pode fazer ${remainingSlots} substituições.`
+
+  const outSection = (
+    <Box>
+      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.7rem', color: 'text.secondary' }}>
+        Selecionar quem sai do campo
+      </Typography>
+      <Stack spacing={0.75}>
+        {outgoingRanked.map(p => (
+          <PlayerCard
+            key={p.playerId}
+            player={p}
+            compact
+            selected={pendingOut?.playerId === p.playerId}
+            onClick={() => onSelectOut(p)}
+            disabled={remainingSlots <= 0}
+            booking={bookingOf(p.playerId, events)}
+            minutes={minutesPlayed(p.playerId, events, minute)}
+            suggested={isSuggestedFor(p, pendingIn)}
+          />
+        ))}
+        {outgoingRanked.length === 0 && (
+          <Typography variant="body2" sx={{ color: 'text.secondary', p: 1 }}>
+            Sem jogadores disponíveis.
+          </Typography>
+        )}
+      </Stack>
+    </Box>
+  )
+
+  const inSection = (
+    <Box>
+      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.7rem', color: 'text.secondary' }}>
+        Selecionar quem entra no jogo
+      </Typography>
+      <Stack spacing={0.75}>
+        {incomingRanked.map(p => (
+          <PlayerCard
+            key={p.playerId}
+            player={p}
+            compact
+            selected={pendingIn?.playerId === p.playerId}
+            onClick={() => onSelectIn(p)}
+            disabled={remainingSlots <= 0}
+            booking={bookingOf(p.playerId, events)}
+            minutes={minutesPlayed(p.playerId, events, minute)}
+            suggested={isSuggestedFor(p, pendingOut)}
+          />
+        ))}
+        {incomingRanked.length === 0 && (
+          <Typography variant="body2" sx={{ color: 'text.secondary', p: 1 }}>
+            Sem reservas disponíveis.
+          </Typography>
+        )}
+      </Stack>
+    </Box>
   )
 
   return (
     <>
+      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+        {remainingSlotsLabel}
+      </Typography>
+
       <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
         Substituições Pendentes
       </Typography>
@@ -220,13 +306,29 @@ function SubTabContent({
               <ArrowForwardIcon fontSize="small" sx={{ color: 'text.secondary' }} />
               <PlaceholderCard label="Entra" />
             </Box>
-            <IconButton size="small" onClick={onCancelPendingOut} aria-label="Cancelar seleção">
+            <IconButton size="small" onClick={onCancelPending} aria-label="Cancelar seleção">
               <CloseIcon fontSize="small" />
             </IconButton>
           </Box>
         )}
 
-        {!pendingOut && Array.from({ length: emptySlotCount }).map((_, i) => (
+        {pendingIn && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 16, textAlign: 'right' }}>
+              {queue.length + 1}.
+            </Typography>
+            <Box sx={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 0.5, alignItems: 'center' }}>
+              <PlaceholderCard label="Sai" />
+              <ArrowForwardIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              <PlayerCard player={pendingIn} compact selected />
+            </Box>
+            <IconButton size="small" onClick={onCancelPending} aria-label="Cancelar seleção">
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        )}
+
+        {!pendingOut && !pendingIn && Array.from({ length: emptySlotCount }).map((_, i) => (
           <Box
             // eslint-disable-next-line react/no-array-index-key
             key={`empty-${i}`}
@@ -260,49 +362,21 @@ function SubTabContent({
           gap: 2,
         }}
       >
-        <Box>
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.7rem', color: 'text.secondary' }}>
-            Selecionar quem sai do campo
-          </Typography>
-          <Stack spacing={0.75}>
-            {outgoingOptions.map(p => (
-              <PlayerCard
-                key={p.playerId}
-                player={p}
-                selected={pendingOut?.playerId === p.playerId}
-                onClick={() => onSelectOut(p)}
-                disabled={remainingSlots <= 0}
-              />
-            ))}
-            {outgoingOptions.length === 0 && (
-              <Typography variant="body2" sx={{ color: 'text.secondary', p: 1 }}>
-                Sem jogadores disponíveis.
-              </Typography>
-            )}
-          </Stack>
-        </Box>
-
-        <Box>
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.7rem', color: 'text.secondary' }}>
-            Selecionar quem entra no jogo
-          </Typography>
-          <Stack spacing={0.75}>
-            {incomingOptions.map(p => (
-              <PlayerCard
-                key={p.playerId}
-                player={p}
-                selected={false}
-                onClick={() => onSelectIn(p)}
-                disabled={!pendingOut}
-              />
-            ))}
-            {incomingOptions.length === 0 && (
-              <Typography variant="body2" sx={{ color: 'text.secondary', p: 1 }}>
-                Sem reservas disponíveis.
-              </Typography>
-            )}
-          </Stack>
-        </Box>
+        {/* DOM order (not CSS order) so the relevant next choice sits first and is testable:
+            a pending OUT means the incoming list is what the manager needs next, so it renders
+            first; with a pending IN (or nothing pending) the outgoing list renders first, which
+            is also today's default order. */}
+        {pendingOut ? (
+          <>
+            {inSection}
+            {outSection}
+          </>
+        ) : (
+          <>
+            {outSection}
+            {inSection}
+          </>
+        )}
       </Box>
     </>
   )
@@ -391,6 +465,8 @@ export interface MatchActionsDialogProps {
   // Substitution tab props
   onPitch: LivePlayer[]
   bench: LivePlayer[]
+  events: LiveEvent[]
+  minute: number
   subsRemaining: number
   // Unified apply callback and pending flag
   pending: boolean
@@ -405,6 +481,8 @@ export function MatchActionsDialog({
   initialTab,
   onPitch,
   bench,
+  events,
+  minute,
   subsRemaining,
   pending,
   onApply,
@@ -412,9 +490,12 @@ export function MatchActionsDialog({
 }: MatchActionsDialogProps) {
   const [activeTab, setActiveTab] = useState<0 | 1>(initialTab)
 
-  // Sub tab state
+  // Sub tab state. pendingOut and pendingIn are never both set: each selection handler below
+  // either completes a pair (clearing whichever was pending) or toggles the OTHER side's pending
+  // slot, never both at once.
   const [queue, setQueue] = useState<SubPair[]>([])
   const [pendingOut, setPendingOut] = useState<LivePlayer | null>(null)
+  const [pendingIn, setPendingIn] = useState<LivePlayer | null>(null)
 
   // Tactics tab state — initialised from the current tactics
   const [mentality, setMentality] = useState(currentTactics.mentality)
@@ -424,20 +505,39 @@ export function MatchActionsDialog({
   const [marking, setMarking] = useState(currentTactics.marking)
   const [formation, setFormation] = useState(currentTactics.formation)
 
+  // Clicking an on-pitch player: completes the pair if a bench player is already pending
+  // (out-first's mirror), otherwise toggles this player as the pending OUT — today's behaviour.
   function handleSelectOut(player: LivePlayer) {
     const remainingSlots = subsRemaining - queue.length
     if (remainingSlots <= 0) return
+    if (pendingIn) {
+      setQueue(prev => [...prev, { out: player, in: pendingIn }])
+      setPendingIn(null)
+      return
+    }
     setPendingOut(prev => prev?.playerId === player.playerId ? null : player)
   }
 
+  // Clicking a bench player: completes the pair if an on-pitch player is already pending
+  // (today's out-first behaviour), otherwise toggles this player as the pending IN.
   function handleSelectIn(player: LivePlayer) {
-    if (!pendingOut) return
-    setQueue(prev => [...prev, { out: pendingOut, in: player }])
-    setPendingOut(null)
+    const remainingSlots = subsRemaining - queue.length
+    if (remainingSlots <= 0) return
+    if (pendingOut) {
+      setQueue(prev => [...prev, { out: pendingOut, in: player }])
+      setPendingOut(null)
+      return
+    }
+    setPendingIn(prev => prev?.playerId === player.playerId ? null : player)
   }
 
   function handleRemoveQueued(index: number) {
     setQueue(prev => prev.filter((_, i) => i !== index))
+  }
+
+  function handleCancelPending() {
+    setPendingOut(null)
+    setPendingIn(null)
   }
 
   function handleContinue() {
@@ -485,13 +585,16 @@ export function MatchActionsDialog({
             <SubTabContent
               onPitch={onPitch}
               bench={bench}
+              events={events}
+              minute={minute}
               subsRemaining={subsRemaining}
               queue={queue}
               pendingOut={pendingOut}
+              pendingIn={pendingIn}
               onSelectOut={handleSelectOut}
               onSelectIn={handleSelectIn}
               onRemoveQueued={handleRemoveQueued}
-              onCancelPendingOut={() => setPendingOut(null)}
+              onCancelPending={handleCancelPending}
             />
           )}
         </Box>

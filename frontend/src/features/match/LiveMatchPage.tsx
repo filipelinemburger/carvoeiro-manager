@@ -436,6 +436,8 @@ export function LiveMatchPage() {
         initialTab={actionsTab}
         onPitch={state.onPitch}
         bench={state.bench}
+        events={state.events}
+        minute={state.minute}
         subsRemaining={state.subsRemaining}
         pending={applyPending}
         onApply={handleApply}
