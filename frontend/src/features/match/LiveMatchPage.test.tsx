@@ -721,7 +721,7 @@ describe('LiveMatchPage', () => {
     const inSection = screen.getByText(/selecionar quem entra no jogo/i).closest('div') as HTMLElement
     fireEvent.click(within(inSection).getByText('Reserva'))
     const dialog = screen.getByRole('dialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: /continuar/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Aplicar 1 alteração' }))
 
     await waitFor(() => expect(substituteLiveMatch).toHaveBeenCalledTimes(1))
     // The returned PAUSED_INJURY state has rendered — proves handleApply's setState() and the
@@ -771,8 +771,8 @@ describe('LiveMatchPage', () => {
     const mentalidadeSelect = screen.getByRole('combobox', { name: /mentalidade/i })
     fireEvent.change(mentalidadeSelect, { target: { value: 'ATTACKING' } })
 
-    // Click Continuar (scoped to dialog to avoid the page-level "Continuar" button)
-    fireEvent.click(within(dialog).getByRole('button', { name: /continuar/i }))
+    // Click Aplicar (scoped to dialog to avoid the page-level "Continuar" button)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Aplicar 1 alteração' }))
 
     await waitFor(() =>
       expect(changeTactics).toHaveBeenCalledWith(
@@ -825,9 +825,9 @@ describe('LiveMatchPage', () => {
     const pendingSection = screen.getByText(/Substituições Pendentes/i).closest('div') as HTMLElement
     expect(within(pendingSection).getByText(/Titular/)).toBeInTheDocument()
 
-    // Click Continuar (scoped to dialog)
+    // Click Aplicar (scoped to dialog)
     const dialog = screen.getByRole('dialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: /continuar/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Aplicar 1 alteração' }))
 
     await waitFor(() =>
       expect(substituteLiveMatch).toHaveBeenCalledWith(
@@ -870,8 +870,8 @@ describe('LiveMatchPage', () => {
     inSection = screen.getByText(/selecionar quem entra no jogo/i).closest('div') as HTMLElement
     fireEvent.click(within(inSection).getByText('Reserva Dois'))
 
-    // Click Continuar once — both pairs must go out in a single batched request
-    fireEvent.click(within(dialog).getByRole('button', { name: /continuar/i }))
+    // Click Aplicar once — both pairs must go out in a single batched request
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Aplicar 2 alterações' }))
 
     await waitFor(() =>
       expect(substituteLiveMatch).toHaveBeenCalledWith(
@@ -901,9 +901,9 @@ describe('LiveMatchPage', () => {
     const inSection = screen.getByText(/selecionar quem entra no jogo/i).closest('div') as HTMLElement
     fireEvent.click(within(inSection).getByText('Reserva'))
 
-    // Click Continuar (scoped to dialog)
+    // Click Aplicar (scoped to dialog)
     const dialog = screen.getByRole('dialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: /continuar/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Aplicar 1 alteração' }))
 
     // Still force-paused after the sub, so the screen advances once to resume play automatically.
     await waitFor(() => expect(advanceLiveMatch).toHaveBeenCalledWith('sg-1', 'test-token'))
@@ -970,8 +970,8 @@ describe('LiveMatchPage', () => {
     const mentalidadeSelect = await screen.findByRole('combobox', { name: /mentalidade/i })
     fireEvent.change(mentalidadeSelect, { target: { value: 'ATTACKING' } })
 
-    // Click Continuar — should apply both subs and tactics
-    fireEvent.click(within(dialog).getByRole('button', { name: /continuar/i }))
+    // Click Aplicar — should apply both subs and tactics
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Aplicar 2 alterações' }))
 
     await waitFor(() =>
       expect(substituteLiveMatch).toHaveBeenCalledWith(

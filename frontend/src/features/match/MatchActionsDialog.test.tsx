@@ -3,7 +3,9 @@ import { render, screen, fireEvent, within } from '@testing-library/react'
 import { MatchActionsDialog } from './MatchActionsDialog'
 import { FORMATION_CODES } from '../pitch/pitchSlots'
 import { MENTALITY_LABEL, GAME_STYLE_LABEL, ATTACK_ZONE_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
-import type { LiveEvent, LivePlayer } from '../../api/types'
+import type { LiveEvent, LivePlayer, LiveTactics } from '../../api/types'
+
+const DEFAULT_TACTICS: LiveTactics = { mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', attackZone: 'MISTO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-4-2' }
 
 function renderTacticsTab(onApply: (payload: unknown) => void = () => {}) {
   render(
@@ -18,9 +20,48 @@ function renderTacticsTab(onApply: (payload: unknown) => void = () => {}) {
       subsRemaining={3}
       pending={false}
       onApply={onApply}
-      currentTactics={{ mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', attackZone: 'MISTO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-4-2' }}
+      currentTactics={DEFAULT_TACTICS}
     />,
   )
+}
+
+// Renders the dialog with both tabs reachable, for tests exercising the shared footer
+// (summary line / apply-button label) which depends on state from both tabs at once.
+function renderDialog({
+  initialTab = 0,
+  onPitch = [],
+  bench = [],
+  events = [],
+  minute = 0,
+  subsRemaining = 3,
+  onApply = vi.fn(),
+  currentTactics = DEFAULT_TACTICS,
+}: Partial<{
+  initialTab: 0 | 1
+  onPitch: LivePlayer[]
+  bench: LivePlayer[]
+  events: LiveEvent[]
+  minute: number
+  subsRemaining: number
+  onApply: (payload: unknown) => void
+  currentTactics: LiveTactics
+}> = {}) {
+  render(
+    <MatchActionsDialog
+      open
+      onClose={() => {}}
+      initialTab={initialTab}
+      onPitch={onPitch}
+      bench={bench}
+      events={events}
+      minute={minute}
+      subsRemaining={subsRemaining}
+      pending={false}
+      onApply={onApply}
+      currentTactics={currentTactics}
+    />,
+  )
+  return { onApply }
 }
 
 describe('MatchActionsDialog tactics tab', () => {
@@ -50,7 +91,7 @@ describe('MatchActionsDialog tactics tab', () => {
     renderTacticsTab(onApply)
 
     fireEvent.change(screen.getByLabelText('Estilo de jogo'), { target: { value: 'RETRANCA' } })
-    fireEvent.click(screen.getByRole('button', { name: /continuar/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar 1 alteração' }))
 
     expect(onApply).toHaveBeenCalledTimes(1)
     expect(onApply).toHaveBeenCalledWith({
@@ -64,13 +105,33 @@ describe('MatchActionsDialog tactics tab', () => {
     renderTacticsTab(onApply)
 
     fireEvent.change(screen.getByLabelText('Onde forçar o jogo'), { target: { value: 'CENTRO' } })
-    fireEvent.click(screen.getByRole('button', { name: /continuar/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar 1 alteração' }))
 
     expect(onApply).toHaveBeenCalledTimes(1)
     expect(onApply).toHaveBeenCalledWith({
       subs: [],
       tactics: expect.objectContaining({ attackZone: 'CENTRO', mentality: 'BALANCED' }),
     })
+  })
+
+  it('changing a tactic field shows era: <friendly label of the previous value>', () => {
+    renderTacticsTab()
+
+    fireEvent.change(screen.getByLabelText('Estilo de jogo'), { target: { value: 'RETRANCA' } })
+
+    expect(screen.getByText(`era: ${GAME_STYLE_LABEL.EQUILIBRADO}`)).toBeInTheDocument()
+  })
+
+  it("clicking that field's undo restores the original value and hides the indicator", () => {
+    renderTacticsTab()
+
+    fireEvent.change(screen.getByLabelText('Estilo de jogo'), { target: { value: 'RETRANCA' } })
+    expect(screen.getByText(`era: ${GAME_STYLE_LABEL.EQUILIBRADO}`)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Desfazer alteração em Estilo de jogo' }))
+
+    expect(screen.queryByText(`era: ${GAME_STYLE_LABEL.EQUILIBRADO}`)).not.toBeInTheDocument()
+    expect((screen.getByLabelText('Estilo de jogo') as HTMLSelectElement).value).toBe('EQUILIBRADO')
   })
 })
 
@@ -148,7 +209,7 @@ describe('MatchActionsDialog substitution tab', () => {
 
     fireEvent.click(within(inSection()).getByText('Entrando'))
     fireEvent.click(within(outSection()).getByText('Saindo'))
-    fireEvent.click(screen.getByRole('button', { name: /continuar/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar 1 alteração' }))
 
     expect(onApply).toHaveBeenCalledWith({
       subs: [{ out: outP, in: inP }],
@@ -236,5 +297,49 @@ describe('MatchActionsDialog substitution tab', () => {
 
     fireEvent.click(within(outSection()).getByText('Saindo'))
     expect(screen.queryByLabelText('Cancelar seleção')).not.toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Shared footer — summary line and apply-button label, driven by state from
+// both tabs at once (subs queued on one tab, tactics changed on the other).
+// ---------------------------------------------------------------------------
+
+describe('MatchActionsDialog footer', () => {
+  it('with no changes, the apply button reads Aplicar and is disabled', () => {
+    renderDialog()
+
+    expect(screen.getByRole('button', { name: 'Aplicar' })).toBeDisabled()
+  })
+
+  it('one queued substitution makes it read Aplicar 1 alteração', () => {
+    const outP = player({ playerId: 'out1', name: 'Saindo' })
+    const inP = player({ playerId: 'in1', name: 'Entrando' })
+    renderDialog({ onPitch: [outP], bench: [inP] })
+
+    fireEvent.click(within(outSection()).getByText('Saindo'))
+    fireEvent.click(within(inSection()).getByText('Entrando'))
+
+    expect(screen.getByRole('button', { name: 'Aplicar 1 alteração' })).toBeInTheDocument()
+  })
+
+  it('one queued substitution plus one changed tactic field makes it read Aplicar 2 alterações', () => {
+    const outP = player({ playerId: 'out1', name: 'Saindo' })
+    const inP = player({ playerId: 'in1', name: 'Entrando' })
+    renderDialog({ onPitch: [outP], bench: [inP] })
+
+    fireEvent.click(within(outSection()).getByText('Saindo'))
+    fireEvent.click(within(inSection()).getByText('Entrando'))
+
+    fireEvent.click(screen.getByRole('tab', { name: /instruções táticas/i }))
+    fireEvent.change(screen.getByLabelText('Estilo de jogo'), { target: { value: 'RETRANCA' } })
+
+    expect(screen.getByRole('button', { name: 'Aplicar 2 alterações' })).toBeInTheDocument()
+  })
+
+  it('the summary line reads Nenhuma alteração pendente. when nothing changed', () => {
+    renderDialog()
+
+    expect(screen.getByText('Nenhuma alteração pendente.')).toBeInTheDocument()
   })
 })

@@ -8,6 +8,7 @@ import PersonIcon from '@mui/icons-material/Person'
 import CloseIcon from '@mui/icons-material/Close'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import AddIcon from '@mui/icons-material/Add'
+import UndoIcon from '@mui/icons-material/Undo'
 import type { LiveEvent, LivePlayer, LiveTactics, LiveTacticsRequest, Mentality, GameStyle, AttackZone, Pressing, Marking } from '../../api/types'
 import { FitnessBar, fitnessSeverity } from '../squad/FitnessBar'
 import { FORMATION_CODES } from '../pitch/pitchSlots'
@@ -132,12 +133,19 @@ function PlaceholderCard({ label }: { label: string }) {
   )
 }
 
-function SelectField({ label, value, onChange, options }: {
+function SelectField({ label, value, onChange, options, originalValue, onReset }: {
   label: string
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string }[]
+  originalValue: string
+  onReset: () => void
 }) {
+  const changed = value !== originalValue
+  // Friendly label for the "era: ..." caption — falls back to the raw value on the (unreachable
+  // today) chance originalValue isn't one of this field's own options.
+  const originalLabel = options.find(o => o.value === originalValue)?.label ?? originalValue
+
   return (
     <FormControl size="small" fullWidth>
       <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.25 }}>{label}</Typography>
@@ -150,6 +158,14 @@ function SelectField({ label, value, onChange, options }: {
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </NativeSelect>
+      {changed && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>era: {originalLabel}</Typography>
+          <IconButton size="small" aria-label={`Desfazer alteração em ${label}`} onClick={onReset}>
+            <UndoIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      )}
     </FormControl>
   )
 }
@@ -399,6 +415,7 @@ interface TacticsTabProps {
 }
 
 function TacticsTabContent({
+  currentTactics,
   mentality,
   gameStyle,
   attackZone,
@@ -419,36 +436,48 @@ function TacticsTabContent({
         value={mentality}
         onChange={onMentalityChange}
         options={MENTALITIES}
+        originalValue={currentTactics.mentality}
+        onReset={() => onMentalityChange(currentTactics.mentality)}
       />
       <SelectField
         label="Estilo de jogo"
         value={gameStyle}
         onChange={onGameStyleChange}
         options={GAME_STYLES}
+        originalValue={currentTactics.gameStyle}
+        onReset={() => onGameStyleChange(currentTactics.gameStyle)}
       />
       <SelectField
         label="Onde forçar o jogo"
         value={attackZone}
         onChange={onAttackZoneChange}
         options={ATTACK_ZONES}
+        originalValue={currentTactics.attackZone}
+        onReset={() => onAttackZoneChange(currentTactics.attackZone)}
       />
       <SelectField
         label="Pressão"
         value={pressing}
         onChange={onPressingChange}
         options={PRESSINGS}
+        originalValue={currentTactics.pressing}
+        onReset={() => onPressingChange(currentTactics.pressing)}
       />
       <SelectField
         label="Marcação"
         value={marking}
         onChange={onMarkingChange}
         options={MARKINGS}
+        originalValue={currentTactics.marking}
+        onReset={() => onMarkingChange(currentTactics.marking)}
       />
       <SelectField
         label="Formação"
         value={formation}
         onChange={onFormationChange}
         options={FORMATIONS.map(f => ({ value: f, label: f }))}
+        originalValue={currentTactics.formation}
+        onReset={() => onFormationChange(currentTactics.formation)}
       />
     </Stack>
   )
@@ -540,20 +569,43 @@ export function MatchActionsDialog({
     setPendingIn(null)
   }
 
-  function handleContinue() {
-    const tacticsChanged =
-      mentality !== currentTactics.mentality ||
-      gameStyle !== currentTactics.gameStyle ||
-      attackZone !== currentTactics.attackZone ||
-      pressing !== currentTactics.pressing ||
-      marking !== currentTactics.marking ||
-      formation !== currentTactics.formation
+  // How many of the six tactic fields differ from currentTactics — drives both the payload's
+  // tactics/null branch below and the footer's summary line + apply-button count.
+  const tacticsChangedCount = [
+    mentality !== currentTactics.mentality,
+    gameStyle !== currentTactics.gameStyle,
+    attackZone !== currentTactics.attackZone,
+    pressing !== currentTactics.pressing,
+    marking !== currentTactics.marking,
+    formation !== currentTactics.formation,
+  ].filter(Boolean).length
 
+  const changeCount = queue.length + tacticsChangedCount
+
+  function handleContinue() {
     onApply({
       subs: queue,
-      tactics: tacticsChanged ? { mentality, gameStyle, attackZone, pressing, marking, formation } : null,
+      tactics: tacticsChangedCount > 0 ? { mentality, gameStyle, attackZone, pressing, marking, formation } : null,
     })
   }
+
+  const applyLabel = pending
+    ? 'Aplicando…'
+    : changeCount === 0
+      ? 'Aplicar'
+      : changeCount === 1
+        ? 'Aplicar 1 alteração'
+        : `Aplicar ${changeCount} alterações`
+
+  const subsSummary = queue.length === 0
+    ? null
+    : queue.length === 1 ? '1 substituição' : `${queue.length} substituições`
+  const tacticsSummary = tacticsChangedCount === 0
+    ? null
+    : tacticsChangedCount === 1 ? '1 ajuste tático' : `${tacticsChangedCount} ajustes táticos`
+  const summaryText = changeCount === 0
+    ? 'Nenhuma alteração pendente.'
+    : [subsSummary, tacticsSummary].filter(Boolean).join(' · ')
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
@@ -626,21 +678,22 @@ export function MatchActionsDialog({
       </DialogContent>
 
       <DialogActions sx={{ justifyContent: 'space-between', px: 3, py: 2 }}>
-        {activeTab === 0 ? (
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            Limite total de 5 substituições por partida.
-          </Typography>
-        ) : (
-          <Box />
-        )}
+        <Typography variant="caption" color="text.secondary">
+          {summaryText}
+        </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button onClick={onClose}>Cancelar</Button>
+          {/* Labelled "Aplicar…" rather than "Continuar" — besides being honest about what the
+              click does, it also side-steps a real ambiguity: LiveMatchPage.tsx documents that the
+              full-time card button and the pause toggle can both read "Continuar" at once, which
+              would make `getByRole('button', { name: /continuar/i })` ambiguous if this dialog's
+              button competed for that name too. */}
           <Button
             variant="contained"
-            disabled={pending}
+            disabled={pending || changeCount === 0}
             onClick={handleContinue}
           >
-            {pending ? 'Aplicando…' : 'Continuar'}
+            {applyLabel}
           </Button>
         </Box>
       </DialogActions>
