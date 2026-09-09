@@ -173,7 +173,7 @@ public class MatchPreviewService {
                 .toList();
 
         MatchPreviewData.PreviewTopScorer topScorer = avaliacaoDeJogadores >= TIER_FULL
-                ? topScorerFor(save.getId(), event.getCompetitionId(), opponentId)
+                ? topScorerFor(save.getId(), event.getCompetitionId(), opponentId, managedClubId)
                 : null;
 
         MatchPreviewData.TacticalRead tacticalRead = conhecimentoTatico >= TIER_MID
@@ -249,14 +249,19 @@ public class MatchPreviewService {
                 .toList();
     }
 
-    private MatchPreviewData.PreviewTopScorer topScorerFor(UUID saveGameId, UUID competitionId, UUID clubId) {
+    // Same loan bar as bestPlayers above, through the aggregate's clubId instead of Player.clubId:
+    // a lent player who scored for the opponent across the competition must not headline as their
+    // top scorer for a fixture he is barred from playing.
+    private MatchPreviewData.PreviewTopScorer topScorerFor(UUID saveGameId, UUID competitionId, UUID clubId,
+                                                             UUID managedClubId) {
         Map<UUID, CompetitionPlayerAggregate> aggregates =
                 playerStatsService.aggregateCompetition(saveGameId, competitionId);
         return aggregates.values().stream()
                 .filter(a -> clubId.equals(a.clubId()) && a.goals() > 0)
-                .max(Comparator.comparingInt(CompetitionPlayerAggregate::goals))
-                .flatMap(a -> playerRepository.findById(a.playerId())
+                .flatMap(a -> playerRepository.findById(a.playerId()).stream()
+                        .filter(p -> loanEligibility.mayFace(p, managedClubId))
                         .map(p -> new MatchPreviewData.PreviewTopScorer(p.getName(), a.goals())))
+                .max(Comparator.comparingInt(MatchPreviewData.PreviewTopScorer::goals))
                 .orElse(null);
     }
 

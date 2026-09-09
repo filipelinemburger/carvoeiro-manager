@@ -6,6 +6,10 @@ import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.match.FixtureAppearance;
+import br.com.carvoeiromanager.match.FixtureAppearanceRepository;
+import br.com.carvoeiromanager.match.MatchEvent;
+import br.com.carvoeiromanager.match.MatchEventRepository;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.staff.Staff;
@@ -50,6 +54,8 @@ class MatchPreviewServiceIT {
     @Autowired SeasonEventRepository seasonEventRepository;
     @Autowired FixtureRepository fixtureRepository;
     @Autowired PlayerRepository playerRepository;
+    @Autowired FixtureAppearanceRepository fixtureAppearanceRepository;
+    @Autowired MatchEventRepository matchEventRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -101,6 +107,25 @@ class MatchPreviewServiceIT {
         lentPlayer.setOverall(99);
         lentPlayer.loanTo(opponentId, 50, mayFaceOwner);
         return playerRepository.save(lentPlayer);
+    }
+
+    /**
+     * Records one goal for {@code scorer}, attributed to {@code clubId}, in some fixture of the
+     * managed club's next competition — the same shape {@code PlayerStatsService.aggregateCompetition}
+     * reads to build {@code topScorerFor}'s candidates. {@code clubId} is independent of
+     * {@code Player.getClubId()}: it is what the aggregate uses to decide which club's headline
+     * scorer this player counts as, exactly like {@code opponentPlayers}'s own
+     * {@code findByClubIdAndYouthProspectFalse(opponentId)} does for the best-players panel.
+     */
+    private void giveGoalInCompetition(Career c, UUID clubId, Player scorer) {
+        SeasonEvent nextMatch = seasonEventRepository.findNextManagedMatchEvent(c.id(), c.clubId());
+        Fixture fixture = fixtureRepository
+                .findBySaveGameIdAndCompetitionId(c.id(), nextMatch.getCompetitionId())
+                .stream().findFirst().orElseThrow();
+        fixtureAppearanceRepository.save(
+                FixtureAppearance.create(fixture.getId(), scorer.getId(), clubId, 90, 0));
+        matchEventRepository.save(
+                MatchEvent.create(fixture.getId(), 30, "GOAL", scorer.getId(), clubId));
     }
 
     private AdvanceResponse deserialize(NewsItem item) {
@@ -267,5 +292,48 @@ class MatchPreviewServiceIT {
                 .as("the negotiated release lets him appear as the opponent's top danger man")
                 .extracting(MatchPreviewData.PreviewPlayer::name)
                 .contains(lentPlayer.getName());
+    }
+
+    // --- The opponent's "top scorer" line must respect the loan bar too (same bug, second field) ---
+
+    @Test
+    void aBarredLoanedTopScorerDoesNotHeadlineTheOpponentsPreview() {
+        // Same lend-with-no-release setup as the bestPlayers pair, but this time the lent player
+        // has already scored for the opponent in this competition (the normal case — a loan spans
+        // many fixtures before the return leg). He is still barred from facing his owner, so he
+        // must not be handed over as the opponent's headline scorer. No other candidate has scored
+        // in this fresh career, so with him excluded topScorer has nobody left to report.
+        Career c = createCareer();
+        UUID opponentId = opponentClubIdFor(c);
+        Player lentPlayer = lendManagedPlayerToNextOpponent(c, opponentId, false);
+        giveGoalInCompetition(c, opponentId, lentPlayer);
+        hireAssistant(c, 18, 18); // full depth: topScorer populated
+
+        matchPreviewService.maybePersistPreview(c.id());
+
+        MatchPreviewData preview = latestPreview(c.id());
+        assertThat(preview.topScorer())
+                .as("a lent player barred from this fixture must not headline as the opponent's top scorer")
+                .isNull();
+    }
+
+    @Test
+    void aLoanedTopScorerWithTheNegotiatedReleaseStillHeadlinesTheOpponentsPreview() {
+        // Same setup, but the loan negotiated the release to face the owner — he may play, so his
+        // goal tally must still surface as the opponent's top scorer.
+        Career c = createCareer();
+        UUID opponentId = opponentClubIdFor(c);
+        Player lentPlayer = lendManagedPlayerToNextOpponent(c, opponentId, true);
+        giveGoalInCompetition(c, opponentId, lentPlayer);
+        hireAssistant(c, 18, 18);
+
+        matchPreviewService.maybePersistPreview(c.id());
+
+        MatchPreviewData preview = latestPreview(c.id());
+        assertThat(preview.topScorer())
+                .as("the negotiated release lets his goal tally headline the opponent's top scorer")
+                .isNotNull();
+        assertThat(preview.topScorer().name()).isEqualTo(lentPlayer.getName());
+        assertThat(preview.topScorer().goals()).isEqualTo(1);
     }
 }
