@@ -68,6 +68,19 @@ describe('minutesPlayed', () => {
     const result = minutesPlayed('p1', events, 80)
     expect(result).toBeGreaterThanOrEqual(0)
   })
+
+  it('correctly handles exit event appearing before entry event in the array', () => {
+    // Regression test: exit at minute 80 should not be used if it appears before
+    // entry at minute 60 in the events array. Ensures the function does not assume
+    // chronological array order and does independent scans.
+    const events: LiveEvent[] = [
+      event({ minute: 80, type: 'SUBSTITUTION', home: true, playerId: 'p1', playerInId: 'other1' }),
+      event({ minute: 60, type: 'SUBSTITUTION', home: true, playerInId: 'p1', playerId: 'other2' }),
+    ]
+    const result = minutesPlayed('p1', events, 90)
+    // Entry = 60, Exit = 80, Result = 20
+    expect(result).toBe(20)
+  })
 })
 
 describe('bookingOf', () => {

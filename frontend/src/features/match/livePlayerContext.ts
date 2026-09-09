@@ -19,19 +19,24 @@ export const POSITION_ORDER = ['GK', 'DEF', 'MID', 'ATT'] as const
  * (the player is still on).
  *
  * Result is Math.max(0, exit - entry).
+ *
+ * Note: Entry and exit are resolved as two independent "first match" searches over the
+ * entire event array. The implementation does not assume events are in chronological order.
  */
 export function minutesPlayed(playerId: string, events: LiveEvent[], currentMinute: number): number {
+  // First scan: find entry minute (first SUBSTITUTION where playerInId === playerId, or 0)
   let entryMinute = 0
-  let exitMinute = currentMinute
-
   for (const event of events) {
-    // Find the entry minute (first time player comes in as substitute)
-    if (entryMinute === 0 && event.type === 'SUBSTITUTION' && event.playerInId === playerId) {
+    if (event.type === 'SUBSTITUTION' && event.playerInId === playerId) {
       entryMinute = event.minute
+      break
     }
+  }
 
-    // Find the exit minute (first time player goes off at or after entry)
-    if (event.minute >= entryMinute && event.type === 'SUBSTITUTION' && event.playerId === playerId) {
+  // Second scan: find exit minute (first SUBSTITUTION at or after entry where playerId === playerId)
+  let exitMinute = currentMinute
+  for (const event of events) {
+    if (event.type === 'SUBSTITUTION' && event.playerId === playerId && event.minute >= entryMinute) {
       exitMinute = event.minute
       break
     }
