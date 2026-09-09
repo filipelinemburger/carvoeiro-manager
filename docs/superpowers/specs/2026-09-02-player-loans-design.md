@@ -1,7 +1,10 @@
 # Empréstimo de Jogadores — Player Loans — Design Spec
 
 **Date:** 2026-09-02
-**Status:** Approved (design); ready for implementation plan.
+**Status:** Built and shipped. Revised 2026-09-08 against the built feature — an opus
+whole-branch review after the build found three Important defects and six Minor ones, and the
+fix wave that followed added two more of its own. Statements the build proved wrong are corrected
+in place and marked **(found in build)**; §12 records what the design never covered at all.
 **Builds on:** the transfer negotiation (`TransferOffer`, `TransferNegotiator`, `SellerContext`),
 the pre-contract slice as the precedent for a two-club agreement about a player, and
 `SquadDeparture` — created by the contract-termination slice
@@ -168,6 +171,23 @@ A countered offer means the deal is live. A rejected one means it is not.
 - `club_id` = borrower, `owner_club_id` = owner, `loan_wage_share` and `loan_may_face_owner` set.
 - The departing side runs the full `SquadDeparture` contract: `requireNoLiveMatch`,
   `requireDepartureAllowed`, `cleanManagedLineup`, `rejectOpenOffersFor`.
+- His transfer listing is cleared. **(found in build)** The design forgot this. A listed player
+  who was then lent stayed on the market, displayed under the **borrowing** club's name, with a
+  buy button that always failed. He is not the owner's to sell while lent, and certainly not the
+  borrower's.
+
+**(found in build) "The departing side" has to mean every path that executes a loan, not the path
+that opens one.** The build ran `requireDepartureAllowed` in `offerLoanOut` only. Two doors skipped
+it: `acceptCounter`, which calls the same `execute`, and `offerLoanIn`, which never guarded the
+*owning AI club* at all. The reachable failure: offer to lend your backup keeper, let the AI
+counter, terminate your first-choice keeper — legal, since termination is window-independent and
+two keepers existed at that moment — then accept. The club is left with zero goalkeepers.
+`TransferService.respondToIncoming` had this right all along, re-running its sell guard on every
+accept branch rather than only at offer time; loans now mirror it.
+
+That defect survived for one reason worth recording: **`requireDepartureAllowed` in `offerLoanOut`
+had no test at all.** Deleting the line left the whole ~1400-test suite green. A guard nothing
+watches is a guard that spreads incompletely.
 
 That last one is not theoretical. Without it a pending bid outlives the loan, and the sell guard
 then passes **trivially** because the player is no longer in the owner's squad — the club could be
@@ -187,8 +207,22 @@ with one year left, and cannot borrow one either. It also means no loan can be i
 player becoming a free agent mid-loan — the case is designed out rather than handled.
 
 **Monthly**, `FinanceService.monthlyWageBills` stops being a plain group-by. For a loaned player it
-charges `loan_wage_share`% to `owner_club_id` and the remainder to `club_id`. This is the one place
-the split ownership reaches a hot path, and it runs for every club, every processed month.
+charges `loan_wage_share`% to `owner_club_id` and the remainder to `club_id`. The borrower's share
+is computed as `wage.subtract(ownerPart)` — never as its own rounded percentage — so the two halves
+sum to exactly the wage and money is neither created nor destroyed.
+
+~~This is the one place the split ownership reaches a hot path~~ — **(found in build) this was
+wrong, and it was one place too few.** `ClubFinancialHealthEvaluator` computes its own monthly wage
+bill and was never taught the split: it summed the **full** wage of everyone at `findByClubId`, so
+the borrower was judged on a wage it does not pay and the lender on a squad missing a wage it does.
+That classification feeds `AiListingEngine`'s FINANCIAL trigger, `AiTransferEngine`'s buyer filter,
+and `SellerContext.health`, which prices every bid — a club nudged across the DESPERATE line
+fire-sells its two best players. Both callers now route through one extracted `WageBillCalculator`,
+so a third cannot drift again. The honest bound: one wage against a 20–45 man bill is a few percent,
+so this moved clubs already at the boundary rather than inventing disasters.
+
+**The lesson the design should have carried:** "the one place X reaches a hot path" is a claim that
+has to be grepped, not asserted. It was two.
 
 **At rollover**, the return happens in the player pass, and **two orderings matter**:
 
@@ -198,6 +232,12 @@ the split ownership reaches a hot path, and it runs for every club, every proces
 - **Before the contract tick.** The contract is with the owner, so he must be home before it ticks.
 
 The return sets `club_id = owner_club_id` and clears all three loan columns.
+
+**(found in build) A loanee who returns and then retires is reported once, not twice.** The return
+is recorded before the aging pass runs, so the same player landed under both "voltaram de
+empréstimo" and "se aposentaram" in the season summary — a small thing that reads like the game
+losing track of him. The orderings above are load-bearing and were not touched; the two lists are
+reconciled at the end instead, with retirement winning as the more informative heading.
 
 ## 8. Squad limits and the return
 
@@ -211,6 +251,12 @@ principle as the wage and the squad list. Lending frees a place; borrowing fills
 a loan **in** is refused when the borrower is already at the cap, exactly as buying is; and lending
 **out** runs the existing `requireDepartureAllowed` floor, so a club cannot lend itself below a
 fieldable squad.
+
+**(found in build) "A club" means the AI too, and the build read it as "the managed club".** The
+floor was enforced only when the manager lent someone away. Borrowing *in* never checked the owning
+AI club, so an AI side could be lent below a fieldable squad. It was masked by luck rather than
+guarded: `SellerContextFactory.isNoCover` treats a sole keeper as a `KEY_PLAYER` refusal, which
+happens to cover the goalkeeper case and nothing else. The guard now binds both sides.
 
 **Returns can still overflow**, because the cap is checked when *adding* a player and the return
 adds several at once. After the returns, any club above 45 lists its lowest-`overall` senior
@@ -227,6 +273,42 @@ It needs a new opponent-aware check where a lineup is built and validated.
 It must apply to the **AI's automatic lineup selection** as well, not only the manager's. If only
 the manager's side enforces it, the AI will field an ineligible borrowed player against the club
 that owns him — visibly, in a match the manager is watching minute by minute.
+
+**(found in build) "Where a lineup is built" turned out to be five places, not one, and the build
+found three of them.** The bar was applied to the *eligible* filter and nowhere else:
+
+- **The bench had no filter at all.** `bestBench` selected on `isEligible` only, and an AI
+  substitution path consumed the bench stored at kickoff without re-checking. A player correctly
+  kept out of the starting XI could still be brought on against his owner mid-match — the exact
+  moment this rule exists to prevent. In the borrow-in direction the manager could hand-substitute
+  him in, because `substitute` validated against bench membership alone.
+- **All three of `bestXi`'s fallbacks read the unfiltered squad**: the goalkeeper `.or()`, the
+  outfield top-up when fewer than ten eligible outfielders remain, and `improvisedKeeper`'s own last
+  resort. The reachable case is the goalkeeper one: lend your backup keeper to an AI club with no
+  fixture release — the *default*, since the AI never concedes one when it is the borrower — then
+  wait for its own keeper to be injured or suspended, which is routine over a season. Your keeper
+  starts in goal against you.
+- **The match preview leaked the same thing through a different door.** The opponent scouting panel
+  and the top-scorer line both read the opponent's squad unfiltered, so lending a star to your next
+  opponent made the preview headline **your own player** as their danger man for a fixture he cannot
+  play. The strength comparison had it on the other side too: your own average still counted a
+  player you had borrowed *from that opponent*.
+
+**A consequence the design did not follow through: enforcing the bar means a short XI is a legal
+outcome, and a short XI has to cost something.** `TeamStrengthCalculator` averaged over the players
+actually present, with no squad-size term anywhere downstream — so dropping a below-average player
+*raised* a club's rating. Ten men out-rated eleven, and a red card could strengthen the team that
+received it. Strength now divides by the nominal full side, so the absent player's share is simply
+lost. A full XI is byte-identical under the new arithmetic, which is what keeps the seeded goldens
+and the calibration test from moving.
+
+This was pre-existing — red cards had it too — but the loan bar turned it from a rare accident into
+a routine, rule-driven event, so the feature owns it.
+
+**And the fallbacks must not become a brick.** `improvisedKeeper` ends in a hard `NO_GK_FOUND`
+throw, and its javadoc records that hard-failing there once bricked saves — season advance threw 422
+forever. The bar therefore wins wherever an alternative exists, via an intermediate tier, and the
+last resort stays unfiltered so the throw's reachability is exactly what it was.
 
 ## 10. Interface
 
@@ -265,3 +347,72 @@ toward the responder.
 
 **Frontend** — the two negotiation surfaces, the three distinct refusal messages, the counter
 accept flow, and the borrowed-player marking in the squad list.
+
+---
+
+## 12. What the design never covered *(added 2026-09-08, from the built feature)*
+
+Four things the build needed that this document does not mention anywhere above. They are recorded
+as design, not as errata, because they are decisions rather than corrections.
+
+### 12.1 The transfer window applies to loans
+
+The spec is silent on the window, and the build inherited that silence: the backend imposed no
+window on loans in either direction, while the client happened to disable "Pedir emprestado" when
+the window was shut and left "Emprestar" enabled. So loans out worked year-round, loans in did not,
+for no stated reason — and a direct API call bypassed both.
+
+**Ruling: the window binds loans, server-side, in both directions, and at accept time.** A loan is a
+squad movement like any transfer; the backend already enforces the window for transfers and
+contracts; and a rule that lives only in the client is not a rule. Contract *termination* stays
+window-independent — that was an explicit product decision and is untouched.
+
+A consequence that has to be accepted with it: **a countered offer can outlive the window and become
+unacceptable.** That refusal is correct and the interface surfaces it honestly rather than hiding
+the offer. The mid-season window reopens, so such an offer is unreachable for a stretch rather than
+destroyed.
+
+And a corollary the first attempt missed: enforcing a window means auditing **what else keys off a
+closing window**. The advance gate blocks on unresolved *transfer* offers so the manager does not
+lose them; loan offers now count in that same gate, because they die the same way.
+
+### 12.2 A countered offer has to survive the dialog closing
+
+§10 says a countered offer "shows the AI's terms and offers to accept them" — but the build put that
+entirely inside the dialog. Closing it, or refreshing the page, lost the offer id permanently. The
+only reason this was recoverable at all is that the negotiator is RNG-free, so re-offering the exact
+counter terms is certain to be accepted — if the manager memorised them.
+
+Loans now have a `GET` listing the save's open offers and a withdraw endpoint, with pending counters
+surfaced in a small panel on both loan surfaces. Deliberately **less** than the transfer inbox: the
+counter must be reachable, not re-homed.
+
+**The panel must state the direction.** The two dialogs distinguish it carefully — "the wage share
+**your club** keeps paying" versus "the wage share **the owning club** keeps paying" — and a single
+neutral "70% do salário" means opposite financial things in the two directions, one click from an
+irreversible squad move.
+
+### 12.3 A loan-barred starter warns, it does not block
+
+Once the engine plays a short XI and charges for it, blocking the advance on a loan-barred starter
+protects nothing — and it can **deadlock a save**. Squad near the floor, three players injured or
+suspended, one of the remaining eleven a borrowed player facing his owner: the lineup saves (the bar
+is deliberately not validated at save time), the advance is refused, no legal substitute exists, and
+injuries only tick down *on the advance being blocked*. Unrecoverable.
+
+`LOAN_BARRED` is therefore a warning, like low fitness. Suspensions and injuries still block, since
+those are fixable. This codebase has now been bricked twice by hard failures where graceful
+degradation was available; the pattern is worth stating as a rule.
+
+### 12.4 A borrowed player is not yours to dispose of
+
+Implicit in §5 but never written down, and the build got it wrong in five places at once: because
+`loanTo` sets `club_id` to the **borrower**, a borrowed player passes every pre-existing
+`clubId.equals(managedClubId)` filter identically to an owned one. He could be terminated, sold,
+transfer-listed, or re-contracted by the club that only had him on loan — and selling was the worst
+of them, leaving a third club holding him while the original owner kept paying his wage forever.
+The AI market traded borrowed players among AI clubs too; that was a live bug, not a theoretical one.
+
+The rule: **`owner_club_id IS NOT NULL` bars disposal by anyone.** It is enforced through one shared
+guard at every disposal site, with a backstop at the single point every transfer funnels through, so
+a future sixth path cannot reopen it.
