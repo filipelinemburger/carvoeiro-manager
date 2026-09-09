@@ -98,8 +98,8 @@ function PlayerCard({
           {minutes !== undefined && (
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>{minutes}'</Typography>
           )}
-          {booking === 'YELLOW' && <span title="Cartão amarelo">🟨</span>}
-          {booking === 'RED' && <span title="Cartão vermelho">🟥</span>}
+          {booking === 'YELLOW' && <span role="img" aria-label="Cartão amarelo" title="Cartão amarelo">🟨</span>}
+          {booking === 'RED' && <span role="img" aria-label="Cartão vermelho" title="Cartão vermelho">🟥</span>}
         </Box>
         {fitnessSeverity(player.fitness) === 'error' && (
           <Typography variant="caption" sx={{ color: 'error.main', display: 'block' }}>Exausto</Typography>
@@ -241,7 +241,7 @@ function SubTabContent({
             onClick={() => onSelectOut(p)}
             disabled={remainingSlots <= 0}
             booking={bookingOf(p.playerId, events)}
-            minutes={minutesPlayed(p.playerId, events, minute)}
+            minutes={minutesPlayed(p, events, minute)}
             suggested={isSuggestedFor(p, pendingIn)}
           />
         ))}
@@ -269,7 +269,7 @@ function SubTabContent({
             onClick={() => onSelectIn(p)}
             disabled={remainingSlots <= 0}
             booking={bookingOf(p.playerId, events)}
-            minutes={minutesPlayed(p.playerId, events, minute)}
+            minutes={minutesPlayed(p, events, minute)}
             suggested={isSuggestedFor(p, pendingOut)}
           />
         ))}
@@ -603,8 +603,16 @@ export function MatchActionsDialog({
   const tacticsSummary = tacticsChangedCount === 0
     ? null
     : tacticsChangedCount === 1 ? '1 ajuste tático' : `${tacticsChangedCount} ajustes táticos`
+  // A half-built swap (one side chosen, the other not yet) does not count toward changeCount —
+  // the apply button stays disabled — but the footer must not contradict the "Substituições
+  // Pendentes" section above it, which is already showing that half-built pair in its own slot.
+  // Replace the "nothing pending" line with a hint toward finishing the trade instead.
   const summaryText = changeCount === 0
-    ? 'Nenhuma alteração pendente.'
+    ? pendingOut
+      ? 'Escolha quem entra para concluir a troca.'
+      : pendingIn
+        ? 'Escolha quem sai para concluir a troca.'
+        : 'Nenhuma alteração pendente.'
     : [subsSummary, tacticsSummary].filter(Boolean).join(' · ')
 
   return (

@@ -22,7 +22,7 @@ function player(overrides: Partial<LivePlayer> & Pick<LivePlayer, 'playerId'>): 
 describe('minutesPlayed', () => {
   it('a starter still on at minute 63 has played 63 minutes', () => {
     const events: LiveEvent[] = []
-    const result = minutesPlayed('p1', events, 63)
+    const result = minutesPlayed(player({ playerId: 'p1', onPitch: true }), events, 63)
     expect(result).toBe(63)
   })
 
@@ -30,7 +30,7 @@ describe('minutesPlayed', () => {
     const events: LiveEvent[] = [
       event({ minute: 70, type: 'SUBSTITUTION', home: true, playerInId: 'p1', playerId: 'other1' }),
     ]
-    const result = minutesPlayed('p1', events, 78)
+    const result = minutesPlayed(player({ playerId: 'p1', onPitch: true }), events, 78)
     expect(result).toBe(8)
   })
 
@@ -38,7 +38,7 @@ describe('minutesPlayed', () => {
     const events: LiveEvent[] = [
       event({ minute: 55, type: 'SUBSTITUTION', home: true, playerId: 'p1', playerInId: 'other1' }),
     ]
-    const result = minutesPlayed('p1', events, 80)
+    const result = minutesPlayed(player({ playerId: 'p1', onPitch: true }), events, 80)
     expect(result).toBe(55)
   })
 
@@ -47,7 +47,7 @@ describe('minutesPlayed', () => {
       event({ minute: 60, type: 'SUBSTITUTION', home: true, playerInId: 'p1', playerId: 'other1' }),
       event({ minute: 75, type: 'SUBSTITUTION', home: true, playerId: 'p1', playerInId: 'other2' }),
     ]
-    const result = minutesPlayed('p1', events, 80)
+    const result = minutesPlayed(player({ playerId: 'p1', onPitch: true }), events, 80)
     expect(result).toBe(15)
   })
 
@@ -56,7 +56,7 @@ describe('minutesPlayed', () => {
       event({ minute: 45, type: 'SUBSTITUTION', home: true, playerId: 'other1', playerInId: 'other2' }),
       event({ minute: 70, type: 'SUBSTITUTION', home: true, playerInId: 'p1', playerId: 'other3' }),
     ]
-    const result = minutesPlayed('p1', events, 80)
+    const result = minutesPlayed(player({ playerId: 'p1', onPitch: true }), events, 80)
     expect(result).toBe(10)
   })
 
@@ -65,7 +65,7 @@ describe('minutesPlayed', () => {
       event({ minute: 75, type: 'SUBSTITUTION', home: true, playerInId: 'p1', playerId: 'other1' }),
       event({ minute: 70, type: 'SUBSTITUTION', home: true, playerId: 'p1', playerInId: 'other2' }),
     ]
-    const result = minutesPlayed('p1', events, 80)
+    const result = minutesPlayed(player({ playerId: 'p1', onPitch: true }), events, 80)
     expect(result).toBeGreaterThanOrEqual(0)
   })
 
@@ -77,9 +77,25 @@ describe('minutesPlayed', () => {
       event({ minute: 80, type: 'SUBSTITUTION', home: true, playerId: 'p1', playerInId: 'other1' }),
       event({ minute: 60, type: 'SUBSTITUTION', home: true, playerInId: 'p1', playerId: 'other2' }),
     ]
-    const result = minutesPlayed('p1', events, 90)
+    const result = minutesPlayed(player({ playerId: 'p1', onPitch: true }), events, 90)
     // Entry = 60, Exit = 80, Result = 20
     expect(result).toBe(20)
+  })
+
+  it('an unused substitute (never entered, not currently on the pitch) has played 0 minutes', () => {
+    // Regression test for the bench-card bug: with no entry event and onPitch false, the old
+    // implementation's entry-defaults-to-0 fallback made this return currentMinute (the whole
+    // match clock) instead of 0.
+    const result = minutesPlayed(player({ playerId: 'bench1', onPitch: false }), [], 57)
+    expect(result).toBe(0)
+  })
+
+  it('a red-carded player stops accumulating minutes at the dismissal, not the current clock', () => {
+    const events: LiveEvent[] = [
+      event({ minute: 40, type: 'RED_CARD', home: true, playerId: 'p1' }),
+    ]
+    const result = minutesPlayed(player({ playerId: 'p1', onPitch: true }), events, 80)
+    expect(result).toBe(40)
   })
 })
 
@@ -189,6 +205,21 @@ describe('rankByFit', () => {
     const sorted = rankByFit(candidates, null)
 
     expect(sorted.map(p => p.playerId)).toEqual(['c2', 'c4', 'c1', 'c3'])
+  })
+
+  it('an unrecognised position sorts after every known position band, not before GK', () => {
+    // position is typed as a plain string (only the domain, not the type, is limited to
+    // POSITION_ORDER), so an out-of-catalogue value must fall to the back, matching the
+    // byPosition helper this code replaced — not to the front, which indexOf's bare -1 would do.
+    const candidates = [
+      player({ playerId: 'unknown', position: 'LATERAL_ESQUERDO', overall: 99 }),
+      player({ playerId: 'att', position: 'ATT', overall: 50 }),
+      player({ playerId: 'gk', position: 'GK', overall: 40 }),
+    ]
+
+    const sorted = rankByFit(candidates, null)
+
+    expect(sorted.map(p => p.playerId)).toEqual(['gk', 'att', 'unknown'])
   })
 
   it('the input array is not mutated', () => {

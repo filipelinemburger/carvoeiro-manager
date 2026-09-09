@@ -298,6 +298,36 @@ describe('MatchActionsDialog substitution tab', () => {
     fireEvent.click(within(outSection()).getByText('Saindo'))
     expect(screen.queryByLabelText('Cancelar seleção')).not.toBeInTheDocument()
   })
+
+  it('clicking a pending IN selection again clears it (mirrors the pendingOut toggle-off)', () => {
+    const inP = player({ playerId: 'in1', name: 'Entrando', onPitch: false })
+    renderSubTab({ onPitch: [], bench: [inP] })
+
+    fireEvent.click(within(inSection()).getByText('Entrando'))
+    expect(screen.getByLabelText('Cancelar seleção')).toBeInTheDocument()
+
+    fireEvent.click(within(inSection()).getByText('Entrando'))
+    expect(screen.queryByLabelText('Cancelar seleção')).not.toBeInTheDocument()
+  })
+
+  it('an unused bench player does not show the match clock as its minutes played', () => {
+    const benchP = player({ playerId: 'bench1', name: 'ReservaNuncaEntrou', onPitch: false, used: false })
+    renderSubTab({ onPitch: [], bench: [benchP], minute: 70 })
+
+    expect(within(inSection()).queryByText("70'")).not.toBeInTheDocument()
+  })
+
+  it("a yellow-carded player's card marker exposes an accessible name via aria-label", () => {
+    const p = player({ playerId: 'p1', name: 'Amarelado' })
+    const events: LiveEvent[] = [
+      event({ minute: 10, type: 'YELLOW_CARD', home: true, playerId: 'p1', playerName: 'Amarelado' }),
+    ]
+    renderSubTab({ onPitch: [p], events, minute: 20 })
+
+    // getByTitle must keep working (existing tests rely on it) alongside the new aria-label.
+    expect(screen.getByTitle('Cartão amarelo')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Cartão amarelo' })).toBeInTheDocument()
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -341,5 +371,41 @@ describe('MatchActionsDialog footer', () => {
     renderDialog()
 
     expect(screen.getByText('Nenhuma alteração pendente.')).toBeInTheDocument()
+  })
+
+  it('one queued substitution plus one changed tactic field renders the composed summary text', () => {
+    const outP = player({ playerId: 'out1', name: 'Saindo' })
+    const inP = player({ playerId: 'in1', name: 'Entrando' })
+    renderDialog({ onPitch: [outP], bench: [inP] })
+
+    fireEvent.click(within(outSection()).getByText('Saindo'))
+    fireEvent.click(within(inSection()).getByText('Entrando'))
+
+    fireEvent.click(screen.getByRole('tab', { name: /instruções táticas/i }))
+    fireEvent.change(screen.getByLabelText('Estilo de jogo'), { target: { value: 'RETRANCA' } })
+
+    expect(screen.getByText('1 substituição · 1 ajuste tático')).toBeInTheDocument()
+  })
+
+  it('with a half-built swap (OUT chosen, no IN yet), the footer hints at finishing it instead of claiming nothing is pending', () => {
+    const outP = player({ playerId: 'out1', name: 'Saindo' })
+    renderDialog({ onPitch: [outP], bench: [] })
+
+    fireEvent.click(within(outSection()).getByText('Saindo'))
+
+    expect(screen.getByText('Escolha quem entra para concluir a troca.')).toBeInTheDocument()
+    expect(screen.queryByText('Nenhuma alteração pendente.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Aplicar' })).toBeDisabled()
+  })
+
+  it('with a half-built swap (IN chosen, no OUT yet), the footer hints at finishing it instead of claiming nothing is pending', () => {
+    const inP = player({ playerId: 'in1', name: 'Entrando', onPitch: false })
+    renderDialog({ onPitch: [], bench: [inP] })
+
+    fireEvent.click(within(inSection()).getByText('Entrando'))
+
+    expect(screen.getByText('Escolha quem sai para concluir a troca.')).toBeInTheDocument()
+    expect(screen.queryByText('Nenhuma alteração pendente.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Aplicar' })).toBeDisabled()
   })
 })

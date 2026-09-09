@@ -11,32 +11,56 @@ export const POSITION_ORDER = ['GK', 'DEF', 'MID', 'ATT'] as const
 /**
  * Computes the number of minutes a player has spent on the pitch based on the live event stream.
  *
- * Entry minute: the minute of the first SUBSTITUTION event where playerInId === playerId,
- * or 0 when there is none (the player started the match).
+ * Entry minute: the minute of the first SUBSTITUTION event where playerInId === playerId. When
+ * there is no such event, the player is credited an implicit entry at minute 0 ("started the
+ * match") only when `player.onPitch` is true. A player with neither an entry event nor
+ * `onPitch` true has never taken the field, and this function returns 0 immediately without
+ * running the exit scan below.
  *
- * Exit minute: the minute of the first SUBSTITUTION event at or after the entry minute
- * where playerId === playerId (the player went off), or currentMinute if there is none
- * (the player is still on).
+ * Exit minute: the minute of the first SUBSTITUTION or RED_CARD event at or after the entry
+ * minute where playerId === playerId (the player went off, subbed or sent off), or
+ * currentMinute if there is none (the player is still on).
  *
  * Result is Math.max(0, exit - entry).
  *
- * Note: Entry and exit are resolved as two independent "first match" searches over the
- * entire event array. The implementation does not assume events are in chronological order.
+ * Note: Entry and exit are resolved as independent "first match" searches over the entire event
+ * array. The implementation does not assume events are in chronological order.
+ *
+ * Divergence from the backend: `LiveMatchService.minutesThrough` takes the LAST matching exit
+ * event for a player (its exit map `put` overwrites), while this takes the FIRST at-or-after
+ * entry. The two agree today only because a player enters and leaves the pitch at most once.
  */
-export function minutesPlayed(playerId: string, events: LiveEvent[], currentMinute: number): number {
-  // First scan: find entry minute (first SUBSTITUTION where playerInId === playerId, or 0)
+export function minutesPlayed(player: LivePlayer, events: LiveEvent[], currentMinute: number): number {
+  const playerId = player.playerId
+
+  // First scan: find entry minute (first SUBSTITUTION where playerInId === playerId).
   let entryMinute = 0
+  let entered = false
   for (const event of events) {
     if (event.type === 'SUBSTITUTION' && event.playerInId === playerId) {
       entryMinute = event.minute
+      entered = true
       break
     }
   }
 
-  // Second scan: find exit minute (first SUBSTITUTION at or after entry where playerId === playerId)
+  if (!entered) {
+    // No recorded entry: an unused substitute has never played at all.
+    if (!player.onPitch) {
+      return 0
+    }
+    entryMinute = 0
+  }
+
+  // Second scan: find exit minute (first SUBSTITUTION or RED_CARD at or after entry where
+  // playerId === playerId) — a dismissal ends a player's minutes just like being subbed off.
   let exitMinute = currentMinute
   for (const event of events) {
-    if (event.type === 'SUBSTITUTION' && event.playerId === playerId && event.minute >= entryMinute) {
+    if (
+      (event.type === 'SUBSTITUTION' || event.type === 'RED_CARD')
+      && event.playerId === playerId
+      && event.minute >= entryMinute
+    ) {
       exitMinute = event.minute
       break
     }
@@ -91,10 +115,18 @@ export function rankByFit(candidates: LivePlayer[], reference: LivePlayer | null
   const sorted = [...candidates]
 
   if (reference === null) {
-    // Null reference: position band order, then overall descending, then playerId ascending
+    // Null reference: position band order, then overall descending, then playerId ascending.
+    // `position` is a plain string (only the domain, not the type, is limited to POSITION_ORDER's
+    // members), so an unrecognised value must not silently sort first: findIndex's -1 is mapped to
+    // POSITION_ORDER.length, placing it last, matching the byPosition helper this replaced.
+    const positionRank = (position: string): number => {
+      const index = POSITION_ORDER.findIndex(band => band === position)
+      return index === -1 ? POSITION_ORDER.length : index
+    }
+
     sorted.sort((a, b) => {
-      const positionA = POSITION_ORDER.indexOf(a.position as typeof POSITION_ORDER[number])
-      const positionB = POSITION_ORDER.indexOf(b.position as typeof POSITION_ORDER[number])
+      const positionA = positionRank(a.position)
+      const positionB = positionRank(b.position)
 
       if (positionA !== positionB) {
         return positionA - positionB
