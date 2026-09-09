@@ -184,7 +184,14 @@ public class MatchPreviewService {
         List<String> insights = null;
         if (conhecimentoTatico >= TIER_FULL) {
             int opponentAvg = averageOverall(opponentPlayers);
-            int managedAvg = averageOverall(playerRepository.findByClubIdAndYouthProspectFalse(managedClubId));
+            // Same loan bar as opponentPlayers above, orientation flipped: these are the managed
+            // club's OWN players, and the club they would face is the opponent — a player the
+            // manager borrowed from this very opponent must not inflate this average either, or
+            // overallDiff understates the real strength gap.
+            List<Player> managedPlayers = playerRepository.findByClubIdAndYouthProspectFalse(managedClubId).stream()
+                    .filter(p -> loanEligibility.mayFace(p, opponentId))
+                    .toList();
+            int managedAvg = averageOverall(managedPlayers);
             long seed = fixture.getId().getMostSignificantBits() ^ fixture.getId().getLeastSignificantBits();
             insights = MatchPreviewInsights.compose(seed, opponent.getDefaultMentality(),
                     opponent.getDefaultPressing(), opponent.getDefaultMarking(),

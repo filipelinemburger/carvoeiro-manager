@@ -28,6 +28,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -335,5 +336,53 @@ class MatchPreviewServiceIT {
                 .isNotNull();
         assertThat(preview.topScorer().name()).isEqualTo(lentPlayer.getName());
         assertThat(preview.topScorer().goals()).isEqualTo(1);
+    }
+
+    // --- The strength-comparison insight must respect the loan bar on BOTH sides, not just
+    // --- the opponent's (finding: opponentPlayers/opponentAvg were filtered by Task 10, but the
+    // --- managed club's own average one line below was not — orientation flips here, since these
+    // --- are the managed club's OWN players and the club they'd face is the opponent).
+
+    @Test
+    void aBorrowedPlayerFromTheOpponentDoesNotInflateTheManagedClubsOwnStrengthAverage() {
+        Career c = createCareer();
+        UUID opponentId = opponentClubIdFor(c);
+        hireAssistant(c, 18, 18); // full depth: overallDiff-driven insights populated
+
+        // Uniform overalls on both sides make the true gap exact and squad-size independent:
+        // opponent at 60, managed (before the borrow) at 57 — a genuine 3-point gap, which is
+        // the ">=3" threshold for the "eles são favoritos" (opponent favored) insight bucket.
+        setAllNonYouthOveralls(opponentId, 60);
+        setAllNonYouthOveralls(c.clubId(), 57);
+
+        // Borrow one player FROM the opponent — he now plays for the managed club (clubId) but
+        // is still OWNED by the opponent (ownerClubId), at overall 99. High enough that if he
+        // were still wrongly counted toward the managed club's own average, the computed gap
+        // would collapse well under 3 regardless of squad size (see finding write-up for the
+        // arithmetic: the shift from adding one 99-overall player to any realistic squad size
+        // is far more than the 1-point margin needed to flip insight buckets).
+        Player borrowed = playerRepository.findByClubIdAndYouthProspectFalse(opponentId).stream()
+                .findFirst().orElseThrow();
+        borrowed.setOverall(99);
+        borrowed.loanTo(c.clubId(), 50, false);
+        playerRepository.save(borrowed);
+
+        matchPreviewService.maybePersistPreview(c.id());
+
+        MatchPreviewData preview = latestPreview(c.id());
+        assertThat(preview.insights()).hasSize(3);
+        // The third insight line is the strength/venue read, driven by overallDiff. If the
+        // borrowed player were still counted toward the managed club's own average, this would
+        // read as a balanced or home/away game instead of "opponent favored" — the true 3-point
+        // gap must survive the loan.
+        assertThat(preview.insights().get(2)).isIn(
+                "No papel eles são favoritos — organização defensiva e eficiência nas poucas chances serão fundamentais.",
+                "Elenco superior ao nosso; um jogo disciplinado pode surpreendê-los.");
+    }
+
+    private void setAllNonYouthOveralls(UUID clubId, int overall) {
+        List<Player> players = playerRepository.findByClubIdAndYouthProspectFalse(clubId);
+        players.forEach(p -> p.setOverall(overall));
+        playerRepository.saveAll(players);
     }
 }

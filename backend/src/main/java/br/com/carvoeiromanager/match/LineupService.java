@@ -261,7 +261,7 @@ public class LineupService {
 
     /**
      * Returns the persisted starting XI for the given (saveGameId, clubId) if one exists,
-     * otherwise falls back to bestXi(clubId). Excludes a saved starter who is on loan
+     * otherwise falls back to {@link #bestXi}. Excludes a saved starter who is on loan
      * and barred from facing {@code opponentClubId} (see {@link LoanEligibility}) — such a player
      * behaves like a suspended one only in that his absence can leave the saved XI short and fall
      * through to {@link #bestXi}. Once there, the loan bar is stricter than suspension again (see

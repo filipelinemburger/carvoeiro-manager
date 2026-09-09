@@ -223,6 +223,19 @@ describe('ClubViewPage', () => {
     expect(screen.queryByText('Erro ao enviar proposta.')).not.toBeInTheDocument()
   })
 
+  it('disables "Fazer proposta" for a player the viewed club only has on loan', async () => {
+    // The viewed (rival) club doesn't own this player — he's borrowed, so a transfer offer
+    // can't go through (backend refuses with PLAYER_ALREADY_ON_LOAN). TransferMarketPage
+    // already gates this the same way via MarketPlayer.onLoan.
+    vi.mocked(getSquad).mockResolvedValue({
+      players: [player({ onLoanFromClubName: 'Emprestador FC' })],
+      primaryColor: '#aa0000', secondaryColor: '#ffffff',
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /fazer proposta/i })).toBeDisabled()
+  })
+
   it('hides "Fazer proposta" when viewing the managed club', async () => {
     vi.mocked(getSquad).mockResolvedValue({
       players: [player({ id: 'mp1', name: 'Meu Jogador' })], primaryColor: '#f7d417', secondaryColor: '#111111',

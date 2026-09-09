@@ -14,6 +14,8 @@ import br.com.carvoeiromanager.competition.CompetitionClubRepository;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.loan.LoanOffer;
+import br.com.carvoeiromanager.loan.LoanOfferRepository;
 import br.com.carvoeiromanager.match.LineupResponse;
 import br.com.carvoeiromanager.match.LineupService;
 import br.com.carvoeiromanager.match.LineupStarter;
@@ -60,6 +62,7 @@ class AdvancePreviewIT {
     @Autowired PlayerRepository playerRepository;
     @Autowired SeasonEventRepository seasonEventRepository;
     @Autowired TransferOfferRepository transferOfferRepository;
+    @Autowired LoanOfferRepository loanOfferRepository;
     @Autowired TransferWindow transferWindow;
     @Autowired BackgroundCompetitionService backgroundCompetitionService;
     @Autowired ClubRepository clubRepository;
@@ -335,6 +338,31 @@ class AdvancePreviewIT {
 
         // Then the flag matches the real predicate for the next event's date
         assertThat(open.windowClosingAfterAdvance()).isEqualTo(!transferWindow.isOpen(nextDate));
+    }
+
+    /**
+     * Task 3 made loan offers die at window close exactly like transfer offers, and Task 6 made a
+     * countered loan offer durable and visible — but {@code pendingTransfers} only ever counted
+     * {@code TransferOfferRepository} rows, so a manager with an unresolved loan counter got no
+     * warning before losing the ability to accept it. LoanOffer rows must count too.
+     */
+    @Test
+    void windowClosingPendingCountIncludesCounteredLoanOffers() {
+        // Given a career and a countered (still unresolved) loan offer on the managed club
+        Career c = createCareer();
+        LoanOffer offer = LoanOffer.create(c.id(), UUID.randomUUID(), UUID.randomUUID(), c.clubId(),
+                50, false, 1);
+        offer.markCountered(60, true);
+        loanOfferRepository.save(offer);
+
+        // When the current date is forced outside every transfer window (window closed now)
+        SaveGame save = saveGameRepository.findById(c.id()).orElseThrow();
+        save.setCurrentDate(LocalDate.of(save.getCurrentDate().getYear(), 12, 1));
+        saveGameRepository.save(save);
+        AdvancePreviewResponse closed = advancePreviewService.preview(c.id(), c.userId());
+
+        // Then the countered loan offer is counted alongside any transfer offers
+        assertThat(closed.pendingTransfers()).isGreaterThanOrEqualTo(1);
     }
 
     @Test

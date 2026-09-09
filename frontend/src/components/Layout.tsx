@@ -210,16 +210,27 @@ export function Layout({ children }: LayoutProps) {
   // No saved line-up before a match the managed club plays: the user must pick a team first.
   const blockNoLineup =
     preview?.managedClubPlaysNext === true && lineupLoaded && !managedLineup
+  // LOAN_BARRED is deliberately excluded here: the match engine now plays a short XI and
+  // charges TeamStrengthCalculator for the missing starter, so there is nothing left to
+  // protect the manager from by blocking. Blocking it too can deadlock a save — a thin
+  // squad with injuries/suspensions plus a loan-barred starter has no legal eleven, and
+  // injuries/suspensions only tick down on the advance this would block. It is surfaced as
+  // a non-blocking warning instead (see loanBarredStarters below), the same treatment
+  // lowFitnessStarters already gets.
+  const blockingIneligibleStarters = (preview?.ineligibleStarters ?? [])
+    .filter(s => s.reason !== 'LOAN_BARRED')
+  const loanBarredStarters = (preview?.ineligibleStarters ?? [])
+    .filter(s => s.reason === 'LOAN_BARRED')
   const blockIneligible =
-    preview?.managedClubPlaysNext === true && (preview?.ineligibleStarters.length ?? 0) > 0
+    preview?.managedClubPlaysNext === true && blockingIneligibleStarters.length > 0
   const blockWindow =
     preview?.windowClosingAfterAdvance === true && (preview?.pendingTransfers ?? 0) > 0
   const advanceBlockReason = blockNoLineup
     ? 'Escale seu time antes do primeiro jogo.'
     : blockIneligible
-      // Covers all three IneligibleStarter reasons (SUSPENDED, INJURED, LOAN_BARRED) without
-      // switching on which one — this banner only ever needs to say "fix your lineup".
-      ? 'Há titular(es) indisponível(is) (suspenso, lesionado ou impedido por empréstimo) na escalação. Ajuste o time antes de avançar.'
+      // Covers the two remaining blocking IneligibleStarter reasons (SUSPENDED, INJURED)
+      // without switching on which one — this banner only ever needs to say "fix your lineup".
+      ? 'Há titular(es) indisponível(is) (suspenso ou lesionado) na escalação. Ajuste o time antes de avançar.'
       : blockWindow
         ? 'A janela de transferências vai fechar e há proposta(s) pendente(s). Resolva-as antes de avançar.'
         : null
@@ -490,6 +501,16 @@ export function Layout({ children }: LayoutProps) {
             >
               Jogadores com pouca condição:{' '}
               {(preview?.lowFitnessStarters ?? []).map(s => s.playerName).join(', ')}
+            </Alert>
+          )}
+          {hasSaveGame && preview?.managedClubPlaysNext === true && loanBarredStarters.length > 0 && (
+            <Alert
+              severity="warning"
+              icon={<WarningAmberIcon fontSize="inherit" />}
+              sx={{ mb: 2, borderRadius: 2 }}
+            >
+              Jogadores impedidos por empréstimo (o time jogará com um a menos):{' '}
+              {loanBarredStarters.map(s => s.playerName).join(', ')}
             </Alert>
           )}
           <Paper

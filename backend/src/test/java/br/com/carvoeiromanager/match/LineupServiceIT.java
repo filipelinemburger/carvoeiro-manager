@@ -632,7 +632,7 @@ class LineupServiceIT {
     @Test
     void bestBenchPicksTheBestRemainingPlayersWithAKeeperFirst() {
         // Given an AI club's XI (lineupService.startingXi for a club with no saved lineup),
-        // bestBench(clubId, xi): size <= 7; contains NO player from the XI; contains exactly
+        // bestBench(clubId, xi, opponentClubId): size <= 7; contains NO player from the XI; contains exactly
         // one GK when the squad has a spare eligible GK, and that GK is the best remaining one;
         // the non-GK slots are the highest-overall remaining eligible non-youth players.
         Career career = createCareer();
@@ -696,7 +696,7 @@ class LineupServiceIT {
         UUID expectedBenchGkId = secondGk.getId();
         List<UUID> expectedBenchNonGkIds = outfield.subList(10, 16).stream().map(Player::getId).toList();
 
-        // When: an AI club with no saved lineup -> startingXi falls back to bestXi(clubId).
+        // When: an AI club with no saved lineup -> startingXi falls back to bestXi(clubId, onDate, opponentClubId).
         List<Player> xi = lineupService.startingXi(saveGameId, clubId, null);
         List<Player> bench = lineupService.bestBench(clubId, xi, null);
 

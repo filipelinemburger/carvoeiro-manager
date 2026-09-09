@@ -276,9 +276,12 @@ describe('Layout shell', () => {
     expect(screen.getByRole('link', { name: /ajustar escalação/i })).toBeInTheDocument()
   })
 
-  it('disables Avançar and warns when a saved starter is barred from facing his loan owner', async () => {
-    // LOAN_BARRED is neither SUSPENDED nor INJURED — the block banner must still read as
-    // "your lineup has a problem" without literally saying "suspenso" or "lesionado" about him.
+  it('does not block Avançar for a loan-barred starter, only warns (short XI is a valid outcome)', async () => {
+    // LOAN_BARRED must NOT block: the match engine plays a short XI and charges
+    // TeamStrengthCalculator for the missing starter, so there is nothing left to protect
+    // against by blocking — and blocking it can deadlock a thin, injury-hit squad that has
+    // no legal eleven left (injuries/suspensions only tick down on the advance that would be
+    // blocked). It is a non-blocking warning instead, like lowFitnessStarters.
     ;(getAdvancePreview as Mock).mockResolvedValue({
       ...PREVIEW_OK,
       managedClubPlaysNext: true,
@@ -288,8 +291,29 @@ describe('Layout shell', () => {
     renderLayout('/dashboard')
 
     const avancarBtn = await screen.findByRole('button', { name: 'Ir para o jogo' })
+    // The button must remain ENABLED — a loan bar never blocks advance any more.
+    await waitFor(() => expect(avancarBtn).not.toBeDisabled())
+    expect(screen.getByText(/Emprestado Barrado/)).toBeInTheDocument()
+    expect(screen.getByText(/impedidos por empréstimo/i)).toBeInTheDocument()
+  })
+
+  it('still blocks Avançar when a saved starter is injured or suspended, even alongside a loan bar', async () => {
+    // Injuries and suspensions keep blocking per the explicit scope limit — only the
+    // loan-barred subset of ineligibleStarters was downgraded to a warning.
+    ;(getAdvancePreview as Mock).mockResolvedValue({
+      ...PREVIEW_OK,
+      managedClubPlaysNext: true,
+      ineligibleStarters: [
+        { playerId: 'p9', playerName: 'Emprestado Barrado', reason: 'LOAN_BARRED' },
+        { playerId: 'p10', playerName: 'Machucado Silva', reason: 'INJURED' },
+      ],
+    } satisfies AdvancePreviewResponse)
+    seedAuth('U1', 'sg-1')
+    renderLayout('/dashboard')
+
+    const avancarBtn = await screen.findByRole('button', { name: 'Ir para o jogo' })
     await waitFor(() => expect(avancarBtn).toBeDisabled())
-    expect(screen.getByRole('status')).toHaveTextContent(/empréstimo/i)
+    expect(screen.getByRole('status')).toHaveTextContent(/suspenso|lesionado/i)
     expect(screen.getByRole('link', { name: /ajustar escalação/i })).toBeInTheDocument()
   })
 

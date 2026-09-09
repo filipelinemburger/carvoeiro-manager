@@ -17,7 +17,8 @@ import java.util.List;
  *   <li>{@code windowClosingAfterAdvance} — true when the transfer window is open now but the next
  *       event lands outside it (this advance closes the window).</li>
  *   <li>{@code pendingTransfers} — count of unresolved offers (PENDING/COUNTERED) involving the
- *       managed club. Combined with {@code windowClosingAfterAdvance}, the UI blocks the advance so
+ *       managed club, transfer AND loan offers combined (both die the same way when the window
+ *       closes). Combined with {@code windowClosingAfterAdvance}, the UI blocks the advance so
  *       the manager resolves bids before the window shuts.</li>
  *   <li>{@code defaultStandingsCompetitionId} — the competition of the most recently played match,
  *       or (if none played yet) the next scheduled match; the Classificação screen defaults to it.</li>

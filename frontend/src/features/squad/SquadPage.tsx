@@ -879,16 +879,15 @@ export function SquadPage() {
     )
   }
 
-  /** Why this player cannot be loaned out right now, or null when he can be. The window guard
-   * mirrors LoanService.requireWindowOpen (a loan is a squad movement like any transfer); the
-   * contract-length guard mirrors LoanService.requireLoanableContract; the borrowed-player guard
-   * mirrors the `!isOnLoan()` filter `offerLoanOut` applies before it will even look the player
-   * up — a club only lends what it owns outright. Explains only — the backend still enforces all
-   * three. */
+  /** Why this player cannot be loaned out right now, or null when he can be. Window state is
+   * deliberately NOT checked here (combined at the disable site instead, mirroring
+   * TransferMarketPage's `loanInBlockedReason`) — otherwise a closed window shadows the
+   * player-specific reason and a borrowed player's caption misleadingly reads "janela fechada"
+   * instead of "jogador emprestado". The contract-length guard mirrors
+   * LoanService.requireLoanableContract; the borrowed-player guard mirrors the `!isOnLoan()`
+   * filter `offerLoanOut` applies before it will even look the player up — a club only lends
+   * what it owns outright. Explains only — the backend still enforces both, plus the window. */
   function loanBlockedReason(player: PlayerResponse): string | null {
-    if (!windowOpen) {
-      return 'Janela de transferências fechada.'
-    }
     if (player.onLoanFromClubName) {
       return 'Jogador emprestado por outro clube — não pode ser emprestado.'
     }
@@ -902,11 +901,13 @@ export function SquadPage() {
     const reason = loanBlockedReason(player)
     return (
       <Stack spacing={0.25} sx={{ alignItems: 'flex-start' }}>
-        <Button size="small" color="secondary" variant="outlined" disabled={reason !== null}
+        <Button size="small" color="secondary" variant="outlined" disabled={!windowOpen || reason !== null}
           onClick={() => { setLoaningId(player.id); setLoanResult(null) }}>
           Emprestar
         </Button>
-        {reason && <Typography variant="caption" color="error">{reason}</Typography>}
+        {reason
+          ? <Typography variant="caption" color="error">{reason}</Typography>
+          : !windowOpen && <Typography variant="caption" color="error">Janela de transferências fechada.</Typography>}
       </Stack>
     )
   }

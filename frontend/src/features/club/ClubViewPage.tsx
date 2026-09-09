@@ -197,7 +197,11 @@ export function ClubViewPage() {
     <Button
       size="small"
       variant="outlined"
-      disabled={!windowOpen || offerMut.isPending}
+      // A player shown here on loan (onLoanFromClubName set) is only borrowed by this club —
+      // it doesn't own him, so a transfer offer can't go through. TransferMarketPage already
+      // disables "Fazer proposta" the same way (its p.onLoan); without this, the button here
+      // stayed live and the backend refused with PLAYER_ALREADY_ON_LOAN.
+      disabled={!windowOpen || offerMut.isPending || Boolean(player.onLoanFromClubName)}
       onClick={() => setOfferTarget({
         playerId: player.id, name: player.name, value: player.value, wageDemand: player.wageDemand,
       })}

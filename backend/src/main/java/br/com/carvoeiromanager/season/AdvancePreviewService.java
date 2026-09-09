@@ -4,6 +4,8 @@ import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.loan.LoanOfferRepository;
+import br.com.carvoeiromanager.loan.LoanOfferStatus;
 import br.com.carvoeiromanager.match.LineupService;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.match.AdvancePreviewLowFitness;
@@ -36,6 +38,7 @@ public class AdvancePreviewService {
     private final LineupService lineupService;
     private final TransferWindow transferWindow;
     private final TransferOfferRepository transferOfferRepository;
+    private final LoanOfferRepository loanOfferRepository;
     private final BackgroundCompetitionService backgroundCompetitionService;
 
     public AdvancePreviewService(SaveGameService saveGameService,
@@ -44,6 +47,7 @@ public class AdvancePreviewService {
                                  LineupService lineupService,
                                  TransferWindow transferWindow,
                                  TransferOfferRepository transferOfferRepository,
+                                 LoanOfferRepository loanOfferRepository,
                                  BackgroundCompetitionService backgroundCompetitionService) {
         this.saveGameService = saveGameService;
         this.seasonEventRepository = seasonEventRepository;
@@ -51,6 +55,7 @@ public class AdvancePreviewService {
         this.lineupService = lineupService;
         this.transferWindow = transferWindow;
         this.transferOfferRepository = transferOfferRepository;
+        this.loanOfferRepository = loanOfferRepository;
         this.backgroundCompetitionService = backgroundCompetitionService;
     }
 
@@ -101,8 +106,13 @@ public class AdvancePreviewService {
                 && transferWindow.isOpen(currentDate)
                 && !transferWindow.isOpen(next.getEventDate());
 
+        // Loan offers die the same way transfer offers do when the window closes (Task 3), and a
+        // countered loan is just as durable/visible as a countered transfer (Task 6) — so both
+        // must count toward the "resolve your pending proposals" gate, not just transfers.
         int pendingTransfers = transferOfferRepository.findBySaveGameIdAndStatusIn(saveGameId,
-                List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED)).size();
+                List.of(TransferOfferStatus.PENDING, TransferOfferStatus.COUNTERED)).size()
+                + loanOfferRepository.findBySaveGameIdAndStatusIn(saveGameId,
+                List.of(LoanOfferStatus.PENDING, LoanOfferStatus.COUNTERED)).size();
 
         UUID defaultStandingsCompetitionId = defaultStandingsCompetition(saveGameId, managedClubId);
 

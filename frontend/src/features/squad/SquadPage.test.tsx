@@ -709,6 +709,28 @@ describe('SquadPage', () => {
     expect(screen.queryByRole('combobox', { name: /clube de destino/i })).not.toBeInTheDocument()
   })
 
+  it('shows the player-specific loan-blocked reason, not the window one, when both apply', async () => {
+    // loanBlockedReason used to check the window FIRST, so a borrowed player's caption
+    // misleadingly read "janela de transferências fechada" instead of the real reason
+    // ("jogador emprestado por outro clube"). TransferMarketPage's loanInBlockedReason never
+    // had this bug (window is checked only at the disable site) — this brings SquadPage in
+    // line with it. The button must still be disabled either way.
+    mockGetSaveGame.mockResolvedValue({ ...SAVE_OPEN, transferWindowOpen: false })
+    const borrowed = makeOutfield('p-borrowed-window', 'Emprestado Janela', 'DEF')
+    borrowed.onLoanFromClubName = 'Avaí FC'
+    mockGetSquad.mockResolvedValue({ ...squad, players: [...squad.players, borrowed] })
+    renderWithProviders()
+    await waitFor(() => screen.getByText('Emprestado Janela'))
+    fireEvent.click(screen.getByText('Emprestado Janela'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: /contrato/i }))
+
+    const loanBtn = await within(dialog).findByRole('button', { name: /^emprestar$/i })
+    expect(loanBtn).toBeDisabled()
+    expect(within(dialog).getByText(/emprestado por outro clube/i)).toBeInTheDocument()
+    expect(within(dialog).queryByText(/janela de transferências fechada/i)).not.toBeInTheDocument()
+  })
+
   it('proposes a loan for a player with a long enough contract, offering every club but the manager\'s own', async () => {
     mockLoanOut.mockResolvedValue({
       offerId: 'o1', playerId: 'p-m1', playerName: 'Meio Um', status: 'ACCEPTED',
