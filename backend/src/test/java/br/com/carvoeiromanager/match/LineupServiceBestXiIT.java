@@ -51,7 +51,7 @@ class LineupServiceBestXiIT {
     void bestXiReturnsElevenWithExactlyOneKeeper() {
         UUID clubId = anyClubId();
 
-        List<Player> xi = lineupService.bestXi(clubId);
+        List<Player> xi = lineupService.bestXi(clubId, null, null);
 
         assertThat(xi).hasSize(11);
         assertThat(xi.stream().filter(p -> p.getPosition() == Position.GK)).hasSize(1);
@@ -64,8 +64,8 @@ class LineupServiceBestXiIT {
     void bestXiIsDeterministicAcrossRepeatedCalls() {
         UUID clubId = anyClubId();
 
-        List<UUID> first = lineupService.bestXi(clubId).stream().map(Player::getId).toList();
-        List<UUID> second = lineupService.bestXi(clubId).stream().map(Player::getId).toList();
+        List<UUID> first = lineupService.bestXi(clubId, null, null).stream().map(Player::getId).toList();
+        List<UUID> second = lineupService.bestXi(clubId, null, null).stream().map(Player::getId).toList();
 
         assertThat(first).isEqualTo(second);
     }
@@ -74,8 +74,8 @@ class LineupServiceBestXiIT {
     void bestBenchExcludesEveryXiMember() {
         UUID clubId = anyClubId();
 
-        List<Player> xi = lineupService.bestXi(clubId);
-        List<Player> bench = lineupService.bestBench(clubId, xi);
+        List<Player> xi = lineupService.bestXi(clubId, null, null);
+        List<Player> bench = lineupService.bestBench(clubId, xi, null);
 
         List<UUID> xiIds = xi.stream().map(Player::getId).toList();
         assertThat(bench).isNotEmpty();

@@ -58,7 +58,7 @@ class LiveMatchSubstituteIT {
         managedClubId = save.managedClubId();
 
         // Save a valid 11-player XI + bench players for the managed club
-        List<Player> bestXi = lineupService.bestXi(managedClubId);
+        List<Player> bestXi = lineupService.bestXi(managedClubId, null, null);
         List<LineupStarter> starters = bestXi.stream()
                 .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());

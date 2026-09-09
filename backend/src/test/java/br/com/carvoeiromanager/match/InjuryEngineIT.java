@@ -103,7 +103,7 @@ class InjuryEngineIT {
         UUID clubId = career.save().managedClubId();
 
         // Pick a player NOT in the best XI (so they will be treated as a non-player)
-        List<Player> xi = lineupService.bestXi(clubId);
+        List<Player> xi = lineupService.bestXi(clubId, null, null);
         Player victim = playerRepository.findByClubId(clubId).stream()
                 .filter(p -> xi.stream().noneMatch(x -> x.getId().equals(p.getId())))
                 .findFirst()
@@ -155,7 +155,7 @@ class InjuryEngineIT {
         UUID saveGameId = career.save().id();
         UUID clubId = career.save().managedClubId();
 
-        List<LineupStarter> starters = lineupService.bestXi(clubId).stream()
+        List<LineupStarter> starters = lineupService.bestXi(clubId, null, null).stream()
                 .map(p -> new LineupStarter(
                         p.getId(),
                         br.com.carvoeiromanager.player.RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
@@ -214,12 +214,12 @@ class InjuryEngineIT {
         // Given a player in a club is injured
         Career career = createCareer();
         UUID clubId = career.save().managedClubId();
-        Player victim = lineupService.bestXi(clubId).get(3);
+        Player victim = lineupService.bestXi(clubId, null, null).get(3);
         victim.addInjury(1);
         playerRepository.save(victim);
 
         // When picking the best XI
-        List<Player> xi = lineupService.bestXi(clubId);
+        List<Player> xi = lineupService.bestXi(clubId, null, null);
 
         // Then the injured player is not in it
         assertThat(xi).extracting(Player::getId).doesNotContain(victim.getId());

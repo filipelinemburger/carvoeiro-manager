@@ -68,7 +68,7 @@ class LiveMatchParallelSimulationIT {
         saveGameId = save.id();
         managedClubId = save.managedClubId();
 
-        List<Player> bestXi = lineupService.bestXi(managedClubId);
+        List<Player> bestXi = lineupService.bestXi(managedClubId, null, null);
         List<LineupStarter> starters = bestXi.stream()
                 .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
@@ -121,7 +121,7 @@ class LiveMatchParallelSimulationIT {
      */
     private Map<UUID, Set<UUID>> expectedXiIdsBySide(List<Fixture> others, boolean home) {
         return others.stream().collect(Collectors.toMap(Fixture::getId,
-                f -> ids(lineupService.bestXi(home ? f.getHomeClubId() : f.getAwayClubId(), f.getMatchDate()))));
+                f -> ids(lineupService.bestXi(home ? f.getHomeClubId() : f.getAwayClubId(), f.getMatchDate(), null))));
     }
 
     /**

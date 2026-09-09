@@ -55,12 +55,12 @@ class SuspensionLifecycleIT {
         // Given a player in a club is suspended
         Career career = createCareer();
         UUID clubId = career.save().managedClubId();
-        Player victim = lineupService.bestXi(clubId).get(5);
+        Player victim = lineupService.bestXi(clubId, null, null).get(5);
         victim.addSuspension(1);
         playerRepository.save(victim);
 
         // When picking the best XI
-        List<Player> xi = lineupService.bestXi(clubId);
+        List<Player> xi = lineupService.bestXi(clubId, null, null);
 
         // Then the suspended player is not in it
         assertThat(xi).extracting(Player::getId).doesNotContain(victim.getId());
@@ -73,7 +73,7 @@ class SuspensionLifecycleIT {
         UUID saveGameId = career.save().id();
         UUID clubId = career.save().managedClubId();
 
-        List<Player> xi = lineupService.bestXi(clubId);
+        List<Player> xi = lineupService.bestXi(clubId, null, null);
         Player benched = playerRepository.findByClubId(clubId).stream()
                 .filter(p -> xi.stream().noneMatch(s -> s.getId().equals(p.getId())))
                 .findFirst().orElseThrow();

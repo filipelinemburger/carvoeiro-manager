@@ -200,7 +200,7 @@ class LineupServiceIT {
         UUID clubId = career.managedClubId();
 
         // When
-        List<br.com.carvoeiromanager.player.Player> xi = lineupService.bestXi(clubId);
+        List<br.com.carvoeiromanager.player.Player> xi = lineupService.bestXi(clubId, null, null);
 
         // Then
         assertThat(xi).hasSize(11);
@@ -578,7 +578,7 @@ class LineupServiceIT {
         UUID fillerId = fillerPlayer.getId();
 
         // WHEN — no-date path (raw overall)
-        List<Player> xiNoDate = lineupService.bestXi(clubId);
+        List<Player> xiNoDate = lineupService.bestXi(clubId, null, null);
 
         // THEN — full XI, the higher-rated GK is chosen, both equal-overall boundary players are in,
         //        and the lower-overall filler is excluded.
@@ -591,7 +591,7 @@ class LineupServiceIT {
         assertThat(xiNoDate.stream().anyMatch(p -> p.getId().equals(fillerId))).isFalse();
 
         // WHEN — date path (fitness-adjusted rating)
-        List<Player> xi = lineupService.bestXi(clubId, matchDate);
+        List<Player> xi = lineupService.bestXi(clubId, matchDate, null);
 
         // THEN — full XI, still the higher-rated GK, the fresh boundary and the filler start,
         //        and the drained boundary player is benched.
@@ -697,8 +697,8 @@ class LineupServiceIT {
         List<UUID> expectedBenchNonGkIds = outfield.subList(10, 16).stream().map(Player::getId).toList();
 
         // When: an AI club with no saved lineup -> startingXi falls back to bestXi(clubId).
-        List<Player> xi = lineupService.startingXi(saveGameId, clubId);
-        List<Player> bench = lineupService.bestBench(clubId, xi);
+        List<Player> xi = lineupService.startingXi(saveGameId, clubId, null);
+        List<Player> bench = lineupService.bestBench(clubId, xi, null);
 
         // Then
         assertThat(bench.size()).isLessThanOrEqualTo(7);
@@ -728,7 +728,7 @@ class LineupServiceIT {
         UUID saveGameId = career.id();
         UUID clubId = career.managedClubId();
 
-        List<Player> xi = lineupService.startingXi(saveGameId, clubId);
+        List<Player> xi = lineupService.startingXi(saveGameId, clubId, null);
         Set<UUID> xiIds = xi.stream().map(Player::getId).collect(Collectors.toSet());
 
         List<Player> nonXi = playerRepository.findByClubId(clubId).stream()
@@ -750,7 +750,7 @@ class LineupServiceIT {
             playerRepository.save(p);
         }
 
-        List<Player> bench = lineupService.bestBench(clubId, xi);
+        List<Player> bench = lineupService.bestBench(clubId, xi, null);
 
         assertThat(bench).hasSize(2);
         assertThat(bench.stream().map(Player::getId).toList())
@@ -776,7 +776,7 @@ class LineupServiceIT {
         playerRepository.saveAll(keepers);
 
         // WHEN the engine resolves the club's XI
-        List<Player> xi = lineupService.bestXi(clubId);
+        List<Player> xi = lineupService.bestXi(clubId, null, null);
 
         // THEN it improvises instead of crashing the save: a full XI, no real keeper in it, and
         // the man between the posts is the outfielder with the best goalkeeping attribute —
@@ -794,7 +794,7 @@ class LineupServiceIT {
     // --- Private helpers ---
 
     private List<LineupStarter> buildValidStarters(UUID clubId) {
-        return lineupService.bestXi(clubId).stream()
+        return lineupService.bestXi(clubId, null, null).stream()
                 .map(p -> new LineupStarter(
                         p.getId(),
                         br.com.carvoeiromanager.player.RoleArchetype.defaultFor(p.getDetailedPosition()).name()))

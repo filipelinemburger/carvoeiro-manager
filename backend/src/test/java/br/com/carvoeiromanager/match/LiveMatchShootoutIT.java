@@ -85,7 +85,7 @@ class LiveMatchShootoutIT {
 
         // A valid 11-player XI + 3 bench players for the managed club (same recipe as
         // LiveMatchFinishIT), so kickoff() has a lineup to build a LiveMatchConfig from.
-        List<Player> bestXi = lineupService.bestXi(managedClubId);
+        List<Player> bestXi = lineupService.bestXi(managedClubId, null, null);
         List<LineupStarter> starters = bestXi.stream()
                 .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());

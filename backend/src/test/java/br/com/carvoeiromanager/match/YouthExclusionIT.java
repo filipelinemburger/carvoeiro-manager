@@ -54,7 +54,7 @@ class YouthExclusionIT {
                 .noneMatch(pr -> pr.id().equals(prospect.getId()));
         assertThat(lineupService.getSquad(save.id(), clubId, user.getId()).players()).hasSize(seniorCountBefore);
         // ...and neither must bestXi.
-        assertThat(lineupService.bestXi(clubId)).noneMatch(p -> p.getId().equals(prospect.getId()));
+        assertThat(lineupService.bestXi(clubId, null, null)).noneMatch(p -> p.getId().equals(prospect.getId()));
     }
 
     @Test
@@ -75,7 +75,7 @@ class YouthExclusionIT {
 
         // Build an otherwise-valid 11 from bestXi (all seniors) and replace one starter with the prospect
         List<LineupStarter> starters = new ArrayList<>(
-                lineupService.bestXi(clubId).stream()
+                lineupService.bestXi(clubId, null, null).stream()
                         .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                         .collect(Collectors.toList())
         );
@@ -112,7 +112,7 @@ class YouthExclusionIT {
         playerRepository.save(prospect);
 
         // Build a valid senior starting XI
-        List<LineupStarter> starters = lineupService.bestXi(clubId).stream()
+        List<LineupStarter> starters = lineupService.bestXi(clubId, null, null).stream()
                 .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
 

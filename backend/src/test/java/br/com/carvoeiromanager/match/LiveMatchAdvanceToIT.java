@@ -59,7 +59,7 @@ class LiveMatchAdvanceToIT {
         saveGameId = save.id();
         managedClubId = save.managedClubId();
 
-        List<Player> bestXi = lineupService.bestXi(managedClubId);
+        List<Player> bestXi = lineupService.bestXi(managedClubId, null, null);
         List<LineupStarter> starters = bestXi.stream()
                 .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
@@ -187,7 +187,7 @@ class LiveMatchAdvanceToIT {
             UUID trialSaveGameId = save.id();
             UUID trialClubId = save.managedClubId();
 
-            List<Player> bestXi = lineupService.bestXi(trialClubId);
+            List<Player> bestXi = lineupService.bestXi(trialClubId, null, null);
             List<LineupStarter> starters = bestXi.stream()
                     .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                     .collect(Collectors.toList());

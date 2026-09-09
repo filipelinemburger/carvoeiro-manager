@@ -173,7 +173,7 @@ class LoanLiveMatchEligibilityIT {
         // rating. Merely dropping his overall does not keep him out: fillOutfieldSlots is
         // natural-first, and a natural for a slot the managed squad cannot fill naturally starts
         // however badly he is rated — which squad generation turns into a per-career coin flip.
-        List<Player> xi = lineupService.bestXi(c.managedClubId());
+        List<Player> xi = lineupService.bestXi(c.managedClubId(), null, null);
         assertThat(xi).as("a real XI, or the bench built from it proves nothing").hasSize(11);
 
         borrowed.setOverall(30);

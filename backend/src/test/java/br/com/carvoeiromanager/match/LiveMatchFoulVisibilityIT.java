@@ -49,7 +49,7 @@ class LiveMatchFoulVisibilityIT {
         saveGameId = save.id();
         UUID managedClubId = save.managedClubId();
 
-        List<Player> bestXi = lineupService.bestXi(managedClubId);
+        List<Player> bestXi = lineupService.bestXi(managedClubId, null, null);
         List<LineupStarter> starters = bestXi.stream()
                 .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());

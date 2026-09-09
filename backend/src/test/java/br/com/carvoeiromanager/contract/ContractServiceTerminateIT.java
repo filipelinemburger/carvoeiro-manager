@@ -264,7 +264,7 @@ class ContractServiceTerminateIT {
     void aReleasedStarterLeavesTheLineup() {
         Career c = createCareer();
         makeRich(c);
-        List<Player> bestXi = lineupService.bestXi(c.clubId());
+        List<Player> bestXi = lineupService.bestXi(c.clubId(), null, null);
         List<LineupStarter> starters = bestXi.stream()
                 .map(p -> new LineupStarter(p.getId(),
                         RoleArchetype.defaultFor(p.getDetailedPosition()).name()))

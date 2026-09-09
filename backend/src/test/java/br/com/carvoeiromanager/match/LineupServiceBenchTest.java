@@ -55,7 +55,7 @@ class LineupServiceBenchTest {
     }
 
     private List<LineupStarter> buildValidStarters(UUID clubId) {
-        return lineupService.bestXi(clubId).stream()
+        return lineupService.bestXi(clubId, null, null).stream()
                 .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
     }

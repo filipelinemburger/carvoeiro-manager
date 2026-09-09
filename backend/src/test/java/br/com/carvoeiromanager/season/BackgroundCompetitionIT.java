@@ -614,7 +614,7 @@ class BackgroundCompetitionIT {
         UUID managedClubId = saveGameRepository.findById(c.id()).orElseThrow().getManagedClubId();
 
         // Someone outside the XI, so they sit out the round rather than playing in it.
-        List<Player> xi = lineupService.bestXi(managedClubId);
+        List<Player> xi = lineupService.bestXi(managedClubId, null, null);
         Player benched = playerRepository.findByClubId(managedClubId).stream()
                 .filter(p -> xi.stream().noneMatch(x -> x.getId().equals(p.getId())))
                 .findFirst().orElseThrow();

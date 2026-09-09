@@ -79,7 +79,7 @@ class AdvancePreviewIT {
     }
 
     private void setBestEligibleLineup(Career c) {
-        List<LineupStarter> starters = lineupService.bestXi(c.clubId()).stream()
+        List<LineupStarter> starters = lineupService.bestXi(c.clubId(), null, null).stream()
                 .map(p -> new LineupStarter(p.getId(), RoleArchetype.defaultFor(p.getDetailedPosition()).name()))
                 .collect(Collectors.toList());
         lineupService.setLineup(c.id(), c.clubId(), new SetLineupRequest("4-4-2", starters, null), c.userId());
