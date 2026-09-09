@@ -4,6 +4,10 @@ import br.com.carvoeiromanager.auth.User;
 import br.com.carvoeiromanager.auth.UserRepository;
 import br.com.carvoeiromanager.career.SaveGameResponse;
 import br.com.carvoeiromanager.career.SaveGameService;
+import br.com.carvoeiromanager.competition.Fixture;
+import br.com.carvoeiromanager.competition.FixtureRepository;
+import br.com.carvoeiromanager.player.Player;
+import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.staff.Staff;
 import br.com.carvoeiromanager.staff.StaffQuality;
 import br.com.carvoeiromanager.staff.StaffRepository;
@@ -19,6 +23,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,6 +47,9 @@ class MatchPreviewServiceIT {
     @Autowired UserRepository userRepository;
     @Autowired NewsItemRepository newsItemRepository;
     @Autowired ObjectMapper objectMapper;
+    @Autowired SeasonEventRepository seasonEventRepository;
+    @Autowired FixtureRepository fixtureRepository;
+    @Autowired PlayerRepository playerRepository;
 
     private record Career(UUID userId, SaveGameResponse save) {
         UUID id() { return save.id(); }
@@ -63,6 +71,36 @@ class MatchPreviewServiceIT {
         staffRepository.findByClubIdAndRole(c.clubId(), StaffRole.ASSISTENTE).ifPresent(staffRepository::delete);
         staffRepository.save(Staff.create(c.id(), c.clubId(), StaffRole.ASSISTENTE, StaffQuality.EXCELENTE,
                 "Auxiliar Teste", new BigDecimal("80000.00"), primaryAttribute, secondaryAttribute));
+    }
+
+    /**
+     * The opponent for the managed club's next fixture, resolved the same way
+     * {@link MatchPreviewService#buildPreview} does — needed before the first
+     * {@code maybePersistPreview} call so a loan can be planted ahead of it (previews are written
+     * once per fixture, so mutating the squad afterwards would be too late).
+     */
+    private UUID opponentClubIdFor(Career c) {
+        SeasonEvent nextMatch = seasonEventRepository.findNextManagedMatchEvent(c.id(), c.clubId());
+        Fixture fixture = fixtureRepository
+                .findBySaveGameIdAndCompetitionIdAndRound(c.id(), nextMatch.getCompetitionId(), nextMatch.getRound())
+                .stream()
+                .filter(f -> c.clubId().equals(f.getHomeClubId()) || c.clubId().equals(f.getAwayClubId()))
+                .findFirst().orElseThrow();
+        return c.clubId().equals(fixture.getHomeClubId()) ? fixture.getAwayClubId() : fixture.getHomeClubId();
+    }
+
+    /**
+     * Lends the managed squad's strongest non-youth player to the opponent of the next fixture,
+     * boosted to overall 99 so he is the unambiguous top pick in {@code findByClubIdAndYouthProspectFalse}
+     * whenever the loan bar does not exclude him — mirroring {@code LoanFixtureEligibilityIT}'s pattern.
+     */
+    private Player lendManagedPlayerToNextOpponent(Career c, UUID opponentId, boolean mayFaceOwner) {
+        Player lentPlayer = playerRepository.findByClubIdAndYouthProspectFalse(c.clubId()).stream()
+                .max(Comparator.comparingInt(Player::getOverall))
+                .orElseThrow();
+        lentPlayer.setOverall(99);
+        lentPlayer.loanTo(opponentId, 50, mayFaceOwner);
+        return playerRepository.save(lentPlayer);
     }
 
     private AdvanceResponse deserialize(NewsItem item) {
@@ -190,5 +228,44 @@ class MatchPreviewServiceIT {
 
         assertThat(newsItemRepository.findFirstBySaveGameIdAndTypeOrderBySeqDesc(c.id(), "MATCH_PREVIEW"))
                 .isNotNull(); // preview exists for the next managed fixture
+    }
+
+    // --- The opponent's "best players" panel must respect the loan bar (LoanEligibility) ---
+
+    @Test
+    void aBarredLoanedPlayerDoesNotHeadlineTheOpponentsBestPlayersPanel() {
+        // Lend the managed club's own star to the club it plays next, with no negotiated release —
+        // he now plays for the opponent (best-player panel candidate material at overall 99) but is
+        // barred from facing his owner, the managed club, in this very fixture.
+        Career c = createCareer();
+        UUID opponentId = opponentClubIdFor(c);
+        Player lentPlayer = lendManagedPlayerToNextOpponent(c, opponentId, false);
+        hireAssistant(c, 18, 18); // full depth: top-3 best players
+
+        matchPreviewService.maybePersistPreview(c.id());
+
+        MatchPreviewData preview = latestPreview(c.id());
+        assertThat(preview.bestPlayers())
+                .as("a lent player barred from this fixture must not headline the opponent's danger men")
+                .extracting(MatchPreviewData.PreviewPlayer::name)
+                .doesNotContain(lentPlayer.getName());
+    }
+
+    @Test
+    void aLoanedPlayerWithTheNegotiatedReleaseStillHeadlinesTheOpponentsBestPlayersPanel() {
+        // Same setup, but the loan negotiated the release to face the owner — he may play, so at
+        // overall 99 he is the unambiguous top pick and must still headline the panel.
+        Career c = createCareer();
+        UUID opponentId = opponentClubIdFor(c);
+        Player lentPlayer = lendManagedPlayerToNextOpponent(c, opponentId, true);
+        hireAssistant(c, 18, 18);
+
+        matchPreviewService.maybePersistPreview(c.id());
+
+        MatchPreviewData preview = latestPreview(c.id());
+        assertThat(preview.bestPlayers())
+                .as("the negotiated release lets him appear as the opponent's top danger man")
+                .extracting(MatchPreviewData.PreviewPlayer::name)
+                .contains(lentPlayer.getName());
     }
 }

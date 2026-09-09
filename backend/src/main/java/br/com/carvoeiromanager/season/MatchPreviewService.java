@@ -8,6 +8,7 @@ import br.com.carvoeiromanager.competition.Fixture;
 import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.competition.StandingRow;
 import br.com.carvoeiromanager.competition.StandingsCalculator;
+import br.com.carvoeiromanager.loan.LoanEligibility;
 import br.com.carvoeiromanager.match.Weather;
 import br.com.carvoeiromanager.match.WeatherService;
 import br.com.carvoeiromanager.player.Player;
@@ -60,6 +61,7 @@ public class MatchPreviewService {
     private final NewsItemRepository newsItemRepository;
     private final ObjectMapper objectMapper;
     private final WeatherService weatherService;
+    private final LoanEligibility loanEligibility;
     private final StandingsCalculator standingsCalculator = new StandingsCalculator();
 
     public MatchPreviewService(SaveGameRepository saveGameRepository,
@@ -71,7 +73,8 @@ public class MatchPreviewService {
                                PlayerStatsService playerStatsService,
                                NewsItemRepository newsItemRepository,
                                ObjectMapper objectMapper,
-                               WeatherService weatherService) {
+                               WeatherService weatherService,
+                               LoanEligibility loanEligibility) {
         this.saveGameRepository = saveGameRepository;
         this.seasonEventRepository = seasonEventRepository;
         this.fixtureRepository = fixtureRepository;
@@ -82,6 +85,7 @@ public class MatchPreviewService {
         this.newsItemRepository = newsItemRepository;
         this.objectMapper = objectMapper;
         this.weatherService = weatherService;
+        this.loanEligibility = loanEligibility;
     }
 
     @Transactional
@@ -155,7 +159,10 @@ public class MatchPreviewService {
         int conhecimentoTatico = assistant.getPrimaryAttribute();
         int avaliacaoDeJogadores = assistant.getSecondaryAttribute();
 
+        // The panel previews a specific fixture — a lent player barred from facing his owner (see
+        // LoanEligibility) must not headline as the opponent's danger man for a match he cannot play.
         List<Player> opponentPlayers = playerRepository.findByClubIdAndYouthProspectFalse(opponentId).stream()
+                .filter(p -> loanEligibility.mayFace(p, managedClubId))
                 .sorted(Comparator.comparingInt(Player::getOverall).reversed()
                         .thenComparing(Player::getName))
                 .toList();
