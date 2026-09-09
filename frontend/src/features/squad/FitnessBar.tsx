@@ -1,8 +1,8 @@
 import { Box, LinearProgress, Typography } from '@mui/material'
 
-type Severity = 'error' | 'warning' | 'success'
+export type FitnessSeverity = 'error' | 'warning' | 'success'
 
-function severityFor(fitness: number): Severity {
+export function fitnessSeverity(fitness: number): FitnessSeverity {
   if (fitness < 40) return 'error'
   if (fitness < 70) return 'warning'
   return 'success'
@@ -10,7 +10,7 @@ function severityFor(fitness: number): Severity {
 
 export function FitnessBar({ fitness }: { fitness: number }) {
   const clamped = Math.max(0, Math.min(100, fitness))
-  const severity = severityFor(clamped)
+  const severity = fitnessSeverity(clamped)
   return (
     <Box
       aria-label={`Condição ${clamped}%`}
