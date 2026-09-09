@@ -24,6 +24,8 @@ public class TeamStrengthCalculator {
 
     private static final double DECAY_BASE = 0.15;
     private static final double MORALE_COEFF = 0.02;   // morale +/-5 -> +/-10% per player, same weight as form
+    /** A full side. Attack and outfield defense are divided by this complement, not by the head count. */
+    private static final int FULL_XI = 11;
 
     public TeamMatchInput compute(List<Player> xi, TacticalProfile profile) {
         return compute(xi, profile, Map.of());
@@ -74,8 +76,21 @@ public class TeamStrengthCalculator {
             }
         }
 
-        double attack = attackSum / xi.size();
-        double outfieldDefense = outfieldCount > 0 ? outfieldDefenseSum / outfieldCount : 0.0;
+        // Divide by the NOMINAL size of a full side, never by the head count actually on the pitch.
+        // Averaging over the head count meant a club that lost a BELOW-average player came out
+        // stronger: ten men out-rated eleven, and a red card could strengthen the side that received
+        // it. Dividing by the full complement instead makes every absentee cost exactly his share of
+        // the team's output, whatever put the side short — the loan bar, a suspension, an injury with
+        // no cover, or a sending-off (LiveMatchEngine recomputes through this same method).
+        // Math.max keeps a full — or, defensively, an over-full — XI dividing by its own size, so a
+        // well-formed squad's strength is byte-identical to before and seeded results are unmoved.
+        // The outfield nominal is 11 minus the keepers present, so a keeper-less XI (a manager may
+        // improvise an outfielder in goal — see LineupService) is measured against eleven outfielders
+        // and is penalised on the same terms rather than escaping the size term.
+        int keeperCount = xi.size() - outfieldCount;
+        int outfieldNominal = Math.max(outfieldCount, FULL_XI - keeperCount);
+        double attack = attackSum / Math.max(xi.size(), FULL_XI);
+        double outfieldDefense = outfieldNominal > 0 ? outfieldDefenseSum / outfieldNominal : 0.0;
         double defense = 0.6 * outfieldDefense + 0.4 * gkDefense;
 
         Formation formation = Formation.fromCode(profile.formation());

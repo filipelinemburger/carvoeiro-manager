@@ -286,7 +286,8 @@ public class LineupService {
                     // bestXi to fill it back out as far as the squad and the loan bar allow. That is
                     // not necessarily a full 11 any more: bestXi(..., opponentClubId) can itself return
                     // a short XI when the loan bar is why a slot can't be filled (see its javadoc) —
-                    // TeamStrengthCalculator tolerates dividing by a smaller xi.size().
+                    // TeamStrengthCalculator tolerates a short XI, and now charges for it: it
+                    // divides by the full eleven, so each missing man costs his share.
                     return eligibleXi.size() == 11 ? eligibleXi : bestXi(clubId, null, opponentClubId);
                 })
                 .orElseGet(() -> bestXi(clubId, null, opponentClubId));
@@ -390,9 +391,10 @@ public class LineupService {
      * and suspension are accidents of a season and degrade gracefully into a full XI; the
      * fixture-release rule is a rule of the competition, and it outranks the convenience of always
      * fielding eleven. A club whose only cover at a position is barred therefore fields a SHORT XI
-     * — the engine tolerates that ({@code TeamStrengthCalculator} averages over {@code xi.size()}
-     * and contributes no keeper defense when there is no keeper; {@code FixtureSimulator} handles a
-     * degenerate XI explicitly). The single exception is {@link #improvisedKeeper}'s last resort,
+     * — the engine tolerates that, and makes it hurt ({@code TeamStrengthCalculator} divides by the
+     * full eleven, so a missing man costs his share instead of raising an average, and contributes
+     * no keeper defense when there is no keeper; {@code FixtureSimulator} handles a degenerate XI
+     * explicitly). The single exception is {@link #improvisedKeeper}'s last resort,
      * where the only alternative is throwing — see there.
      */
     public List<Player> bestXi(UUID clubId, LocalDate onDate, UUID opponentClubId) {

@@ -311,6 +311,95 @@ class TeamStrengthCalculatorTest {
                 Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of(), Map.of());
     }
 
+    // ---- squad size: a short XI must COST strength, never gain it ----
+
+    /** The same XI with the player at {@code index} gone — a red card, or a slot the loan bar left empty. */
+    private static List<Player> minus(List<Player> xi, int index) {
+        List<Player> shortXi = new ArrayList<>(xi);
+        shortXi.remove(index);
+        return shortXi;
+    }
+
+    @Test
+    void anXiMinusItsWeakestOutfielderRatesStrictlyLower() {
+        // The man who leaves is far BELOW average, which is exactly the case the head-count average
+        // got backwards: dropping him used to RAISE both attack and outfield defense, so ten men
+        // out-rated the eleven that included him. A defender is the player removed throughout this
+        // section because he contributes to attack AND defense — an attacker's defense weight is
+        // zero, which would leave the defense half of the assertion vacuous.
+        List<Player> eleven = new ArrayList<>(standardXi());
+        eleven.set(4, p(Position.DEF, 20));   // the weakest outfielder, by some distance
+        // One profile, built from the full eleven, is reused for both computes: the remaining ten
+        // keep their identical roles, so the squad-size term is the only thing that moves.
+        TacticalProfile prof = profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, eleven);
+
+        TeamMatchInput withHim = calc.compute(eleven, prof);
+        TeamMatchInput withoutHim = calc.compute(minus(eleven, 4), prof);
+
+        assertThat(withoutHim.attack()).isLessThan(withHim.attack());
+        assertThat(withoutHim.defense()).isLessThan(withHim.defense());
+    }
+
+    @Test
+    void sendingOffAnExactlyAveragePlayerStillCostsStrength() {
+        // The red-card path: LiveMatchEngine drops the sent-off man from onPitch and recomputes
+        // through this very method. Every player here is identical, so the one who walks is exactly
+        // average — under the head-count average that left the ten-man side byte-identical to the
+        // eleven-man one, i.e. a sending-off was free.
+        List<Player> eleven = standardXi();
+        TacticalProfile prof = profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, eleven);
+
+        TeamMatchInput beforeRed = calc.compute(eleven, prof);
+        TeamMatchInput afterRed = calc.compute(minus(eleven, 4), prof);   // the keeper stays; a defender walks
+
+        assertThat(afterRed.attack()).isLessThan(beforeRed.attack());
+        assertThat(afterRed.defense()).isLessThan(beforeRed.defense());
+    }
+
+    @Test
+    void aSecondSendingOffCostsStrengthAgain() {
+        // The penalty is proportional, not a one-off flag: nine men rate below ten, which rate below
+        // eleven. LiveMatchEngine recomputes after every red, so each one has to bite.
+        List<Player> eleven = standardXi();
+        TacticalProfile prof = profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, eleven);
+
+        TeamMatchInput ten = calc.compute(minus(eleven, 4), prof);
+        TeamMatchInput nine = calc.compute(minus(minus(eleven, 4), 3), prof);
+
+        assertThat(nine.attack()).isLessThan(ten.attack());
+        assertThat(nine.defense()).isLessThan(ten.defense());
+    }
+
+    @Test
+    void aKeeperlessXiIsChargedForAMissingOutfielderToo() {
+        // A manager may improvise an outfielder in goal, leaving no Position.GK in the XI — then all
+        // eleven count as outfield. The outfield size term is measured against eleven outfielders
+        // here, so this XI is charged on the same terms instead of escaping the penalty.
+        List<Player> eleven = new ArrayList<>(standardXi());
+        eleven.set(0, p(Position.DEF, 70));
+        TacticalProfile prof = profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, eleven);
+
+        TeamMatchInput withHim = calc.compute(eleven, prof);
+        TeamMatchInput withoutHim = calc.compute(minus(eleven, 4), prof);
+
+        assertThat(withoutHim.attack()).isLessThan(withHim.attack());
+        assertThat(withoutHim.defense()).isLessThan(withHim.defense());
+    }
+
+    @Test
+    void droppingAnOutfielderWhoContributesNoDefenseNeverRaisesDefense() {
+        // An attacker's defense weight is exactly zero, so the defense half cannot fall — but it must
+        // not RISE either, which is precisely what shrinking the divisor used to do.
+        List<Player> eleven = standardXi();
+        TacticalProfile prof = profile(Mentality.BALANCED, "4-4-2", Pressing.MEDIUM, Marking.ZONAL, eleven);
+
+        TeamMatchInput withHim = calc.compute(eleven, prof);
+        TeamMatchInput withoutHim = calc.compute(minus(eleven, 10), prof);   // an attacker walks
+
+        assertThat(withoutHim.attack()).isLessThan(withHim.attack());
+        assertThat(withoutHim.defense()).isLessThanOrEqualTo(withHim.defense());
+    }
+
     // ---- position-fit penalty: tactical DISTANCE between the slot and the player's positions ----
 
     @Test
