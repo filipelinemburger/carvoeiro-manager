@@ -12,8 +12,10 @@ import java.util.List;
  *       managed club has a fixture. {@code ineligibleStarters} is only populated in that case.</li>
  *   <li>{@code ineligibleStarters} — players in the saved starting XI who cannot play the next
  *       match: suspended, injured, or on loan and not released to face this particular opponent.
- *       Non-empty here means advancing would start a match with an ineligible starter selected
- *       (UI blocks the advance — the manager must fix the lineup first).</li>
+ *       Non-empty here means advancing would start a match with an ineligible starter selected.
+ *       The UI blocks the advance for SUSPENDED and INJURED — the manager must fix the lineup
+ *       first — but LOAN_BARRED is only a warning: the engine drops him and charges the club for
+ *       the missing man, and blocking it too could leave a thin squad unable to advance at all.</li>
  *   <li>{@code windowClosingAfterAdvance} — true when the transfer window is open now but the next
  *       event lands outside it (this advance closes the window).</li>
  *   <li>{@code pendingTransfers} — count of unresolved offers (PENDING/COUNTERED) involving the

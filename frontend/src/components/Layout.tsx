@@ -509,7 +509,7 @@ export function Layout({ children }: LayoutProps) {
               icon={<WarningAmberIcon fontSize="inherit" />}
               sx={{ mb: 2, borderRadius: 2 }}
             >
-              Jogadores impedidos por empréstimo (o time jogará com um a menos):{' '}
+              Jogadores impedidos por empréstimo (serão substituídos, ou o time jogará com um a menos):{' '}
               {loanBarredStarters.map(s => s.playerName).join(', ')}
             </Alert>
           )}
