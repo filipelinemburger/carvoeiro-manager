@@ -35,19 +35,23 @@ describe('minutesPlayed', () => {
   })
 
   it('a starter taken off at minute 55, clock at 80, has played 55 minutes', () => {
+    // onPitch: false is the production-shaped value for a player who has already been subbed
+    // off (see LiveMatchService.onPitchFor on the backend) — this is the case the fix targets.
     const events: LiveEvent[] = [
       event({ minute: 55, type: 'SUBSTITUTION', home: true, playerId: 'p1', playerInId: 'other1' }),
     ]
-    const result = minutesPlayed(player({ playerId: 'p1', onPitch: true }), events, 80)
+    const result = minutesPlayed(player({ playerId: 'p1', onPitch: false }), events, 80)
     expect(result).toBe(55)
   })
 
   it('a substitute who came on at 60 and went off at 75 has played 15 minutes', () => {
+    // onPitch: false for realism (the player has since been subbed off); cosmetic here since
+    // an entry event is found and the onPitch gate is never reached.
     const events: LiveEvent[] = [
       event({ minute: 60, type: 'SUBSTITUTION', home: true, playerInId: 'p1', playerId: 'other1' }),
       event({ minute: 75, type: 'SUBSTITUTION', home: true, playerId: 'p1', playerInId: 'other2' }),
     ]
-    const result = minutesPlayed(player({ playerId: 'p1', onPitch: true }), events, 80)
+    const result = minutesPlayed(player({ playerId: 'p1', onPitch: false }), events, 80)
     expect(result).toBe(15)
   })
 
@@ -73,11 +77,13 @@ describe('minutesPlayed', () => {
     // Regression test: exit at minute 80 should not be used if it appears before
     // entry at minute 60 in the events array. Ensures the function does not assume
     // chronological array order and does independent scans.
+    // onPitch: false for realism (the player has since gone off); cosmetic here since an
+    // entry event is found and the onPitch gate is never reached.
     const events: LiveEvent[] = [
       event({ minute: 80, type: 'SUBSTITUTION', home: true, playerId: 'p1', playerInId: 'other1' }),
       event({ minute: 60, type: 'SUBSTITUTION', home: true, playerInId: 'p1', playerId: 'other2' }),
     ]
-    const result = minutesPlayed(player({ playerId: 'p1', onPitch: true }), events, 90)
+    const result = minutesPlayed(player({ playerId: 'p1', onPitch: false }), events, 90)
     // Entry = 60, Exit = 80, Result = 20
     expect(result).toBe(20)
   })
@@ -91,11 +97,27 @@ describe('minutesPlayed', () => {
   })
 
   it('a red-carded player stops accumulating minutes at the dismissal, not the current clock', () => {
+    // onPitch: false for realism (a RED_CARD removes the player from the on-pitch list per
+    // LiveMatchService.onPitchFor); cosmetic here since an entry event is found and the onPitch
+    // gate is never reached.
     const events: LiveEvent[] = [
       event({ minute: 40, type: 'RED_CARD', home: true, playerId: 'p1' }),
     ]
-    const result = minutesPlayed(player({ playerId: 'p1', onPitch: true }), events, 80)
+    const result = minutesPlayed(player({ playerId: 'p1', onPitch: false }), events, 80)
     expect(result).toBe(40)
+  })
+
+  it('a starter sent off (no entry event, onPitch false) still gets their real minutes, not 0', () => {
+    // A starter has no SUBSTITUTION entry event. Once sent off, onPitch also flips to false
+    // (LiveMatchService.onPitchFor drops the player from the on-pitch list), so the "never
+    // played" gate must rely on the exit event (here RED_CARD) to tell this apart from an unused
+    // substitute, rather than on onPitch alone. Distinct minute/clock from the case above so this
+    // is not a duplicate assertion.
+    const events: LiveEvent[] = [
+      event({ minute: 25, type: 'RED_CARD', home: true, playerId: 'p1' }),
+    ]
+    const result = minutesPlayed(player({ playerId: 'p1', onPitch: false }), events, 90)
+    expect(result).toBe(25)
   })
 })
 

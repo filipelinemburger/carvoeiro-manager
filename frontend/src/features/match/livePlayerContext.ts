@@ -13,9 +13,11 @@ export const POSITION_ORDER = ['GK', 'DEF', 'MID', 'ATT'] as const
  *
  * Entry minute: the minute of the first SUBSTITUTION event where playerInId === playerId. When
  * there is no such event, the player is credited an implicit entry at minute 0 ("started the
- * match") only when `player.onPitch` is true. A player with neither an entry event nor
- * `onPitch` true has never taken the field, and this function returns 0 immediately without
- * running the exit scan below.
+ * match") when `player.onPitch` is true, OR when the event stream shows the player leaving the
+ * match (a SUBSTITUTION or RED_CARD event carrying their playerId) — a starter who has since
+ * been subbed off or sent off is neither `onPitch` nor has an entry event, but did start. A
+ * player with no entry event, `onPitch` false, and no exit event has never taken the field, and
+ * this function returns 0 immediately without running the exit scan below.
  *
  * Exit minute: the minute of the first SUBSTITUTION or RED_CARD event at or after the entry
  * minute where playerId === playerId (the player went off, subbed or sent off), or
@@ -45,8 +47,14 @@ export function minutesPlayed(player: LivePlayer, events: LiveEvent[], currentMi
   }
 
   if (!entered) {
-    // No recorded entry: an unused substitute has never played at all.
-    if (!player.onPitch) {
+    // No recorded entry: a player who never entered still started the match if the event
+    // stream shows them leaving it (subbed off or sent off) — `onPitch` alone can't tell a
+    // subbed-off/sent-off starter apart from an unused substitute, since both read false.
+    const hasExit = events.some(event =>
+      (event.type === 'SUBSTITUTION' || event.type === 'RED_CARD') && event.playerId === playerId)
+
+    if (!player.onPitch && !hasExit) {
+      // No entry, not currently on the pitch, and never left it either: never played at all.
       return 0
     }
     entryMinute = 0
