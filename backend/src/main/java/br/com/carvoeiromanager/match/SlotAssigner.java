@@ -107,21 +107,36 @@ final class SlotAssigner {
      */
     static Map<UUID, FormationSlots.Slot> assignToSlots(List<Player> xi, String formation,
                                                         Map<UUID, Integer> pinnedSlotIndexes) {
+        return slotsFor(assignToSlotIndexes(xi, formation, pinnedSlotIndexes), formation);
+    }
+
+    /**
+     * Index form of {@link #assignToSlots(List, String, Map)} — the same pinned-first, greedy-leftover
+     * assignment, reporting each player's INDEX into {@code FormationSlots.of(formation)} instead of the
+     * {@link FormationSlots.Slot}. The index is the only thing that tells two slots accepting the same
+     * positions apart (a 4-4-2's two centre-back slots are equal {@code Slot}s), so anything that must
+     * know WHERE a player stands — the live pitch, a manual rearrangement — needs this form. A pin that
+     * is out of range or already claimed is ignored and that player joins the leftovers.
+     */
+    static Map<UUID, Integer> assignToSlotIndexes(List<Player> xi, String formation,
+                                                  Map<UUID, Integer> pinnedSlotIndexes) {
         List<FormationSlots.Slot> slots = FormationSlots.of(formation);
-        Map<UUID, FormationSlots.Slot> assignments = new HashMap<>();
+        Map<UUID, Integer> assignments = new HashMap<>();
         Set<Integer> taken = new HashSet<>();
         List<Player> leftovers = new ArrayList<>();
         for (Player p : xi) {
             Integer idx = pinnedSlotIndexes.get(p.getId());
             if (idx != null && idx >= 0 && idx < slots.size() && taken.add(idx)) {
-                assignments.put(p.getId(), slots.get(idx));
+                assignments.put(p.getId(), idx);
             } else {
                 leftovers.add(p);
             }
         }
+        List<Integer> freeIndexes = new ArrayList<>();
         List<FormationSlots.Slot> freeSlots = new ArrayList<>();
         for (int i = 0; i < slots.size(); i++) {
             if (!taken.contains(i)) {
+                freeIndexes.add(i);
                 freeSlots.add(slots.get(i));
             }
         }
@@ -130,10 +145,18 @@ final class SlotAssigner {
         Player[] picked = assign(freeSlots, leftovers, byRating);
         for (int i = 0; i < picked.length; i++) {
             if (picked[i] != null) {
-                assignments.put(picked[i].getId(), freeSlots.get(i));
+                assignments.put(picked[i].getId(), freeIndexes.get(i));
             }
         }
         return assignments;
+    }
+
+    /** Resolves slot indexes against {@code formation}'s ordered slot list. Indexes must be in range. */
+    static Map<UUID, FormationSlots.Slot> slotsFor(Map<UUID, Integer> slotIndexes, String formation) {
+        List<FormationSlots.Slot> slots = FormationSlots.of(formation);
+        Map<UUID, FormationSlots.Slot> resolved = new HashMap<>();
+        slotIndexes.forEach((id, index) -> resolved.put(id, slots.get(index)));
+        return resolved;
     }
 
     /**

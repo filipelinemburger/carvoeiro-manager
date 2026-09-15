@@ -6,6 +6,7 @@ import br.com.carvoeiromanager.player.Position;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -124,6 +125,49 @@ class SlotAssignerTest {
         List<Player> xi = wellFormed442();
         assertThat(SlotAssigner.assignToSlots(xi, "4-4-2", Map.of()))
                 .isEqualTo(SlotAssigner.assignToSlots(xi, "4-4-2"));
+    }
+
+    @Test
+    void pinnedIndexesAreHonouredVerbatimAndEveryoneElseFillsTheFreeIndexes() {
+        List<Player> xi = wellFormed442();
+        Player first = xi.get(1);
+        Player second = xi.get(2);
+
+        Map<UUID, Integer> indexes = SlotAssigner.assignToSlotIndexes(
+                xi, "4-4-2", Map.of(first.getId(), 3, second.getId(), 0));
+
+        assertThat(indexes).hasSize(11);
+        assertThat(indexes.get(first.getId())).isEqualTo(3);
+        assertThat(indexes.get(second.getId())).isEqualTo(0);
+        assertThat(new HashSet<>(indexes.values())).containsExactlyInAnyOrder(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+    }
+
+    @Test
+    void aClaimedOrOutOfRangePinIsIgnoredAndThatPlayerIsPlacedGreedily() {
+        List<Player> xi = wellFormed442();
+        Player claimant = xi.get(1);
+        Player latecomer = xi.get(2);
+        Player outOfRange = xi.get(3);
+
+        Map<UUID, Integer> indexes = SlotAssigner.assignToSlotIndexes(xi, "4-4-2",
+                Map.of(claimant.getId(), 4, latecomer.getId(), 4, outOfRange.getId(), 99));
+
+        // XI order decides a contested pin: the earlier player keeps it.
+        assertThat(indexes.get(claimant.getId())).isEqualTo(4);
+        assertThat(indexes.get(latecomer.getId())).isNotEqualTo(4);
+        assertThat(indexes.get(outOfRange.getId())).isBetween(0, 10);
+        assertThat(new HashSet<>(indexes.values())).hasSize(11);
+    }
+
+    @Test
+    void theSlotFormIsExactlyTheIndexFormResolvedAgainstTheFormation() {
+        List<Player> xi = wellFormed442();
+        Map<UUID, Integer> pinned = Map.of(xi.get(5).getId(), 7);
+
+        Map<UUID, Integer> indexes = SlotAssigner.assignToSlotIndexes(xi, "4-3-3", pinned);
+
+        assertThat(SlotAssigner.assignToSlots(xi, "4-3-3", pinned))
+                .isEqualTo(SlotAssigner.slotsFor(indexes, "4-3-3"));
     }
 
     // ---- helpers ----
