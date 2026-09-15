@@ -104,10 +104,10 @@ describe('LiveMatchPage', () => {
       ...STATE,
       minute: 0,
       onPitch: [
-        { playerId: 'h1', name: 'Goleiro Casa', position: 'GK', overall: 60, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+        { playerId: 'h1', name: 'Goleiro Casa', position: 'GK', overall: 60, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
       opponentOnPitch: [
-        { playerId: 'a1', name: 'Goleiro Fora', position: 'GK', overall: 58, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+        { playerId: 'a1', name: 'Goleiro Fora', position: 'GK', overall: 58, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
     } as never)
     renderPage()
@@ -127,10 +127,10 @@ describe('LiveMatchPage', () => {
       minute: 0,
       managedIsHome: false,
       onPitch: [
-        { playerId: 'h1', name: 'Goleiro Visitante', position: 'GK', overall: 60, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+        { playerId: 'h1', name: 'Goleiro Visitante', position: 'GK', overall: 60, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
       opponentOnPitch: [
-        { playerId: 'a1', name: 'Goleiro Mandante', position: 'GK', overall: 58, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+        { playerId: 'a1', name: 'Goleiro Mandante', position: 'GK', overall: 58, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
     } as never)
     renderPage()
@@ -475,7 +475,7 @@ describe('LiveMatchPage', () => {
     vi.mocked(getLiveMatch).mockResolvedValue({
       ...STATE, status: 'IN_PROGRESS',
       onPitch: [
-        { playerId: 'p1', name: 'Camisa 9', position: 'ATT', overall: 70, fitness: 80, hobbled: false, onPitch: true, used: false, eligible: true, role: 'ST' },
+        { playerId: 'p1', name: 'Camisa 9', position: 'ATT', overall: 70, fitness: 80, hobbled: false, onPitch: true, used: false, eligible: true, role: 'ST', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
       playerRatings: [
         { playerId: 'p1', name: 'Camisa 9', position: 'ATT', minutesPlayed: 90, goals: 1, rating: 7.0 },
@@ -497,11 +497,11 @@ describe('LiveMatchPage', () => {
       ...STATE,
       onPitch: [
         { playerId: 'p1', name: 'Goleiro Titular', position: 'GK', overall: 70, fitness: 100,
-          hobbled: false, onPitch: true, used: false, eligible: true, role: 'GOALKEEPER' },
+          hobbled: false, onPitch: true, used: false, eligible: true, role: 'GOALKEEPER', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
       opponentOnPitch: [
         { playerId: 'o1', name: 'Zagueiro Rival', position: 'DEF', overall: 65, fitness: 100,
-          hobbled: true, onPitch: true, used: false, eligible: true, role: 'STOPPER' },
+          hobbled: true, onPitch: true, used: false, eligible: true, role: 'STOPPER', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
     } as never)
     renderPage()
@@ -519,11 +519,11 @@ describe('LiveMatchPage', () => {
       managedIsHome: false,
       onPitch: [
         { playerId: 'p1', name: 'Managed Titular', position: 'MID', overall: 70, fitness: 100,
-          hobbled: false, onPitch: true, used: false, eligible: true, role: 'BOX_TO_BOX' },
+          hobbled: false, onPitch: true, used: false, eligible: true, role: 'BOX_TO_BOX', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
       opponentOnPitch: [
         { playerId: 'o1', name: 'Home Rival Titular', position: 'MID', overall: 65, fitness: 100,
-          hobbled: false, onPitch: true, used: false, eligible: true, role: 'BOX_TO_BOX' },
+          hobbled: false, onPitch: true, used: false, eligible: true, role: 'BOX_TO_BOX', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
     } as never)
     renderPage()
@@ -688,8 +688,8 @@ describe('LiveMatchPage', () => {
   it('does not race the per-minute advance when handleApply auto-resumes while a skip is in flight (regression: resume() must honor its in-flight guard from the handleApply auto-resume call site, not just from disabled buttons)', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({
       ...STATE, status: 'IN_PROGRESS', minute: 60,
-      onPitch: [{ playerId: 'p1', name: 'Titular', position: 'MID', overall: 75, fitness: 40, hobbled: false, onPitch: true, used: false, eligible: true }],
-      bench: [{ playerId: 'b1', name: 'Reserva', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true }],
+      onPitch: [{ playerId: 'p1', name: 'Titular', position: 'MID', overall: 75, fitness: 40, hobbled: false, onPitch: true, used: false, eligible: true, slotIndex: null, detailedPosition: null, altPositions: [] }],
+      bench: [{ playerId: 'b1', name: 'Reserva', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true, slotIndex: null, detailedPosition: null, altPositions: [] }],
       subsRemaining: 5,
     } as never)
     // Never resolves — the skip (advanceToMut) stays in flight for the whole test, exactly
@@ -795,8 +795,8 @@ describe('LiveMatchPage', () => {
   it('opens the sub dialog, queues a pair, confirms, and calls substituteLiveMatch', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({
       ...STATE, status: 'PAUSED_INJURY',
-      onPitch: [{ playerId: 'p1', name: 'Titular', position: 'MID', overall: 75, fitness: 40, hobbled: true, onPitch: true, used: false, eligible: true }],
-      bench: [{ playerId: 'b1', name: 'Reserva', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true }],
+      onPitch: [{ playerId: 'p1', name: 'Titular', position: 'MID', overall: 75, fitness: 40, hobbled: true, onPitch: true, used: false, eligible: true, slotIndex: null, detailedPosition: null, altPositions: [] }],
+      bench: [{ playerId: 'b1', name: 'Reserva', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true, slotIndex: null, detailedPosition: null, altPositions: [] }],
       subsRemaining: 5,
     } as never)
     vi.mocked(substituteLiveMatch).mockResolvedValue({ ...STATE, subsRemaining: 4 } as never)
@@ -842,12 +842,12 @@ describe('LiveMatchPage', () => {
     vi.mocked(getLiveMatch).mockResolvedValue({
       ...STATE, status: 'IN_PROGRESS',
       onPitch: [
-        { playerId: 'p1', name: 'Titular', position: 'MID', overall: 75, fitness: 40, hobbled: false, onPitch: true, used: false, eligible: true },
-        { playerId: 'p2', name: 'Titular Dois', position: 'DEF', overall: 72, fitness: 60, hobbled: false, onPitch: true, used: false, eligible: true },
+        { playerId: 'p1', name: 'Titular', position: 'MID', overall: 75, fitness: 40, hobbled: false, onPitch: true, used: false, eligible: true, slotIndex: null, detailedPosition: null, altPositions: [] },
+        { playerId: 'p2', name: 'Titular Dois', position: 'DEF', overall: 72, fitness: 60, hobbled: false, onPitch: true, used: false, eligible: true, slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
       bench: [
-        { playerId: 'b1', name: 'Reserva', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true },
-        { playerId: 'b2', name: 'Reserva Dois', position: 'DEF', overall: 68, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true },
+        { playerId: 'b1', name: 'Reserva', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true, slotIndex: null, detailedPosition: null, altPositions: [] },
+        { playerId: 'b2', name: 'Reserva Dois', position: 'DEF', overall: 68, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true, slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
       subsRemaining: 5,
     } as never)
@@ -885,8 +885,8 @@ describe('LiveMatchPage', () => {
   it('auto-resumes play after a substitution made during an injury pause', async () => {
     const paused = {
       ...STATE, status: 'PAUSED_INJURY',
-      onPitch: [{ playerId: 'p1', name: 'Titular', position: 'MID', overall: 75, fitness: 40, hobbled: true, onPitch: true, used: false, eligible: true }],
-      bench: [{ playerId: 'b1', name: 'Reserva', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true }],
+      onPitch: [{ playerId: 'p1', name: 'Titular', position: 'MID', overall: 75, fitness: 40, hobbled: true, onPitch: true, used: false, eligible: true, slotIndex: null, detailedPosition: null, altPositions: [] }],
+      bench: [{ playerId: 'b1', name: 'Reserva', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true, slotIndex: null, detailedPosition: null, altPositions: [] }],
       subsRemaining: 5,
     }
     vi.mocked(getLiveMatch).mockResolvedValue(paused as never)
@@ -939,8 +939,8 @@ describe('LiveMatchPage', () => {
   it('queues a sub AND changes mentality, clicks Continuar, calls both substituteLiveMatch and changeTactics', async () => {
     vi.mocked(getLiveMatch).mockResolvedValue({
       ...STATE, status: 'IN_PROGRESS',
-      onPitch: [{ playerId: 'p1', name: 'Titular', position: 'MID', overall: 75, fitness: 40, hobbled: false, onPitch: true, used: false, eligible: true }],
-      bench: [{ playerId: 'b1', name: 'Reserva', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true }],
+      onPitch: [{ playerId: 'p1', name: 'Titular', position: 'MID', overall: 75, fitness: 40, hobbled: false, onPitch: true, used: false, eligible: true, slotIndex: null, detailedPosition: null, altPositions: [] }],
+      bench: [{ playerId: 'b1', name: 'Reserva', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: false, used: false, eligible: true, slotIndex: null, detailedPosition: null, altPositions: [] }],
       subsRemaining: 5,
     } as never)
     vi.mocked(substituteLiveMatch).mockResolvedValue({ ...STATE, subsRemaining: 4 } as never)
@@ -1035,10 +1035,10 @@ describe('LiveMatchPage', () => {
       ...STATE,
       minute: 0,
       onPitch: [
-        { playerId: 'h1', name: 'Goleiro Casa', position: 'GK', overall: 60, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+        { playerId: 'h1', name: 'Goleiro Casa', position: 'GK', overall: 60, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
       opponentOnPitch: [
-        { playerId: 'a1', name: 'Goleiro Fora', position: 'GK', overall: 58, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+        { playerId: 'a1', name: 'Goleiro Fora', position: 'GK', overall: 58, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
     } as never)
     vi.mocked(getPlayer).mockResolvedValue({ ...MOCK_PLAYER, id: 'a1', name: 'Goleiro Fora', position: 'GK' } as never)
@@ -1057,10 +1057,10 @@ describe('LiveMatchPage', () => {
       ...STATE,
       minute: 0,
       onPitch: [
-        { playerId: 'h1', name: 'Goleiro Casa', position: 'GK', overall: 60, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+        { playerId: 'h1', name: 'Goleiro Casa', position: 'GK', overall: 60, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
       opponentOnPitch: [
-        { playerId: 'a1', name: 'Goleiro Fora', position: 'GK', overall: 58, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK' },
+        { playerId: 'a1', name: 'Goleiro Fora', position: 'GK', overall: 58, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'GK', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
     } as never)
     vi.mocked(getPlayer).mockResolvedValue({ ...MOCK_PLAYER, id: 'h1', name: 'Goleiro Casa', position: 'GK' } as never)
@@ -1422,7 +1422,7 @@ describe('LiveMatchPage', () => {
     vi.mocked(getLiveMatch).mockResolvedValue({
       ...STATE,
       opponentOnPitch: [
-        { playerId: 'o1', name: 'Zagueiro Rival', position: 'DEF', overall: 65, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'STOPPER' },
+        { playerId: 'o1', name: 'Zagueiro Rival', position: 'DEF', overall: 65, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'STOPPER', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
       opponentTactics: { mentality: 'ATTACKING', gameStyle: 'PRESSAO_ALTA', attackZone: 'CENTRO', pressing: 'HIGH', marking: 'MAN_TIGHT', formation: '3-5-2' },
     } as never)
@@ -1453,10 +1453,10 @@ describe('LiveMatchPage', () => {
       ...STATE,
       managedIsHome: false,
       onPitch: [
-        { playerId: 'p1', name: 'Managed Titular', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'BOX_TO_BOX' },
+        { playerId: 'p1', name: 'Managed Titular', position: 'MID', overall: 70, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'BOX_TO_BOX', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
       opponentOnPitch: [
-        { playerId: 'o1', name: 'Home Rival Titular', position: 'MID', overall: 65, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'BOX_TO_BOX' },
+        { playerId: 'o1', name: 'Home Rival Titular', position: 'MID', overall: 65, fitness: 100, hobbled: false, onPitch: true, used: false, eligible: true, role: 'BOX_TO_BOX', slotIndex: null, detailedPosition: null, altPositions: [] },
       ],
     } as never)
     renderPage()
