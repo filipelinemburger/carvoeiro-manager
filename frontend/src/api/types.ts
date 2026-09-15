@@ -843,6 +843,12 @@ export type LiveTactics = {
   formation: string
 }
 
+/** A manual rearrangement: every on-pitch player's slot index, plus only the roles set by hand. */
+export type LiveArrangement = {
+  slotIndexes: Record<string, number>
+  roles: Record<string, RoleArchetype>
+}
+
 export type LiveTacticsRequest = {
   mentality: string
   gameStyle: string
@@ -850,6 +856,8 @@ export type LiveTacticsRequest = {
   pressing: string
   marking: string
   formation: string
+  /** Omitted when nothing was rearranged, so a tactics-only apply sends exactly what it always has. */
+  arrangement?: LiveArrangement
 }
 
 export type LiveEvent = {
@@ -875,6 +883,10 @@ export type LivePlayer = {
   used: boolean
   eligible: boolean
   role: string
+  /** Slot index into the side's displayed formation; null on the bench or when the server can't know it. */
+  slotIndex: number | null
+  detailedPosition: DetailedPosition | null
+  altPositions: DetailedPosition[]
 }
 
 /** A managed player's 0–10 performance grade for a finished match. */

@@ -145,6 +145,7 @@ function player(overrides: Partial<LivePlayer> & Pick<LivePlayer, 'playerId'>): 
   return {
     name: 'Jogador', position: 'MID', overall: 70, fitness: 100,
     hobbled: false, onPitch: true, used: false, eligible: true, role: 'MIDFIELDER',
+    slotIndex: null, detailedPosition: null, altPositions: [],
     ...overrides,
   }
 }

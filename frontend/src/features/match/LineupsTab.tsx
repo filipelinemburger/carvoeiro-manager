@@ -18,6 +18,10 @@ export function buildTeam(players: LivePlayer[], formation: string, colors: Live
       position: p.position as PlacedPlayer['position'],
       fitness: p.fitness,
       badges: p.hobbled ? { injured: true } : undefined,
+      detailedPosition: p.detailedPosition,
+      altPositions: p.altPositions,
+      // Pitch places explicitly only when EVERY player has an index; one null falls back to the line-zip.
+      slotIndex: p.slotIndex ?? undefined,
     })),
   }
 }

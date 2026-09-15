@@ -5,11 +5,13 @@ import type { LiveMatchState, LivePlayer, PlayerRating } from '../../api/types'
 const managedPlayer: LivePlayer = {
   playerId: 'm1', name: 'Meu Jogador', position: 'ATT', overall: 78, fitness: 90,
   hobbled: false, onPitch: true, used: true, eligible: true, role: 'ATT',
+  slotIndex: null, detailedPosition: null, altPositions: [],
 }
 
 const opponentPlayer: LivePlayer = {
   playerId: 'o1', name: 'Jogador Rival', position: 'DEF', overall: 70, fitness: 85,
   hobbled: false, onPitch: true, used: true, eligible: true, role: 'DEF',
+  slotIndex: null, detailedPosition: null, altPositions: [],
 }
 
 const managedRating: PlayerRating = {
