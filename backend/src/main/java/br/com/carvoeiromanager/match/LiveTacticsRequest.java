@@ -11,5 +11,12 @@ public record LiveTacticsRequest(
         String attackZone,
         @NotBlank String pressing,
         @NotBlank String marking,
-        @NotBlank String formation) {
+        @NotBlank String formation,
+        // Optional: null means "no rearrangement" — every client from before live positioning.
+        ArrangementRequest arrangement) {
+
+    public LiveTacticsRequest(String mentality, String gameStyle, String attackZone,
+                              String pressing, String marking, String formation) {
+        this(mentality, gameStyle, attackZone, pressing, marking, formation, null);
+    }
 }

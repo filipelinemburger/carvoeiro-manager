@@ -59,6 +59,9 @@ public class LiveMatch {
     @Column(name = "tactics_schedule", nullable = false, columnDefinition = "TEXT")
     private String tacticsSchedule;
 
+    @Column(name = "slot_schedule", nullable = false, columnDefinition = "TEXT")
+    private String slotSchedule;
+
     /**
      * JSON snapshot of the round's OTHER fixtures, pre-simulated at kickoff (see
      * {@code LiveMatchService#kickoff}) so {@code finish} can replay them instead of
@@ -90,6 +93,7 @@ public class LiveMatch {
         this.awayBench = awayBench;
         this.subSchedule = subSchedule;
         this.tacticsSchedule = "[]";
+        this.slotSchedule = "[]";
     }
 
     public static LiveMatch create(UUID saveGameId, UUID fixtureId, UUID competitionId, int round,
@@ -116,10 +120,12 @@ public class LiveMatch {
     public String getSubSchedule() { return subSchedule; }
 
     public String getTacticsSchedule() { return tacticsSchedule; }
+    public String getSlotSchedule() { return slotSchedule; }
     public String getParallelScores() { return parallelScores; }
 
     public void setCommittedMinute(int committedMinute) { this.committedMinute = committedMinute; }
     public void setSubSchedule(String subSchedule) { this.subSchedule = subSchedule; }
     public void setTacticsSchedule(String tacticsSchedule) { this.tacticsSchedule = tacticsSchedule; }
+    public void setSlotSchedule(String slotSchedule) { this.slotSchedule = slotSchedule; }
     public void setParallelScores(String parallelScores) { this.parallelScores = parallelScores; }
 }

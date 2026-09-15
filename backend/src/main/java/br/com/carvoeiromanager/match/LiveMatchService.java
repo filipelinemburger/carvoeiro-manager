@@ -12,6 +12,7 @@ import br.com.carvoeiromanager.competition.FixtureRepository;
 import br.com.carvoeiromanager.finance.AttendanceCalculator;
 import br.com.carvoeiromanager.loan.LoanEligibility;
 import br.com.carvoeiromanager.player.AttackZone;
+import br.com.carvoeiromanager.player.DetailedPosition;
 import br.com.carvoeiromanager.player.Formation;
 import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
@@ -19,6 +20,7 @@ import br.com.carvoeiromanager.player.Mentality;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerRepository;
 import br.com.carvoeiromanager.player.Position;
+import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.player.RoleAssignment;
 import br.com.carvoeiromanager.player.Pressing;
 import br.com.carvoeiromanager.season.AdvanceResponse;
@@ -38,6 +40,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -277,11 +280,34 @@ public class LiveMatchService {
         String formation = parseFormation(req.formation());
 
         int minute = Math.min(precheckTimeline.finalMinute(), lm.getCommittedMinute() + 1);
-        List<TimedTactics> tactics = new ArrayList<>(deserializeTactics(lm.getTacticsSchedule()));
-        // A null gameStyle/attackZone (client omitted it) records "keep current" in the schedule entry.
-        tactics.add(new TimedTactics(minute, lm.isManagedIsHome(), mentality, gameStyle, attackZone,
-                pressing, marking, formation));
-        lm.setTacticsSchedule(serialize(tactics));
+
+        // Validated before anything is persisted, so a bad arrangement rejects the whole request.
+        TimedSlots slots = req.arrangement() == null ? null
+                : parseArrangement(lm, precheckCfg, precheckTimeline, minute, formation, req.arrangement());
+
+        // Plan ruling R8: an arrangement-only apply re-sends the tactics already in force. Recording them
+        // again would schedule a no-op TimedTactics and put a spurious "mudança tática" in the commentary,
+        // so they are written only when something in them actually changed. Compared against the tactics
+        // in force at `minute`, which includes a change already scheduled for that same minute.
+        LiveTactics inForce = tacticsFor(precheckCfg, minute, lm.isManagedIsHome());
+        boolean tacticsChanged = !inForce.mentality().equals(mentality.name())
+                || !inForce.pressing().equals(pressing.name())
+                || !inForce.marking().equals(marking.name())
+                || !inForce.formation().equals(formation)
+                || (gameStyle != null && !inForce.gameStyle().equals(gameStyle.name()))
+                || (attackZone != null && !inForce.attackZone().equals(attackZone.name()));
+        if (slots == null || tacticsChanged) {
+            List<TimedTactics> tactics = new ArrayList<>(deserializeTactics(lm.getTacticsSchedule()));
+            // A null gameStyle/attackZone (client omitted it) records "keep current" in the schedule entry.
+            tactics.add(new TimedTactics(minute, lm.isManagedIsHome(), mentality, gameStyle, attackZone,
+                    pressing, marking, formation));
+            lm.setTacticsSchedule(serialize(tactics));
+        }
+        if (slots != null) {
+            List<TimedSlots> schedule = new ArrayList<>(deserializeSlots(lm.getSlotSchedule()));
+            schedule.add(slots);
+            lm.setSlotSchedule(serialize(schedule));
+        }
         liveMatchRepository.save(lm);
         return toState(lm, save);
     }
@@ -334,6 +360,78 @@ public class LiveMatchService {
             if (f.code().equals(code)) return code;
         }
         throw new ApiException(ErrorCode.INVALID_TACTICS, "Unknown formation: " + code);
+    }
+
+    /**
+     * Plan ruling R7: an arrangement must place exactly the managed side's players on the pitch at
+     * `minute` — the committed on-pitch set with the substitutions already scheduled for that same
+     * minute applied, since those land before the arrangement does (engine order: tactics, subs, slots).
+     * After a red card that is ten players, not eleven.
+     */
+    private TimedSlots parseArrangement(LiveMatch lm, LiveMatchConfig cfg, LiveTimeline timeline, int minute,
+                                        String formation, ArrangementRequest req) {
+        boolean home = lm.isManagedIsHome();
+        List<Player> managedXi = home ? cfg.homeXi() : cfg.awayXi();
+        List<UUID> onPitch = new ArrayList<>(onPitchManaged(lm, timeline, lm.getCommittedMinute(), managedXi).onPitch());
+        for (LiveSub sub : cfg.subSchedule()) {
+            if (sub.home() == home && sub.minute() == minute && onPitch.remove(sub.outId())) {
+                onPitch.add(sub.inId());
+            }
+        }
+
+        if (req.slotIndexes() == null) {
+            throw invalidArrangement("An arrangement must place every player on the pitch");
+        }
+        List<FormationSlots.Slot> slots = FormationSlots.of(formation);
+        Map<UUID, Integer> indexes = new HashMap<>();
+        for (Map.Entry<String, Integer> e : req.slotIndexes().entrySet()) {
+            Integer index = e.getValue();
+            if (index == null || index < 0 || index >= slots.size()) {
+                throw invalidArrangement("Slot index out of range for " + formation + ": " + index);
+            }
+            if (indexes.containsValue(index)) {
+                throw invalidArrangement("Two players cannot share slot " + index);
+            }
+            indexes.put(parsePlayerId(e.getKey()), index);
+        }
+        if (!indexes.keySet().equals(new HashSet<>(onPitch))) {
+            throw invalidArrangement("An arrangement must place exactly the players on the pitch");
+        }
+
+        Map<UUID, RoleArchetype> roles = new HashMap<>();
+        if (req.roles() != null) {
+            for (Map.Entry<String, String> e : req.roles().entrySet()) {
+                UUID id = parsePlayerId(e.getKey());
+                Integer index = indexes.get(id);
+                if (index == null) {
+                    throw invalidArrangement("A role was given for a player the arrangement does not place");
+                }
+                RoleArchetype archetype;
+                try {
+                    archetype = RoleArchetype.valueOf(e.getValue());
+                } catch (IllegalArgumentException | NullPointerException ex) {
+                    throw invalidArrangement("Unknown role: " + e.getValue());
+                }
+                DetailedPosition position = slots.get(index).accepted().iterator().next();
+                if (!archetype.validFor(position)) {
+                    throw invalidArrangement(archetype + " is not a valid role for " + position);
+                }
+                roles.put(id, archetype);
+            }
+        }
+        return new TimedSlots(minute, home, Map.copyOf(indexes), Map.copyOf(roles));
+    }
+
+    private static UUID parsePlayerId(String raw) {
+        try {
+            return UUID.fromString(raw);
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            throw invalidArrangement("Unknown player id: " + raw);
+        }
+    }
+
+    private static ApiException invalidArrangement(String message) {
+        return new ApiException(ErrorCode.INVALID_LINEUP, message);
     }
 
     @Transactional
@@ -600,6 +698,7 @@ public class LiveMatchService {
                 clubOf(awayXi), awayXi);
 
         List<TimedTactics> tacticsSchedule = deserializeTactics(lm.getTacticsSchedule());
+        List<TimedSlots> slotSchedule = deserializeSlots(lm.getSlotSchedule());
 
         // Resolved from the fixture's home club, not clubOf(homeXi) (homeXi.get(0).getClubId()) —
         // the same source toState()/finish() use — so this and the display/attendance paths are
@@ -624,7 +723,7 @@ public class LiveMatchService {
 
         return new LiveMatchConfig(lm.getSeed(), homeXi, awayXi, homeBench, awayBench,
                 homeProfile, awayProfile, fitness, subs, tacticsSchedule, !lm.isManagedIsHome(), weather,
-                knockoutDecider, firstLegHomeGoals, firstLegAwayGoals);
+                knockoutDecider, firstLegHomeGoals, firstLegAwayGoals, slotSchedule);
     }
 
     /**
@@ -695,23 +794,28 @@ public class LiveMatchService {
         TacticalProfile managedProfile = managedIsHome ? cfg.homeProfile() : cfg.awayProfile();
         TacticalProfile opponentProfile = managedIsHome ? cfg.awayProfile() : cfg.homeProfile();
 
+        LiveTactics currentTactics = computeCurrentTactics(lm, cfg, minute);
+        LiveTactics opponentTactics = computeOpponentTactics(lm, cfg, minute);
+
         // Managed on-pitch/bench for the sub dialog.
         List<Player> managedXi = managedIsHome ? cfg.homeXi() : cfg.awayXi();
         List<Player> managedBench = managedIsHome ? cfg.homeBench() : cfg.awayBench();
         OnPitch managed = onPitchManaged(lm, timeline, minute, managedXi);
+        Optional<ArrangementSnapshot> managedArrangement = timeline.arrangementAt(minute, managedIsHome);
+        Optional<ArrangementSnapshot> opponentArrangement = timeline.arrangementAt(minute, !managedIsHome);
         List<LivePlayerResponse> onPitch = managed.onPitch().stream()
-                .map(id -> livePlayer(byId.get(id), cfg, managedProfile, true, false, managed.hobbled().contains(id))).toList();
+                .map(id -> livePlayer(byId.get(id), cfg, managedProfile, managedArrangement, currentTactics.formation(),
+                        true, false, managed.hobbled().contains(id))).toList();
         List<LivePlayerResponse> bench = managedBench.stream()
-                .map(p -> livePlayer(p, cfg, managedProfile, false, managed.usedIn().contains(p.getId()), false)).toList();
+                .map(p -> livePlayer(p, cfg, managedProfile, managedArrangement, currentTactics.formation(),
+                        false, managed.usedIn().contains(p.getId()), false)).toList();
 
         // Opponent on-pitch for the ratings sub-tab and the dual-formation pitch view.
         List<Player> opponentXi = managedIsHome ? cfg.awayXi() : cfg.homeXi();
         OnPitch opponent = onPitchOpponent(lm, timeline, minute, opponentXi);
         List<LivePlayerResponse> opponentOnPitch = opponent.onPitch().stream()
-                .map(id -> livePlayer(byId.get(id), cfg, opponentProfile, true, false, opponent.hobbled().contains(id))).toList();
-
-        LiveTactics currentTactics = computeCurrentTactics(lm, cfg, minute);
-        LiveTactics opponentTactics = computeOpponentTactics(lm, cfg, minute);
+                .map(id -> livePlayer(byId.get(id), cfg, opponentProfile, opponentArrangement, opponentTactics.formation(),
+                        true, false, opponent.hobbled().contains(id))).toList();
 
         // Live grades: computed from what has been revealed so far (goals/cards/minutes/score through
         // the committed minute). They start near 6.0 and diverge as the game unfolds; at minute 90
@@ -1157,11 +1261,24 @@ public class LiveMatchService {
     }
 
     private LivePlayerResponse livePlayer(Player p, LiveMatchConfig cfg, TacticalProfile profile,
+                                          Optional<ArrangementSnapshot> arrangement, String displayedFormation,
                                           boolean onPitch, boolean used, boolean hobbled) {
         int fit = cfg.fitness().getOrDefault(p.getId(), 100);
-        RoleAssignment role = RoleAssignment.resolve(profile.roles(), p);
+        // Plan ruling R10: an index is only meaningful against the formation it was assigned under. A
+        // manager's formation change relocates, so the two agree; if they ever differ, "unknown" is the
+        // honest answer and the pitch falls back to its line-zip instead of drawing players in wrong slots.
+        Integer slotIndex = arrangement
+                .filter(a -> a.formation().equals(displayedFormation))
+                .map(a -> a.slotIndexes().get(p.getId()))
+                .orElse(null);
+        RoleAssignment role = arrangement
+                .map(a -> a.roles().get(p.getId()))
+                .orElseGet(() -> RoleAssignment.resolve(profile.roles(), p));
         return new LivePlayerResponse(p.getId().toString(), p.getName(), p.getPosition().name(),
-                p.getOverall(), fit, hobbled, onPitch, used, p.isEligible(), role.archetype().name());
+                p.getOverall(), fit, hobbled, onPitch, used, p.isEligible(), role.archetype().name(),
+                slotIndex,
+                p.getDetailedPosition() == null ? null : p.getDetailedPosition().name(),
+                p.getAltPositions().stream().map(Enum::name).toList());
     }
 
     // ---- helpers ----
@@ -1221,5 +1338,10 @@ public class LiveMatchService {
     List<TimedTactics> deserializeTactics(String json) {
         try { return objectMapper.readValue(json, new TypeReference<List<TimedTactics>>() { }); }
         catch (Exception e) { throw new RuntimeException("Failed to read tactics schedule", e); }
+    }
+
+    List<TimedSlots> deserializeSlots(String json) {
+        try { return objectMapper.readValue(json, new TypeReference<List<TimedSlots>>() { }); }
+        catch (Exception e) { throw new RuntimeException("Failed to read slot schedule", e); }
     }
 }
