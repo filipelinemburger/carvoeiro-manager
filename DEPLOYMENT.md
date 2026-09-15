@@ -98,8 +98,7 @@ call from production breaks.
 | `JWT_SECRET` | JWT signing secret. Generate with `openssl rand -hex 48` |
 | `CORS_ALLOWED_ORIGINS` | Defaults to `https://carvoeiromanager.vercel.app` |
 
-> `deploy/.env.example` shows `carvoeiro-manager.duckdns.org` (with a hyphen). The live host is
-> `carvoeiromanager.duckdns.org`, and `DOMAIN` must match the destination in `frontend/vercel.json`.
+> `DOMAIN` must match the destination host in `frontend/vercel.json`.
 
 Fixed in `deploy/docker-compose.yml`, not in `.env`:
 
