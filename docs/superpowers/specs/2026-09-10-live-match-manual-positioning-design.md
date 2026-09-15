@@ -92,20 +92,23 @@ must reproduce today's behaviour exactly.
 
 ### Replay
 
-`LiveMatchEngine` gains `applySlotChanges(cfg, minute, side, events)`. The existing pair of calls at
-`LiveMatchEngine.java:176-177` is kept as is, and two new calls are appended directly below them,
-giving this exact order for every minute:
+`LiveMatchEngine` gains `applySlotChanges(cfg, minute, side)`, called after **both** sides'
+substitutions for the minute, giving this exact order:
 
 ```
 applyTacticChanges(cfg, minute, home, events);
 applyTacticChanges(cfg, minute, away, events);
-applySlotChanges(cfg, minute, home, events);
-applySlotChanges(cfg, minute, away, events);
+applySubs(cfg, minute, home, events);
+applySubs(cfg, minute, away, events);
+applySlotChanges(cfg, minute, home);
+applySlotChanges(cfg, minute, away);
 ```
 
-The order is load-bearing and must be documented at the call site: a formation change must install
-the new slot list before an arrangement is applied against it. Both sides' tactics settle before
-either side's arrangement, which keeps the two sides symmetric.
+The order is load-bearing and must be documented at the call site. Tactics come first so a formation
+change installs the new slot list before an arrangement is applied against it. Substitutions come
+before arrangements because an arrangement submitted together with a substitution names the incoming
+player, who is only on the pitch once `applySubs` has run. *(Corrected while planning — see "Rulings
+made while planning" below.)*
 
 It rebuilds the side's `TacticalProfile` with
 `SlotAssigner.assignToSlots(xi, formation, entry.slotIndexes())`, then resolves roles from the
@@ -182,6 +185,35 @@ the service and the client never has to sequence two calls.
 - `Pitch` inside the dialog renders the server's arrangement, not the line-zip fallback.
 - A drag produces the expected `arrangement` payload.
 - `LineupsTab` renders the true arrangement once `slotIndex` is present.
+
+## Rulings made while planning
+
+Writing the implementation plan (`docs/superpowers/plans/2026-09-15-live-match-manual-positioning.md`)
+against the code surfaced defects in this spec. These supersede the text above wherever they conflict:
+
+- **Apply order** is tactics → substitutions → arrangement (corrected in *Replay* above). Arrangement
+  before substitutions would reject any arrangement that places the player coming on.
+- **The live arrangement lives on the engine's per-side state, not in `TacticalProfile`.** AI posture
+  swaps rebuild the AI's profile from its kickoff identity and tactics changes rebuild it wholesale;
+  either would silently reset an arrangement held there. The engine overlays it onto the profile when
+  computing strength and goal attribution. `TacticalProfile` gains `slotIndexes` only to carry the
+  kickoff indexes in, because `FormationSlots.Slot` compares by accepted positions — two centre-back
+  slots are equal — so an index can't be recovered from `slotAssignments`.
+- **Decision 4 applies to the manager's formation changes only.** AI posture swaps (`ALL_OUT` → 4-2-4,
+  `PARK_THE_BUS` → 5-4-1) do not relocate; that would be an unrequested balance change. AI
+  substitutes still inherit and are graded.
+- **`TimedSlots.roles` is `Map<UUID, RoleArchetype>`**, not `RoleAssignment`; focus is always the
+  archetype's default for the slot. A player whose slot and formation are unchanged keeps their current
+  role, including one set before the match.
+- **Validation** keys an arrangement by exactly the managed side's on-pitch players at the target minute,
+  with same-minute substitutions applied — ten players after a red card, not "a permutation of 0..10
+  over eleven".
+- **An arrangement-only apply writes no tactics entry**, so no spurious `TACTICS_CHANGE` reaches the
+  commentary, and **a rearrangement emits no timeline event**.
+- **`slotIndex` is reported only when the side's arrangement formation equals its displayed formation**;
+  otherwise it is null and the pitch falls back to its line-zip.
+- **Scope of Decision 5:** `FixtureSimulator` makes no in-match substitutions, so the behaviour change is
+  confined to live matches.
 
 ## Out of scope
 
