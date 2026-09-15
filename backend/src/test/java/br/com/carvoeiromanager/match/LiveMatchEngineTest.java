@@ -1250,12 +1250,19 @@ class LiveMatchEngineTest {
 
     private LiveMatchConfig trackedConfig(long seed, List<LiveSub> subs, List<TimedTactics> tactics,
                                           List<TimedSlots> slots) {
+        return trackedConfig(seed, subs, tactics, slots, trackedProfile(homeXi, "4-4-2"));
+    }
+
+    /** Like {@link #trackedConfig(long, List, List, List)} but with a caller-supplied home profile —
+     *  used to pin a kickoff role that deliberately differs from what bestAssignmentFor would give. */
+    private LiveMatchConfig trackedConfig(long seed, List<LiveSub> subs, List<TimedTactics> tactics,
+                                          List<TimedSlots> slots, TacticalProfile homeProfile) {
         Map<UUID, Integer> fitness = new HashMap<>();
         homeXi.forEach(pl -> fitness.put(pl.getId(), 100));
         awayXi.forEach(pl -> fitness.put(pl.getId(), 100));
         homeBench.forEach(pl -> fitness.put(pl.getId(), 100));
         return new LiveMatchConfig(seed, homeXi, awayXi, homeBench, List.of(),
-                trackedProfile(homeXi, "4-4-2"), trackedProfile(awayXi, "4-4-2"), fitness, subs, tactics,
+                homeProfile, trackedProfile(awayXi, "4-4-2"), fitness, subs, tactics,
                 null, Weather.neutral(), false, null, null, slots);
     }
 
@@ -1365,24 +1372,162 @@ class LiveMatchEngineTest {
         assertThat(checked).isPositive();
     }
 
+    // ---- role resolution across a rearrangement (plan ruling R6, final-review F5) ----
+
     @Test
-    void aValidRoleOverrideIsUsedAndAnInvalidOneFallsBackToTheSlotsNaturalRole() {
-        Map<UUID, Integer> kickoff = trackedProfile(homeXi, "4-4-2").slotIndexes();
+    void aValidOverrideDifferentFromTheKickoffArchetypeIsApplied() {
+        TacticalProfile kickoffProfile = trackedProfile(homeXi, "4-4-2");
+        Map<UUID, Integer> kickoff = kickoffProfile.slotIndexes();
         UUID outfielder = homeXi.get(1).getId();
-        UUID other = homeXi.get(2).getId();
+        RoleArchetype kickoffArchetype = kickoffProfile.roles().get(outfielder).archetype();
         DetailedPosition outfielderSlot = FormationSlots.of("4-4-2").get(kickoff.get(outfielder))
                 .accepted().iterator().next();
+        // Deliberately different from the kickoff archetype, so this genuinely exercises "applied",
+        // not a no-op that happens to already match.
         RoleArchetype valid = Arrays.stream(RoleArchetype.values())
-                .filter(r -> r.validFor(outfielderSlot)).findFirst().orElseThrow();
-        // GOALKEEPER is never valid for an outfield slot.
-        Map<UUID, RoleArchetype> overrides = Map.of(outfielder, valid, other, RoleArchetype.GOALKEEPER);
+                .filter(r -> r.validFor(outfielderSlot) && r != kickoffArchetype).findFirst().orElseThrow();
+        Map<UUID, RoleArchetype> overrides = Map.of(outfielder, valid);
 
         LiveTimeline t = engine.simulate(trackedConfig(4L, List.of(), List.of(),
                 List.of(new TimedSlots(10, true, kickoff, overrides))));
 
         ArrangementSnapshot after = t.arrangementAt(10, true).orElseThrow();
         assertThat(after.roles().get(outfielder).archetype()).isEqualTo(valid);
-        assertThat(after.roles().get(other).archetype()).isNotEqualTo(RoleArchetype.GOALKEEPER);
+    }
+
+    @Test
+    void aMovedPlayerWithNoOverrideTakesTheSlotsBestFamiliarRole() {
+        Map<UUID, Integer> kickoff = trackedProfile(homeXi, "4-4-2").slotIndexes();
+        UUID a = homeXi.get(1).getId();   // a DEF
+        UUID b = homeXi.get(5).getId();   // a MID — swapping guarantees an actual position change
+        Map<UUID, Integer> swapped = new HashMap<>(kickoff);
+        swapped.put(a, kickoff.get(b));
+        swapped.put(b, kickoff.get(a));
+
+        LiveTimeline t = engine.simulate(trackedConfig(4L, List.of(), List.of(),
+                List.of(new TimedSlots(10, true, swapped, Map.of()))));
+
+        ArrangementSnapshot after = t.arrangementAt(10, true).orElseThrow();
+        FormationSlots.Slot aSlot = FormationSlots.of("4-4-2").get(swapped.get(a));
+        RoleAssignment expected = TacticsService.bestAssignmentFor(homeXi.get(1), aSlot);
+        assertThat(after.roles().get(a)).isEqualTo(expected);
+    }
+
+    @Test
+    void anUnmovedPlayerKeepsItsKickoffRoleEvenWhenABetterFitExists() {
+        Map<UUID, Integer> kickoff = SlotAssigner.assignToSlotIndexes(homeXi, "4-4-2", Map.of());
+        Map<UUID, FormationSlots.Slot> kickoffSlots = SlotAssigner.slotsFor(kickoff, "4-4-2");
+        Map<UUID, RoleAssignment> roles = new HashMap<>(LegacyRoles.forXi(homeXi));
+
+        UUID unmoved = homeXi.get(1).getId();
+        FormationSlots.Slot unmovedSlot = kickoffSlots.get(unmoved);
+        DetailedPosition unmovedPos = unmovedSlot.accepted().iterator().next();
+        RoleAssignment naturalBest = TacticsService.bestAssignmentFor(homeXi.get(1), unmovedSlot);
+        // Hand-set to something bestAssignmentFor would NOT pick, so keeping it actually proves R6
+        // (an unmoved player keeps their role, including one that isn't the natural fit) rather than
+        // passing by coincidence.
+        RoleArchetype notBest = Arrays.stream(RoleArchetype.values())
+                .filter(r -> r.validFor(unmovedPos) && r != naturalBest.archetype()).findFirst().orElseThrow();
+        RoleAssignment kickoffRole = new RoleAssignment(notBest, notBest.defaultFocusFor(unmovedPos));
+        roles.put(unmoved, kickoffRole);
+        TacticalProfile home = new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO,
+                "4-4-2", Pressing.MEDIUM, Marking.ZONAL, roles, null, null, null, Map.of(), kickoffSlots, kickoff);
+
+        // A full snapshot (spec: TimedSlots is complete, not a delta) that moves two OTHER players and
+        // leaves `unmoved` at its kickoff index — so replaceArrangement takes the "unchanged" branch
+        // for `unmoved` while still genuinely applying a same-minute rearrangement.
+        UUID other1 = homeXi.get(2).getId();
+        UUID other2 = homeXi.get(3).getId();
+        Map<UUID, Integer> swapped = new HashMap<>(kickoff);
+        swapped.put(other1, kickoff.get(other2));
+        swapped.put(other2, kickoff.get(other1));
+
+        LiveTimeline t = engine.simulate(trackedConfig(4L, List.of(), List.of(),
+                List.of(new TimedSlots(10, true, swapped, Map.of())), home));
+
+        ArrangementSnapshot after = t.arrangementAt(10, true).orElseThrow();
+        assertThat(after.roles().get(unmoved)).isEqualTo(kickoffRole);
+    }
+
+    @Test
+    void anInvalidOverrideFallsBackAndIsNotApplied() {
+        TacticalProfile kickoffProfile = trackedProfile(homeXi, "4-4-2");
+        Map<UUID, Integer> kickoff = kickoffProfile.slotIndexes();
+        UUID other = homeXi.get(2).getId();
+        RoleArchetype kickoffArchetype = kickoffProfile.roles().get(other).archetype();
+        // GOALKEEPER is never valid for an outfield slot; `other` is unmoved (same kickoff index), so
+        // the fallback is the KICKOFF role, not bestAssignmentFor — asserted precisely, not just "not
+        // GOALKEEPER".
+        Map<UUID, RoleArchetype> overrides = Map.of(other, RoleArchetype.GOALKEEPER);
+
+        LiveTimeline t = engine.simulate(trackedConfig(4L, List.of(), List.of(),
+                List.of(new TimedSlots(10, true, kickoff, overrides))));
+
+        ArrangementSnapshot after = t.arrangementAt(10, true).orElseThrow();
+        assertThat(after.roles().get(other).archetype())
+                .isEqualTo(kickoffArchetype)
+                .isNotEqualTo(RoleArchetype.GOALKEEPER);
+    }
+
+    // ---- tactics and arrangement at the same minute (final-review F2b, F6) ----
+
+    @Test
+    void aSameMinuteFormationChangeAndArrangementLandTheArrangementInTheNewFormation() {
+        TimedTactics toFourThreeThree = new TimedTactics(30, true, Mentality.BALANCED, null, null,
+                Pressing.MEDIUM, Marking.ZONAL, "4-3-3");
+        Map<UUID, Integer> greedy = SlotAssigner.assignToSlotIndexes(homeXi, "4-3-3", Map.of());
+        UUID a = homeXi.get(1).getId();
+        UUID b = homeXi.get(5).getId();
+        // Differs from the engine's own greedy relocation, so landing on this EXACT map proves the
+        // pinned arrangement won, not merely that relocation ran.
+        Map<UUID, Integer> pinned = new HashMap<>(greedy);
+        pinned.put(a, greedy.get(b));
+        pinned.put(b, greedy.get(a));
+
+        int checked = 0;
+        for (long seed = 0; seed < 20; seed++) {
+            LiveTimeline t = engine.simulate(trackedConfig(seed, List.of(), List.of(toFourThreeThree),
+                    List.of(new TimedSlots(30, true, pinned, Map.of()))));
+            // ANY home red card at/before minute 30 removes that player from onPitch, so a full 11-entry
+            // pinned map would no longer land verbatim (the missing player's pin is simply ignored) —
+            // exclude the seed rather than weaken the exact-equality assertion below.
+            boolean homeRedCardByThirty = t.events().stream()
+                    .anyMatch(e -> e.type() == EventType.RED_CARD && e.home() && e.minute() <= 30);
+            if (homeRedCardByThirty) continue;
+
+            ArrangementSnapshot after = t.arrangementAt(30, true).orElseThrow();
+            assertThat(after.formation()).as("seed %d", seed).isEqualTo("4-3-3");
+            assertThat(after.slotIndexes()).as("seed %d", seed).isEqualTo(pinned);
+            checked++;
+        }
+        assertThat(checked).isPositive();
+    }
+
+    @Test
+    void aSameFormationTacticsChangeLeavesTheArrangementUntouched() {
+        TimedTactics staySameFormation = new TimedTactics(30, true, Mentality.ATTACKING, null, null,
+                Pressing.HIGH, Marking.ZONAL, "4-4-2");
+
+        int checked = 0;
+        for (long seed = 0; seed < 20; seed++) {
+            LiveTimeline t = engine.simulate(trackedConfig(seed, List.of(), List.of(staySameFormation), List.of()));
+            // A red card at minute 30 would itself change the home arrangement (vacateSlot) — exclude
+            // that seed so this test only ever measures the tactics change's own effect.
+            boolean redCardAtThirty = t.events().stream().anyMatch(e ->
+                    e.type() == EventType.RED_CARD && e.home() && e.minute() == 30);
+            if (redCardAtThirty) continue;
+
+            ArrangementSnapshot before = t.arrangementAt(29, true).orElseThrow();
+            ArrangementSnapshot after = t.arrangementAt(30, true).orElseThrow();
+            assertThat(after.formation()).as("seed %d", seed).isEqualTo(before.formation());
+            assertThat(after.slotIndexes()).as("seed %d", seed).isEqualTo(before.slotIndexes());
+            assertThat(after.roles()).as("seed %d", seed).isEqualTo(before.roles());
+            assertThat(t.arrangements().stream()
+                    .filter(ArrangementSnapshot::home).map(ArrangementSnapshot::minute))
+                    .as("seed %d", seed).doesNotContain(30);
+            checked++;
+        }
+        assertThat(checked).isPositive();
     }
 
     @Test

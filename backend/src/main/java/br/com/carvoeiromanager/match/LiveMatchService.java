@@ -394,6 +394,22 @@ public class LiveMatchService {
             }
             indexes.put(parsePlayerId(e.getKey()), index);
         }
+        // Final-review Ruling F1(ii): the roster reported to the client is stale at the committed
+        // minute (see toState), so a manager who applies a substitution and immediately drags still
+        // submits the OUTGOING player's id. Remap it to the incoming player's id before validating —
+        // the engine's substitute inheritance (LiveMatchEngine#inheritSlot) gives the incoming player
+        // that exact slot, so honouring the outgoing id here is honest, not permissive. Both ids
+        // present in the same request is a genuine duplicate, not a stale-roster artifact.
+        for (LiveSub sub : cfg.subSchedule()) {
+            if (sub.home() != home || sub.minute() != minute) continue;
+            if (indexes.containsKey(sub.outId())) {
+                if (indexes.containsKey(sub.inId())) {
+                    throw invalidArrangement(
+                            "An arrangement cannot name both the outgoing and incoming player of the same substitution");
+                }
+                indexes.put(sub.inId(), indexes.remove(sub.outId()));
+            }
+        }
         if (!indexes.keySet().equals(new HashSet<>(onPitch))) {
             throw invalidArrangement("An arrangement must place exactly the players on the pitch");
         }
@@ -794,7 +810,17 @@ public class LiveMatchService {
         TacticalProfile managedProfile = managedIsHome ? cfg.homeProfile() : cfg.awayProfile();
         TacticalProfile opponentProfile = managedIsHome ? cfg.awayProfile() : cfg.homeProfile();
 
-        LiveTactics currentTactics = computeCurrentTactics(lm, cfg, minute);
+        // Final-review Ruling F1(i): every apply targets committed+1, so while the clock is paused
+        // (manual pause, or minute 0 before kickoff) a manager who applies a change and reopens the
+        // dialog must see what the NEXT apply will build on, not merely what's committed — otherwise a
+        // pure drag re-submits a stale formation and silently reverts a pending formation change (R8
+        // sees it as a real change), and a pending substitution's incoming player is missing from the
+        // roster the dialog seeds itself from. This leaks nothing: it is the manager's OWN scheduled
+        // input. targetMinute collapses to `minute` once the match is over (committedMinute is never
+        // past finalMinute, so committedMinute + 1 already clamps to it). Opponent tactics stay at the
+        // committed minute — nothing about the opponent should look ahead.
+        int targetMinute = Math.min(timeline.finalMinute(), minute + 1);
+        LiveTactics currentTactics = tacticsFor(cfg, targetMinute, managedIsHome);
         LiveTactics opponentTactics = computeOpponentTactics(lm, cfg, minute);
 
         // Managed on-pitch/bench for the sub dialog.
@@ -1109,11 +1135,6 @@ public class LiveMatchService {
             }
         }
         return out;
-    }
-
-    /** Derives the managed side's active tactics at {@code minute}, applying any scheduled changes. */
-    private LiveTactics computeCurrentTactics(LiveMatch lm, LiveMatchConfig cfg, int minute) {
-        return tacticsFor(cfg, minute, lm.isManagedIsHome());
     }
 
     /** Derives the opponent side's active tactics at {@code minute}, applying any scheduled changes. */

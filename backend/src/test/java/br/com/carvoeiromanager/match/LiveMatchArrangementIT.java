@@ -202,4 +202,77 @@ class LiveMatchArrangementIT {
         assertInvalidLineup(() -> liveMatchService.changeTactics(saveGameId, userId,
                 currentTacticsWith(state, new ArrangementRequest(slots, Map.of(outfielder, "GOALKEEPER")))));
     }
+
+    /**
+     * Final-review ruling F1(ii): toState reports {@code onPitch}/{@code bench} at the COMMITTED
+     * minute (unlike {@code currentTactics}, F1(i) does not move this), so a manager who applies a
+     * substitution and then reopens the dialog still sees the pre-substitution roster — the
+     * arrangement they build is keyed by the OUTGOING player's id, not the incoming one
+     * parseArrangement would otherwise expect. The service must remap that stale key rather than
+     * reject an otherwise-valid drag as INVALID_LINEUP.
+     */
+    @Test
+    void anArrangementKeyedByThePreSubstitutionRosterIsAcceptedAndLandsOnTheIncomingPlayer() {
+        LiveMatchState state = liveMatchService.kickoff(saveGameId, userId);
+        Map<String, Integer> staleSlots = new HashMap<>(slotsOf(state));   // pre-substitution roster
+
+        String out = state.onPitch().get(5).playerId();
+        int outIndex = staleSlots.get(out);
+        String in = state.bench().get(0).playerId();
+        liveMatchService.substitute(saveGameId, userId, new SubstituteBatchRequest(
+                List.of(new SubstituteRequest(UUID.fromString(out), UUID.fromString(in)))));
+
+        // Two OTHER players, swapped — the request stays keyed by the OUTGOING player's id, exactly
+        // what a dialog reopened against the stale (pre-substitution) roster would still hold.
+        String a = state.onPitch().get(1).playerId();
+        String b = state.onPitch().get(2).playerId();
+        int aIndex = staleSlots.get(a);
+        int bIndex = staleSlots.get(b);
+        staleSlots.put(a, bIndex);
+        staleSlots.put(b, aIndex);
+
+        liveMatchService.changeTactics(saveGameId, userId,
+                currentTacticsWith(state, new ArrangementRequest(staleSlots, Map.of())));
+        LiveMatchState after = advanceToMinuteOne();
+
+        assertThat(slotsOf(after)).doesNotContainKey(out).containsEntry(in, outIndex)
+                .containsEntry(a, bIndex).containsEntry(b, aIndex);
+    }
+
+    /**
+     * Final-review ruling F1(i): toState now reports the managed side's currentTactics at
+     * committed+1 (what the NEXT apply builds on), not merely the committed minute — so a manager
+     * who applies a formation change and reopens the dialog sees the NEW formation already, and a
+     * pure drag re-submits that same formation instead of the stale one, which would otherwise
+     * register as a real tactics change (R8) and silently revert the pending formation change.
+     */
+    @Test
+    void aPureDragAfterAFormationChangeDoesNotRevertTheFormation() {
+        LiveMatchState state = liveMatchService.kickoff(saveGameId, userId);
+        LiveTactics t = state.currentTactics();
+        LiveMatchState afterFormationChange = liveMatchService.changeTactics(saveGameId, userId,
+                new LiveTacticsRequest(t.mentality(), t.gameStyle(), t.attackZone(), t.pressing(), t.marking(),
+                        "4-3-3", null));
+        assertThat(afterFormationChange.currentTactics().formation()).isEqualTo("4-3-3");
+
+        // R10: the arrangement snapshot is still at the OLD formation (the change hasn't been
+        // committed yet), so onPitch().slotIndex() is null for everyone here — assign distinct
+        // indexes ourselves, pinning the goalkeeper to slot 0.
+        List<LivePlayerResponse> onPitch = afterFormationChange.onPitch();
+        Map<String, Integer> arrangement = new HashMap<>();
+        int next = 1;
+        for (LivePlayerResponse p : onPitch) {
+            if ("GK".equals(p.position())) {
+                arrangement.put(p.playerId(), 0);
+            } else {
+                arrangement.put(p.playerId(), next++);
+            }
+        }
+
+        liveMatchService.changeTactics(saveGameId, userId,
+                currentTacticsWith(afterFormationChange, new ArrangementRequest(arrangement, Map.of())));
+        LiveMatchState after = advanceToMinuteOne();
+
+        assertThat(after.currentTactics().formation()).isEqualTo("4-3-3");
+    }
 }

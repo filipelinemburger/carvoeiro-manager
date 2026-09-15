@@ -79,8 +79,13 @@ public final class AiManagerBrain {
 
     private static TacticalProfile with(TacticalProfile identity, Mentality mentality,
                                         Pressing pressing, String formation) {
-        // Per-player instructions and the kickoff slot assignment belong to the identity and never
-        // change with an AI posture swap (a mid-match formation change does not re-grade positions).
+        // Per-player instructions and the kickoff slot data belong to the identity and never change
+        // with an AI posture swap: unlike a MANAGER formation change (which relocates, spec Decision
+        // 4), an AI posture swap keeps the identity's kickoff slot assignment and does not re-grade
+        // positions (plan ruling R4) — relocating an AI side on a posture swap would be an unrequested
+        // balance change. The live arrangement itself is tracked on the engine's side state, not here
+        // (see LiveMatchEngine's Side.slotIndexes/arrangementFormation), so this identity snapshot is
+        // never what the engine actually plays once a side is under arrangement tracking.
         return new TacticalProfile(mentality, identity.gameStyle(), identity.attackZone(), formation, pressing,
                 identity.marking(), identity.roles(), identity.penaltyTakerId(), identity.freekickTakerId(),
                 identity.cornerTakerId(), identity.instructions(), identity.slotAssignments(),

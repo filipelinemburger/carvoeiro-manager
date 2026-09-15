@@ -58,3 +58,15 @@ export function sameSlots(a: SlotMap, b: SlotMap): boolean {
   const keys = Object.keys(a)
   return keys.length === Object.keys(b).length && keys.every(k => a[k] === b[k])
 }
+
+/**
+ * Keeps a hand-set role override only for a player whose slot is identical in `before` and `after`.
+ * A moved player's override may not be valid in their new slot, so they take the slot's natural role
+ * instead (spec Decision 6) — exactly what the server does (`LiveMatchEngine#replaceArrangement`'s
+ * same-index-and-formation check), including dropping the mover's override on a move into an empty slot.
+ */
+export function dropMovedRoles(before: SlotMap, after: SlotMap, roles: RoleOverrides): RoleOverrides {
+  return Object.fromEntries(
+    Object.entries(roles).filter(([id]) => after[id] === before[id]),
+  )
+}

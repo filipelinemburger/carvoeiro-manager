@@ -419,7 +419,11 @@ public class LiveMatchEngine {
         for (TimedSlots entry : cfg.slotSchedule()) {
             if (entry.minute() != minute || entry.home() != side.home) continue;
             List<Player> onPitch = side.onPitch.stream().map(side.all::get).toList();
-            String formation = side.currentProfile.formation();
+            // Plan ruling R4 (final review P2): the formation the arrangement refers to, not
+            // side.currentProfile.formation() — an AI posture swap can change the latter without
+            // relocating, leaving the two apart. For the managed side they are always equal here,
+            // since a manager formation change already relocated via `relocate` earlier this minute.
+            String formation = side.arrangementFormation;
             Map<UUID, Integer> indexes = SlotAssigner.assignToSlotIndexes(onPitch, formation, entry.slotIndexes());
             replaceArrangement(side, formation, indexes, entry.roles() == null ? Map.of() : entry.roles());
             snapshot(side, minute);

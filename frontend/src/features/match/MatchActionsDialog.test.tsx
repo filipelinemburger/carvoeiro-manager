@@ -462,6 +462,40 @@ describe('MatchActionsDialog positions tab', () => {
     })
   })
 
+  it('dragging a player to swap slots updates the footer and sends the exchanged slot indexes', async () => {
+    // The GK token is never draggable (Pitch.tsx), so this drags between two OUTFIELD players — a
+    // third fixture with its own distinct slotIndex, alongside the existing `zag`.
+    const mid = player({
+      playerId: 'mid', name: 'Meia', position: 'MID', role: 'BOX_TO_BOX',
+      slotIndex: 6, detailedPosition: 'VOLANTE',
+    })
+    const onApply = vi.fn()
+    openPositions({ onPitch: [gk, zag, mid], onApply })
+
+    const pitch = screen.getByTestId('pitch')
+    // Same getBoundingClientRect mocking pattern Pitch.test.tsx's drag suite uses: a fixed
+    // 400x600 rect so slot centers (fractions of pitchSlots) land at predictable client coordinates.
+    vi.spyOn(pitch, 'getBoundingClientRect').mockReturnValue({
+      left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0,
+      toJSON: () => ({}),
+    } as DOMRect)
+    const slot = (i: number) => pitch.querySelector(`[data-slot-index="${i}"]`) as HTMLElement
+
+    // 4-4-2 slot 2 (zag: DEF, x=0.38 y=0.79) dragged straight up onto slot 6 (mid: MID, x=0.38 y=0.55).
+    fireEvent.pointerDown(slot(2), { pointerId: 1, clientX: 152, clientY: 474 })
+    fireEvent.pointerMove(slot(2), { pointerId: 1, clientX: 152, clientY: 330 })
+    fireEvent.pointerUp(slot(2), { pointerId: 1, clientX: 152, clientY: 330 })
+
+    const apply = await waitFor(() => screen.getByRole('button', { name: 'Aplicar 1 alteração' }))
+    expect(screen.getByText('1 reposicionamento')).toBeInTheDocument()
+    fireEvent.click(apply)
+
+    expect(onApply).toHaveBeenCalledWith({
+      subs: [],
+      tactics: { ...DEFAULT_TACTICS, arrangement: { slotIndexes: { gk: 0, zag: 6, mid: 2 }, roles: {} } },
+    })
+  })
+
   it('shows the incoming player in place of the outgoing one once a substitution is queued', () => {
     renderDialog({ onPitch: [gk, zag], bench: [reserve] })
     fireEvent.click(within(outSection()).getByText('Zagueiro'))

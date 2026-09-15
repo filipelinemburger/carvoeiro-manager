@@ -14,7 +14,7 @@ import { FitnessBar, fitnessSeverity } from '../squad/FitnessBar'
 import { FORMATION_CODES } from '../pitch/pitchSlots'
 import { MENTALITY_LABEL, GAME_STYLE_LABEL, ATTACK_ZONE_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
 import { bookingOf, minutesPlayed, rankByFit, isSuggestedFor, type Booking } from './livePlayerContext'
-import { workingRoster, baselineArrangement, swapSlots, sameSlots, type SubPair, type SlotMap, type RoleOverrides } from './liveArrangement'
+import { workingRoster, baselineArrangement, swapSlots, sameSlots, dropMovedRoles, type SubPair, type SlotMap, type RoleOverrides } from './liveArrangement'
 import { PositionsTabContent } from './PositionsTabContent'
 
 export type { SubPair } from './liveArrangement'
@@ -564,9 +564,7 @@ export function MatchActionsDialog({
     const nextSlots = swapSlots(slots, fromSlot, toSlot)
     // A moved player's hand-set role may not be valid in their new slot; they take the slot's natural
     // role instead (spec Decision 6), exactly as the server would.
-    const roles = Object.fromEntries(
-      Object.entries(roleOverrides).filter(([id]) => nextSlots[id] === slots[id]),
-    )
+    const roles = dropMovedRoles(slots, nextSlots, roleOverrides)
     editArrangement({ slots: nextSlots, roles })
   }
 

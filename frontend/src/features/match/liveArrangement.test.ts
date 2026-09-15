@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { workingRoster, baselineArrangement, swapSlots, sameSlots } from './liveArrangement'
+import { workingRoster, baselineArrangement, swapSlots, sameSlots, dropMovedRoles, type RoleOverrides } from './liveArrangement'
 import type { LivePlayer } from '../../api/types'
 
 function livePlayer(overrides: Partial<LivePlayer> & Pick<LivePlayer, 'playerId'>): LivePlayer {
@@ -73,5 +73,23 @@ describe('sameSlots', () => {
     expect(sameSlots({ a: 1, b: 2 }, { b: 2, a: 1 })).toBe(true)
     expect(sameSlots({ a: 1, b: 2 }, { a: 2, b: 1 })).toBe(false)
     expect(sameSlots({ a: 1 }, { a: 1, b: 2 })).toBe(false)
+  })
+})
+
+describe('dropMovedRoles', () => {
+  it('drops the override for both swapped players and keeps an unmoved player\'s override', () => {
+    const before = { a: 1, b: 2, c: 3 }
+    const after = { a: 2, b: 1, c: 3 }
+    const roles: RoleOverrides = { a: 'WINGER', b: 'FULLBACK', c: 'STOPPER' }
+
+    expect(dropMovedRoles(before, after, roles)).toEqual({ c: 'STOPPER' })
+  })
+
+  it('drops the mover\'s override on a move into an empty slot', () => {
+    const before = { a: 1 }
+    const after = { a: 5 }
+    const roles: RoleOverrides = { a: 'WINGER' }
+
+    expect(dropMovedRoles(before, after, roles)).toEqual({})
   })
 })
