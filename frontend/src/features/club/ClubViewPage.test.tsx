@@ -13,6 +13,10 @@ vi.mock('../../api/career', () => ({
   getSquad: vi.fn(),
   makeOffer: vi.fn(),
   getStaffRoster: vi.fn(),
+  loanIn: vi.fn(),
+  acceptLoanCounter: vi.fn(),
+  getLoanOffers: vi.fn(),
+  withdrawLoanOffer: vi.fn(),
 }))
 
 vi.mock('../../api/watchlist', () => ({
@@ -21,8 +25,25 @@ vi.mock('../../api/watchlist', () => ({
   removeFromWatchlist: vi.fn(),
 }))
 
-import { getSaveGame, getClubs, getSquad, makeOffer, getStaffRoster } from '../../api/career'
+import {
+  getSaveGame, getClubs, getSquad, makeOffer, getStaffRoster, loanIn, acceptLoanCounter, getLoanOffers,
+} from '../../api/career'
 import { getWatchlist } from '../../api/watchlist'
+import type { LoanOfferResult } from '../../api/types'
+
+const LOAN_ACCEPTED: LoanOfferResult = {
+  offerId: 'lo1', playerId: 'p1', playerName: 'Alvo Um', status: 'ACCEPTED',
+  managedClubIsOwner: false,
+  ownerWageShare: 70, mayFaceOwner: true, counterOwnerWageShare: null, counterMayFaceOwner: null,
+  refusal: null,
+}
+
+const LOAN_COUNTERED: LoanOfferResult = {
+  offerId: 'lo1', playerId: 'p1', playerName: 'Alvo Um', status: 'COUNTERED',
+  managedClubIsOwner: false,
+  ownerWageShare: 50, mayFaceOwner: false, counterOwnerWageShare: 80, counterMayFaceOwner: false,
+  refusal: 'TERMS_REJECTED',
+}
 
 const mockGetStaffRoster = vi.mocked(getStaffRoster)
 
@@ -77,6 +98,7 @@ describe('ClubViewPage', () => {
       players: [player()], primaryColor: '#aa0000', secondaryColor: '#ffffff',
     })
     vi.mocked(getWatchlist).mockResolvedValue([])
+    vi.mocked(getLoanOffers).mockResolvedValue([])
     mockGetStaffRoster.mockResolvedValue({
       tecnico: null, assistente: null, preparadorFisico: null, olheiro: null, fisioterapeuta: null,
     })
@@ -243,6 +265,96 @@ describe('ClubViewPage', () => {
     renderPage(MANAGED_CLUB_ID)
     await waitFor(() => expect(screen.getByText('Meu Jogador')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /fazer proposta/i })).not.toBeInTheDocument()
+  })
+
+  it('lets the manager ask to borrow any rival player, not only transfer-listed ones', async () => {
+    // The market lists only transfer-listed players; the club page is the door to everyone else.
+    // The fixture player is deliberately NOT listed.
+    vi.mocked(loanIn).mockResolvedValue(LOAN_ACCEPTED)
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+    render(
+      <MemoryRouter initialEntries={[`/club?saveGameId=sg-1&clubId=${OTHER_CLUB_ID}`]}>
+        <AuthProvider>
+          <QueryClientProvider client={qc}>
+            <ClubViewPage />
+          </QueryClientProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /pedir emprestado/i }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/parcela salarial/i), { target: { value: '70' } })
+    fireEvent.click(within(dialog).getByRole('switch', { name: /pode enfrentar o clube dono/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /pedir empréstimo/i }))
+
+    await waitFor(() => expect(loanIn).toHaveBeenCalledWith(
+      'sg-1', { playerId: 'p1', ownerWageShare: 70, mayFaceOwner: true }, 'test-token',
+    ))
+    expect(await within(dialog).findByText(/empréstimo aprovado/i)).toBeInTheDocument()
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['squad', 'sg-1', MANAGED_CLUB_ID] }))
+    // The viewed club just lost a player too — its own roster on this page must refresh.
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['squad', 'sg-1', OTHER_CLUB_ID] })
+  })
+
+  it('accepts the owner club counter from the loan dialog', async () => {
+    vi.mocked(loanIn).mockResolvedValue(LOAN_COUNTERED)
+    vi.mocked(acceptLoanCounter).mockResolvedValue({ ...LOAN_COUNTERED, status: 'ACCEPTED', refusal: null })
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /pedir emprestado/i }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /pedir empréstimo/i }))
+    fireEvent.click(await within(dialog).findByRole('button', { name: /aceitar contraproposta/i }))
+
+    await waitFor(() => expect(acceptLoanCounter).toHaveBeenCalledWith('sg-1', 'lo1', 'test-token'))
+    expect(await within(dialog).findByText(/empréstimo aprovado/i)).toBeInTheDocument()
+  })
+
+  it('disables "Pedir emprestado" with a visible reason when the contract is too short to loan', async () => {
+    vi.mocked(getSquad).mockResolvedValue({
+      players: [player({ contractYears: 1 })], primaryColor: '#aa0000', secondaryColor: '#ffffff',
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /pedir emprestado/i })).toBeDisabled()
+    expect(screen.getByText(/menos de 2 anos/i)).toBeInTheDocument()
+  })
+
+  it('disables "Pedir emprestado" with a visible reason for a player the viewed club only has on loan', async () => {
+    vi.mocked(getSquad).mockResolvedValue({
+      players: [player({ onLoanFromClubName: 'Emprestador FC' })],
+      primaryColor: '#aa0000', secondaryColor: '#ffffff',
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /pedir emprestado/i })).toBeDisabled()
+    expect(screen.getByText(/já está emprestado/i)).toBeInTheDocument()
+  })
+
+  it('disables "Pedir emprestado" when the transfer window is closed', async () => {
+    vi.mocked(getSaveGame).mockResolvedValue({ ...SAVE, transferWindowOpen: false })
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Alvo Um')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: /pedir emprestado/i })).toBeDisabled())
+  })
+
+  it('hides "Pedir emprestado" when viewing the managed club', async () => {
+    vi.mocked(getSquad).mockResolvedValue({
+      players: [player({ id: 'mp1', name: 'Meu Jogador' })], primaryColor: '#f7d417', secondaryColor: '#111111',
+    })
+    renderPage(MANAGED_CLUB_ID)
+    await waitFor(() => expect(screen.getByText('Meu Jogador')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /pedir emprestado/i })).not.toBeInTheDocument()
+  })
+
+  it('surfaces a still-open countered loan offer so it survives the dialog closing', async () => {
+    vi.mocked(getLoanOffers).mockResolvedValue([LOAN_COUNTERED])
+    renderPage()
+    expect(await screen.findByText('Empréstimos com contraproposta pendente')).toBeInTheDocument()
   })
 
   it('invalidates the managed squad when an offer for a rival player is accepted', async () => {

@@ -5,6 +5,22 @@ import type { LoanRefusal } from '../../api/types'
  * lend-out gate (SquadPage) and the borrow gate (TransferMarketPage) so the two can't drift. */
 export const MIN_CONTRACT_YEARS_TO_LOAN = 2
 
+/** Why another club's player cannot be borrowed right now, or null when he can be. Shared by
+ * every borrow door (TransferMarketPage, ClubViewPage) so they explain the same way. Mirrors
+ * SquadPage's `loanBlockedReason`: the contract-length guard mirrors
+ * LoanService.requireLoanableContract, and the already-on-loan guard mirrors the `!isOnLoan()`
+ * filter the backend applies before it will even look the player up — a player already on loan
+ * isn't his current club's to re-lend. Explains only — the backend still enforces both. */
+export function loanInBlockedReason(player: { contractYears: number; onLoan: boolean }): string | null {
+  if (player.onLoan) {
+    return 'Jogador já está emprestado.'
+  }
+  if (player.contractYears < MIN_CONTRACT_YEARS_TO_LOAN) {
+    return `Contrato com menos de ${MIN_CONTRACT_YEARS_TO_LOAN} anos não pode ser emprestado.`
+  }
+  return null
+}
+
 /**
  * pt-BR text for a rejected loan offer. The three refusals carry the whole realism rule to the
  * manager, and the distinction between them is load-bearing: KEY_PLAYER and BELOW_LEVEL end the

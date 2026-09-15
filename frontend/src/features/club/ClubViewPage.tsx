@@ -5,7 +5,10 @@ import {
   Alert, Box, Button, Card, CardContent, Chip, Link, Paper, Stack, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Typography,
 } from '@mui/material'
-import { getClubs, getSaveGame, getSquad, getStaffRoster, makeOffer } from '../../api/career'
+import {
+  acceptLoanCounter, getClubs, getLoanOffers, getSaveGame, getSquad, getStaffRoster, loanIn, makeOffer,
+  withdrawLoanOffer,
+} from '../../api/career'
 import { errorMessage } from '../../api/errorMessages'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
@@ -13,8 +16,12 @@ import { formatBRL, formatThousandsBR } from '../../lib/money'
 import { PlayerDetails } from '../squad/PlayerDetails'
 import { WatchStar } from '../players/WatchStar'
 import { MakeOfferDialog, type OfferTarget } from '../transfer/MakeOfferDialog'
+import { LoanInDialog } from '../transfer/LoanInDialog'
+import { PendingLoanOffers } from '../loan/PendingLoanOffers'
+import { invalidateAfterLoanMove } from '../loan/loanInvalidation'
+import { loanInBlockedReason } from '../loan/loanMessages'
 import type {
-  ClubSummary, PlayerResponse, StaffMember, StaffRole, StaffRoster, TransferOffer,
+  ClubSummary, LoanOfferResult, PlayerResponse, StaffMember, StaffRole, StaffRoster, TransferOffer,
 } from '../../api/types'
 import { positionShort } from '../players/positionLabels'
 import { STAFF_ATTRIBUTE_LABELS, STAFF_QUALITY_LABEL, STAFF_ROLE_LABEL, STAFF_ROLE_ORDER } from '../staff/staffLabels'
@@ -111,8 +118,10 @@ function Commission({ roster }: { roster: StaffRoster | undefined }) {
 
 /**
  * Read-only view of any club's roster. Players open the full details modal; for other
- * clubs each player also gets a "Fazer proposta" action that drafts a transfer offer
- * (hidden for the managed club — you can't bid on your own players).
+ * clubs each player also gets a "Fazer proposta" action that drafts a transfer offer and a
+ * "Pedir emprestado" action that proposes a loan (both hidden for the managed club — you can't
+ * bid on or borrow your own players). This is the borrow door for players who aren't
+ * transfer-listed: the market only ever shows listed ones, and the backend never required it.
  */
 export function ClubViewPage() {
   const { token } = useAuth()
@@ -126,6 +135,10 @@ export function ClubViewPage() {
   const [detailsPlayer, setDetailsPlayer] = useState<PlayerResponse | null>(null)
   const [offerTarget, setOfferTarget] = useState<OfferTarget | null>(null)
   const [lastResult, setLastResult] = useState<TransferOffer | null>(null)
+  // The rival player a loan-in proposal is being drafted for (opens LoanInDialog), and the outcome
+  // of that negotiation — null before a proposal is sent, reset whenever the dialog opens.
+  const [loaningPlayer, setLoaningPlayer] = useState<{ playerId: string; name: string } | null>(null)
+  const [loanResult, setLoanResult] = useState<LoanOfferResult | null>(null)
 
   const enabled = Boolean(saveGameId && token)
   const save = useQuery({
@@ -154,9 +167,45 @@ export function ClubViewPage() {
     staleTime: Infinity,
   })
 
+  // Same queryKey as TransferMarketPage/SquadPage so a counter made anywhere shows up here.
+  const loanOffersQuery = useQuery({
+    queryKey: ['loanOffers', saveGameId],
+    queryFn: () => getLoanOffers(saveGameId, token ?? ''),
+    enabled,
+    staleTime: 30_000,
+  })
+
   const club = (clubsQuery.data ?? []).find(c => c.id === clubId)
-  const isManagedClub = save.data?.managedClubId === clubId
+  const managedClubId = save.data?.managedClubId ?? ''
+  const isManagedClub = managedClubId === clubId
   const windowOpen = save.data?.transferWindowOpen ?? true
+
+  // A completed loan moves a player out of the viewed club too, so its roster here goes stale
+  // alongside everything invalidateAfterLoanMove covers for the managed club.
+  const invalidateAfterLoan = (result: LoanOfferResult) => {
+    setLoanResult(result)
+    if (result.status === 'REJECTED') return
+    invalidateAfterLoanMove(queryClient, saveGameId, managedClubId)
+    void queryClient.invalidateQueries({ queryKey: ['squad', saveGameId, clubId] })
+  }
+
+  const loanInMut = useMutation({
+    mutationFn: (v: { playerId: string; ownerWageShare: number; mayFaceOwner: boolean }) =>
+      loanIn(saveGameId, v, token ?? ''),
+    onSuccess: invalidateAfterLoan,
+  })
+
+  const acceptLoanCounterMut = useMutation({
+    mutationFn: (offerId: string) => acceptLoanCounter(saveGameId, offerId, token ?? ''),
+    onSuccess: invalidateAfterLoan,
+  })
+
+  const withdrawLoanOfferMut = useMutation({
+    mutationFn: (offerId: string) => withdrawLoanOffer(saveGameId, offerId, token ?? ''),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['loanOffers', saveGameId] })
+    },
+  })
 
   const offerMut = useMutation({
     mutationFn: (v: { playerId: string; amount: number; wage: number; contractYears: number }) =>
@@ -210,6 +259,38 @@ export function ClubViewPage() {
     </Button>
   )
 
+  const loanButton = (player: PlayerResponse) => {
+    const blockedReason = loanInBlockedReason({
+      contractYears: player.contractYears,
+      onLoan: Boolean(player.onLoanFromClubName),
+    })
+    return (
+      <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
+        <Button
+          size="small"
+          variant="outlined"
+          color="secondary"
+          disabled={!windowOpen || blockedReason !== null}
+          onClick={() => { setLoaningPlayer({ playerId: player.id, name: player.name }); setLoanResult(null) }}
+        >
+          Pedir emprestado
+        </Button>
+        {blockedReason && (
+          <Typography variant="caption" color="error" sx={{ textAlign: 'right' }}>
+            {blockedReason}
+          </Typography>
+        )}
+      </Stack>
+    )
+  }
+
+  const playerActions = (player: PlayerResponse) => (
+    <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', alignItems: 'flex-start' }}>
+      {offerButton(player)}
+      {loanButton(player)}
+    </Stack>
+  )
+
   const clubName = club ? (club.commonName ?? club.name) : ''
   const locationLine = club ? clubLocationLine(club) : null
 
@@ -240,6 +321,23 @@ export function ClubViewPage() {
         </Alert>
       )}
       {offerMut.isError && <Alert severity="error" sx={{ mt: 2 }}>{errorMessage(offerMut.error, 'Erro ao enviar proposta.')}</Alert>}
+      {(loanInMut.isError || acceptLoanCounterMut.isError) && (
+        <Alert severity="error" sx={{ mt: 2 }}>
+          {errorMessage(loanInMut.error ?? acceptLoanCounterMut.error, 'Erro ao pedir empréstimo.')}
+        </Alert>
+      )}
+
+      {!isManagedClub && (
+        <Box sx={{ mt: 2 }}>
+          <PendingLoanOffers
+            offers={loanOffersQuery.data ?? []}
+            windowOpen={windowOpen}
+            busy={acceptLoanCounterMut.isPending || withdrawLoanOfferMut.isPending}
+            onAccept={id => acceptLoanCounterMut.mutate(id)}
+            onWithdraw={id => withdrawLoanOfferMut.mutate(id)}
+          />
+        </Box>
+      )}
 
       {isLoading && <Typography sx={{ mt: 2 }}>Carregando elenco…</Typography>}
       {error && <Typography sx={{ mt: 2 }} color="error">Erro ao carregar elenco.</Typography>}
@@ -264,9 +362,7 @@ export function ClubViewPage() {
                     <Chip size="small" color="primary" label={`OVR ${player.overall}`} />
                   </Stack>
                   {!isManagedClub && (
-                    <Stack direction="row" sx={{ mt: 1, justifyContent: 'flex-end' }}>
-                      {offerButton(player)}
-                    </Stack>
+                    <Box sx={{ mt: 1 }}>{playerActions(player)}</Box>
                   )}
                 </CardContent>
               </Card>
@@ -300,7 +396,7 @@ export function ClubViewPage() {
                     <TableCell align="center">{player.overall}</TableCell>
                     <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>{formatBRL(player.value)}</TableCell>
                     <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>{formatBRL(player.wageDemand)}</TableCell>
-                    {!isManagedClub && <TableCell align="center">{offerButton(player)}</TableCell>}
+                    {!isManagedClub && <TableCell align="right">{playerActions(player)}</TableCell>}
                   </TableRow>
                 ))}
               </TableBody>
@@ -327,6 +423,15 @@ export function ClubViewPage() {
         busy={offerMut.isPending}
         onClose={() => setOfferTarget(null)}
         onSubmit={v => offerMut.mutate(v)}
+      />
+
+      <LoanInDialog
+        player={loaningPlayer}
+        pending={loanInMut.isPending || acceptLoanCounterMut.isPending}
+        result={loanResult}
+        onSubmit={v => { if (loaningPlayer) loanInMut.mutate({ playerId: loaningPlayer.playerId, ...v }) }}
+        onAcceptCounter={() => { if (loanResult) acceptLoanCounterMut.mutate(loanResult.offerId) }}
+        onClose={() => { setLoaningPlayer(null); setLoanResult(null) }}
       />
     </Box>
   )

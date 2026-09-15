@@ -3,13 +3,14 @@ import {
   Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack,
   Switch, TextField, Typography,
 } from '@mui/material'
-import type { LoanOfferResult, MarketPlayer } from '../../api/types'
+import type { LoanOfferResult } from '../../api/types'
 import { refusalMessage, isNegotiable } from '../loan/loanMessages'
 
 /**
  * Proposes borrowing `player` from whichever club currently owns him — the mirror of
  * `LoanOutDialog`, minus the club picker (there's nothing to pick: the owner is whoever
- * holds the player on the market). Same three outcomes, same reasoning:
+ * holds the player). Opened from the market row and from a rival club's roster, so it takes
+ * only the identity both have. Same three outcomes, same reasoning:
  *  - REJECTED shows why (via `refusalMessage`) and offers nothing further — even a negotiable
  *    TERMS_REJECTED isn't re-opened here (the manager closes and sends a fresh proposal
  *    instead). The alert's severity alone (warning vs. error, via `isNegotiable`) tells the
@@ -19,7 +20,7 @@ import { refusalMessage, isNegotiable } from '../loan/loanMessages'
  * Follows `LoanOutDialog`'s shape: `player === null` renders nothing at all.
  */
 export function LoanInDialog({ player, pending, result, onSubmit, onAcceptCounter, onClose }: {
-  player: MarketPlayer | null
+  player: { playerId: string; name: string } | null
   pending: boolean
   result: LoanOfferResult | null
   onSubmit: (v: { ownerWageShare: number; mayFaceOwner: boolean }) => void
