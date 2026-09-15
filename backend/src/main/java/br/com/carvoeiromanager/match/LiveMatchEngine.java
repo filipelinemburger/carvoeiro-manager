@@ -2,6 +2,7 @@ package br.com.carvoeiromanager.match;
 
 import br.com.carvoeiromanager.player.AttackZone;
 import br.com.carvoeiromanager.player.Attribute;
+import br.com.carvoeiromanager.player.DetailedPosition;
 import br.com.carvoeiromanager.player.InjurySeverity;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.PlayerInstruction;
@@ -98,6 +99,18 @@ public class LiveMatchEngine {
         int aiFatigueSubsMade = 0;
         boolean aiPostureSubMade = false;
 
+        // Live arrangement (spec 2026-09-10). Tracked only when the kickoff profile carries slot indexes;
+        // an untracked side (legacy profiles, this engine's fixed-seed golden tests) never touches these
+        // fields, which is what keeps those timelines byte-identical. The arrangement lives here and not in
+        // currentProfile because tactics changes replace currentProfile wholesale and AI posture swaps
+        // rebuild it from the kickoff identity — either would silently reset it.
+        boolean arrangementTracked = false;
+        String arrangementFormation;                       // the formation slotIndexes refer to
+        final Map<UUID, Integer> slotIndexes = new HashMap<>();
+        final Map<UUID, FormationSlots.Slot> slotAssignments = new HashMap<>();
+        final Map<UUID, RoleAssignment> roles = new HashMap<>();
+        final List<ArrangementSnapshot> snapshots = new ArrayList<>();
+
         Side(boolean home) { this.home = home; }
     }
 
@@ -131,6 +144,9 @@ public class LiveMatchEngine {
         home.currentProfile = cfg.homeProfile();
         away.currentProfile = cfg.awayProfile();
 
+        initArrangement(home, cfg.homeProfile());
+        initArrangement(away, cfg.awayProfile());
+
         // AI-manager reactions: which side (if any) re-evaluates its posture each second-half minute.
         Side aiSide = cfg.aiHome() == null ? null : (cfg.aiHome() ? home : away);
         TacticalProfile aiIdentity = cfg.aiHome() == null ? null
@@ -140,9 +156,9 @@ public class LiveMatchEngine {
         List<TimedInjury> injuries = new ArrayList<>();
         List<MinuteStats> minuteStats = new ArrayList<>();
 
-        TeamMatchInput homeInput = strength(home, home.currentProfile, cfg, homeCoachMult);
+        TeamMatchInput homeInput = strength(home, profileOf(home), cfg, homeCoachMult);
         home.dirty = false;
-        TeamMatchInput awayInput = strength(away, away.currentProfile, cfg, awayCoachMult);
+        TeamMatchInput awayInput = strength(away, profileOf(away), cfg, awayCoachMult);
         away.dirty = false;
 
         // Initial state at kickoff, from the starting game styles. Recomputed below whenever
@@ -177,14 +193,18 @@ public class LiveMatchEngine {
             applyTacticChanges(cfg, minute, away, events);
             applySubs(cfg, minute, home, events);
             applySubs(cfg, minute, away, events);
+            // After BOTH sides' substitutions: an arrangement submitted together with a substitution names
+            // the player coming on, who is only on the pitch once applySubs has run (plan ruling R1).
+            applySlotChanges(cfg, minute, home);
+            applySlotChanges(cfg, minute, away);
             if (aiSide != null) {
                 int scoreDiff = aiSide.home ? homeGoals - awayGoals : awayGoals - homeGoals;
                 reactAiManager(minute, aiSide, aiIdentity, scoreDiff, events);
                 maybeAiSubstitution(minute, aiSide, cfg, events);
             }
             boolean inputsRebuilt = home.dirty || away.dirty;
-            if (home.dirty) { homeInput = strength(home, home.currentProfile, cfg, homeCoachMult); home.dirty = false; }
-            if (away.dirty) { awayInput = strength(away, away.currentProfile, cfg, awayCoachMult); away.dirty = false; }
+            if (home.dirty) { homeInput = strength(home, profileOf(home), cfg, homeCoachMult); home.dirty = false; }
+            if (away.dirty) { awayInput = strength(away, profileOf(away), cfg, awayCoachMult); away.dirty = false; }
             // Weather itself (cfg.weather()) never changes — only the response to it, which is a
             // pure, RNG-free function of the current homeInput/awayInput (specifically each side's
             // live gameStyle). Recomputing here, and only here, means a tactics change that flips a
@@ -291,8 +311,10 @@ public class LiveMatchEngine {
         Map<UUID, Integer> minutes = new LinkedHashMap<>();
         putMinutes(home, minutes);
         putMinutes(away, minutes);
+        List<ArrangementSnapshot> arrangements = new ArrayList<>(home.snapshots);
+        arrangements.addAll(away.snapshots);
         return new LiveTimeline(hg, ag, List.copyOf(events), Map.copyOf(minutes), List.copyOf(injuries), finalMinute,
-                List.copyOf(minuteStats));
+                List.copyOf(minuteStats), List.copyOf(arrangements));
     }
 
     // ---- side setup & minutes ----
@@ -353,10 +375,123 @@ public class LiveMatchEngine {
                     // a tracked side's live arrangement lives on the Side and is overlaid at strength time.
                     old.instructions(), old.slotAssignments(), old.slotIndexes());
             side.dirty = true;
+            // A MANAGER formation change relocates the players into the new shape (spec Decision 4).
+            // AI posture swaps change formation through reactAiManager instead and deliberately do not
+            // relocate (plan ruling R4).
+            if (side.arrangementTracked && !t.formation().equals(side.arrangementFormation)) {
+                relocate(side, t.formation(), minute);
+            }
             // Use the first on-pitch player as a sentinel playerId — never NPE, never displayed.
             UUID carrier = side.onPitch.isEmpty() ? null : side.onPitch.get(0);
             events.add(new LiveTimelineEvent(minute, EventType.TACTICS_CHANGE, side.home, carrier, null, null, null));
         }
+    }
+
+    // ---- live arrangement (spec 2026-09-10) ----
+
+    private static void initArrangement(Side side, TacticalProfile profile) {
+        if (profile.slotIndexes() == null || profile.slotIndexes().isEmpty()) return;
+        side.arrangementTracked = true;
+        side.arrangementFormation = profile.formation();
+        side.slotIndexes.putAll(profile.slotIndexes());
+        side.slotAssignments.putAll(profile.slotAssignments());
+        side.roles.putAll(profile.roles());
+        snapshot(side, 0);
+    }
+
+    /**
+     * The profile this side actually plays: its tactical profile with the LIVE arrangement laid over it.
+     * An untracked side plays its profile exactly as given.
+     */
+    private static TacticalProfile profileOf(Side side) {
+        if (!side.arrangementTracked) return side.currentProfile;
+        return side.currentProfile.withArrangement(
+                Map.copyOf(side.slotAssignments), Map.copyOf(side.slotIndexes), Map.copyOf(side.roles));
+    }
+
+    /**
+     * Applies any {@link TimedSlots} scheduled for this minute and side. Pins go through
+     * {@link SlotAssigner#assignToSlotIndexes}, so a pin for a player no longer on the pitch is ignored
+     * and everyone else still lands. Draws no RNG and emits no event (plan ruling R9).
+     */
+    private void applySlotChanges(LiveMatchConfig cfg, int minute, Side side) {
+        if (!side.arrangementTracked) return;
+        for (TimedSlots entry : cfg.slotSchedule()) {
+            if (entry.minute() != minute || entry.home() != side.home) continue;
+            List<Player> onPitch = side.onPitch.stream().map(side.all::get).toList();
+            String formation = side.currentProfile.formation();
+            Map<UUID, Integer> indexes = SlotAssigner.assignToSlotIndexes(onPitch, formation, entry.slotIndexes());
+            replaceArrangement(side, formation, indexes, entry.roles() == null ? Map.of() : entry.roles());
+            snapshot(side, minute);
+        }
+    }
+
+    private static void relocate(Side side, String formation, int minute) {
+        List<Player> onPitch = side.onPitch.stream().map(side.all::get).toList();
+        replaceArrangement(side, formation, SlotAssigner.assignToSlotIndexes(onPitch, formation, Map.of()), Map.of());
+        snapshot(side, minute);
+    }
+
+    /**
+     * Installs a new arrangement. Roles follow plan ruling R6: a player whose slot index AND formation are
+     * unchanged keeps their current role, which preserves a role the manager set before the match; anyone
+     * who moved takes a valid hand-set override, else the best familiar role for the slot they now hold.
+     */
+    private static void replaceArrangement(Side side, String formation, Map<UUID, Integer> indexes,
+                                           Map<UUID, RoleArchetype> overrides) {
+        Map<UUID, Integer> previousIndexes = new HashMap<>(side.slotIndexes);
+        Map<UUID, RoleAssignment> previousRoles = new HashMap<>(side.roles);
+        boolean sameFormation = formation.equals(side.arrangementFormation);
+        Map<UUID, FormationSlots.Slot> slots = SlotAssigner.slotsFor(indexes, formation);
+
+        side.arrangementFormation = formation;
+        side.slotIndexes.clear();
+        side.slotIndexes.putAll(indexes);
+        side.slotAssignments.clear();
+        side.slotAssignments.putAll(slots);
+        side.roles.clear();
+        for (Map.Entry<UUID, FormationSlots.Slot> e : slots.entrySet()) {
+            UUID id = e.getKey();
+            DetailedPosition position = e.getValue().accepted().iterator().next();
+            RoleArchetype override = overrides.get(id);
+            RoleAssignment role;
+            if (override != null && override.validFor(position)) {
+                role = new RoleAssignment(override, override.defaultFocusFor(position));
+            } else if (sameFormation && indexes.get(id).equals(previousIndexes.get(id)) && previousRoles.containsKey(id)) {
+                role = previousRoles.get(id);
+            } else {
+                role = TacticsService.bestAssignmentFor(side.all.get(id), e.getValue());
+            }
+            side.roles.put(id, role);
+        }
+        side.dirty = true;
+    }
+
+    /** Spec Decision 5: the player coming on takes the outgoing player's slot, and is graded for it. */
+    private static void inheritSlot(Side side, UUID outId, UUID inId, int minute) {
+        if (!side.arrangementTracked) return;
+        Integer index = side.slotIndexes.remove(outId);
+        FormationSlots.Slot slot = side.slotAssignments.remove(outId);
+        side.roles.remove(outId);
+        if (index != null && slot != null) {
+            side.slotIndexes.put(inId, index);
+            side.slotAssignments.put(inId, slot);
+            side.roles.put(inId, TacticsService.bestAssignmentFor(side.all.get(inId), slot));
+        }
+        snapshot(side, minute);
+    }
+
+    private static void vacateSlot(Side side, UUID playerId, int minute) {
+        if (!side.arrangementTracked) return;
+        side.slotIndexes.remove(playerId);
+        side.slotAssignments.remove(playerId);
+        side.roles.remove(playerId);
+        snapshot(side, minute);
+    }
+
+    private static void snapshot(Side side, int minute) {
+        side.snapshots.add(new ArrangementSnapshot(minute, side.home, side.arrangementFormation,
+                Map.copyOf(side.slotIndexes), Map.copyOf(side.roles)));
     }
 
     /**
@@ -391,6 +526,7 @@ public class LiveMatchEngine {
             side.exitMinute.put(sub.outId(), minute);
             side.entryMinute.put(sub.inId(), minute);
             side.dirty = true;
+            inheritSlot(side, sub.outId(), sub.inId(), minute);
             events.add(new LiveTimelineEvent(minute, EventType.SUBSTITUTION, side.home,
                     sub.outId(), sub.inId(), null, null));
         }
@@ -427,6 +563,7 @@ public class LiveMatchEngine {
         ai.exitMinute.put(d.outId(), minute);
         ai.entryMinute.put(d.inId(), minute);
         ai.dirty = true;
+        inheritSlot(ai, d.outId(), d.inId(), minute);
         ai.aiSubsMade++;
         switch (d.kind()) {
             case POSTURE -> ai.aiPostureSubMade = true;
@@ -473,6 +610,7 @@ public class LiveMatchEngine {
                 side.exitMinute.put(booked, minute);
                 side.redCarded = true;
                 side.dirty = true;
+                vacateSlot(side, booked, minute);
             }
         }
     }
@@ -693,8 +831,9 @@ public class LiveMatchEngine {
             // exactly one nextInt from its stream (weight VALUES change, not the RNG contract). For
             // the neutral MISTO the weights equal the pre-AttackZone formulas → byte-identical.
             AttackZone zone = side.currentProfile.attackZone();
-            Map<UUID, RoleAssignment> roles = side.currentProfile.roles();
-            TacticalProfile profile = side.currentProfile;
+            // Attribution reads roles, so it reads the live arrangement's roles, not the kickoff ones.
+            TacticalProfile profile = profileOf(side);
+            Map<UUID, RoleAssignment> roles = profile.roles();
             UUID scorer = pickByWeight(side, p -> scorerWeight(p, zone, profile.instructionFor(p.getId())), attrRng);
             UUID assister = assistRng.nextDouble() < ASSIST_CHANCE
                     ? pickByWeightExcluding(side, scorer,

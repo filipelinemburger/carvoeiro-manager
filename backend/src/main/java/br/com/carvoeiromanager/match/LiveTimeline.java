@@ -2,6 +2,7 @@ package br.com.carvoeiromanager.match;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -14,6 +15,7 @@ import java.util.UUID;
  *                    corresponds to minute {@code i + 1}. Rolled by {@link LiveMatchEngine}'s
  *                    dedicated {@code statsRng} stream, so size is always exactly
  *                    {@link #finalMinute}.
+ * @param arrangements every ArrangementSnapshot the engine recorded, per side in chronological order.
  */
 public record LiveTimeline(
         int homeGoals,
@@ -22,7 +24,30 @@ public record LiveTimeline(
         Map<UUID, Integer> minutesPlayed,
         List<TimedInjury> injuries,
         int finalMinute,
-        List<MinuteStats> minuteStats) {
+        List<MinuteStats> minuteStats,
+        List<ArrangementSnapshot> arrangements) {
+
+    /** Pre-arrangement constructor: no snapshots. */
+    public LiveTimeline(int homeGoals, int awayGoals, List<LiveTimelineEvent> events,
+                        Map<UUID, Integer> minutesPlayed, List<TimedInjury> injuries, int finalMinute,
+                        List<MinuteStats> minuteStats) {
+        this(homeGoals, awayGoals, events, minutesPlayed, injuries, finalMinute, minuteStats, List.of());
+    }
+
+    /**
+     * {@code home}'s arrangement as it stood at {@code minute}: the latest snapshot at or before it.
+     * Snapshots are appended chronologically per side, so the last match in list order wins. Empty for
+     * an untracked side.
+     */
+    public Optional<ArrangementSnapshot> arrangementAt(int minute, boolean home) {
+        ArrangementSnapshot latest = null;
+        for (ArrangementSnapshot s : arrangements) {
+            if (s.home() == home && s.minute() <= minute) {
+                latest = s;
+            }
+        }
+        return Optional.ofNullable(latest);
+    }
 
     private static boolean isGoal(EventType t) {
         return t.isGoal();

@@ -24,6 +24,7 @@ import java.util.UUID;
  * own 90-minute score, whether the aggregate is level — the ONLY case that actually extends the
  * simulated timeline past minute 90. A match that isn't a knockout decider never even evaluates
  * that check, so its timeline is byte-identical to before these fields existed.
+ * {@code slotSchedule} is the ordered list of manual rearrangements; empty is the neutral default.
  */
 public record LiveMatchConfig(
         long seed,
@@ -40,5 +41,16 @@ public record LiveMatchConfig(
         Weather weather,
         boolean knockoutDecider,
         Integer firstLegHomeGoals,
-        Integer firstLegAwayGoals) {
+        Integer firstLegAwayGoals,
+        List<TimedSlots> slotSchedule) {
+
+    /** Pre-rearrangement constructor: no slot schedule. */
+    public LiveMatchConfig(long seed, List<Player> homeXi, List<Player> awayXi, List<Player> homeBench,
+                           List<Player> awayBench, TacticalProfile homeProfile, TacticalProfile awayProfile,
+                           Map<UUID, Integer> fitness, List<LiveSub> subSchedule,
+                           List<TimedTactics> tacticsSchedule, Boolean aiHome, Weather weather,
+                           boolean knockoutDecider, Integer firstLegHomeGoals, Integer firstLegAwayGoals) {
+        this(seed, homeXi, awayXi, homeBench, awayBench, homeProfile, awayProfile, fitness, subSchedule,
+                tacticsSchedule, aiHome, weather, knockoutDecider, firstLegHomeGoals, firstLegAwayGoals, List.of());
+    }
 }

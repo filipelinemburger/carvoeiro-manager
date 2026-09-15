@@ -7,9 +7,11 @@ import br.com.carvoeiromanager.player.Attributes;
 import br.com.carvoeiromanager.player.GameStyle;
 import br.com.carvoeiromanager.player.Marking;
 import br.com.carvoeiromanager.player.Mentality;
+import br.com.carvoeiromanager.player.DetailedPosition;
 import br.com.carvoeiromanager.player.Player;
 import br.com.carvoeiromanager.player.Position;
 import br.com.carvoeiromanager.player.Pressing;
+import br.com.carvoeiromanager.player.RoleArchetype;
 import br.com.carvoeiromanager.player.RoleAssignment;
 import br.com.carvoeiromanager.match.TimedTactics;
 import org.junit.jupiter.api.Test;
@@ -1234,5 +1236,203 @@ class LiveMatchEngineTest {
         LiveTimeline extended = engine.simulate(deciderConfig(seed, ninety.homeGoals(), ninety.awayGoals()));
         assertThat(extended.finalMinute()).isEqualTo(120);
         assertThat(extended.minuteStats()).hasSize(120);
+    }
+
+    // ---- live arrangement (spec 2026-09-10) ----
+
+    /** defaultProfile, but carrying real kickoff slot indexes — a TRACKED side. */
+    private static TacticalProfile trackedProfile(List<Player> xi, String formation) {
+        Map<UUID, Integer> indexes = SlotAssigner.assignToSlotIndexes(xi, formation, Map.of());
+        return new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO, formation,
+                Pressing.MEDIUM, Marking.ZONAL, LegacyRoles.forXi(xi), null, null, null, Map.of(),
+                SlotAssigner.slotsFor(indexes, formation), indexes);
+    }
+
+    private LiveMatchConfig trackedConfig(long seed, List<LiveSub> subs, List<TimedTactics> tactics,
+                                          List<TimedSlots> slots) {
+        Map<UUID, Integer> fitness = new HashMap<>();
+        homeXi.forEach(pl -> fitness.put(pl.getId(), 100));
+        awayXi.forEach(pl -> fitness.put(pl.getId(), 100));
+        homeBench.forEach(pl -> fitness.put(pl.getId(), 100));
+        return new LiveMatchConfig(seed, homeXi, awayXi, homeBench, List.of(),
+                trackedProfile(homeXi, "4-4-2"), trackedProfile(awayXi, "4-4-2"), fitness, subs, tactics,
+                null, Weather.neutral(), false, null, null, slots);
+    }
+
+    private static LiveMatchConfig withProfiles(LiveMatchConfig c, TacticalProfile home, TacticalProfile away) {
+        return new LiveMatchConfig(c.seed(), c.homeXi(), c.awayXi(), c.homeBench(), c.awayBench(), home, away,
+                c.fitness(), c.subSchedule(), c.tacticsSchedule(), c.aiHome(), c.weather(), c.knockoutDecider(),
+                c.firstLegHomeGoals(), c.firstLegAwayGoals(), c.slotSchedule());
+    }
+
+    private static boolean sentOffBy(LiveTimeline t, UUID playerId, int minute) {
+        return t.events().stream().anyMatch(e ->
+                e.type() == EventType.RED_CARD && playerId.equals(e.playerId()) && e.minute() <= minute);
+    }
+
+    @Test
+    void anUntrackedSideIgnoresAScheduledArrangementEntirely() {
+        LiveMatchConfig plain = config(555L, List.of());
+        UUID a = homeXi.get(1).getId();
+        UUID b = homeXi.get(2).getId();
+        LiveMatchConfig withSlots = new LiveMatchConfig(plain.seed(), plain.homeXi(), plain.awayXi(),
+                plain.homeBench(), plain.awayBench(), plain.homeProfile(), plain.awayProfile(), plain.fitness(),
+                plain.subSchedule(), plain.tacticsSchedule(), plain.aiHome(), plain.weather(),
+                plain.knockoutDecider(), plain.firstLegHomeGoals(), plain.firstLegAwayGoals(),
+                List.of(new TimedSlots(30, true, Map.of(a, 2, b, 1), Map.of())));
+
+        LiveTimeline t = engine.simulate(withSlots);
+
+        assertThat(t.events()).isEqualTo(engine.simulate(plain).events());
+        assertThat(t.arrangements()).isEmpty();
+    }
+
+    @Test
+    void aTrackedSideRecordsItsKickoffArrangementAtMinuteZero() {
+        LiveMatchConfig cfg = trackedConfig(1L, List.of(), List.of(), List.of());
+
+        LiveTimeline t = engine.simulate(cfg);
+
+        ArrangementSnapshot kickoff = t.arrangementAt(0, true).orElseThrow();
+        assertThat(kickoff.formation()).isEqualTo("4-4-2");
+        assertThat(kickoff.slotIndexes()).isEqualTo(cfg.homeProfile().slotIndexes());
+    }
+
+    @Test
+    void aSubstituteTakesTheOutgoingPlayersSlotIndex() {
+        UUID out = homeXi.get(5).getId();
+        UUID in = homeBench.get(0).getId();
+        int checked = 0;
+        for (long seed = 0; seed < 20; seed++) {
+            LiveTimeline t = engine.simulate(trackedConfig(seed, List.of(new LiveSub(60, true, out, in)),
+                    List.of(), List.of()));
+            if (sentOffBy(t, out, 59)) continue;   // applySubs skips a player no longer on the pitch
+            int outIndex = t.arrangementAt(59, true).orElseThrow().slotIndexes().get(out);
+
+            ArrangementSnapshot after = t.arrangementAt(60, true).orElseThrow();
+            if (sentOffBy(t, in, 60)) continue;
+            assertThat(after.slotIndexes()).as("seed %d", seed)
+                    .doesNotContainKey(out)
+                    .containsEntry(in, outIndex);
+            checked++;
+        }
+        assertThat(checked).isPositive();
+    }
+
+    @Test
+    void anAiSubstituteAlsoTakesTheOutgoingPlayersSlotIndex() {
+        List<Player> awayBench = awayBenchWithCover();
+        int checked = 0;
+        for (long seed = 0; seed < 40; seed++) {
+            LiveMatchConfig cfg = withProfiles(configWithAwayBench(seed, awayBench, List.of(), false),
+                    trackedProfile(homeXi, "4-4-2"), trackedProfile(awayXi, "4-4-2"));
+            LiveTimeline t = engine.simulate(cfg);
+            for (LiveTimelineEvent e : t.events()) {
+                if (e.type() != EventType.SUBSTITUTION || e.home()) continue;
+                if (sentOffBy(t, e.playerInId(), e.minute())) continue;
+                Integer outIndex = t.arrangementAt(e.minute() - 1, false).orElseThrow()
+                        .slotIndexes().get(e.playerId());
+                if (outIndex == null) continue;
+                assertThat(t.arrangementAt(e.minute(), false).orElseThrow().slotIndexes())
+                        .as("seed %d minute %d", seed, e.minute())
+                        .containsEntry(e.playerInId(), outIndex);
+                checked++;
+            }
+        }
+        assertThat(checked).as("at least one AI substitution was exercised").isPositive();
+    }
+
+    @Test
+    void aScheduledArrangementTakesEffectFromItsMinute() {
+        Map<UUID, Integer> kickoff = trackedProfile(homeXi, "4-4-2").slotIndexes();
+        UUID a = homeXi.get(1).getId();
+        UUID b = homeXi.get(2).getId();
+        Map<UUID, Integer> swapped = new HashMap<>(kickoff);
+        swapped.put(a, kickoff.get(b));
+        swapped.put(b, kickoff.get(a));
+        int checked = 0;
+        for (long seed = 0; seed < 20; seed++) {
+            LiveTimeline t = engine.simulate(trackedConfig(seed, List.of(), List.of(),
+                    List.of(new TimedSlots(30, true, swapped, Map.of()))));
+            if (sentOffBy(t, a, 30) || sentOffBy(t, b, 30)) continue;
+
+            assertThat(t.arrangementAt(29, true).orElseThrow().slotIndexes().get(a)).isEqualTo(kickoff.get(a));
+            ArrangementSnapshot after = t.arrangementAt(30, true).orElseThrow();
+            assertThat(after.slotIndexes().get(a)).as("seed %d", seed).isEqualTo(kickoff.get(b));
+            assertThat(after.slotIndexes().get(b)).as("seed %d", seed).isEqualTo(kickoff.get(a));
+            checked++;
+        }
+        assertThat(checked).isPositive();
+    }
+
+    @Test
+    void aValidRoleOverrideIsUsedAndAnInvalidOneFallsBackToTheSlotsNaturalRole() {
+        Map<UUID, Integer> kickoff = trackedProfile(homeXi, "4-4-2").slotIndexes();
+        UUID outfielder = homeXi.get(1).getId();
+        UUID other = homeXi.get(2).getId();
+        DetailedPosition outfielderSlot = FormationSlots.of("4-4-2").get(kickoff.get(outfielder))
+                .accepted().iterator().next();
+        RoleArchetype valid = Arrays.stream(RoleArchetype.values())
+                .filter(r -> r.validFor(outfielderSlot)).findFirst().orElseThrow();
+        // GOALKEEPER is never valid for an outfield slot.
+        Map<UUID, RoleArchetype> overrides = Map.of(outfielder, valid, other, RoleArchetype.GOALKEEPER);
+
+        LiveTimeline t = engine.simulate(trackedConfig(4L, List.of(), List.of(),
+                List.of(new TimedSlots(10, true, kickoff, overrides))));
+
+        ArrangementSnapshot after = t.arrangementAt(10, true).orElseThrow();
+        assertThat(after.roles().get(outfielder).archetype()).isEqualTo(valid);
+        assertThat(after.roles().get(other).archetype()).isNotEqualTo(RoleArchetype.GOALKEEPER);
+    }
+
+    @Test
+    void aManagerFormationChangeRelocatesThePlayersIntoTheNewShape() {
+        TimedTactics toFourThreeThree = new TimedTactics(30, true, Mentality.BALANCED, null, null,
+                Pressing.MEDIUM, Marking.ZONAL, "4-3-3");
+
+        LiveTimeline t = engine.simulate(trackedConfig(3L, List.of(), List.of(toFourThreeThree), List.of()));
+
+        assertThat(t.arrangementAt(29, true).orElseThrow().formation()).isEqualTo("4-4-2");
+        ArrangementSnapshot after = t.arrangementAt(30, true).orElseThrow();
+        assertThat(after.formation()).isEqualTo("4-3-3");
+        assertThat(new HashSet<>(after.slotIndexes().values())).hasSize(after.slotIndexes().size());
+    }
+
+    @Test
+    void anAiPostureSwapChangesFormationWithoutRelocating() {
+        Map<UUID, Integer> idx = SlotAssigner.assignToSlotIndexes(awayXi, "4-3-3", Map.of());
+        TacticalProfile attackingAway = new TacticalProfile(Mentality.ATTACKING, GameStyle.EQUILIBRADO,
+                AttackZone.MISTO, "4-3-3", Pressing.MEDIUM, Marking.ZONAL, LegacyRoles.forXi(awayXi),
+                null, null, null, Map.of(), SlotAssigner.slotsFor(idx, "4-3-3"), idx);
+        boolean sawFormationPosture = false;
+        for (long seed = 1; seed <= 40; seed++) {
+            Map<UUID, Integer> fitness = new HashMap<>();
+            homeXi.forEach(pl -> fitness.put(pl.getId(), 100));
+            awayXi.forEach(pl -> fitness.put(pl.getId(), 100));
+            LiveTimeline t = engine.simulate(new LiveMatchConfig(seed, homeXi, awayXi, List.of(), List.of(),
+                    defaultProfile(homeXi), attackingAway, fitness, List.of(), List.of(), false, Weather.neutral(),
+                    false, null, null, List.of()));
+            sawFormationPosture |= t.events().stream().anyMatch(e -> e.type() == EventType.TACTICS_CHANGE
+                    && !e.home() && ("ALL_OUT".equals(e.detail()) || "PARK_THE_BUS".equals(e.detail())));
+            assertThat(t.arrangements().stream().filter(s -> !s.home()))
+                    .as("seed %d", seed)
+                    .allMatch(s -> s.formation().equals("4-3-3"));
+        }
+        assertThat(sawFormationPosture).as("some seed reached a formation-changing posture").isTrue();
+    }
+
+    @Test
+    void aSentOffPlayerLeavesTheArrangement() {
+        boolean saw = false;
+        for (long seed = 0; seed < 300 && !saw; seed++) {
+            LiveTimeline t = engine.simulate(trackedConfig(seed, List.of(), List.of(), List.of()));
+            for (LiveTimelineEvent e : t.events()) {
+                if (e.type() != EventType.RED_CARD || !e.home()) continue;
+                assertThat(t.arrangementAt(e.minute(), true).orElseThrow().slotIndexes())
+                        .doesNotContainKey(e.playerId());
+                saw = true;
+            }
+        }
+        assertThat(saw).isTrue();
     }
 }
