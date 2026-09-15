@@ -9,11 +9,15 @@ import CloseIcon from '@mui/icons-material/Close'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import AddIcon from '@mui/icons-material/Add'
 import UndoIcon from '@mui/icons-material/Undo'
-import type { LiveEvent, LivePlayer, LiveTactics, LiveTacticsRequest, Mentality, GameStyle, AttackZone, Pressing, Marking } from '../../api/types'
+import type { LiveEvent, LiveKitColors, LivePlayer, LiveTactics, LiveTacticsRequest, Mentality, GameStyle, AttackZone, Pressing, Marking, RoleArchetype } from '../../api/types'
 import { FitnessBar, fitnessSeverity } from '../squad/FitnessBar'
 import { FORMATION_CODES } from '../pitch/pitchSlots'
 import { MENTALITY_LABEL, GAME_STYLE_LABEL, ATTACK_ZONE_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
 import { bookingOf, minutesPlayed, rankByFit, isSuggestedFor, type Booking } from './livePlayerContext'
+import { workingRoster, baselineArrangement, swapSlots, sameSlots, type SubPair, type SlotMap, type RoleOverrides } from './liveArrangement'
+import { PositionsTabContent } from './PositionsTabContent'
+
+export type { SubPair } from './liveArrangement'
 
 // ---------------------------------------------------------------------------
 // Shared constants
@@ -30,15 +34,6 @@ const PRESSINGS = (Object.keys(PRESSING_LABEL) as Pressing[])
 const MARKINGS = (Object.keys(MARKING_LABEL) as Marking[])
   .map(v => ({ value: v, label: MARKING_LABEL[v] }))
 const FORMATIONS = FORMATION_CODES
-
-// ---------------------------------------------------------------------------
-// Sub-types
-// ---------------------------------------------------------------------------
-
-export interface SubPair {
-  out: LivePlayer
-  in: LivePlayer
-}
 
 // ---------------------------------------------------------------------------
 // Shared helper components
@@ -490,7 +485,7 @@ function TacticsTabContent({
 export interface MatchActionsDialogProps {
   open: boolean
   onClose: () => void
-  initialTab: 0 | 1
+  initialTab: 0 | 1 | 2
   // Substitution tab props
   onPitch: LivePlayer[]
   bench: LivePlayer[]
@@ -502,6 +497,8 @@ export interface MatchActionsDialogProps {
   onApply: (payload: { subs: SubPair[]; tactics: LiveTacticsRequest | null }) => void
   // Tactics tab props
   currentTactics: LiveTactics
+  /** The managed side's kit, for the Posições pitch. */
+  kit: LiveKitColors
 }
 
 export function MatchActionsDialog({
@@ -516,8 +513,9 @@ export function MatchActionsDialog({
   pending,
   onApply,
   currentTactics,
+  kit,
 }: MatchActionsDialogProps) {
-  const [activeTab, setActiveTab] = useState<0 | 1>(initialTab)
+  const [activeTab, setActiveTab] = useState<0 | 1 | 2>(initialTab)
 
   // Sub tab state. pendingOut and pendingIn are never both set: each selection handler below
   // either completes a pair (clearing whichever was pending) or toggles the OTHER side's pending
@@ -533,6 +531,51 @@ export function MatchActionsDialog({
   const [pressing, setPressing] = useState(currentTactics.pressing)
   const [marking, setMarking] = useState(currentTactics.marking)
   const [formation, setFormation] = useState(currentTactics.formation)
+
+  // Posições state. Edits are remembered together with the formation and roster they were made on.
+  // Changing the formation, or queueing/removing a substitution, changes what the edits refer to, so
+  // they are discarded and the tab re-derives its baseline — never applied to a pitch they weren't made on.
+  const [arrangementEdits, setArrangementEdits] = useState<{
+    formation: string
+    rosterKey: string
+    slots: SlotMap
+    roles: RoleOverrides
+  } | null>(null)
+
+  const roster = workingRoster(onPitch, queue)
+  const rosterKey = roster.map(p => p.playerId).sort().join(',')
+  const baseline = baselineArrangement(roster, formation, currentTactics.formation)
+  const liveEdits = arrangementEdits !== null
+    && arrangementEdits.formation === formation
+    && arrangementEdits.rosterKey === rosterKey
+    ? arrangementEdits
+    : null
+  const slots = liveEdits?.slots ?? baseline
+  const roleOverrides = liveEdits?.roles ?? {}
+  // Dragging two players and back again is not a change.
+  const arrangementChanged = liveEdits !== null
+    && (!sameSlots(liveEdits.slots, baseline) || Object.keys(liveEdits.roles).length > 0)
+
+  function editArrangement(next: { slots?: SlotMap; roles?: RoleOverrides }) {
+    setArrangementEdits({ formation, rosterKey, slots: next.slots ?? slots, roles: next.roles ?? roleOverrides })
+  }
+
+  function handleSwap(fromSlot: number, toSlot: number) {
+    const nextSlots = swapSlots(slots, fromSlot, toSlot)
+    // A moved player's hand-set role may not be valid in their new slot; they take the slot's natural
+    // role instead (spec Decision 6), exactly as the server would.
+    const roles = Object.fromEntries(
+      Object.entries(roleOverrides).filter(([id]) => nextSlots[id] === slots[id]),
+    )
+    editArrangement({ slots: nextSlots, roles })
+  }
+
+  function handleRoleChange(playerId: string, archetype: RoleArchetype | null) {
+    const roles = { ...roleOverrides }
+    if (archetype === null) delete roles[playerId]
+    else roles[playerId] = archetype
+    editArrangement({ roles })
+  }
 
   // Clicking an on-pitch player: completes the pair if a bench player is already pending
   // (out-first's mirror), otherwise toggles this player as the pending OUT — today's behaviour.
@@ -580,13 +623,19 @@ export function MatchActionsDialog({
     formation !== currentTactics.formation,
   ].filter(Boolean).length
 
-  const changeCount = queue.length + tacticsChangedCount
+  const changeCount = queue.length + tacticsChangedCount + (arrangementChanged ? 1 : 0)
 
   function handleContinue() {
-    onApply({
-      subs: queue,
-      tactics: tacticsChangedCount > 0 ? { mentality, gameStyle, attackZone, pressing, marking, formation } : null,
-    })
+    const sendTactics = tacticsChangedCount > 0 || arrangementChanged
+    const tactics: LiveTacticsRequest | null = sendTactics
+      ? {
+          mentality, gameStyle, attackZone, pressing, marking, formation,
+          // Omitted rather than null when untouched, so a tactics-only apply sends exactly the payload it
+          // always has. The server skips re-recording unchanged tactics when an arrangement rides along.
+          ...(arrangementChanged ? { arrangement: { slotIndexes: slots, roles: roleOverrides } } : {}),
+        }
+      : null
+    onApply({ subs: queue, tactics })
   }
 
   const applyLabel = pending
@@ -603,6 +652,7 @@ export function MatchActionsDialog({
   const tacticsSummary = tacticsChangedCount === 0
     ? null
     : tacticsChangedCount === 1 ? '1 ajuste tático' : `${tacticsChangedCount} ajustes táticos`
+  const arrangementSummary = arrangementChanged ? '1 reposicionamento' : null
   // A half-built swap (one side chosen, the other not yet) does not count toward changeCount —
   // the apply button stays disabled — but the footer must not contradict the "Substituições
   // Pendentes" section above it, which is already showing that half-built pair in its own slot.
@@ -613,7 +663,7 @@ export function MatchActionsDialog({
       : pendingIn
         ? 'Escolha quem sai para concluir a troca.'
         : 'Nenhuma alteração pendente.'
-    : [subsSummary, tacticsSummary].filter(Boolean).join(' · ')
+    : [subsSummary, tacticsSummary, arrangementSummary].filter(Boolean).join(' · ')
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
@@ -624,11 +674,12 @@ export function MatchActionsDialog({
       <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}>
         <Tabs
           value={activeTab}
-          onChange={(_, v: 0 | 1) => setActiveTab(v)}
+          onChange={(_, v: 0 | 1 | 2) => setActiveTab(v)}
           aria-label="Ações da partida"
         >
           <Tab label="Substituição" id="tab-sub" aria-controls="tabpanel-sub" />
           <Tab label="Instruções táticas" id="tab-tactics" aria-controls="tabpanel-tactics" />
+          <Tab label="Posições" id="tab-positions" aria-controls="tabpanel-positions" />
         </Tabs>
       </Box>
 
@@ -680,6 +731,25 @@ export function MatchActionsDialog({
               onPressingChange={setPressing}
               onMarkingChange={setMarking}
               onFormationChange={setFormation}
+            />
+          )}
+        </Box>
+
+        <Box
+          role="tabpanel"
+          id="tabpanel-positions"
+          aria-labelledby="tab-positions"
+          hidden={activeTab !== 2}
+        >
+          {activeTab === 2 && (
+            <PositionsTabContent
+              roster={roster}
+              formation={formation}
+              slots={slots}
+              roleOverrides={roleOverrides}
+              kit={kit}
+              onSwap={handleSwap}
+              onRoleChange={handleRoleChange}
             />
           )}
         </Box>

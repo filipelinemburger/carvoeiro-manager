@@ -1,11 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import { MatchActionsDialog } from './MatchActionsDialog'
 import { FORMATION_CODES } from '../pitch/pitchSlots'
 import { MENTALITY_LABEL, GAME_STYLE_LABEL, ATTACK_ZONE_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tacticsLabels'
+import { ARCHETYPES_FOR_POSITION } from '../players/roleLabels'
 import type { LiveEvent, LivePlayer, LiveTactics } from '../../api/types'
 
 const DEFAULT_TACTICS: LiveTactics = { mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', attackZone: 'MISTO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-4-2' }
+const KIT = { primary: '#ffcc00', secondary: '#000000' }
 
 function renderTacticsTab(onApply: (payload: unknown) => void = () => {}) {
   render(
@@ -21,6 +23,7 @@ function renderTacticsTab(onApply: (payload: unknown) => void = () => {}) {
       pending={false}
       onApply={onApply}
       currentTactics={DEFAULT_TACTICS}
+      kit={KIT}
     />,
   )
 }
@@ -59,6 +62,7 @@ function renderDialog({
       pending={false}
       onApply={onApply}
       currentTactics={currentTactics}
+      kit={KIT}
     />,
   )
   return { onApply }
@@ -186,6 +190,7 @@ function renderSubTab({
       pending={false}
       onApply={onApply}
       currentTactics={{ mentality: 'BALANCED', gameStyle: 'EQUILIBRADO', attackZone: 'MISTO', pressing: 'MEDIUM', marking: 'ZONAL', formation: '4-4-2' }}
+      kit={KIT}
     />,
   )
   return { onApply }
@@ -408,5 +413,78 @@ describe('MatchActionsDialog footer', () => {
     expect(screen.getByText('Escolha quem sai para concluir a troca.')).toBeInTheDocument()
     expect(screen.queryByText('Nenhuma alteração pendente.')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Aplicar' })).toBeDisabled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Positions tab
+// ---------------------------------------------------------------------------
+
+describe('MatchActionsDialog positions tab', () => {
+  const gk = player({ playerId: 'gk', name: 'Goleiro', position: 'GK', role: 'GOALKEEPER', slotIndex: 0, detailedPosition: 'GOLEIRO' })
+  const zag = player({ playerId: 'zag', name: 'Zagueiro', position: 'DEF', role: 'STOPPER', slotIndex: 2, detailedPosition: 'ZAGUEIRO' })
+  const reserve = player({ playerId: 'res', name: 'Reserva', position: 'DEF', role: 'STOPPER', onPitch: false, slotIndex: null, detailedPosition: 'ZAGUEIRO' })
+
+  function openPositions(overrides: Parameters<typeof renderDialog>[0] = {}) {
+    renderDialog({ onPitch: [gk, zag], bench: [reserve], ...overrides })
+    fireEvent.click(screen.getByRole('tab', { name: 'Posições' }))
+  }
+
+  it('draws every on-pitch player on the pitch', () => {
+    openPositions()
+
+    const pitch = screen.getByTestId('pitch')
+    expect(within(pitch).getByText('Goleiro')).toBeInTheDocument()
+    expect(within(pitch).getByText('Zagueiro')).toBeInTheDocument()
+  })
+
+  it('leaves the apply button disabled when nothing was rearranged', () => {
+    openPositions()
+
+    expect(screen.getByRole('button', { name: 'Aplicar' })).toBeDisabled()
+  })
+
+  it('sends a hand-set role as one repositioning, alongside the unchanged tactics', async () => {
+    const onApply = vi.fn()
+    openPositions({ onApply })
+    const archetype = ARCHETYPES_FOR_POSITION.ZAGUEIRO.find(a => a !== 'STOPPER')!
+
+    fireEvent.contextMenu(within(screen.getByTestId('pitch')).getByText('Zagueiro'))
+    fireEvent.change(screen.getByLabelText('Função'), { target: { value: archetype } })
+    fireEvent.keyDown(screen.getByLabelText('Função'), { key: 'Escape' })
+
+    const apply = await waitFor(() => screen.getByRole('button', { name: 'Aplicar 1 alteração' }))
+    expect(screen.getByText('1 reposicionamento')).toBeInTheDocument()
+    fireEvent.click(apply)
+    expect(onApply).toHaveBeenCalledWith({
+      subs: [],
+      tactics: { ...DEFAULT_TACTICS, arrangement: { slotIndexes: { gk: 0, zag: 2 }, roles: { zag: archetype } } },
+    })
+  })
+
+  it('shows the incoming player in place of the outgoing one once a substitution is queued', () => {
+    renderDialog({ onPitch: [gk, zag], bench: [reserve] })
+    fireEvent.click(within(outSection()).getByText('Zagueiro'))
+    fireEvent.click(within(inSection()).getByText('Reserva'))
+    fireEvent.click(screen.getByRole('tab', { name: 'Posições' }))
+
+    const pitch = screen.getByTestId('pitch')
+    expect(within(pitch).getByText('Reserva')).toBeInTheDocument()
+    expect(within(pitch).queryByText('Zagueiro')).not.toBeInTheDocument()
+  })
+
+  it('discards rearrangement edits when the formation changes', async () => {
+    openPositions()
+    const archetype = ARCHETYPES_FOR_POSITION.ZAGUEIRO.find(a => a !== 'STOPPER')!
+    fireEvent.contextMenu(within(screen.getByTestId('pitch')).getByText('Zagueiro'))
+    fireEvent.change(screen.getByLabelText('Função'), { target: { value: archetype } })
+    fireEvent.keyDown(screen.getByLabelText('Função'), { key: 'Escape' })
+    await waitFor(() => screen.getByText('1 reposicionamento'))
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Instruções táticas' }))
+    fireEvent.change(screen.getByLabelText('Formação'), { target: { value: '4-3-3' } })
+
+    expect(screen.queryByText(/reposicionamento/)).not.toBeInTheDocument()
+    expect(screen.getByText('1 ajuste tático')).toBeInTheDocument()
   })
 })

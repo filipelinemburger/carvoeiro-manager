@@ -442,6 +442,7 @@ export function LiveMatchPage() {
         pending={applyPending}
         onApply={handleApply}
         currentTactics={state.currentTactics}
+        kit={state.managedIsHome ? state.homeClubColors : state.awayClubColors}
       />
 
       <OpponentScoutingPanel
