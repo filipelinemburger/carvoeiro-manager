@@ -83,7 +83,8 @@ public final class AiManagerBrain {
         // change with an AI posture swap (a mid-match formation change does not re-grade positions).
         return new TacticalProfile(mentality, identity.gameStyle(), identity.attackZone(), formation, pressing,
                 identity.marking(), identity.roles(), identity.penaltyTakerId(), identity.freekickTakerId(),
-                identity.cornerTakerId(), identity.instructions(), identity.slotAssignments());
+                identity.cornerTakerId(), identity.instructions(), identity.slotAssignments(),
+                identity.slotIndexes());
     }
 
     private static int chaseOffset(Mentality identity) {

@@ -31,9 +31,13 @@ import java.util.UUID;
  * {@link br.com.carvoeiromanager.player.DetailedPosition}) because grading needs the slot's
  * {@code accepted()} set as a whole, measured against every position the player can play. An empty
  * map is the legacy/neutral no-op: every player resolves to a x1.0 multiplier, keeping engine
- * results byte-identical. NOTE: a mid-match formation change does NOT re-grade positions — it
- * preserves the kickoff assignment; acceptable since a well-formed squad's assignment is all-exact
- * (x1.0) either way.
+ * results byte-identical.
+ *
+ * <p>{@code slotIndexes} carries each starter's kickoff slot INDEX into {@code FormationSlots.of(formation)}
+ * — the only thing that distinguishes two slots accepting the same positions. It is where the live engine
+ * starts tracking the arrangement from; mid-match rearrangement, substitute slot inheritance and a
+ * manager's formation relocation all happen on the engine's own side state, not in this record
+ * (spec 2026-09-10). An empty map means "untracked".
  */
 public record TacticalProfile(
         Mentality mentality,
@@ -47,7 +51,34 @@ public record TacticalProfile(
         UUID freekickTakerId,
         UUID cornerTakerId,
         Map<UUID, PlayerInstruction> instructions,
-        Map<UUID, FormationSlots.Slot> slotAssignments) {
+        Map<UUID, FormationSlots.Slot> slotAssignments,
+        Map<UUID, Integer> slotIndexes) {
+
+    /**
+     * Pre-index constructor. Yields no slot indexes — the neutral "untracked" profile that legacy
+     * callers and the engine's fixed-seed golden tests build, which the live engine never rearranges
+     * (see {@code LiveMatchEngine}'s arrangement tracking), keeping those timelines byte-identical.
+     */
+    public TacticalProfile(Mentality mentality, GameStyle gameStyle, AttackZone attackZone, String formation,
+                           Pressing pressing, Marking marking, Map<UUID, RoleAssignment> roles,
+                           UUID penaltyTakerId, UUID freekickTakerId, UUID cornerTakerId,
+                           Map<UUID, PlayerInstruction> instructions,
+                           Map<UUID, FormationSlots.Slot> slotAssignments) {
+        this(mentality, gameStyle, attackZone, formation, pressing, marking, roles, penaltyTakerId,
+                freekickTakerId, cornerTakerId, instructions, slotAssignments, Map.of());
+    }
+
+    /**
+     * The same tactics with a live arrangement laid over them: roles, slot assignments and slot
+     * indexes replaced, everything else — mentality, style, takers, instructions — untouched.
+     */
+    public TacticalProfile withArrangement(Map<UUID, FormationSlots.Slot> arrangedSlots,
+                                           Map<UUID, Integer> arrangedIndexes,
+                                           Map<UUID, RoleAssignment> arrangedRoles) {
+        return new TacticalProfile(mentality, gameStyle, attackZone, formation, pressing, marking,
+                arrangedRoles, penaltyTakerId, freekickTakerId, cornerTakerId, instructions,
+                arrangedSlots, arrangedIndexes);
+    }
 
     /** This player's instruction, or {@code null} when none is set (the neutral no-op). */
     public PlayerInstruction instructionFor(UUID playerId) {

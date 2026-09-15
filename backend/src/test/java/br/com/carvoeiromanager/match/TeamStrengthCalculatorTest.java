@@ -583,4 +583,36 @@ class TeamStrengthCalculatorTest {
         p.setFamiliarRoles(List.of(RoleArchetype.defaultFor(detailed).name() + "++"));
         return p;
     }
+
+    @Test
+    void aGoalkeeperArrangedIntoAStrikerSlotContributesLessThanWhenUnslotted() {
+        List<Player> xi = new ArrayList<>();
+        Player keeper = Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", Position.GK, 25, "BRA",
+                70, 70, 70, 70, 70, 70, 70);
+        xi.add(keeper);
+        for (Position pos : List.of(Position.DEF, Position.DEF, Position.DEF, Position.DEF,
+                Position.MID, Position.MID, Position.MID, Position.MID, Position.ATT, Position.ATT)) {
+            xi.add(Player.create(UUID.randomUUID(), UUID.randomUUID(), "T", pos, 25, "BRA",
+                    70, 70, 70, 70, 10, 70, 70));
+        }
+        TacticalProfile neutral = new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO,
+                "4-4-2", Pressing.MEDIUM, Marking.ZONAL, LegacyRoles.forXi(xi), null, null, null, Map.of(), Map.of());
+        // Slot 9 of a 4-4-2 is a striker slot (GK 0, DEF 1-4, MID 5-8, ATT 9-10).
+        FormationSlots.Slot strikerSlot = FormationSlots.of("4-4-2").get(9);
+
+        TacticalProfile arranged = neutral.withArrangement(
+                Map.of(keeper.getId(), strikerSlot), Map.of(keeper.getId(), 9), neutral.roles());
+
+        TeamMatchInput unslotted = new TeamStrengthCalculator().compute(xi, neutral);
+        TeamMatchInput misplaced = new TeamStrengthCalculator().compute(xi, arranged);
+        assertThat(misplaced.attack() + misplaced.defense())
+                .isLessThan(unslotted.attack() + unslotted.defense());
+    }
+
+    @Test
+    void theTwelveArgumentConstructorCarriesNoSlotIndexes() {
+        TacticalProfile legacy = new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO,
+                "4-4-2", Pressing.MEDIUM, Marking.ZONAL, Map.of(), null, null, null, Map.of(), Map.of());
+        assertThat(legacy.slotIndexes()).isEmpty();
+    }
 }

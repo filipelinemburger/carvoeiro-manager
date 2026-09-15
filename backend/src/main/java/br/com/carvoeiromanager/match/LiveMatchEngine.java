@@ -349,9 +349,9 @@ public class LiveMatchEngine {
                     t.attackZone() != null ? t.attackZone() : old.attackZone(),
                     t.formation(), t.pressing(), t.marking(),
                     old.roles(), old.penaltyTakerId(), old.freekickTakerId(), old.cornerTakerId(),
-                    // A mid-match tactics change never alters per-player instructions, nor re-grades
-                    // positions: the kickoff slot assignment carries over unchanged.
-                    old.instructions(), old.slotAssignments());
+                    // Instructions never change mid-match. Slot data is carried through untouched here;
+                    // a tracked side's live arrangement lives on the Side and is overlaid at strength time.
+                    old.instructions(), old.slotAssignments(), old.slotIndexes());
             side.dirty = true;
             // Use the first on-pitch player as a sentinel playerId — never NPE, never displayed.
             UUID carrier = side.onPitch.isEmpty() ? null : side.onPitch.get(0);

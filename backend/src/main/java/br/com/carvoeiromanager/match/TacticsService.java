@@ -68,7 +68,8 @@ public class TacticsService {
 
         // Grade each starter against the formation the AI actually plays (same club-default-else-4-4-2
         // resolution bestXi's formationFor uses), so the bestXi-picked XI assigns all-exact → x1.0.
-        Map<UUID, FormationSlots.Slot> slotAssignments = SlotAssigner.assignToSlots(xi, formation);
+        Map<UUID, Integer> slotIndexes = SlotAssigner.assignToSlotIndexes(xi, formation, Map.of());
+        Map<UUID, FormationSlots.Slot> slotAssignments = SlotAssigner.slotsFor(slotIndexes, formation);
         // AI/default clubs never persist explicit roles, so every starter gets its best FAMILIAR
         // archetype for the slot it's actually assigned to (defaultProfile has no persisted rows to
         // fall back to, unlike fromLineup).
@@ -82,7 +83,7 @@ public class TacticsService {
                 .map(Player::getId).orElse(null);
         // AI/default clubs carry no per-player instructions — an empty map is the neutral no-op.
         return new TacticalProfile(mentality, gameStyle, attackZone, formation, pressing, marking,
-                roles, bestFinisher, bestPasser, bestFinisher, Map.of(), slotAssignments);
+                roles, bestFinisher, bestPasser, bestFinisher, Map.of(), slotAssignments, slotIndexes);
     }
 
     /**
@@ -142,8 +143,10 @@ public class TacticsService {
                 });
         // Persisted (drag-and-drop) slots are honored verbatim; XI members without one — subs
         // who came on, legacy lineups — fill the remaining slots greedily.
+        Map<UUID, Integer> slotIndexes =
+                SlotAssigner.assignToSlotIndexes(xi, lineup.getFormation(), pinnedSlots);
         Map<UUID, FormationSlots.Slot> slotAssignments =
-                SlotAssigner.assignToSlots(xi, lineup.getFormation(), pinnedSlots);
+                SlotAssigner.slotsFor(slotIndexes, lineup.getFormation());
         // Fill any XI member missing a persisted assignment with its best familiar archetype for the
         // slot it's actually assigned to (a manager who set nothing still gets a familiar-aware pick,
         // not a blunt position default).
@@ -156,6 +159,6 @@ public class TacticsService {
                 lineup.getMentality(), lineup.getGameStyle(), lineup.getAttackZone(), lineup.getFormation(),
                 lineup.getPressing(), lineup.getMarking(),
                 roles, lineup.getPenaltyTakerId(), lineup.getFreekickTakerId(), lineup.getCornerTakerId(),
-                instructions, slotAssignments);
+                instructions, slotAssignments, slotIndexes);
     }
 }

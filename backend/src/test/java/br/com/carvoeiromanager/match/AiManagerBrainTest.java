@@ -157,4 +157,15 @@ class AiManagerBrainTest {
                 Mentality.DEFENSIVE, GameStyle.JOGO_DIRETO, AttackZone.MISTO, "5-4-1", Pressing.LOW,
                 Marking.MAN_TIGHT, ROLES, PEN, FK, CORNER, Map.of(), Map.of()));
     }
+
+    @Test
+    void aPostureSwapKeepsTheIdentitysKickoffSlotIndexes() {
+        UUID playerId = UUID.randomUUID();
+        TacticalProfile identity = new TacticalProfile(Mentality.BALANCED, GameStyle.EQUILIBRADO, AttackZone.MISTO,
+                "4-4-2", Pressing.MEDIUM, Marking.ZONAL, Map.of(), null, null, null, Map.of(),
+                Map.of(), Map.of(playerId, 7));
+
+        assertThat(AiManagerBrain.profileFor(AiManagerBrain.Posture.ALL_OUT, identity).slotIndexes())
+                .containsExactly(Map.entry(playerId, 7));
+    }
 }
