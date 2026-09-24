@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { workingRoster, baselineArrangement, swapSlots, sameSlots, dropMovedRoles, type RoleOverrides } from './liveArrangement'
+import { workingRoster, baselineArrangement, appliedRole, swapSlots, sameSlots, dropMovedRoles, type RoleOverrides } from './liveArrangement'
 import type { LivePlayer } from '../../api/types'
 
 function livePlayer(overrides: Partial<LivePlayer> & Pick<LivePlayer, 'playerId'>): LivePlayer {
@@ -21,6 +21,43 @@ describe('workingRoster', () => {
 
     expect(roster.map(p => p.playerId)).toEqual(['stays', 'in'])
     expect(roster[1].slotIndex).toBe(6)
+  })
+
+  it('blanks the incoming player\'s role, which the engine recomputes for the inherited slot', () => {
+    const out = livePlayer({ playerId: 'out', slotIndex: 6, role: 'PLAYMAKER' })
+    const incoming = livePlayer({ playerId: 'in', onPitch: false, slotIndex: null, role: 'HOLDING' })
+
+    const roster = workingRoster([out], [{ out, in: incoming }])
+
+    expect(roster[0].role).toBe('')
+  })
+})
+
+describe('appliedRole', () => {
+  const archetypes = ['BOX_TO_BOX', 'PLAYMAKER'] as const
+
+  it('is the role the server reports while the player keeps the slot it was assigned in', () => {
+    const player = livePlayer({ playerId: 'a', slotIndex: 6, role: 'PLAYMAKER' })
+
+    expect(appliedRole(player, { a: 6 }, archetypes)).toBe('PLAYMAKER')
+  })
+
+  it('is automatic for a player the manager moved, whose role the engine recomputes', () => {
+    const player = livePlayer({ playerId: 'a', slotIndex: 6, role: 'PLAYMAKER' })
+
+    expect(appliedRole(player, { a: 7 }, archetypes)).toBe('')
+  })
+
+  it('is automatic when the server could not place the player', () => {
+    const player = livePlayer({ playerId: 'a', slotIndex: null, role: 'PLAYMAKER' })
+
+    expect(appliedRole(player, { a: 6 }, archetypes)).toBe('')
+  })
+
+  it('is automatic when the reported role is not one the slot can take', () => {
+    const player = livePlayer({ playerId: 'a', slotIndex: 6, role: 'TARGET_MAN' })
+
+    expect(appliedRole(player, { a: 6 }, archetypes)).toBe('')
   })
 })
 

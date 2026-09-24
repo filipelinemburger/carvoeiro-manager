@@ -19,8 +19,28 @@ export type RoleOverrides = Record<string, RoleArchetype>
 export function workingRoster(onPitch: LivePlayer[], queue: SubPair[]): LivePlayer[] {
   return onPitch.map(p => {
     const pair = queue.find(q => q.out.playerId === p.playerId)
-    return pair ? { ...pair.in, onPitch: true, slotIndex: p.slotIndex } : p
+    // The role is blanked along the way: the incoming player's is the one they carry off the bench,
+    // and the engine gives them the best familiar role for the slot they inherit instead. Leaving it
+    // would have `appliedRole` announce a role nobody is going to play.
+    return pair ? { ...pair.in, onPitch: true, slotIndex: p.slotIndex, role: '' } : p
   })
+}
+
+/**
+ * The role the server is currently applying to `player`, as far as the client can honestly tell. It
+ * only holds while the player still sits in the slot the server assigned them in: a player the manager
+ * has dragged, and a substitute waiting to come on, both have their role recomputed for the slot they
+ * end up in (spec Decision 6), so '' — "automática" — is the truthful answer for them. A role the slot
+ * cannot take is not shown either, for the same reason.
+ */
+export function appliedRole(
+  player: LivePlayer,
+  slots: SlotMap,
+  validArchetypes: readonly RoleArchetype[],
+): RoleArchetype | '' {
+  if (player.slotIndex === null || slots[player.playerId] !== player.slotIndex) return ''
+  const role = player.role as RoleArchetype
+  return validArchetypes.includes(role) ? role : ''
 }
 
 const toAssignable = (p: LivePlayer): AssignablePlayer => ({

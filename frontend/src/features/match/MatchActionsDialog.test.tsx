@@ -507,6 +507,31 @@ describe('MatchActionsDialog positions tab', () => {
     expect(within(pitch).queryByText('Zagueiro')).not.toBeInTheDocument()
   })
 
+  it('opens the role menu on the role the player is already playing', () => {
+    openPositions()
+
+    fireEvent.contextMenu(within(screen.getByTestId('pitch')).getByText('Zagueiro'))
+
+    const select = screen.getByLabelText('Função')
+    expect(select).toHaveValue('STOPPER')
+    // Picking "automática" here would do nothing — the engine keeps an unmoved player's role — so
+    // the option is not offered while a named role is in force.
+    expect(within(select).queryByText(/Automática/)).not.toBeInTheDocument()
+  })
+
+  it('offers automática for a substitute, whose role the engine picks for the inherited slot', () => {
+    renderDialog({ onPitch: [gk, zag], bench: [reserve] })
+    fireEvent.click(within(outSection()).getByText('Zagueiro'))
+    fireEvent.click(within(inSection()).getByText('Reserva'))
+    fireEvent.click(screen.getByRole('tab', { name: 'Posições' }))
+
+    fireEvent.contextMenu(within(screen.getByTestId('pitch')).getByText('Reserva'))
+
+    const select = screen.getByLabelText('Função')
+    expect(select).toHaveValue('')
+    expect(within(select).getByText(/Automática/)).toBeInTheDocument()
+  })
+
   it('discards rearrangement edits when the formation changes', async () => {
     openPositions()
     const archetype = ARCHETYPES_FOR_POSITION.ZAGUEIRO.find(a => a !== 'STOPPER')!
