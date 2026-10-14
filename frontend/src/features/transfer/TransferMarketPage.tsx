@@ -759,13 +759,18 @@ export function TransferMarketPage() {
           ) : (
             <>
               <Stack spacing={1.25}>
-                {sortMarketPlayers(market.data?.content ?? [], sortBy).map(p => (
+                {sortMarketPlayers(market.data?.content ?? [], sortBy).map(p => {
+                const loanBlocked = loanInBlockedReason(p)
+                return (
                 <Card key={p.playerId} variant="outlined" sx={{ '&:hover': { borderColor: 'primary.main' } }}>
                   <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    {/* Identity + stats share the top row; actions get a row of their own. Inside
+                        the md-wide page there's no room for all three side by side — a long
+                        blocked-loan caption used to squeeze the identity column down to 0px. */}
                     <Stack
-                      direction={{ xs: 'column', md: 'row' }}
+                      direction={{ xs: 'column', sm: 'row' }}
                       spacing={1.5}
-                      sx={{ alignItems: { md: 'center' } }}
+                      sx={{ alignItems: { sm: 'center' } }}
                     >
                       <Box sx={{ minWidth: 0, flex: 1 }}>
                         <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -793,38 +798,42 @@ export function TransferMarketPage() {
                         <Stat label="Valor" value={formatBRL(p.value)} />
                         <Stat label="Salário pedido" value={formatBRL(p.wageDemand)} />
                       </Stack>
-                      <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          disabled={!windowOpen || p.onLoan}
-                          onClick={() => setOfferTarget({
-                            playerId: p.playerId, name: p.name, value: p.value, wageDemand: p.wageDemand,
-                          })}
-                        >
-                          Fazer proposta
-                        </Button>
-                        <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
-                          <Button
-                            variant="outlined"
-                            color="secondary"
-                            size="small"
-                            disabled={!windowOpen || loanInBlockedReason(p) !== null}
-                            onClick={() => { setLoaningPlayer(p); setLoanResult(null) }}
-                          >
-                            Pedir emprestado
-                          </Button>
-                          {loanInBlockedReason(p) && (
-                            <Typography variant="caption" color="error" sx={{ textAlign: 'right' }}>
-                              {loanInBlockedReason(p)}
-                            </Typography>
-                          )}
-                        </Stack>
-                      </Stack>
+                    </Stack>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      useFlexGap
+                      sx={{ mt: 1.25, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}
+                    >
+                      {loanBlocked && (
+                        <Typography variant="caption" color="error" sx={{ flex: '1 1 auto', textAlign: 'right' }}>
+                          {loanBlocked}
+                        </Typography>
+                      )}
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        disabled={!windowOpen || p.onLoan}
+                        onClick={() => setOfferTarget({
+                          playerId: p.playerId, name: p.name, value: p.value, wageDemand: p.wageDemand,
+                        })}
+                      >
+                        Fazer proposta
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        color="secondary"
+                        size="small"
+                        disabled={!windowOpen || loanBlocked !== null}
+                        onClick={() => { setLoaningPlayer(p); setLoanResult(null) }}
+                      >
+                        Pedir emprestado
+                      </Button>
                     </Stack>
                   </CardContent>
                 </Card>
-                ))}
+                )
+                })}
               </Stack>
 
               {market.data && market.data.totalPages > 1 && (
