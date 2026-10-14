@@ -18,6 +18,14 @@ const QUALITY_LABEL: Record<string, string> = {
   EXCELENTE: 'Excelente',
 }
 
+/** An alert's offer amount arrives as BigDecimal.toPlainString() ("1478290.50") and is persisted
+ * that way in old news items, so it's formatted here rather than on the server. Anything
+ * non-numeric is shown as sent rather than as "R$ NaN". */
+function formatAlertAmount(detail: string): string {
+  const amount = Number(detail)
+  return Number.isFinite(amount) ? formatBRL(amount) : detail
+}
+
 interface AdvanceEventCardProps {
   result: AdvanceResponse
   saveGameId: string
@@ -387,7 +395,7 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
                     {a.kind === 'LISTED' && (<>📋 {a.playerName} foi listado para transferência ({a.clubName})</>)}
                     {a.kind === 'FREE_AGENT' && (<>🆓 {a.playerName} ficou livre no mercado</>)}
                     {a.kind === 'OFFER_RECEIVED' && (
-                      <>📥 {a.playerName} recebeu proposta do {a.clubName}{a.detail ? ` (R$ ${a.detail})` : ''}</>
+                      <>📥 {a.playerName} recebeu proposta do {a.clubName}{a.detail ? ` (${formatAlertAmount(a.detail)})` : ''}</>
                     )}
                   </ListItem>
                 ))}

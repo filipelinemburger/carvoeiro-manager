@@ -332,6 +332,26 @@ describe('AdvanceEventCard', () => {
     })
   })
 
+  describe('WATCHLIST type', () => {
+    const watchlistResult = (detail: string | null): AdvanceResponse => ({
+      ...TRANSFER_RESULT,
+      type: 'WATCHLIST',
+      bidsReceived: 0,
+      playerAlerts: [{ kind: 'OFFER_RECEIVED', playerName: 'Nicolas', clubName: 'Brusque Futebol Clube', detail }],
+    })
+
+    it('formats an offer amount sent as a plain BigDecimal string as pt-BR currency', () => {
+      // WatchlistNotifier writes the amount with BigDecimal.toPlainString() — e.g. "1478290.50".
+      renderCard(watchlistResult('1478290.50'))
+      expect(screen.getByText(/Nicolas recebeu proposta do Brusque Futebol Clube \(R\$\s1\.478\.290,50\)/)).toBeInTheDocument()
+    })
+
+    it('omits the amount when the alert carries no detail', () => {
+      renderCard(watchlistResult(null))
+      expect(screen.getByText(/Nicolas recebeu proposta do Brusque Futebol Clube$/)).toBeInTheDocument()
+    })
+  })
+
   describe('FINISHED type', () => {
     it('renders temporada encerrada message', () => {
       renderCard(FINISHED_RESULT)
