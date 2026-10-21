@@ -44,7 +44,7 @@ export type SaveGameResponse = {
   totalRounds: number
   currentDate?: string | null
   competitions?: CompetitionSummary[]
-  status?: 'IN_PROGRESS' | 'FINISHED'
+  status?: 'IN_PROGRESS' | 'FINISHED' | 'SACKED'
   transferWindowOpen?: boolean
   managerName?: string
   managerNationality?: string
@@ -53,6 +53,8 @@ export type SaveGameResponse = {
 export type CreateSaveGameRequest = {
   managerName: string
   managerNationality: string
+  /** Whether the board may end the career; absent means yes. */
+  sackingEnabled?: boolean
 }
 
 // Lightweight career summary for the "Carregar jogo salvo" list.
@@ -62,7 +64,7 @@ export type SaveGameSummary = {
   seasonYear: number
   currentRound: number
   currentDate: string | null
-  status: 'IN_PROGRESS' | 'FINISHED'
+  status: 'IN_PROGRESS' | 'FINISHED' | 'SACKED'
   createdAt: string
   lastPlayedAt: string | null
 }
@@ -478,6 +480,7 @@ export type AdvanceResponse = {
     | 'MATCH' | 'TRANSFER' | 'FINISHED' | 'TRAINING_REPORT' | 'PRECONTRACT' | 'WATCHLIST'
     | 'MATCH_PREVIEW'
     | 'PHASE_QUALIFIED' | 'PHASE_ELIMINATED' | 'KNOCKOUT_DRAW' | 'CHAMPION'
+    | BoardNewsType
   date: string | null
   competitionName: string | null
   round: number | null
@@ -507,6 +510,10 @@ export type AdvanceResponse = {
   /** The Auxiliar Técnico's opponent analysis; only on MATCH_PREVIEW items, null everywhere
    * else and on payloads persisted before the feature existed — always null-guard it. */
   matchPreview?: MatchPreviewData | null
+  /** The board's reaction: on MATCH items the match's confidence change (plus the season-end
+   * review on the last round); on BOARD_* items the item's whole content. Null everywhere else
+   * and on payloads persisted before the board existed — always null-guard it. */
+  board?: BoardEvent | null
 }
 
 /** One news-feed entry: the persisted item's id + read flag plus its full payload. */
@@ -975,3 +982,64 @@ export type LiveMatchState = {
 
 export type SubstituteRequest = { outPlayerId: string; inPlayerId: string }
 export type SubstituteBatchRequest = { subs: SubstituteRequest[] }
+
+// ---- Board (a diretoria) ----
+
+export type BoardNewsType =
+  | 'BOARD_OBJECTIVES' | 'BOARD_ULTIMATUM' | 'BOARD_ULTIMATUM_LIFTED'
+  | 'BOARD_REVIEW' | 'BOARD_SACKED' | 'BOARD_SACKING_AVERTED'
+
+export type BoardObjectiveKind = 'LEAGUE' | 'STATE' | 'FINANCE'
+export type BoardStage = 'NOT_QUALIFIED' | 'QUARTERFINAL' | 'SEMIFINAL' | 'FINAL' | 'CHAMPION'
+export type BoardProgress = 'ON_TRACK' | 'AT_RISK' | 'OFF_TRACK'
+export type BoardOutcome = 'PENDING' | 'MET' | 'FAILED'
+
+export type BoardObjective = {
+  kind: BoardObjectiveKind
+  competitionName: string | null
+  /** LEAGUE only: 1 = Série A, 2 = B, 3 = C. */
+  tier: number | null
+  targetPosition: number | null
+  targetStage: BoardStage | null
+  currentPosition: number | null
+  progress: BoardProgress | null
+  outcome: BoardOutcome
+}
+
+export type BoardChangeReason =
+  | 'MATCH_RESULT' | 'HEAVY_DEFEAT' | 'TABLE_POSITION' | 'NEGATIVE_BALANCE'
+  | 'STATE_MET' | 'STATE_FAILED' | 'TITLE_WON'
+  | 'LEAGUE_MET' | 'LEAGUE_FAILED' | 'FINANCE_MET' | 'FINANCE_FAILED'
+  | 'NEW_SEASON' | 'SACKING_AVERTED'
+
+export type BoardChange = {
+  date: string
+  reason: BoardChangeReason
+  delta: number
+  payload: Record<string, unknown> | null
+}
+
+export type BoardResponse = {
+  confidence: number
+  ultimatumActive: boolean
+  sackingEnabled: boolean
+  graceSeason: boolean
+  objectives: BoardObjective[]
+  /** Newest first, at most 8. */
+  recentChanges: BoardChange[]
+}
+
+export type BoardEvent = {
+  confidence: number
+  delta: number
+  ultimatumIssued: boolean
+  ultimatumLifted: boolean
+  sacked: boolean
+  sackingAverted: boolean
+  objectives: BoardObjective[]
+}
+
+export type BoardSeasonRecord = {
+  seasonYear: number
+  objectives: BoardObjective[]
+}

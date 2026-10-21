@@ -13,6 +13,19 @@ vi.mock('../../api/career', () => ({
 
 import { getStandings, getTopScorers, rolloverSeason } from '../../api/career'
 
+vi.mock('../../api/board', () => ({
+  getBoard: vi.fn().mockResolvedValue({
+    confidence: 72, ultimatumActive: false, sackingEnabled: true, graceSeason: false,
+    objectives: [
+      { kind: 'LEAGUE', competitionName: 'Série B', tier: 2, targetPosition: 4, targetStage: null,
+        currentPosition: null, progress: null, outcome: 'MET' },
+      { kind: 'FINANCE', competitionName: null, tier: null, targetPosition: null, targetStage: null,
+        currentPosition: null, progress: null, outcome: 'FAILED' },
+    ],
+    recentChanges: [],
+  }),
+}))
+
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -146,5 +159,15 @@ describe('SeasonSummaryPage', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['seasonHistory', 'sg-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['clubs', 'sg-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['watchlist', 'sg-1'] })
+  })
+
+  it("shows the board's verdict on the season's objectives", async () => {
+    renderPage()
+
+    expect(await screen.findByText('Diretoria')).toBeInTheDocument()
+    expect(screen.getByText('Terminar no G-4')).toBeInTheDocument()
+    expect(screen.getByText('cumprido')).toBeInTheDocument()
+    expect(screen.getByText('não cumprido')).toBeInTheDocument()
+    expect(screen.getByText(/72\/100 \(Satisfeita\)/)).toBeInTheDocument()
   })
 })

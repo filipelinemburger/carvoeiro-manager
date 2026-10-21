@@ -93,4 +93,12 @@ describe('LoadCareerDialog', () => {
 
     expect(await screen.findByText(/nenhuma carreira salva/i)).toBeInTheDocument()
   })
+
+  it('marks a sacked career', async () => {
+    ;(listCareers as Mock).mockResolvedValue([{ ...CAREERS[1], status: 'SACKED' }])
+
+    renderDialog()
+
+    expect(await screen.findByText('Demitido')).toBeInTheDocument()
+  })
 })

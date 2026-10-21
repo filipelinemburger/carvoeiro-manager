@@ -19,6 +19,15 @@ vi.mock('../api/career', () => ({
   getAdvancePreview: vi.fn(),
   getLineup: vi.fn(),
   createCareer: vi.fn(),
+  getSeasonHistory: vi.fn().mockResolvedValue([]),
+}))
+
+vi.mock('../api/board', () => ({
+  getBoard: vi.fn().mockResolvedValue({
+    confidence: 12, ultimatumActive: true, sackingEnabled: true, graceSeason: false,
+    objectives: [], recentChanges: [],
+  }),
+  getBoardHistory: vi.fn().mockResolvedValue([]),
 }))
 
 vi.mock('../api/account', () => ({
@@ -455,6 +464,29 @@ describe('Layout shell', () => {
       // The brand is shortened so the whole row fits a 375px bar.
       expect(screen.getByText('Carvoeiro')).toBeInTheDocument()
       expect(screen.queryByText('Carvoeiro Manager')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('sacked', () => {
+    it('replaces every page with the sacked screen and disables advancing', async () => {
+      ;(getSaveGame as Mock).mockResolvedValue({ ...SAVE_GAME, status: 'SACKED' })
+      seedAuth('U1', 'sg-1')
+      renderLayout('/squad?saveGameId=sg-1&clubId=club-1')
+
+      expect(await screen.findByText('Você foi demitido')).toBeInTheDocument()
+      expect(screen.queryByText('Page content')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Nova carreira' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Ver tabela final' })).toBeInTheDocument()
+    })
+
+    it('still shows the final table', async () => {
+      ;(getSaveGame as Mock).mockResolvedValue({ ...SAVE_GAME, status: 'SACKED' })
+      seedAuth('U1', 'sg-1')
+      renderLayout('/table?saveGameId=sg-1')
+
+      await waitFor(() => expect(getSaveGame).toHaveBeenCalled())
+      expect(screen.getByText('Page content')).toBeInTheDocument()
+      expect(screen.queryByText('Você foi demitido')).not.toBeInTheDocument()
     })
   })
 })

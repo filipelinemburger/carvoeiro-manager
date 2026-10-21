@@ -79,6 +79,7 @@ export function LoadCareerDialog({ open, onClose }: Props) {
                       {career.managedClubName ?? 'Sem clube'}
                     </Typography>
                     {career.id === activeId && <Chip size="small" color="primary" label="atual" />}
+                    {career.status === 'SACKED' && <Chip size="small" color="error" label="Demitido" />}
                   </Stack>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                     Temporada {career.seasonYear} · Rodada {career.currentRound} · criado em{' '}

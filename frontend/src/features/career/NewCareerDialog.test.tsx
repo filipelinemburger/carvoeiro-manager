@@ -59,7 +59,7 @@ describe('NewCareerDialog', () => {
 
     await waitFor(() => {
       expect(createCareer).toHaveBeenCalledWith(
-        { managerName: 'Filipe Silva', managerNationality: 'Brasil' }, 'test-token',
+        { managerName: 'Filipe Silva', managerNationality: 'Brasil', sackingEnabled: true }, 'test-token',
       )
     })
     await waitFor(() => {
@@ -79,5 +79,26 @@ describe('NewCareerDialog', () => {
     expect(onClose).toHaveBeenCalled()
     expect(screen.getByLabelText(/nome do técnico/i)).toHaveValue('')
     expect(screen.getByRole('button', { name: /iniciar carreira/i })).toBeDisabled()
+  })
+
+  it('lets the manager opt out of being sacked', async () => {
+    ;(createCareer as Mock).mockResolvedValue({ id: 'save-9', managedClubId: 'club-1' })
+    renderDialog()
+
+    // The board may sack by default
+    const sacking = screen.getByLabelText('A diretoria pode me demitir')
+    expect(sacking).toBeChecked()
+
+    fireEvent.change(screen.getByLabelText(/nome do técnico/i), { target: { value: 'Filipe Silva' } })
+    fireEvent.mouseDown(screen.getByLabelText(/nacionalidade/i))
+    fireEvent.click(await screen.findByText('Brasil'))
+    fireEvent.click(sacking)
+    fireEvent.click(screen.getByRole('button', { name: /iniciar carreira/i }))
+
+    await waitFor(() => {
+      expect(createCareer).toHaveBeenCalledWith(
+        { managerName: 'Filipe Silva', managerNationality: 'Brasil', sackingEnabled: false }, 'test-token',
+      )
+    })
   })
 })

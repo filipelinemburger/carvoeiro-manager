@@ -11,6 +11,8 @@ import { MENTALITY_LABEL, PRESSING_LABEL, MARKING_LABEL } from '../squad/tactics
 import { STAFF_ROLE_LABEL } from '../staff/staffLabels'
 import { PlayerRatingsList } from './PlayerRatingsList'
 import { WeatherChip, type WeatherCondition } from '../../components/WeatherChip'
+import { BoardNewsBody } from '../board/BoardNewsBody'
+import { BOARD_NEWS_TITLE, isBoardNews, signed } from '../board/boardLabels'
 
 const QUALITY_LABEL: Record<string, string> = {
   REGULAR: 'Regular',
@@ -229,6 +231,22 @@ function MatchTimeline({ result, saveGameId, competitionId, managedClubId }: {
         </TimelineNode>
       )}
 
+      {/* The board's reaction to this match. Routine changes are not news items of their own
+          (the feed should not report back what the manager can already see), so they show here. */}
+      {result.board && (result.board.delta !== 0 || result.board.ultimatumIssued || result.board.sacked) && (
+        <TimelineNode dot="🏛️">
+          <Typography component="strong" sx={{ fontWeight: 700 }}>
+            Diretoria {signed(result.board.delta)}
+          </Typography>
+          {result.board.ultimatumIssued && (
+            <Typography variant="body2" sx={{ color: 'error.main' }}>Ultimato da diretoria.</Typography>
+          )}
+          {result.board.sacked && (
+            <Typography variant="body2" sx={{ color: 'error.main', fontWeight: 700 }}>Você foi demitido.</Typography>
+          )}
+        </TimelineNode>
+      )}
+
       {result.seasonFinished && (
         <TimelineNode dot="🏆">
           <Typography component="strong" sx={{ fontWeight: 700, color: 'var(--cec-green)' }}>
@@ -312,11 +330,20 @@ export function AdvanceEventCard({ result, saveGameId, competitionId, managedClu
               Análise do Adversário
             </Typography>
           )}
+          {isBoardNews(result.type) && (
+            <Typography sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
+              {BOARD_NEWS_TITLE[result.type]}
+            </Typography>
+          )}
         </Box>
         <Divider sx={{ mb: 2, borderBottomWidth: 2, borderColor: 'var(--cec-yellow)' }} />
 
         {/* Timeline body */}
         <Box>
+          {isBoardNews(result.type) && result.board && (
+            <BoardNewsBody type={result.type} board={result.board} />
+          )}
+
           {result.type === 'MATCH' && (
             <MatchTimeline
               result={result}
