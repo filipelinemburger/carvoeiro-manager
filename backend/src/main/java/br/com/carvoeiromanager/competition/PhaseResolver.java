@@ -309,7 +309,7 @@ public class PhaseResolver {
     private void persistNews(UUID saveGameId, LocalDate eventDate, String type, String message) {
         AdvanceResponse response = new AdvanceResponse(type, eventDate.toString(), message, null,
                 List.of(), List.of(), List.of(), List.of(), null, 0, false, List.of(), List.of(),
-                null, List.of(), List.of(), null, null);
+                null, List.of(), List.of(), null, null, null);
         try {
             String payload = objectMapper.writeValueAsString(response);
             int seq = newsItemRepository.countBySaveGameId(saveGameId) + 1;

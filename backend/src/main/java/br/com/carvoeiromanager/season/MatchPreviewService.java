@@ -306,7 +306,7 @@ public class MatchPreviewService {
     private void persist(UUID saveGameId, LocalDate eventDate, MatchPreviewData preview) {
         AdvanceResponse response = new AdvanceResponse(NEWS_TYPE, eventDate.toString(), null, null,
                 List.of(), List.of(), List.of(), List.of(), null, 0, false, List.of(), List.of(),
-                null, List.of(), List.of(), preview, null);
+                null, List.of(), List.of(), preview, null, null);
         try {
             String payload = objectMapper.writeValueAsString(response);
             int seq = newsItemRepository.countBySaveGameId(saveGameId) + 1;

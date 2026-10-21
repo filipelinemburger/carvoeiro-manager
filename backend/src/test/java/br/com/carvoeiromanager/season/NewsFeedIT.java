@@ -172,7 +172,7 @@ class NewsFeedIT {
     private void persistNewsItems(UUID saveGameId, int count) {
         newsItemRepository.deleteBySaveGameId(saveGameId);
         AdvanceResponse minimal = new AdvanceResponse("MATCH", null, null, null, List.of(), List.of(),
-                List.of(), List.of(), null, 0, false, null, null, null, null, null, null, null);
+                List.of(), List.of(), null, 0, false, null, null, null, null, null, null, null, null);
         for (int seq = 1; seq <= count; seq++) {
             String payload;
             try {
