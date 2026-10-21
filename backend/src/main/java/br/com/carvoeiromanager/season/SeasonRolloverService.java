@@ -98,6 +98,7 @@ public class SeasonRolloverService {
     private final WatchlistEntryRepository watchlistEntryRepository;
     private final MatchPreviewService matchPreviewService;
     private final BackgroundCompetitionService backgroundCompetitionService;
+    private final br.com.carvoeiromanager.board.BoardService boardService;
 
     private static final int MAX_INTAKE_PER_SEASON = 3;
     private static final int ACADEMY_TARGET = 10;
@@ -134,7 +135,8 @@ public class SeasonRolloverService {
                                  PreContractAgreementRepository preContractAgreementRepository,
                                  WatchlistEntryRepository watchlistEntryRepository,
                                  MatchPreviewService matchPreviewService,
-                                 BackgroundCompetitionService backgroundCompetitionService) {
+                                 BackgroundCompetitionService backgroundCompetitionService,
+                                 br.com.carvoeiromanager.board.BoardService boardService) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.competitionRepository = competitionRepository;
@@ -167,11 +169,16 @@ public class SeasonRolloverService {
         this.watchlistEntryRepository = watchlistEntryRepository;
         this.matchPreviewService = matchPreviewService;
         this.backgroundCompetitionService = backgroundCompetitionService;
+        this.boardService = boardService;
     }
 
     @Transactional
     public RolloverResponse rollover(UUID saveGameId, UUID userId) {
         SaveGame saveGame = saveGameService.requireOwned(saveGameId, userId);
+        // Before the FINISHED check, so a sacked save is told why rather than "not finished".
+        if (saveGame.getStatus() == SaveGameStatus.SACKED) {
+            throw new ApiException(ErrorCode.MANAGER_SACKED, "The board has sacked the manager");
+        }
         if (saveGame.getStatus() != SaveGameStatus.FINISHED) {
             throw new ApiException(ErrorCode.SEASON_NOT_FINISHED, "The current season is not finished yet");
         }
@@ -410,6 +417,10 @@ public class SeasonRolloverService {
         // 5. Advance the save into the new season.
         saveGame.advanceToNextSeason();
         saveGameRepository.save(saveGame);
+
+        // After the news purge (so the objectives item survives) and after the new calendar exists
+        // (so it is dated on the season's first day): regress confidence, set new objectives.
+        boardService.startNewSeason(saveGame);
 
         // Round 1 of the new season gets its opponent analysis right away (staff carries over).
         matchPreviewService.maybePersistPreview(saveGameId);

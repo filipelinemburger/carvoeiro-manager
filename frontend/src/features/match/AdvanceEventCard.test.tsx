@@ -431,4 +431,48 @@ describe('AdvanceEventCard', () => {
       expect(screen.queryByText(/considere/)).not.toBeInTheDocument()
     })
   })
+
+  describe('board', () => {
+    const board = {
+      confidence: 57, delta: -3, ultimatumIssued: false, ultimatumLifted: false,
+      sacked: false, sackingAverted: false, objectives: [],
+    }
+
+    it('shows the board change on a match', () => {
+      renderCard({ ...MATCH_RESULT, board })
+      expect(screen.getByText('Diretoria −3')).toBeInTheDocument()
+    })
+
+    it('shows nothing for the board when the match moved nothing', () => {
+      renderCard({ ...MATCH_RESULT, board: { ...board, delta: 0 } })
+      expect(screen.queryByText(/Diretoria/)).not.toBeInTheDocument()
+    })
+
+    it('says so when the match got the manager sacked', () => {
+      renderCard({ ...MATCH_RESULT, board: { ...board, sacked: true } })
+      expect(screen.getByText('Você foi demitido.')).toBeInTheDocument()
+    })
+
+    it('renders an objectives item from its board payload', () => {
+      renderCard({
+        ...TRANSFER_RESULT, type: 'BOARD_OBJECTIVES', bidsReceived: 0,
+        board: {
+          ...board, delta: 0, confidence: 60,
+          objectives: [{ kind: 'LEAGUE', competitionName: 'Série B', tier: 2, targetPosition: 4, targetStage: null,
+            currentPosition: null, progress: null, outcome: 'PENDING' }],
+        },
+      })
+      expect(screen.getByText('Metas da diretoria')).toBeInTheDocument()
+      expect(screen.getByText('Terminar no G-4')).toBeInTheDocument()
+      expect(screen.getByText(/60\/100 \(Satisfeita\)/)).toBeInTheDocument()
+    })
+
+    it('renders the ultimatum and the averted sacking with their messages', () => {
+      const { unmount } = renderCard({ ...TRANSFER_RESULT, type: 'BOARD_ULTIMATUM', bidsReceived: 0, board })
+      expect(screen.getByText('A diretoria exige reação imediata.')).toBeInTheDocument()
+      unmount()
+      renderCard({ ...TRANSFER_RESULT, type: 'BOARD_SACKING_AVERTED', bidsReceived: 0, board })
+      expect(screen.getByText('A diretoria queria sua saída, mas decidiu mantê-lo no cargo.')).toBeInTheDocument()
+    })
+  })
 })

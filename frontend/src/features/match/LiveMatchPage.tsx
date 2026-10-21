@@ -153,6 +153,7 @@ export function LiveMatchPage() {
       void queryClient.invalidateQueries({ queryKey: ['standings'] })
       void queryClient.invalidateQueries({ queryKey: ['squad'] })
       void queryClient.invalidateQueries({ queryKey: ['finances'] })
+      void queryClient.invalidateQueries({ queryKey: ['board', saveGameId] })
       // The session was deleted on the server at full time; clear the cached live match so
       // the top-bar "Retomar partida" button doesn't linger from stale cache after the match.
       queryClient.setQueryData(['liveMatch', saveGameId], null)

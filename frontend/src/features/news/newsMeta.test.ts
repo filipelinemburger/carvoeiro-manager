@@ -36,4 +36,15 @@ describe('newsTitle', () => {
     const payload = { type: 'MATCH_PREVIEW', matchPreview: { opponentName: 'Avaí' } } as AdvanceResponse
     expect(newsTitle(payload)).toBe('Análise do adversário — Avaí')
   })
+
+  it.each([
+    ['BOARD_OBJECTIVES', 'Metas da diretoria'],
+    ['BOARD_ULTIMATUM', 'Ultimato da diretoria'],
+    ['BOARD_ULTIMATUM_LIFTED', 'Diretoria mais tranquila'],
+    ['BOARD_REVIEW', 'Avaliação da temporada'],
+    ['BOARD_SACKED', 'Você foi demitido'],
+    ['BOARD_SACKING_AVERTED', 'A diretoria queria sua saída'],
+  ] as const)('titles the board item %s', (type, title) => {
+    expect(newsTitle(payload({ type }))).toBe(title)
+  })
 })

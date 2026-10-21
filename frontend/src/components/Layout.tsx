@@ -23,6 +23,7 @@ import { formatDatePtBR } from '../utils/date'
 import { saveGameKeyFor } from '../features/career/saveGameKey'
 import { LoadCareerDialog } from '../features/career/LoadCareerDialog'
 import { NewCareerDialog } from '../features/career/NewCareerDialog'
+import { SackedPage } from '../features/board/SackedPage'
 import { ConfirmDialog } from './ConfirmDialog'
 import type { AdvancePreviewResponse, AdvanceResponse, LiveMatchState, SaveGameResponse } from '../api/types'
 
@@ -125,6 +126,8 @@ export function Layout({ children }: LayoutProps) {
       void queryClient.invalidateQueries({ queryKey: ['preContractAgreements', saveGameId] })
       // Advancing can sell/list/free watched players, changing their status.
       void queryClient.invalidateQueries({ queryKey: ['watchlist', saveGameId] })
+      // Every managed match moves the board; a sacking also flips saveGame.status (above).
+      void queryClient.invalidateQueries({ queryKey: ['board', saveGameId] })
       // The advance outcome is persisted as a news item; show it on the News tab.
       void navigate(`/news?saveGameId=${saveGameId}`)
     },
@@ -160,6 +163,9 @@ export function Layout({ children }: LayoutProps) {
   // reload following a season-ending advance (the mutation result is ephemeral).
   const seasonFinished =
     advanceMutation.data?.seasonFinished === true || saveGame?.status === 'FINISHED'
+    || saveGame?.status === 'SACKED'
+  // A sacked save is frozen: every page but the final table gives way to the sacked screen.
+  const sacked = saveGame?.status === 'SACKED' && location.pathname !== '/table'
 
   const handleLogout = () => {
     setGearAnchor(null)
@@ -522,7 +528,7 @@ export function Layout({ children }: LayoutProps) {
               boxShadow: '0 2px 16px rgba(0,0,0,0.4)',
             }}
           >
-            {children}
+            {sacked && saveGame ? <SackedPage saveGame={saveGame} /> : children}
           </Paper>
         </Container>
       </Box>

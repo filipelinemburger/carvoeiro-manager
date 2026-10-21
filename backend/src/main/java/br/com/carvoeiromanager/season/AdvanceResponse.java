@@ -1,5 +1,6 @@
 package br.com.carvoeiromanager.season;
 
+import br.com.carvoeiromanager.board.BoardEventResponse;
 import br.com.carvoeiromanager.contract.PreContractEventResponse;
 import br.com.carvoeiromanager.finance.FinanceRoundResponse;
 import br.com.carvoeiromanager.match.BookingResponse;
@@ -49,6 +50,9 @@ import java.util.List;
  * {@code "Quartas de final — Volta"} for a knockout leg, {@code "Primeira Fase"} for a
  * round-robin round); null for a plain (unphased) league round and for every payload persisted
  * before the feature existed — callers must null-guard it and fall back to the raw round number.
+ * {@code board} — the board's reaction: on MATCH items the match's confidence change (and, on the
+ * season's last round, the season-end review); on {@code BOARD_*} items the item's whole payload.
+ * Null on every other item and on payloads persisted before the feature existed — null-guard it.
  * {@code bidsReceived} and {@code seasonFinished} default to {@code 0}/{@code false} (rather
  * than failing deserialization) when absent from a payload, since the standalone WATCHLIST
  * news item (see {@code WatchlistNotifier}) is a sparse {type, date, playerAlerts} map that
@@ -72,5 +76,6 @@ public record AdvanceResponse(
         List<PreContractEventResponse> preContractEvents,
         List<PlayerAlertResponse> playerAlerts,
         MatchPreviewData matchPreview,
-        String phaseName) {
+        String phaseName,
+        BoardEventResponse board) {
 }

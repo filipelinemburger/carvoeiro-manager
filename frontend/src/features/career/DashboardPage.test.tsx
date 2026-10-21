@@ -6,6 +6,13 @@ import { DashboardPage } from './DashboardPage'
 import { AuthProvider } from '../../auth/AuthContext'
 import { getSaveGame, getFinances, listCareers } from '../../api/career'
 
+vi.mock('../../api/board', () => ({
+  getBoard: vi.fn().mockResolvedValue({
+    confidence: 60, ultimatumActive: false, sackingEnabled: true, graceSeason: false,
+    objectives: [], recentChanges: [],
+  }),
+}))
+
 vi.mock('../../api/career', () => ({
   getSaveGame: vi.fn(),
   createCareer: vi.fn(),

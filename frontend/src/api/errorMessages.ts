@@ -21,6 +21,7 @@ const MESSAGES: Record<string, string> = {
   LOAN_CONTRACT_TOO_SHORT: 'O contrato precisa de pelo menos 2 anos restantes para permitir um empréstimo.',
   LOAN_INVALID_TERMS: 'Termos de empréstimo inválidos.',
   PLAYER_ALREADY_ON_LOAN: 'Jogador já está emprestado a outro clube.',
+  MANAGER_SACKED: 'Você foi demitido pela diretoria.',
 }
 
 /** The specific pt-BR reason for a known ApiError code, else the caller's fallback. */

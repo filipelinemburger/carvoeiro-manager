@@ -5,6 +5,8 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography,
 } from '@mui/material'
 import { getStandings, getTopScorers, rolloverSeason } from '../../api/career'
+import { getBoard } from '../../api/board'
+import { moodLabel, objectiveChip, objectiveText } from '../board/boardLabels'
 import { useAuth } from '../../auth/AuthContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import type { RolloverResponse, SquadChange } from '../../api/types'
@@ -47,6 +49,14 @@ export function SeasonSummaryPage() {
     enabled: Boolean(saveGameId && competitionId && token),
   })
 
+  // The finished season's objectives: this page renders before the rollover, while the board's
+  // current season is still the one just played.
+  const board = useQuery({
+    queryKey: ['board', saveGameId],
+    queryFn: () => getBoard(saveGameId, token ?? ''),
+    enabled: Boolean(saveGameId && token),
+  })
+
   const rollover = useMutation<RolloverResponse>({
     mutationFn: () => rolloverSeason(saveGameId, token ?? ''),
     onSuccess: () => {
@@ -69,6 +79,8 @@ export function SeasonSummaryPage() {
       // complete -- landing the user on the Final tab showing last season's ties.
       void queryClient.invalidateQueries({ queryKey: ['phases'] })
       void queryClient.invalidateQueries({ queryKey: ['ties'] })
+      // New season: confidence regressed and new objectives were set.
+      void queryClient.invalidateQueries({ queryKey: ['board', saveGameId] })
     },
   })
 
@@ -151,6 +163,27 @@ export function SeasonSummaryPage() {
           </ListItem>
         ))}
       </List>
+
+      {/* Hidden once rolled over: by then the board holds the new season's objectives. */}
+      {!result && board.data && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>Diretoria</Typography>
+          <List dense disablePadding>
+            {board.data.objectives.map(o => {
+              const chip = objectiveChip(o)
+              return (
+                <ListItem key={o.kind} disableGutters sx={{ display: 'flex', gap: 1 }}>
+                  <Typography variant="body2" sx={{ flex: 1 }}>{objectiveText(o)}</Typography>
+                  {chip && <Chip size="small" variant="outlined" label={chip.label} color={chip.color} />}
+                </ListItem>
+              )
+            })}
+          </List>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            Confiança da diretoria: {board.data.confidence}/100 ({moodLabel(board.data.confidence)})
+          </Typography>
+        </Box>
+      )}
 
       {!result && (
         <Button

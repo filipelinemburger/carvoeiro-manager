@@ -2,6 +2,8 @@ package br.com.carvoeiromanager.competition;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -34,21 +36,38 @@ public class Competition {
     @Column(name = "total_rounds", nullable = false)
     private int totalRounds;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "scope", nullable = false, length = 10)
+    private CompetitionScope scope = CompetitionScope.NATIONAL;
+
+    /** National division: 1 = Série A, 2 = B, 3 = C. Null for a STATE competition. */
+    @Column(name = "tier")
+    private Integer tier;
+
     protected Competition() {
         // for JPA
     }
 
-    private Competition(UUID id, UUID saveGameId, String name, String type, int seasonYear, int totalRounds) {
+    private Competition(UUID id, UUID saveGameId, String name, String type, int seasonYear, int totalRounds,
+                        CompetitionScope scope, Integer tier) {
         this.id = id;
         this.saveGameId = saveGameId;
         this.name = name;
         this.type = type;
         this.seasonYear = seasonYear;
         this.totalRounds = totalRounds;
+        this.scope = scope;
+        this.tier = tier;
     }
 
+    /** A NATIONAL competition with no tier — for callers (mostly tests) that predate scope/tier. */
     public static Competition create(UUID saveGameId, String name, String type, int seasonYear, int totalRounds) {
-        return new Competition(UUID.randomUUID(), saveGameId, name, type, seasonYear, totalRounds);
+        return create(saveGameId, name, type, seasonYear, totalRounds, CompetitionScope.NATIONAL, null);
+    }
+
+    public static Competition create(UUID saveGameId, String name, String type, int seasonYear, int totalRounds,
+                                     CompetitionScope scope, Integer tier) {
+        return new Competition(UUID.randomUUID(), saveGameId, name, type, seasonYear, totalRounds, scope, tier);
     }
 
     public UUID getId() { return id; }
@@ -57,6 +76,8 @@ public class Competition {
     public String getType() { return type; }
     public int getSeasonYear() { return seasonYear; }
     public int getTotalRounds() { return totalRounds; }
+    public CompetitionScope getScope() { return scope; }
+    public Integer getTier() { return tier; }
 
     public void setSeasonYear(int seasonYear) { this.seasonYear = seasonYear; }
     public void setTotalRounds(int totalRounds) { this.totalRounds = totalRounds; }

@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { getSaveGame, getFinances, listCareers } from '../../api/career'
 import { saveGameKeyFor } from './saveGameKey'
 import { formatBRL } from '../../lib/money'
+import { BoardCard } from '../board/BoardCard'
 import type { SaveGameResponse, SaveGameSummary } from '../../api/types'
 
 /** A single "Label: value" stat row with a bold label. */
@@ -98,7 +99,8 @@ export function DashboardPage() {
       {loadingGame && saveGameId && <Typography sx={{ mt: 2 }}>Carregando carreira…</Typography>}
 
       {saveGame && (
-        <Card variant="outlined" sx={{ mt: 3, maxWidth: 480 }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 3, alignItems: 'flex-start' }}>
+        <Card variant="outlined" sx={{ maxWidth: 480, width: '100%' }}>
           <CardContent>
             <Stack spacing={1.25}>
               {saveGame.managerName && (
@@ -121,6 +123,8 @@ export function DashboardPage() {
             </Stack>
           </CardContent>
         </Card>
+        <BoardCard saveGameId={saveGame.id} />
+        </Stack>
       )}
     </Box>
   )

@@ -2485,6 +2485,7 @@
     {
       "name": "Campeonato Catarinense",
       "type": "LEAGUE",
+      "scope": "STATE",
       "seasonYear": 2026,
       "memberShortNames": ["AVA", "CAM", "CON", "MAR", "BRU", "JOI", "CHA", "CAR", "BAR", "FIG", "CRI", "SCA"],
       "phases": [
@@ -2497,6 +2498,7 @@
     {
       "name": "Série B",
       "type": "LEAGUE",
+      "tier": 2,
       "seasonYear": 2026,
       "memberShortNames": [
         "CRI", "AVA", "GOI", "NOV", "SPT", "CEA",
@@ -2508,6 +2510,7 @@
     {
       "name": "Série A",
       "type": "LEAGUE",
+      "tier": 1,
       "seasonYear": 2026,
       "memberShortNames": [
         "ATM", "BAH", "BFR", "BGT", "COR", "CRU",
@@ -2519,6 +2522,7 @@
     {
       "name": "Série C",
       "type": "LEAGUE",
+      "tier": 3,
       "seasonYear": 2026,
       "memberShortNames": ["BRU", "FIG", "BAR", "FER", "AMA", "VRE", "PAY", "CAX", "GUA", "FLO", "CFZ", "YPI", "MGA", "ITU", "BPB", "ANA", "ITB", "SCR", "ILI", "MRN"],
       "phases": [

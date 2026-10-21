@@ -4,6 +4,7 @@ import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameService;
 import br.com.carvoeiromanager.club.Club;
 import br.com.carvoeiromanager.club.ClubRepository;
+import br.com.carvoeiromanager.career.SaveGameStatus;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.CompetitionRepository;
@@ -125,6 +126,11 @@ public class LiveMatchService {
     @Transactional
     public LiveMatchState kickoff(UUID saveGameId, UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
+        // A sacked save can never have a live match in flight (the board runs inside the finish),
+        // so rejecting before the resume branch strands nothing.
+        if (save.getStatus() == SaveGameStatus.SACKED) {
+            throw new ApiException(ErrorCode.MANAGER_SACKED, "The board has sacked the manager");
+        }
         save.setLastPlayedAt(Instant.now());
         Optional<LiveMatch> existing = liveMatchRepository.findBySaveGameId(saveGameId);
         if (existing.isPresent()) {

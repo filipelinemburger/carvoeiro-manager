@@ -7,10 +7,13 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents'
 import EditIcon from '@mui/icons-material/Edit'
 import ArticleIcon from '@mui/icons-material/Article'
 import QueryStatsIcon from '@mui/icons-material/QueryStats'
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance'
 import type { AdvanceResponse } from '../../api/types'
+import { BOARD_NEWS_TITLE, isBoardNews } from '../board/boardLabels'
 
 /** Short headline for a news list row, derived from the payload type. */
 export function newsTitle(payload: AdvanceResponse): string {
+  if (isBoardNews(payload.type)) return BOARD_NEWS_TITLE[payload.type]
   switch (payload.type) {
     case 'MATCH':
       return payload.round !== null ? `Rodada ${payload.round + 1} — resultados` : 'Resultados'
@@ -42,6 +45,7 @@ export function newsTitle(payload: AdvanceResponse): string {
 
 /** Leading icon for a news list row. */
 export function newsIcon(type: AdvanceResponse['type']): ReactNode {
+  if (isBoardNews(type)) return <AccountBalanceIcon fontSize="small" />
   switch (type) {
     case 'MATCH': return <SportsSoccerIcon fontSize="small" />
     case 'TRANSFER': return <SwapHorizIcon fontSize="small" />

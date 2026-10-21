@@ -62,10 +62,13 @@ class NewsFeedIT {
      * TRANSFER advances unconditionally write standalone WATCHLIST OFFER_RECEIVED alerts
      * (WatchlistNotifier) alongside the advance's own item; these tests are about the
      * one-item-per-advance invariant, not the watchlist notifier, so they filter those out.
+     * The board's own items ({@code BOARD_OBJECTIVES} at career creation, and any warning an
+     * advance triggers) are excluded for the same reason — BoardObjectivesIT covers them.
      */
     private List<NewsItem> nonWatchlistItems(UUID saveGameId) {
         return newsItemRepository.findBySaveGameIdOrderBySeqDesc(saveGameId).stream()
                 .filter(i -> !"WATCHLIST".equals(i.getType()))
+                .filter(i -> !i.getType().startsWith("BOARD_"))
                 .toList();
     }
 
@@ -172,7 +175,7 @@ class NewsFeedIT {
     private void persistNewsItems(UUID saveGameId, int count) {
         newsItemRepository.deleteBySaveGameId(saveGameId);
         AdvanceResponse minimal = new AdvanceResponse("MATCH", null, null, null, List.of(), List.of(),
-                List.of(), List.of(), null, 0, false, null, null, null, null, null, null, null);
+                List.of(), List.of(), null, 0, false, null, null, null, null, null, null, null, null);
         for (int seq = 1; seq <= count; seq++) {
             String payload;
             try {
