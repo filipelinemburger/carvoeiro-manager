@@ -332,9 +332,9 @@ Each part with a non-zero value is written as its own `board_confidence_changes`
 (`MATCH_RESULT`, `HEAVY_DEFEAT`, `TABLE_POSITION`, `NEGATIVE_BALANCE`), so the card can say *why*
 confidence moved. If the clamp trims the total, the trim comes off the last row written.
 
-Some sanity checks on the formula: an away win against a much stronger side scores about +6. A
-home loss to a much weaker side scores about −6. A home draw between equals scores −1. An away
-draw between equals scores +1.
+Some sanity checks on the formula (10 points of strength apart for "much"): an away win against a
+much stronger side scores +8. A home loss to a much weaker side scores −7. A home draw between
+equals scores −2. An away draw between equals scores 0.
 
 ### 6.2 When an objective resolves
 
