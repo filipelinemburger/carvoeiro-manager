@@ -1,5 +1,7 @@
 package br.com.carvoeiromanager.season;
 
+import br.com.carvoeiromanager.board.BoardEventResponse;
+import br.com.carvoeiromanager.board.BoardService;
 import br.com.carvoeiromanager.career.SaveGame;
 import br.com.carvoeiromanager.career.SaveGameRepository;
 import br.com.carvoeiromanager.career.SaveGameService;
@@ -92,6 +94,7 @@ public class SeasonAdvanceService {
     private final PhaseResolver phaseResolver;
     private final CompetitionPhaseRepository competitionPhaseRepository;
     private final BackgroundCompetitionService backgroundCompetitionService;
+    private final BoardService boardService;
 
     public SeasonAdvanceService(SaveGameService saveGameService,
                                 SaveGameRepository saveGameRepository,
@@ -110,7 +113,8 @@ public class SeasonAdvanceService {
                                 MatchPreviewService matchPreviewService,
                                 PhaseResolver phaseResolver,
                                 CompetitionPhaseRepository competitionPhaseRepository,
-                                BackgroundCompetitionService backgroundCompetitionService) {
+                                BackgroundCompetitionService backgroundCompetitionService,
+                                BoardService boardService) {
         this.saveGameService = saveGameService;
         this.saveGameRepository = saveGameRepository;
         this.seasonEventRepository = seasonEventRepository;
@@ -129,12 +133,16 @@ public class SeasonAdvanceService {
         this.phaseResolver = phaseResolver;
         this.competitionPhaseRepository = competitionPhaseRepository;
         this.backgroundCompetitionService = backgroundCompetitionService;
+        this.boardService = boardService;
     }
 
     @Transactional
     public AdvanceResponse advance(UUID saveGameId, UUID userId) {
         SaveGame save = saveGameService.requireOwned(saveGameId, userId);
         save.setLastPlayedAt(Instant.now());
+        if (save.getStatus() == SaveGameStatus.SACKED) {
+            throw new ApiException(ErrorCode.MANAGER_SACKED, "The board has sacked the manager");
+        }
         if (save.getStatus() == SaveGameStatus.FINISHED) {
             throw new ApiException(ErrorCode.SEASON_FINISHED, "The season has already finished");
         }
@@ -148,12 +156,14 @@ public class SeasonAdvanceService {
         SeasonEvent event = seasonEventRepository
                 .findNextManagedEvent(saveGameId, save.getManagedClubId());
         if (event == null) {
-            // No calendar entries left to process: the season is over.
-            save.setStatus(SaveGameStatus.FINISHED);
+            // No calendar entries left to process: the season is over. Only reachable on a save whose
+            // last managed round was recorded before the board existed (that round now runs the
+            // review itself), so the review runs here instead and decides FINISHED vs SACKED.
+            BoardEventResponse review = boardService.reviewSeason(save);
             saveGameRepository.save(save);
             return new AdvanceResponse("FINISHED", null, null, null,
                     List.of(), List.of(), List.of(), List.of(), null, 0, true, List.of(), List.of(), null,
-                    List.of(), List.of(), null, null, null);
+                    List.of(), List.of(), null, null, review);
         }
 
         LocalDate eventDate = event.getEventDate();
@@ -233,12 +243,22 @@ public class SeasonAdvanceService {
         // this round would incorrectly read as the season's last one.
         phaseResolver.resolveIfPhaseComplete(save, event);
 
+        // The board judges the match after the phase is resolved (a knockout exit or a title is only
+        // knowable then) and before the season-finished check, so a sacking on the last round is
+        // already on the save when that check runs. Null when the managed club had no fixture.
+        BoardEventResponse board = boardService.afterManagedMatch(save, event, fixtures);
+
         // The season finishes when this was the last unprocessed MATCH event the player is in.
         boolean seasonFinished = noMoreMatchEvents(saveGameId, event.getId(), save.getManagedClubId());
         BigDecimal prize = BigDecimal.ZERO;
         if (seasonFinished) {
-            save.setStatus(SaveGameStatus.FINISHED);
+            // The prize is part of the season's money, so the board judges the balance AFTER it is
+            // paid; the final status (FINISHED or SACKED) is therefore the board's to set, after it.
             prize = financeService.processSeasonEnd(saveGameId, competitionId, eventDate);
+            // A manager this very round's afterManagedMatch sacked stays sacked: no review.
+            if (save.getStatus() != SaveGameStatus.SACKED) {
+                board = withReview(board, boardService.reviewSeason(save));
+            }
         }
 
         // AdvanceResponse.finance is the per-match response (gate + matchCost + optional prize).
@@ -255,7 +275,23 @@ public class SeasonAdvanceService {
                 List.copyOf(outcome.results()), List.copyOf(outcome.bookings()),
                 List.copyOf(outcome.newSuspensions()), List.copyOf(outcome.newInjuries()),
                 finance, 0, seasonFinished, List.copyOf(playerRatings), List.of(), null, List.of(),
-                List.of(), null, phaseName, null);
+                List.of(), null, phaseName, board);
+    }
+
+    /**
+     * The last round's board payload: the review's confidence, objectives and verdict, with the
+     * match's own change folded into the delta and its ultimatum flags kept. The frontend reads
+     * {@code sacked} off the MATCH response to leave the season without a reload, so a sacking by
+     * the review must show here, not only on its news item.
+     */
+    private static BoardEventResponse withReview(BoardEventResponse match, BoardEventResponse review) {
+        if (match == null) {
+            return review;
+        }
+        return new BoardEventResponse(review.confidence(), match.delta() + review.delta(),
+                match.ultimatumIssued(), match.ultimatumLifted(),
+                match.sacked() || review.sacked(), match.sackingAverted() || review.sackingAverted(),
+                review.objectives());
     }
 
     /**

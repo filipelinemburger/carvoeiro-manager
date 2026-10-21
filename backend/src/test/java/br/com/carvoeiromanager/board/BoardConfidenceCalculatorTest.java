@@ -6,8 +6,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-import java.util.List;
-
 import static br.com.carvoeiromanager.board.BoardChangeReason.HEAVY_DEFEAT;
 import static br.com.carvoeiromanager.board.BoardChangeReason.MATCH_RESULT;
 import static br.com.carvoeiromanager.board.BoardChangeReason.NEGATIVE_BALANCE;
@@ -20,48 +18,59 @@ class BoardConfidenceCalculatorTest {
         return new MatchInput(own, opp, home, gf, ga, false, null, null, false);
     }
 
-    private static int total(List<Part> parts) {
-        return parts.stream().mapToInt(Part::delta).sum();
-    }
-
     @Test
-    void homeDrawBetweenEqualsCostsTwo() {
-        // expected = 1.35 + 0.30 = 1.65; (1 − 1.65)·3 = −1.95 → −2
+    void homeDrawBetweenEqualsCostsOne() {
+        // expected = 1.35 + 0.25 = 1.60; (1 − 1.60)·2 = −1.2 → −1
         assertThat(BoardConfidenceCalculator.afterMatch(match(50, 50, true, 1, 1)))
-                .containsExactly(new Part(MATCH_RESULT, -2));
+                .containsExactly(new Part(MATCH_RESULT, -1));
     }
 
     @Test
     void awayDrawBetweenEqualsIsNeutral() {
-        // expected = 1.05; (1 − 1.05)·3 = −0.15 → 0, so no row at all
+        // expected = 1.10; (1 − 1.10)·2 = −0.2 → 0, so no row at all
         assertThat(BoardConfidenceCalculator.afterMatch(match(50, 50, false, 0, 0))).isEmpty();
     }
 
     @Test
-    void awayWinAgainstAMuchStrongerSideIsWorthEight() {
-        // diff −10: expected = clamp(1.35 − 0.8 − 0.3) = 0.30 (floor); (3 − 0.30)·3 = 8.1 → 8
-        assertThat(total(BoardConfidenceCalculator.afterMatch(match(45, 55, false, 1, 0)))).isEqualTo(8);
+    void awayWinAgainstAMuchStrongerSideIsWorthFive() {
+        // diff −10: expected = 1.35 − 0.5 − 0.25 = 0.60; (3 − 0.60)·2 = 4.8 → 5
+        assertThat(BoardConfidenceCalculator.afterMatch(match(45, 55, false, 1, 0)))
+                .containsExactly(new Part(MATCH_RESULT, 5));
     }
 
     @Test
-    void homeLossToAMuchWeakerSideCostsSeven() {
-        // diff +10: expected = 1.35 + 0.8 + 0.3 = 2.45; (0 − 2.45)·3 = −7.35 → −7
+    void homeLossToAMuchWeakerSideCostsFour() {
+        // diff +10: expected = 1.35 + 0.5 + 0.25 = 2.10; (0 − 2.10)·2 = −4.2 → −4
         assertThat(BoardConfidenceCalculator.afterMatch(match(55, 45, true, 0, 1)))
-                .containsExactly(new Part(MATCH_RESULT, -7));
+                .containsExactly(new Part(MATCH_RESULT, -4));
     }
 
     @Test
-    void aFourGoalDefeatAddsAHeavyDefeatRowAndTheTotalIsClampedAtMinusEight() {
-        List<Part> parts = BoardConfidenceCalculator.afterMatch(match(55, 45, true, 0, 4));
-        // −7 −3 = −10 → clamped to −8; the trim comes off the last row written
-        assertThat(parts).containsExactly(new Part(MATCH_RESULT, -7), new Part(HEAVY_DEFEAT, -1));
+    void expectationIsCappedForAnOverwhelmingFavourite() {
+        // diff +40: 1.35 + 2.0 + 0.25 = 3.6 → capped at 2.70; (0 − 2.70)·2 = −5.4 → −5
+        assertThat(BoardConfidenceCalculator.afterMatch(match(80, 40, true, 0, 1)))
+                .containsExactly(new Part(MATCH_RESULT, -5));
+    }
+
+    @Test
+    void aFourGoalDefeatAddsAHeavyDefeatRow() {
+        assertThat(BoardConfidenceCalculator.afterMatch(match(55, 45, true, 0, 4)))
+                .containsExactly(new Part(MATCH_RESULT, -4), new Part(HEAVY_DEFEAT, -3));
+    }
+
+    @Test
+    void theTotalIsClampedAtMinusEightTrimmingFromTheLastRow() {
+        // −5 result, −3 heavy defeat, −1 table, −1 balance = −10: the balance row goes, then the table row
+        MatchInput in = new MatchInput(80, 40, true, 0, 4, false, 20, 4, true);
+        assertThat(BoardConfidenceCalculator.afterMatch(in))
+                .containsExactly(new Part(MATCH_RESULT, -5), new Part(HEAVY_DEFEAT, -3));
     }
 
     @Test
     void stateMatchesCountHalf() {
-        MatchInput in = new MatchInput(55, 45, true, 0, 1, true, null, null, false);
-        // round(−7.35) = −7, halved = −3.5, and Math.round(−3.5) = −3 (half rounds up, toward zero here)
-        assertThat(BoardConfidenceCalculator.afterMatch(in)).containsExactly(new Part(MATCH_RESULT, -3));
+        // diff +2 at home: expected 1.70; (0 − 1.70)·2 = −3.4 → −3, halved −1.5, Math.round(−1.5) = −1
+        MatchInput in = new MatchInput(51, 49, true, 0, 1, true, null, null, false);
+        assertThat(BoardConfidenceCalculator.afterMatch(in)).containsExactly(new Part(MATCH_RESULT, -1));
     }
 
     @ParameterizedTest(name = "position {0} against reference {1} → {2}")
@@ -77,13 +86,6 @@ class BoardConfidenceCalculatorTest {
     void aNegativeBalanceCostsOnePerMatch() {
         MatchInput in = new MatchInput(50, 50, false, 0, 0, false, null, null, true);
         assertThat(BoardConfidenceCalculator.afterMatch(in)).containsExactly(new Part(NEGATIVE_BALANCE, -1));
-    }
-
-    @Test
-    void aClampedWinKeepsTheResultRowAndTrimsTheBonusesAfterIt() {
-        // +8 result, +1 table: 9 → 8, so the table row is trimmed away entirely
-        MatchInput in = new MatchInput(45, 55, false, 1, 0, false, 1, 4, false);
-        assertThat(BoardConfidenceCalculator.afterMatch(in)).containsExactly(new Part(MATCH_RESULT, 8));
     }
 
     @ParameterizedTest(name = "finished {0}º against target {1} (zone={2}) → {3}")

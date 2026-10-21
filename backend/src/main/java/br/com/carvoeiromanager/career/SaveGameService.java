@@ -5,6 +5,7 @@ import br.com.carvoeiromanager.club.ClimateZone;
 import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
+import br.com.carvoeiromanager.board.BoardService;
 import br.com.carvoeiromanager.competition.Competition;
 import br.com.carvoeiromanager.competition.CompetitionScope;
 import br.com.carvoeiromanager.competition.CompetitionClub;
@@ -77,6 +78,10 @@ public class SaveGameService {
     @PersistenceContext
     private EntityManager entityManager;
 
+    // @Lazy for the same reason as transferService: BoardService reaches StandingsService, which
+    // depends on this service for its ownership check.
+    private final BoardService boardService;
+
     public SaveGameService(SeedLoader seedLoader,
                            SaveGameRepository saveGameRepository,
                            ClubRepository clubRepository,
@@ -87,7 +92,8 @@ public class SaveGameService {
                            OverallCalculator overallCalculator,
                            FinanceCalculator financeCalculator,
                            br.com.carvoeiromanager.transfer.TransferWindow transferWindow,
-                           @Lazy br.com.carvoeiromanager.transfer.TransferService transferService) {
+                           @Lazy br.com.carvoeiromanager.transfer.TransferService transferService,
+                           @Lazy BoardService boardService) {
         this.seedLoader = seedLoader;
         this.saveGameRepository = saveGameRepository;
         this.clubRepository = clubRepository;
@@ -98,13 +104,19 @@ public class SaveGameService {
         this.overallCalculator = overallCalculator;
         this.financeCalculator = financeCalculator;
         this.transferWindow = transferWindow;
+        this.boardService = boardService;
         this.transferService = transferService;
     }
 
-    /** Convenience overload for internal/test callers that don't need a specific manager identity. */
+    /**
+     * Convenience overload for internal/test callers that don't need a specific manager identity.
+     * The board may not sack in careers made here: a simulated season ends below the season-end
+     * threshold often enough (a favourite finishing 7th, say) that every full-season test would
+     * otherwise turn on luck. Tests about sacking ask for it through the request overload.
+     */
     @Transactional
     public SaveGameResponse createCareer(UUID userId) {
-        return createCareer(userId, new CreateSaveGameRequest("Técnico", "Brasil"));
+        return createCareer(userId, new CreateSaveGameRequest("Técnico", "Brasil", false));
     }
 
     /**
@@ -272,6 +284,9 @@ public class SaveGameService {
         saveGame.setManagedClubId(managedClubId);
         saveGame.setCurrentDate(seasonStart);
         saveGameRepository.save(saveGame);
+
+        // The board sets this season's objectives now, before anything else can post news on day one.
+        boardService.initialize(saveGame, req.sackingEnabled() == null || req.sackingEnabled());
 
         // 6. Day-one market: AI clubs may already have players worth listing, and those (plus
         //    everyone else) can already draw an unsolicited bid on the managed squad.

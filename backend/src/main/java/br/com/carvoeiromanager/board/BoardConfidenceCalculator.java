@@ -14,14 +14,21 @@ public final class BoardConfidenceCalculator {
     public static final int MIN = 0;
     public static final int MAX = 100;
 
-    // Expected points: 1.35 for equals, ±0.08 per point of strength difference, ±0.30 home/away.
+    // Expected points: 1.35 for equals, ±0.05 per point of strength difference, ±0.25 home/away.
+    // Fitted to the match engine (two full-pyramid seasons, ~4,000 club-matches: base 1.37, slope
+    // 0.046, home 0.25). The spec's first guess of 0.08/0.30 was twice as steep as the engine, so a
+    // favourite sitting on its target still bled confidence every week. Refit if the engine's
+    // strength-to-result curve changes.
     static final double BASE_EXPECTED = 1.35;
-    static final double PER_STRENGTH_POINT = 0.08;
-    static final double HOME_ADVANTAGE = 0.30;
+    static final double PER_STRENGTH_POINT = 0.05;
+    static final double HOME_ADVANTAGE = 0.25;
     static final double EXPECTED_MIN = 0.30;
     static final double EXPECTED_MAX = 2.70;
-    /** Confidence per point above/below expectation. */
-    static final int RESULT_SCALE = 3;
+    /**
+     * Confidence per point above/below expectation. The engine's per-match noise is about ±1.26
+     * points, so at 2 a run of pure luck rarely carries a manager from 60 to the ultimatum on its own.
+     */
+    static final int RESULT_SCALE = 2;
     static final int HEAVY_DEFEAT_MARGIN = 4;
     static final int HEAVY_DEFEAT = -3;
     /** Positions below the reference that turn the trajectory nudge negative. */

@@ -99,7 +99,7 @@ public class PhaseResolver {
 
         CompetitionPhase current = phases.stream().filter(p -> p.getId().equals(phaseId))
                 .findFirst().orElse(null);
-        if (current == null || !phaseComplete(save.getId(), current, processedEvent.getId())) {
+        if (current == null || !isPhaseComplete(save.getId(), current, processedEvent.getId())) {
             return false;
         }
         CompetitionPhase next = phases.stream()
@@ -319,8 +319,13 @@ public class PhaseResolver {
         }
     }
 
-    /** True when every MATCH event of this phase other than the one just handled is processed. */
-    private boolean phaseComplete(UUID saveGameId, CompetitionPhase phase, UUID justProcessedId) {
+    /**
+     * True when every MATCH event of this phase other than the one just handled is processed.
+     * Public for the board, which judges stage objectives the moment a phase ends: the event being
+     * recorded is not yet marked processed, so callers pass its id as {@code justProcessedId}
+     * (null when no event is in flight).
+     */
+    public boolean isPhaseComplete(UUID saveGameId, CompetitionPhase phase, UUID justProcessedId) {
         return seasonEventRepository.findBySaveGameId(saveGameId).stream()
                 .filter(e -> phase.getId().equals(e.getPhaseId()))
                 .allMatch(e -> e.isProcessed() || e.getId().equals(justProcessedId));
