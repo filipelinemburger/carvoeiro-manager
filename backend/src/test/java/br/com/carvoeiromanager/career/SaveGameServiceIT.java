@@ -300,4 +300,27 @@ class SaveGameServiceIT {
         assertThat(response.managerName()).isNotBlank();
         assertThat(response.managerNationality()).isNotBlank();
     }
+
+    @Test
+    void competitionsCarryTheSeedsScopeAndTier() {
+        // Given a persisted user
+        User user = User.create("tigre_scope_" + UUID.randomUUID(), "hash");
+        userRepository.save(user);
+
+        // When a career is created
+        SaveGameResponse response = saveGameService.createCareer(user.getId());
+
+        // Then each competition carries its seed scope and division tier
+        var byName = competitionRepository.findBySaveGameId(response.id()).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        br.com.carvoeiromanager.competition.Competition::getName, c -> c));
+        assertThat(byName.get("Campeonato Catarinense").getScope())
+                .isEqualTo(br.com.carvoeiromanager.competition.CompetitionScope.STATE);
+        assertThat(byName.get("Campeonato Catarinense").getTier()).isNull();
+        assertThat(byName.get("Série B").getScope())
+                .isEqualTo(br.com.carvoeiromanager.competition.CompetitionScope.NATIONAL);
+        assertThat(byName.get("Série B").getTier()).isEqualTo(2);
+        assertThat(byName.get("Série A").getTier()).isEqualTo(1);
+        assertThat(byName.get("Série C").getTier()).isEqualTo(3);
+    }
 }

@@ -6,6 +6,7 @@ import br.com.carvoeiromanager.club.ClubRepository;
 import br.com.carvoeiromanager.common.ApiException;
 import br.com.carvoeiromanager.common.ErrorCode;
 import br.com.carvoeiromanager.competition.Competition;
+import br.com.carvoeiromanager.competition.CompetitionScope;
 import br.com.carvoeiromanager.competition.CompetitionClub;
 import br.com.carvoeiromanager.competition.CompetitionPhase;
 import br.com.carvoeiromanager.competition.CompetitionPhaseRepository;
@@ -28,6 +29,7 @@ import br.com.carvoeiromanager.seed.SeedCompetition;
 import br.com.carvoeiromanager.seed.SeedLoader;
 import br.com.carvoeiromanager.seed.SeedPhase;
 import br.com.carvoeiromanager.seed.SeedPhaseValidator;
+import br.com.carvoeiromanager.seed.SeedScopeValidator;
 import br.com.carvoeiromanager.seed.SeedPlayer;
 import br.com.carvoeiromanager.seed.SeedStaff;
 import br.com.carvoeiromanager.staff.Staff;
@@ -234,11 +236,13 @@ public class SaveGameService {
             // inside an advance() that rolls back and permanently blocks the round, or a career
             // that cannot roll over at all. See SeedPhaseValidator for each rule's failure mode.
             SeedPhaseValidator.validate(seedComp);
+            SeedScopeValidator.validate(seedComp);
 
             int totalRounds = totalRoundsFor(seedComp);
 
             Competition competition = Competition.create(
-                    saveGame.getId(), seedComp.name(), seedComp.type(), seedComp.seasonYear(), totalRounds);
+                    saveGame.getId(), seedComp.name(), seedComp.type(), seedComp.seasonYear(), totalRounds,
+                    CompetitionScope.valueOf(seedComp.scopeOrDefault()), seedComp.tier());
             entityManager.persist(competition);
             competitions.add(competition);
 
