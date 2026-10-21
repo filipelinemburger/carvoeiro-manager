@@ -29,6 +29,7 @@ class ErrorCodeTest {
         assertThat(ErrorCode.LOAN_INVALID_TERMS.status()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ErrorCode.MALFORMED_REQUEST.status()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(ErrorCode.MANAGED_CLUB_NOT_PLAYING.status()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(ErrorCode.MANAGER_SACKED.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.MATCH_NOT_FINISHED.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.MATCH_OVER.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ErrorCode.NEWS_ITEM_NOT_FOUND.status()).isEqualTo(HttpStatus.NOT_FOUND);
@@ -62,7 +63,7 @@ class ErrorCodeTest {
     }
 
     @Test
-    void hasExactlyFiftyConstants() {
-        assertThat(ErrorCode.values()).hasSize(50);
+    void hasExactlyFiftyOneConstants() {
+        assertThat(ErrorCode.values()).hasSize(51);
     }
 }

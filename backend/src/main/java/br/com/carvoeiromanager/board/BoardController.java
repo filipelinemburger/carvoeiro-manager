@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 /** Where the manager stands with the board. Read-only, so it stays open on a sacked save. */
@@ -25,5 +26,10 @@ public class BoardController {
     @GetMapping
     public BoardResponse get(@PathVariable UUID saveGameId, @CurrentUser UUID userId) {
         return boardService.getBoard(saveGameService.requireOwned(saveGameId, userId));
+    }
+
+    @GetMapping("/history")
+    public List<BoardSeasonRecord> history(@PathVariable UUID saveGameId, @CurrentUser UUID userId) {
+        return boardService.history(saveGameService.requireOwned(saveGameId, userId));
     }
 }

@@ -310,10 +310,17 @@ The board compares the points the club actually won with the points it was **exp
 
 ```
 diff     = ClubStrength(own) − ClubStrength(opponent)          // computed at the match
-expected = clamp(1.35 + 0.08·diff + (home ? +0.30 : −0.30), 0.30, 2.70)
+expected = clamp(1.35 + 0.05·diff + (home ? +0.25 : −0.25), 0.30, 2.70)
 points   = 3 / 1 / 0   (for a knockout leg: the leg's own result)
-delta    = round((points − expected) · 3)
+delta    = round((points − expected) · 2)
 ```
+
+*Amended during the build.* The first guess (0.08 per strength point, ±0.30 home, ×3) was twice as
+steep as the match engine. Fitted on two full-pyramid seasons (~4,000 club-matches) the engine
+gives base 1.37, slope 0.046 and home 0.25, with ±1.26 points of per-match noise. Under the first
+guess a favourite sitting on its G-4 target slid from 60 to 15 in a simulated season. With the
+fitted curve and the ×2 scale, three of four simulated seasons on target ended above 90, and the
+one that finished 7th against a G-4 target ended at 21.
 
 Then:
 
@@ -333,8 +340,8 @@ Each part with a non-zero value is written as its own `board_confidence_changes`
 confidence moved. If the clamp trims the total, the trim comes off the last row written.
 
 Some sanity checks on the formula (10 points of strength apart for "much"): an away win against a
-much stronger side scores +8. A home loss to a much weaker side scores −7. A home draw between
-equals scores −2. An away draw between equals scores 0.
+much stronger side scores +5. A home loss to a much weaker side scores −4. A home draw between
+equals scores −1. An away draw between equals scores 0.
 
 ### 6.2 When an objective resolves
 
@@ -518,6 +525,8 @@ back, so does the sacking.
     phase news: an otherwise-empty `AdvanceResponse` with `type = BOARD_…` and `board` filled.
     No pt-BR text goes into `competitionName` or any other string field (§10).
 - `CreateSaveGameRequest` gains `boolean sackingEnabled`, defaulting to true when absent.
+- `GET /api/v1/save-games/{saveGameId}/board/history` → `[{ seasonYear, objectives }]`, oldest
+  first: the career record the sacked screen lists (§9.4). *Added during the build.*
 - `SaveGameStatus` on the wire gains `"SACKED"`. The frontend union types in `api/types.ts` must be
   widened at both sites (lines 47 and 65).
 

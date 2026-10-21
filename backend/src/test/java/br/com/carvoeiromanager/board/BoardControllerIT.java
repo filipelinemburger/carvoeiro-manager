@@ -65,4 +65,16 @@ class BoardControllerIT extends BoardITSupport {
         assertThat(save(c).getStatus()).isEqualTo(SaveGameStatus.SACKED);
         assertThat(controller.get(c.id(), c.userId()).confidence()).isEqualTo(60);
     }
+
+    @Test
+    void theHistoryListsEachSeasonsObjectives() {
+        Career c = createCareer(true);
+
+        var history = controller.history(c.id(), c.userId());
+
+        assertThat(history).singleElement().satisfies(season -> {
+            assertThat(season.seasonYear()).isEqualTo(save(c).getSeasonYear());
+            assertThat(season.objectives()).hasSize(3);
+        });
+    }
 }

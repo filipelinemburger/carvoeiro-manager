@@ -536,9 +536,17 @@ public class BoardService {
                 state.isGraceSeason(save.getSeasonYear()), toResponses(save, objectives), changes);
     }
 
-    /** Every season's objectives, oldest first — the career record. */
-    public List<BoardObjective> careerObjectives(UUID saveGameId) {
-        return objectiveRepository.findBySaveGameIdOrderBySeasonYearAsc(saveGameId);
+    /** Every season's objectives, oldest first — the career record the sacked screen shows. */
+    @Transactional
+    public List<BoardSeasonRecord> history(SaveGame save) {
+        ensureState(save);
+        Map<Integer, List<BoardObjective>> bySeason = new java.util.TreeMap<>();
+        for (BoardObjective o : objectiveRepository.findBySaveGameIdOrderBySeasonYearAsc(save.getId())) {
+            bySeason.computeIfAbsent(o.getSeasonYear(), y -> new ArrayList<>()).add(o);
+        }
+        return bySeason.entrySet().stream()
+                .map(e -> new BoardSeasonRecord(e.getKey(), toResponses(save, e.getValue())))
+                .toList();
     }
 
     private List<BoardObjectiveResponse> toResponses(SaveGame save, List<BoardObjective> objectives) {
