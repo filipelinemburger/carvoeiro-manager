@@ -1,11 +1,13 @@
 # Diretoria — Board Objectives and Job Security — Design Spec
 
 **Date:** 2026-10-21
-**Status:** Draft — not yet planned or built.
+**Status:** Approved 2026-10-21 — planned, not yet built.
 **Builds on:** season advance (`SeasonAdvanceService.recordMatchRound`), rollover
 (`SeasonRolloverService`), the competition/phase engine (`PhaseResolver`), the news feed
 (`NewsItem`), and the finance model (`Club.balance`).
-**Does not depend on:** promotion/relegation, which is still unbuilt (see §3 and §13).
+**Does not depend on:** promotion/relegation, which is still unbuilt (see §3 and §13). The board
+nevertheless sets targets for **every national division** (Série A, B and C), so it needs no rework
+when that slice moves Criciúma between them.
 
 ---
 
@@ -77,7 +79,8 @@ before the end.
 In scope:
 
 1. Three **season objectives** set at the start of every season: league, state championship and
-   finances.
+   finances. The league objective has a target table for **each division** the managed club can
+   play in: Série A, Série B and the phased Série C (§5.2).
 2. A **board confidence** value from 0 to 100 that moves after every managed match and at key
    moments.
 3. An **ultimatum** warning, **mid-season sacking**, and a **season-end review** that can also
@@ -89,10 +92,10 @@ In scope:
 
 Out of scope, deliberately:
 
-- **Promotion and relegation.** Still unbuilt. Objectives are phrased as **table positions**
-  ("Terminar no G-4"), never as "subir" (go up) or "cair" (go down), so they stay true before and
-  after that slice lands. That slice will need to settle one thing here: targets for a *phased*
-  national league (Série C, §5.5).
+- **Promotion and relegation.** Still unbuilt: today Criciúma is always in Série B, so the Série A
+  and Série C targets are reachable only in tests until that slice lands. Objectives are phrased as
+  **table positions or stages** ("Terminar no G-4", "Chegar às semifinais"), never as "subir" (go
+  up) or "cair" (go down), so they stay true before and after it.
 - **Job offers from other clubs.** The game is built around managing Criciúma. Staff, academy and
   lineup are seeded only for the managed club, so switching clubs is a project of its own. A
   sacking ends the career.
@@ -122,7 +125,8 @@ CREATE TABLE board_objectives (
     kind            VARCHAR(20) NOT NULL,            -- LEAGUE | STATE | FINANCE
     competition_id  UUID,                            -- NULL for FINANCE
     target_position INT,                             -- LEAGUE: worst acceptable final position
-    target_stage    VARCHAR(20),                     -- STATE: QUARTERFINAL|SEMIFINAL|FINAL|CHAMPION
+    target_stage    VARCHAR(20),                     -- QUARTERFINAL|SEMIFINAL|FINAL|CHAMPION (STATE, phased LEAGUE)
+    tier            INT,                             -- LEAGUE: the division the target was set for
     outcome         VARCHAR(20) NOT NULL DEFAULT 'PENDING', -- PENDING | MET | FAILED
     UNIQUE (save_game_id, season_year, kind)
 );
@@ -143,11 +147,20 @@ The same migration adds a competition scope (§5.5):
 
 ```sql
 ALTER TABLE competitions ADD COLUMN scope VARCHAR(10) NOT NULL DEFAULT 'NATIONAL'; -- NATIONAL | STATE
-UPDATE competitions SET scope = 'STATE' WHERE name = 'Campeonato Catarinense';   -- backfill existing saves
+ALTER TABLE competitions ADD COLUMN tier  INT;                                    -- 1 = A, 2 = B, 3 = C; NULL for STATE
+-- backfill existing saves
+UPDATE competitions SET scope = 'STATE' WHERE name = 'Campeonato Catarinense';
+UPDATE competitions SET tier = 1 WHERE name = 'Série A';
+UPDATE competitions SET tier = 2 WHERE name = 'Série B';
+UPDATE competitions SET tier = 3 WHERE name = 'Série C';
 ```
 
-The seed JSON gains `"scope": "STATE"` on the Catarinense entry, and `NATIONAL` is the default when
-the key is absent. Career creation copies the scope onto `Competition`.
+The seed JSON gains `"scope": "STATE"` on the Catarinense entry and `"tier": 1|2|3` on each Série,
+and `NATIONAL` is the default scope when the key is absent. `SeedLoader` rejects a `NATIONAL`
+competition without a tier, so a future division cannot silently get no board targets. Career
+creation copies both fields onto `Competition`. Competitions survive rollover (only `seasonYear`
+changes), so the fields persist without a copy. The backfill is the only place that matches by
+name.
 
 `SaveGameStatus` gains **`SACKED`**.
 
@@ -182,10 +195,24 @@ agree on who is strong.
 Strength is recomputed every time it is needed. It is never stored on `Club` and never mixed up
 with the stale `reputation`.
 
-### 5.2 League objective (Série B)
+### 5.2 League objective (every division)
 
-Rank the 20 league members by `ClubStrength`, strongest first; ties are broken by club name. That
-gives the managed club an **expected rank** `r`. The target follows from it:
+Rank the national league's members by `ClubStrength`, strongest first; ties are broken by club
+name. That gives the managed club an **expected rank** `r`. The target depends on the division
+(`Competition.tier`) and on `r`. All three divisions have 20 clubs today; the bands below are
+written for 20, and `LeagueTargets` scales them proportionally (`ceil(band · n / 20)`) if a division
+ever has a different size.
+
+**Série A (tier 1)** — round robin, Z-4 relegated in reality:
+
+| Expected rank `r` | `target_position` | Objective text (pt-BR) |
+|---|---|---|
+| 1–3   | 4  | Terminar no G-4 |
+| 4–8   | 6  | Terminar no G-6 |
+| 9–14  | 12 | Terminar entre os 12 primeiros |
+| 15–20 | 16 | Terminar fora do Z-4 |
+
+**Série B (tier 2)** — round robin, G-4 promoted and Z-4 relegated in reality:
 
 | Expected rank `r` | `target_position` | Objective text (pt-BR) |
 |---|---|---|
@@ -194,8 +221,22 @@ gives the managed club an **expected rank** `r`. The target follows from it:
 | 8–13  | 10 | Terminar na primeira metade da tabela |
 | 14–20 | 16 | Terminar fora do Z-4 |
 
+**Série C (tier 3)** — phased: a 19-round first phase, top 8 into two-legged quarterfinals,
+semifinal and final (the four semifinalists are the clubs promoted in reality). The target is a
+**stage**, like the state objective, except for the weakest band, which is a first-phase position:
+
+| Expected rank `r` | Target | Objective text (pt-BR) |
+|---|---|---|
+| 1–2   | `target_stage` FINAL        | Chegar à final da Série C |
+| 3–5   | `target_stage` SEMIFINAL    | Chegar às semifinais da Série C |
+| 6–10  | `target_stage` QUARTERFINAL | Classificar para as quartas de final |
+| 11–20 | `target_position` 14 (first-phase table) | Terminar a primeira fase entre os 14 primeiros |
+
 The board asks for a little *less* than the club's rank, because the table is noisy. A side ranked
 2nd that finishes 4th has met expectations.
+
+The objective row stores the `tier` it was set for, so the review copy and the sacked screen's
+career record read correctly even after a future promotion moves the club.
 
 ### 5.3 State objective (Catarinense)
 
@@ -207,6 +248,9 @@ Rank the 12 members the same way:
 | 3–4  | FINAL        | Chegar à final do Catarinense |
 | 5–6  | SEMIFINAL    | Chegar às semifinais do Catarinense |
 | 7–12 | QUARTERFINAL | Classificar para as quartas de final |
+
+The same stage rules resolve a Série C `target_stage` LEAGUE objective (§5.2); everything below
+applies to it unchanged, except that the deltas come from the LEAGUE rows of §6.2.
 
 The state objective is resolved **as soon as its outcome is known**, at phase completion inside
 `PhaseResolver.resolveIfPhaseComplete`. All ties in a knockout phase play the same rounds, so phase
@@ -241,9 +285,11 @@ championship. Both "unphased = league" and the seed's `type` fail: every competi
 `type: "LEAGUE"`, and Série C is phased.
 
 If a season lacks one of them, its objective is simply not created; the board must not assume all
-three exist. If the national league is phased (only possible once relegation to Série C exists),
-`target_position` is read against its **first phase's** final table. Proper Série C targets are left
-to the promotion/relegation slice.
+three exist. The division's targets come from `tier` (§5.2), never from the competition's name.
+
+When the national league is phased (Série C), a `target_position` is read against its **first
+phase's** final table and resolves when that phase completes; a `target_stage` resolves through the
+phase hook exactly like the state objective. An unphased league (A, B) resolves at season end.
 
 ## 6. Confidence
 
@@ -274,8 +320,11 @@ Then:
 - **Heavy defeat:** if the club lost by 4 or more goals, an extra −3.
 - **State championship weighting:** Catarinense matches count at half weight
   (`delta = round(delta / 2)`), because the board cares most about the league.
-- **League trajectory** (Série B only, from round 7 on, once the table means something): if the
-  current position is at or above `target_position`, +1. If it is 5 or more places below, −1.
+- **League trajectory** (national league only, from its 7th match on, once the table means
+  something): compare the current position in the league's round-robin table (Série C: the first
+  phase's, while it is running) with the target. For a `target_position`, use it directly. For a
+  `target_stage`, use the qualifying line, 8th, as the reference. At or above the reference: +1. Five
+  or more places below: −1. Once the round-robin phase is over, the rule stops.
 - **Negative balance:** −1 per managed match while `Club.balance < 0`.
 - The total change from one match is clamped to **−8..+8**. Confidence is clamped to **0..100**.
 
@@ -293,17 +342,21 @@ draw between equals scores +1.
 |---|---|
 | STATE objective met | +6 |
 | STATE objective failed | −8 |
-| Catarinense title won (`TITLE_WON`, in addition to any row above) | +4 |
+| Title won in a phased managed competition — Catarinense, or Série C (`TITLE_WON`, in addition to any row above) | +4 |
 | LEAGUE met, finishing 4+ places better than the target | +20 |
-| LEAGUE met | +12 |
-| LEAGUE failed by 1–3 places | −12 |
-| LEAGUE failed by 4+ places | −25 |
-| LEAGUE: finished in the Z-4 (17th–20th) | −35 (instead of the two rows above) |
+| LEAGUE met (a stage target is met the moment it is reached, so it never earns the +20) | +12 |
+| LEAGUE failed by 1–3 places (or 1 stage short) | −12 |
+| LEAGUE failed by 4+ places (or 2+ stages short, incl. not qualifying for a stage target) | −25 |
+| LEAGUE: finished in the Z-4 (17th–20th) of **Série A or B** | −35 (instead of the two rows above) |
+
+Stages are ordered QUARTERFINAL < SEMIFINAL < FINAL < CHAMPION, with failing to qualify one stage
+below QUARTERFINAL. The Z-4 row exists only for the divisions with a relegation zone; Série C has
+none (there is no Série D).
 | FINANCE met | +4 |
 | FINANCE failed | −10 |
 
-LEAGUE and FINANCE resolve when the season finishes (§7.2). STATE resolves when the run ends
-(§5.3).
+FINANCE and an unphased LEAGUE resolve when the season finishes (§7.2). STATE and a Série C LEAGUE
+resolve when their outcome is known (§5.3, §5.5).
 
 ### 6.3 Between seasons
 
@@ -332,10 +385,11 @@ After every managed match, `BoardService` checks the following in order:
 3. **Mid-season sacking.** Every one of these must hold:
    - confidence ≤ **15**;
    - an ultimatum is active and at least **3** managed matches have been played since it was issued;
-   - the club has played at least **6 Série B matches** this season. A new manager gets time to
-     settle in. The Catarinense runs alongside the league (§2), so its matches still move
-     confidence (at half weight) and count toward the 3 matches after an ultimatum. On their own,
-     though, they can never get a manager sacked before the league is six rounds old;
+   - the club has played at least **6 national-league matches** this season (whichever division
+     it is in). A new manager gets time to settle in. The Catarinense runs alongside the league
+     (§2), so its matches still move confidence (at half weight) and count toward the 3 matches
+     after an ultimatum. On their own, though, they can never get a manager sacked before the
+     league is six rounds old;
    - `sacking_enabled` is true and the season is not the `grace_season_year`.
 
    When they all hold, the manager is sacked (§7.3).
@@ -350,8 +404,8 @@ When `recordMatchRound` determines `seasonFinished`, `BoardService.reviewSeason(
 `save.setStatus(FINISHED)` moves below the prize call, and the board sets either `FINISHED` or
 `SACKED`. The review does the following:
 
-1. Resolve LEAGUE and FINANCE (§6.2). STATE is normally resolved already; if it is still `PENDING`,
-   resolve it now with the stage reached.
+1. Resolve FINANCE and an unphased LEAGUE (§6.2). STATE and a phased LEAGUE are normally resolved
+   already; if either is still `PENDING`, resolve it now with the stage or position reached.
 2. Post a `BOARD_REVIEW` news item listing each objective, its outcome and the resulting confidence.
 3. If confidence is **< 25** after the review, `sacking_enabled` is true and the season is not the
    grace season, the manager is sacked (§7.3). Otherwise the status becomes `FINISHED` as it does
@@ -404,12 +458,16 @@ New careers get no grace season. The round-7 rule and the ultimatum are their pr
 | `SaveGameService` career creation, after seeding | `boardService.initialize(save, sackingEnabled)` → state + objectives |
 | `SeasonAdvanceService.recordMatchRound`, after `phaseResolver.resolveIfPhaseComplete` | `boardService.afterManagedMatch(save, round fixtures, competition)`; a no-op when the managed club has no fixture in the round |
 | same method, where `seasonFinished` is true, after `processSeasonEnd` | `boardService.reviewSeason(save)` decides `FINISHED` vs `SACKED` |
-| `PhaseResolver.resolveIfPhaseComplete`, for a `STATE` competition the managed club is in | `boardService.onStatePhaseComplete(save, phase)`, which resolves the objective and records `TITLE_WON` (§5.3) |
+| inside `afterManagedMatch`, when the round completed a phase (`PhaseResolver.isPhaseComplete`, today's private `phaseComplete` made public) | resolve whichever stage objective points at that competition (STATE, or a Série C LEAGUE) and record `TITLE_WON` for a STATE final (§5.3). `PhaseResolver` does **not** call the board: it lives in `competition/` and also runs for background competitions, and a call back into `board/` would make the two packages depend on each other |
 | `SeasonRolloverService.rollover`, at the end | `boardService.startNewSeason(save)` → regression, log purge, new objectives |
 | `advance`, `kickoff`, `rollover` entry | reject `SACKED` (`MANAGER_SACKED`) |
 
 `afterManagedMatch` runs for both the instant advance and the live-match finish, because both go
 through `recordMatchRound`. It must never be called a second time for the same round.
+
+If `afterManagedMatch` sacks the manager on the season's last round, the season-end block still
+pays the prize but **skips** `reviewSeason`, so the `SACKED` status is never overwritten with
+`FINISHED`.
 
 The sacking decision is made inside the same transaction as the match round. If the round rolls
 back, so does the sacking.
@@ -442,8 +500,10 @@ back, so does the sacking.
 ```
 
 - `progress` applies only to a `PENDING` objective. For LEAGUE it is `ON_TRACK` (position ≤
-  target), `AT_RISK` (1–3 places worse) or `OFF_TRACK` (4 or more worse). It is `null` before the
-  league's first round. For FINANCE it is `ON_TRACK` when the balance is positive and `OFF_TRACK`
+  target), `AT_RISK` (1–3 places worse) or `OFF_TRACK` (4 or more worse), measured against the
+  reference of §6.1 for a stage target. It is `null` before the league's first round and once a
+  stage target's round-robin phase is over.
+- Each objective also carries `tier` (LEAGUE only), so the frontend picks the right text table. For FINANCE it is `ON_TRACK` when the balance is positive and `OFF_TRACK`
   otherwise. STATE has no live progress; it resolves quickly.
 - `AdvanceResponse` gains one nullable field, `board` (`BoardEventResponse`):
   `{ confidence, delta, ultimatumIssued, ultimatumLifted, sacked, sackingAverted, objectives }`,
@@ -526,11 +586,12 @@ Follow the project's Given/When/Then style and descriptive test names.
   home/away; the clamps; heavy defeat; Catarinense half weight; the trajectory rule before and
   after round 7; each objective-resolution delta, including the Z-4 override; regression toward 60
   (both directions, with rounding).
-- **Objective targets (unit):** each rank band for LEAGUE and STATE; tie-breaks; a missing
-  competition creates no objective; `ClubStrength` counts loanees for the borrower and excludes
+- **Objective targets (unit):** each rank band for LEAGUE in **each tier** (A, B, C) and for
+  STATE; proportional scaling for a non-20 field; tie-breaks; a missing competition creates no
+  objective; a `NATIONAL` seed competition without a tier is rejected; `ClubStrength` counts loanees for the borrower and excludes
   youth.
 - **Sacking rules (unit):** ultimatum issued once per dip; lifted at 45; no sacking before
-  6 Série B matches, without an ultimatum, within 3 matches of it, in the grace season, or with
+  6 national-league matches, without an ultimatum, within 3 matches of it, in the grace season, or with
   sacking disabled (averted path → 30).
 - **Integration (real Postgres, as the project's ITs do):**
   - a full season through `advance`: objectives exist, confidence moves, `BOARD_REVIEW` is posted
@@ -548,8 +609,14 @@ Follow the project's Given/When/Then style and descriptive test names.
     change neither confidence nor `matches_since_ultimatum`;
   - FINANCE is judged on the balance *after* the season-end prize: a small deficit that the prize
     covers counts as MET;
-  - the V57 backfill marks an existing save's Catarinense as `STATE`, and the LEAGUE objective
-    resolves against Série B, not Série C.
+  - the V57 backfill marks an existing save's Catarinense as `STATE` and sets each Série's tier, and
+    the LEAGUE objective resolves against Série B, not Série C;
+  - with the managed club's membership moved into Série A and into Série C by the test (the only
+    way to reach them before promotion exists), `setSeasonObjectives` writes a LEAGUE objective
+    with the right tier and target. Resolution in those divisions (a Série A Z-4 finish taking the
+    −35 row, a Série C quarterfinal exit failing a SEMIFINAL target by one stage) is covered by the
+    pure calculator's unit tests, because a season cannot be played in them until promotion
+    exists.
 - **Frontend (React Testing Library):** the dashboard card in each mood band, with an ultimatum and
   with grace; the sacked screen redirect; the advance card's board delta; the new-career checkbox;
   the news labels for every new type.
@@ -565,9 +632,10 @@ Follow the project's Given/When/Then style and descriptive test names.
 
 ## 13. Follow-ups this design leaves room for
 
-1. **Promotion and relegation.** The targets follow the club into its new division, because
-   competitions are found by scope (§5.5), and the review copy can then say "Acesso conquistado!".
-   That slice has to design proper targets for the phased Série C.
+1. **Promotion and relegation.** The targets already follow the club into its new division,
+   because competitions are found by scope and targets by tier (§5.2, §5.5). That slice only adds
+   review copy ("Acesso conquistado!", "Rebaixado") and may tune the bands once real movement is
+   playable.
 2. **Board-set transfer budget**, scaled by confidence.
 3. **Clássicos.** Double weight for matches against Avaí, Figueirense, Chapecoense and Joinville.
 4. **Fan mood** as a second voice that feeds the board.
