@@ -17,8 +17,12 @@ A Criciúma EC football-manager game combining backend and frontend components.
 
 2. Run the backend (Gradle):
    ```bash
+   cd backend
    ./gradlew bootRun
    ```
+   `bootRun` activates the `dev` profile, which supplies the throwaway database password and JWT
+   secret from `backend/config/application-dev.yml`. Any other way of starting the backend must
+   set `DB_PASSWORD` and `JWT_SECRET`, or it refuses to start.
 
 3. Run the frontend (Node):
    ```bash

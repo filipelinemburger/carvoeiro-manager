@@ -19,7 +19,7 @@
 - Player JSON key order: `name, position, age, nationality, pace, finishing, passing, tackling, goalkeeping, stamina, attributes`. Attributes key order: `drible, cruzamento, cabeceio, marcacao, bolaParada, chuteLonge, visao, posicionamento, decisao, compostura, concentracao, determinacao, agressividade, lideranca, aceleracao, forca, resistencia, equilibrio, agilidade, posicionamentoGk, saidaDeGol, jogoComOsPes` (22 keys, exactly).
 - Seed JSON style: 2-space indent; each player is ONE line: `{ "name": ..., ... "attributes": { ... } }` with a space after `{` and before `}`.
 - Nationality in Portuguese (`"Brasil"`, `"Argentina"`, `"Venezuela"`, …); ages as of the 2026 season.
-- Working dir for all commands: repo root `/Users/filipelinemburger/Documents/filipe/projects/carvoeiro-manager` unless stated.
+- Working dir for all commands: repo root `<repo-root>` unless stated.
 - Série B 2026 shortNames (the canonical 20): `CRI, AVA, GOI, NOV, SPT, CEA, VIL, OPE, CRB, PPT, BOT, FOR, AME, ATH, ATG, CUI, JUV, LON, NAU, SBE`.
 - Criciúma (CRI) rosters/attributes are already authored — **never modify CRI's players**.
 
@@ -616,7 +616,7 @@ Suggested: `feat(seed): real 2026 Série B membership; drop clubs with no compet
 
 ````text
 You are authoring the real 2026 roster for {CLUB} ({SHORT}) in a football-manager
-game seed. Work from repo root /Users/filipelinemburger/Documents/filipe/projects/carvoeiro-manager.
+game seed. Work from repo root <repo-root>.
 
 1. RESEARCH (WebSearch): find the club's current squad for the 2026 Brasileirão
    Série B season (best sources: Transfermarkt "{CLUB} plantel 2026", Wikipedia

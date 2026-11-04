@@ -6,8 +6,8 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -27,28 +27,23 @@ public class JwtService {
     private static final String USERNAME_CLAIM = "username";
 
     /**
-     * The dev-default JWT secret committed in {@code application.yml}. If this exact value is in
-     * use at startup we emit a prominent warning; production must override it via {@code JWT_SECRET}.
+     * The development JWT secret from {@code backend/config/application-dev.yml}. It is public, so
+     * anyone could forge tokens signed with it: startup fails if it is in use outside the
+     * {@code dev} profile.
      */
-    private static final String DEFAULT_DEV_SECRET =
+    private static final String DEV_SECRET =
             "change-me-dev-secret-change-me-dev-secret-0123456789";
-
-    private static final Logger log = LoggerFactory.getLogger(JwtService.class);
 
     private final SecretKey key;
     private final long expirationMinutes;
 
-    public JwtService(JwtProperties properties) {
+    public JwtService(JwtProperties properties, Environment environment) {
+        if (DEV_SECRET.equals(properties.secret()) && !environment.acceptsProfiles(Profiles.of("dev"))) {
+            throw new IllegalStateException(
+                    "JWT_SECRET is the public development secret. Generate a real one: openssl rand -hex 48");
+        }
         this.key = Keys.hmacShaKeyFor(properties.secret().getBytes(StandardCharsets.UTF_8));
         this.expirationMinutes = properties.expirationMinutes();
-
-        if (DEFAULT_DEV_SECRET.equals(properties.secret())) {
-            log.warn("################################################################");
-            log.warn("# SECURITY WARNING: the default development JWT secret is in   #");
-            log.warn("# use. This is INSECURE for production. Override it by setting  #");
-            log.warn("# the JWT_SECRET environment variable to a strong secret.      #");
-            log.warn("################################################################");
-        }
     }
 
     public String generateToken(UUID userId, String username) {

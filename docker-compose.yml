@@ -7,8 +7,9 @@ services:
       POSTGRES_USER: carvoeiro-manager
       POSTGRES_PASSWORD: carvoeiro-manager
     ports:
-      # Host port 5435 -> container 5432, to avoid clashing with other local Postgres containers.
-      - "5435:5432"
+      # Loopback-only host port 5435 -> container 5432: the password above is public, and 5435 avoids
+      # clashing with other local Postgres containers.
+      - "127.0.0.1:5435:5432"
     volumes:
       - carvoeiro-manager-pgdata:/var/lib/postgresql/data
     healthcheck:

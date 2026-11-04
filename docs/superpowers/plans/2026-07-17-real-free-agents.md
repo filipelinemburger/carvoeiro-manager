@@ -22,7 +22,7 @@
 - GK entries: `finishing <= 40`. Outfielder entries: `goalkeeping <= 40`. Outfielders' `posicionamentoGk`/`saidaDeGol`/`jogoComOsPes` stay low (single digits to low teens) — these are goalkeeper-specific attributes, not general technical skill (see the existing `Bruno Alves` DEF entry in `clubs.json`: `posicionamentoGk: 6, saidaDeGol: 5, jogoComOsPes: 8`).
 - No free-agent name may collide with any player name already in `clubs.json`'s club rosters, and no two free agents may share a name.
 - No procedural generation anywhere in the free-agent system after this plan — `FreeAgentGenerator` is deleted once unused.
-- Working dir for all commands: repo root `/Users/filipelinemburger/Documents/filipe/projects/carvoeiro-manager` unless stated. Backend test commands: `cd backend && JAVA_HOME=/Library/Java/JavaVirtualMachines/amazon-corretto-25.jdk/Contents/Home ./gradlew test ...` — use a long timeout (600000ms); `*IT` tests spin up Testcontainers Postgres and take longer than plain unit tests.
+- Working dir for all commands: repo root `<repo-root>` unless stated. Backend test commands: `cd backend && JAVA_HOME=/Library/Java/JavaVirtualMachines/amazon-corretto-25.jdk/Contents/Home ./gradlew test ...` — use a long timeout (600000ms); `*IT` tests spin up Testcontainers Postgres and take longer than plain unit tests.
 - `.seed-work/` is temporary tooling — never `git add`ed, deleted in the final task.
 
 ---
@@ -848,7 +848,7 @@ EOF
 ````text
 You are authoring real, currently-unattached (free agent) football players from
 {COUNTRY} for a football-manager game's free-agent pool. Work from repo root
-/Users/filipelinemburger/Documents/filipe/projects/carvoeiro-manager.
+<repo-root>.
 
 1. RESEARCH (WebSearch): find real {COUNTRY} players who are genuinely without a
    club right now — rescinded contracts, released, out of contract and unsigned.

@@ -1,0 +1,10 @@
+# Throwaway credentials for local development, loaded because ./gradlew bootRun activates the dev
+# profile. They are public, so this file stays outside src/main/resources and never reaches the
+# deployed jar. The password matches the root docker-compose.yml.
+spring:
+  datasource:
+    password: ${DB_PASSWORD:carvoeiro-manager}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:change-me-dev-secret-change-me-dev-secret-0123456789}

@@ -20,7 +20,7 @@
 - Club JSON key order: `name, shortName, commonName, nickname, primaryColor, secondaryColor, formation, mentality, pressing, marking, players` — the seed carries tactical-identity fields (`formation`/`mentality`/`pressing`/`marking`) added by an earlier project; any tooling that rewrites the seed MUST preserve them (verified below — the naive Série B-era formatter would silently drop them).
 - Seed JSON style: 2-space indent; each player is ONE line: `{ "name": ..., ... "attributes": { ... } }` with a space after `{` and before `}`; club identity/tactical fields one per line. Enforced by `.seed-work/seedfmt.py`'s round-trip check.
 - Nationality in Portuguese (`"Brasil"`, `"Argentina"`, `"Venezuela"`, …); ages as of the 2026 season.
-- Working dir for all commands: repo root `/Users/filipelinemburger/Documents/filipe/projects/carvoeiro-manager` unless stated. Backend test commands: `cd backend && JAVA_HOME=/Library/Java/JavaVirtualMachines/amazon-corretto-25.jdk/Contents/Home ./gradlew test ...` — use a long timeout (600000ms), the full suite takes several minutes.
+- Working dir for all commands: repo root `<repo-root>` unless stated. Backend test commands: `cd backend && JAVA_HOME=/Library/Java/JavaVirtualMachines/amazon-corretto-25.jdk/Contents/Home ./gradlew test ...` — use a long timeout (600000ms), the full suite takes several minutes.
 - The 8 Catarinense-only clubs (Part A target): `FIG, CHA, BRU, MAR, BAR, CON, HER, CAM`. The 20 Série B clubs: `CRI, AVA, GOI, NOV, SPT, CEA, VIL, OPE, CRB, PPT, BOT, FOR, AME, ATH, ATG, CUI, JUV, LON, NAU, SBE`. All 28 together are the Part B target.
 - Criciúma (CRI)'s roster composition and attributes stay exactly as authored today — Part A never touches CRI. Part B MAY rename CRI players (that is exactly the user's own reported bug: CRI's "Diego" needs correcting).
 - `.seed-work/` is temporary tooling — never `git add`ed, deleted in the final task.
@@ -857,7 +857,7 @@ club's row substituted in.**
 
 ````text
 You are authoring the real current roster for {CLUB} ({SHORT}) in a football-manager
-game seed. Work from repo root /Users/filipelinemburger/Documents/filipe/projects/carvoeiro-manager.
+game seed. Work from repo root <repo-root>.
 
 1. RESEARCH (WebSearch): find {CLUB}'s current real squad. This club plays ONLY the
    Campeonato Catarinense (Santa Catarina's state championship) in this game's pool — it
@@ -1011,7 +1011,7 @@ shortNames):**
 ````text
 You are correcting player names in a football-manager game seed to match how each real
 player is actually publicly known. Work from repo root
-/Users/filipelinemburger/Documents/filipe/projects/carvoeiro-manager.
+<repo-root>.
 
 Your assigned clubs (shortNames): {CLUB_LIST}.
 

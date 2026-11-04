@@ -21,7 +21,7 @@
 - GK entries: `finishing <= 40`. Outfielder entries: `goalkeeping <= 40`. Outfielders' `posicionamentoGk`/`saidaDeGol`/`jogoComOsPes` stay low (single digits to low teens).
 - Age range: 18–42 inclusive.
 - Calibration rubric (used verbatim by every research subagent — see Task 2): 5 tiers (S/A/B/C/D) on signature attributes, physicals decline with age from 30 (sharply after 34), mentals track experience/career length rather than tier, anchors must agree with the attribute block.
-- Working dir for all commands: repo root `/Users/filipelinemburger/Documents/filipe/projects/carvoeiro-manager` unless stated. Backend test commands: `cd backend && JAVA_HOME=/Library/Java/JavaVirtualMachines/amazon-corretto-25.jdk/Contents/Home ./gradlew test ...` — use a long timeout (600000ms); `*IT` tests spin up Testcontainers Postgres and take longer than plain unit tests.
+- Working dir for all commands: repo root `<repo-root>` unless stated. Backend test commands: `cd backend && JAVA_HOME=/Library/Java/JavaVirtualMachines/amazon-corretto-25.jdk/Contents/Home ./gradlew test ...` — use a long timeout (600000ms); `*IT` tests spin up Testcontainers Postgres and take longer than plain unit tests.
 - `.seed-work/` is temporary tooling — never `git add`ed, deleted in the final task.
 
 ---
@@ -483,7 +483,7 @@ Expected: `2` (the two `##` section headers: "Tiers (signature attributes)" and 
 ````text
 You are re-researching and re-rating real football players already listed in
 this game's free-agent pool. Work from repo root
-/Users/filipelinemburger/Documents/filipe/projects/carvoeiro-manager.
+<repo-root>.
 
 1. READ `.seed-work/rubric.md` in full — this is the calibration rubric you
    must apply to every player. Read it before touching any data.
@@ -555,7 +555,7 @@ Expected: the same 8 counts as the split step in Task 1 (e.g. `BRA.json 40`, `AR
 Subagent prompt:
 
 ````text
-Work from repo root /Users/filipelinemburger/Documents/filipe/projects/carvoeiro-manager.
+Work from repo root <repo-root>.
 
 1. READ `.seed-work/rubric.md`.
 2. READ all 8 fragments in `.seed-work/free-agents/*.json`.
