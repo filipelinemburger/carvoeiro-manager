@@ -100,9 +100,10 @@ call from production breaks.
 
 > `DOMAIN` must match the destination host in `frontend/vercel.json`.
 
-`DB_PASSWORD` and `JWT_SECRET` have no defaults in the deployed jar: the backend refuses to start
-without them, and also if `JWT_SECRET` is the public development secret from
-`backend/config/application-dev.yml`.
+`DB_PASSWORD` and `JWT_SECRET` have no defaults in the deployed jar. The backend refuses to start
+if `JWT_SECRET` is missing or is the public development secret from
+`backend/config/application-dev.yml`. Without `DB_PASSWORD` it cannot log in to the database, so
+the startup migrations fail.
 
 Fixed in `deploy/docker-compose.yml`, not in `.env`:
 

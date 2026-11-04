@@ -38,6 +38,10 @@ public class JwtService {
     private final long expirationMinutes;
 
     public JwtService(JwtProperties properties, Environment environment) {
+        // Configuration binding leaves an unresolved placeholder as literal text rather than failing.
+        if (properties.secret().startsWith("${")) {
+            throw new IllegalStateException("JWT_SECRET is not set. Generate one: openssl rand -hex 48");
+        }
         if (DEV_SECRET.equals(properties.secret()) && !environment.acceptsProfiles(Profiles.of("dev"))) {
             throw new IllegalStateException(
                     "JWT_SECRET is the public development secret. Generate a real one: openssl rand -hex 48");

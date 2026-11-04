@@ -14,6 +14,17 @@ class JwtServiceTest {
     private static final String REAL_SECRET = "not-the-dev-secret-not-the-dev-secret-0123456789";
 
     @Test
+    void refusesAnUnresolvedSecretPlaceholder() {
+        // Given: what configuration binding produces when JWT_SECRET is not set
+        JwtProperties properties = new JwtProperties("${JWT_SECRET}", 60);
+
+        // When/Then
+        assertThatThrownBy(() -> new JwtService(properties, new MockEnvironment()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("JWT_SECRET is not set");
+    }
+
+    @Test
     void refusesThePublicDevSecretOutsideTheDevProfile() {
         // Given: no active profile, as in the deployed jar
         MockEnvironment environment = new MockEnvironment();
