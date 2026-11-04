@@ -19,7 +19,7 @@
 - Wire format unchanged: selects submit enum values (`Mentality`/`Pressing`/`Marking` from `frontend/src/api/types.ts`); no API or backend change of any kind.
 - Formation catalogue source of truth: `FORMATION_CODES` from `frontend/src/features/pitch/pitchSlots.ts` (16 codes). No hard-coded formation lists may remain in `MatchActionsDialog`.
 - Test commands run from `frontend/`: `npx vitest run <file>` (single file) and `npx vitest run` (full suite).
-- Working dir: repo root `/Users/filipelinemburger/Documents/filipe/projects/carvoeiro-manager` unless stated.
+- Working dir: repo root `<repo-root>` unless stated.
 
 ---
 

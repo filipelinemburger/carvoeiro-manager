@@ -305,7 +305,7 @@ This task is content authoring, not a technical decision — brief the implement
 ````text
 You are expanding a football-manager game's live-match commentary to sound like real Brazilian
 narrator Mateus Mastella (Criciúma's actual radio/stream narrator). Work from repo root
-/Users/filipelinemburger/Documents/filipe/projects/carvoeiro-manager.
+<repo-root>.
 
 CONTEXT ON HIS REAL STYLE (researched, not invented):
 - Native of Criciúma, SC. Started narrating spontaneously from his father's living room; known
@@ -374,7 +374,7 @@ RETURN: the final element count for every array in the table, confirming each me
 
 Run:
 ```bash
-cd /Users/filipelinemburger/Documents/filipe/projects/carvoeiro-manager
+cd <repo-root>
 grep -c '"' backend/src/main/java/br/com/carvoeiromanager/match/LiveCommentary.java
 ```
 Then manually open the file and confirm each of the 18 arrays from the table has at least its

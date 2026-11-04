@@ -4,7 +4,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5435/carvoeiro-manager}
     username: ${DB_USER:carvoeiro-manager}
-    password: ${DB_PASSWORD:carvoeiro-manager}
+    password: ${DB_PASSWORD}
     hikari:
       # Postgres rewrites batched inserts into multi-row statements, turning the
       # ~1,400 per-row inserts of career creation into a handful of round-trips.
@@ -27,7 +27,7 @@ spring:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:change-me-dev-secret-change-me-dev-secret-0123456789}
+    secret: ${JWT_SECRET}
     expiration-minutes: ${JWT_EXP_MIN:720}
   cors:
     # Dev default accepts any localhost port (Vite may use 5173, 5174, ...).

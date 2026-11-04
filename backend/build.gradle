@@ -40,6 +40,11 @@ tasks.named('test') {
     maxHeapSize = '3g'
 }
 
+// Local runs get the throwaway credentials in config/application-dev.yml; the packaged jar never does.
+tasks.named('bootRun') {
+    systemProperty 'spring.profiles.active', 'dev'
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.compilerArgs << '-Xlint:deprecation'
 }

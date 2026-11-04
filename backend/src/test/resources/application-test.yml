@@ -1,4 +1,8 @@
 spring:
+  datasource:
+    # Never used to connect: @ServiceConnection supplies the container's credentials. This only
+    # satisfies the ${DB_PASSWORD} placeholder in application.yml, which has no default.
+    password: test
   jpa:
     hibernate:
       ddl-auto: validate

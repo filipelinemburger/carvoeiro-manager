@@ -100,6 +100,11 @@ call from production breaks.
 
 > `DOMAIN` must match the destination host in `frontend/vercel.json`.
 
+`DB_PASSWORD` and `JWT_SECRET` have no defaults in the deployed jar. The backend refuses to start
+if `JWT_SECRET` is missing or is the public development secret from
+`backend/config/application-dev.yml`. Without `DB_PASSWORD` it cannot log in to the database, so
+the startup migrations fail.
+
 Fixed in `deploy/docker-compose.yml`, not in `.env`:
 
 - `DB_URL=jdbc:postgresql://db:5432/carvoeiro-manager`, `DB_USER=carvoeiro-manager`
@@ -161,10 +166,12 @@ docker compose up -d db          # Postgres 16 on localhost:5435 (the backend's 
 ```
 
 Backend — requires **Java 25**. If the default `java` is older, point `JAVA_HOME` at a Java 25
-JDK. Tests use Testcontainers, so Docker must be running.
+JDK. Tests use Testcontainers, so Docker must be running. `bootRun` activates the `dev` profile,
+which supplies throwaway credentials from `backend/config/application-dev.yml`.
 
 ```bash
 cd backend
+./gradlew bootRun
 ./gradlew test
 ./gradlew clean bootJar
 ```
